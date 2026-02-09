@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRepos } from "@/hooks/useGitHub";
 import { Header } from "@/components/Header";
@@ -16,6 +16,7 @@ import type { TabId } from "@/lib/types";
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("sprint");
+  const [showSettings, setShowSettings] = useState(false);
 
   const { data: repos } = useRepos();
   const repoNames = useMemo(
@@ -23,7 +24,31 @@ export function DashboardPage() {
     [repos],
   );
 
+  // Listen for settings open event from Header dropdown
+  useEffect(() => {
+    const handler = () => setShowSettings(true);
+    window.addEventListener("open-settings", handler);
+    return () => window.removeEventListener("open-settings", handler);
+  }, []);
+
   if (!selectedOrg) return null;
+
+  if (showSettings) {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <button
+            onClick={() => setShowSettings(false)}
+            className="text-sm text-stone-500 hover:text-brand mb-4 cursor-pointer"
+          >
+            &larr; Back to dashboard
+          </button>
+          <SettingsTab />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -37,7 +62,6 @@ export function DashboardPage() {
         {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
         {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
         {activeTab === "activity" && <ActivityTab repoNames={repoNames} />}
-        {activeTab === "settings" && <SettingsTab />}
       </main>
     </div>
   );

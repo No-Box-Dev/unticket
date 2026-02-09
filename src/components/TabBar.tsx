@@ -7,19 +7,17 @@ import {
   GitPullRequest,
   CircleDot,
   BarChart3,
-  Settings,
 } from "lucide-react";
 import type { TabId } from "@/lib/types";
 
 const tabs: { id: TabId; label: string; icon: typeof Rocket }[] = [
   { id: "sprint", label: "Sprint", icon: Rocket },
-  { id: "backlog", label: "Backlog", icon: Layers },
-  { id: "team", label: "Team", icon: Users },
-  { id: "individual", label: "Individual", icon: User },
-  { id: "prs", label: "Pull Requests", icon: GitPullRequest },
-  { id: "issues", label: "Issues", icon: CircleDot },
+  { id: "backlog", label: "Future Features", icon: Layers },
+  { id: "team", label: "Team Dashboard", icon: Users },
+  { id: "individual", label: "Individual Dashboard", icon: User },
+  { id: "prs", label: "Open PRs", icon: GitPullRequest },
+  { id: "issues", label: "Open Issues", icon: CircleDot },
   { id: "activity", label: "Activity", icon: BarChart3 },
-  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 interface TabBarProps {
