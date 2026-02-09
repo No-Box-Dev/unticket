@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown } from "lucide-react";
 
 interface AssignDropdownProps {
   owners: string[];
@@ -30,14 +29,13 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
     <div ref={ref} className="relative inline-block">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 cursor-pointer"
+        className="text-xs cursor-pointer"
       >
         {owners.length === 0 ? (
-          <span className="text-stone-300">Assign</span>
+          <span className="text-stone-300 hover:text-stone-400">+ Assign</span>
         ) : (
-          <span className="truncate max-w-[100px]">{owners.join(", ")}</span>
+          <span className="text-stone-400 hover:text-stone-600">{owners.join(", ")}</span>
         )}
-        <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
         <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[160px]">

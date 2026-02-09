@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Check, ArrowRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { EffortTag } from "./EffortTag";
 import { AssignDropdown } from "./AssignDropdown";
@@ -25,67 +24,82 @@ export function FeatureCard({
 }: FeatureCardProps) {
   const [showModal, setShowModal] = useState(false);
 
-  const statusDot =
+  const dotColor =
     feature.status === "done"
       ? "bg-green-500"
       : feature.status === "active"
-        ? "bg-blue-500"
+        ? "bg-brand"
         : "bg-stone-300";
 
   return (
     <>
       <div
         className={cn(
-          "group flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-          feature.status === "done" ? "bg-stone-50 opacity-60" : "hover:bg-stone-50",
+          "group px-3 py-3 border-b border-stone-100 last:border-b-0 transition-colors",
+          feature.status === "done" && "opacity-50",
         )}
       >
-        <span className={cn("w-2 h-2 rounded-full flex-shrink-0", statusDot)} />
+        {/* Row 1: dot + title + effort + floating actions */}
+        <div className="flex items-center gap-3">
+          <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", dotColor)} />
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex-1 text-sm text-stone-700 text-left truncate cursor-pointer hover:text-brand"
-        >
-          {feature.title}
-        </button>
-
-        <EffortTag
-          effort={feature.effort}
-          onChange={(effort: Effort) => onUpdate({ ...feature, effort })}
-        />
-
-        <AssignDropdown
-          owners={feature.owners}
-          allPeople={allPeople}
-          onChange={(owners) => onUpdate({ ...feature, owners })}
-        />
-
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {mode === "sprint" && feature.status !== "done" && (
-            <button
-              onClick={() => onUpdate({ ...feature, status: "done" })}
-              title="Mark done"
-              className="p-1 text-stone-400 hover:text-green-600 cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {mode === "backlog" && currentSprint && (
-            <button
-              onClick={() => onUpdate({ ...feature, sprint: currentSprint, status: "active" })}
-              title="Move to current sprint"
-              className="p-1 text-stone-400 hover:text-brand cursor-pointer"
-            >
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
           <button
-            onClick={() => onDelete(feature.id)}
-            title="Delete"
-            className="p-1 text-stone-400 hover:text-red-500 cursor-pointer"
+            onClick={() => setShowModal(true)}
+            className="text-sm font-medium text-stone-800 text-left truncate cursor-pointer hover:text-brand"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            {feature.title}
           </button>
+
+          <EffortTag
+            effort={feature.effort}
+            onChange={(effort: Effort) => onUpdate({ ...feature, effort })}
+          />
+
+          {/* Spacer to push actions right */}
+          <div className="flex-1" />
+
+          {/* Floating text actions */}
+          <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            {mode === "sprint" && feature.status !== "done" && (
+              <button
+                onClick={() => onUpdate({ ...feature, status: "future", sprint: null })}
+                className="text-xs text-stone-400 hover:text-stone-600 cursor-pointer"
+              >
+                Future
+              </button>
+            )}
+            {mode === "backlog" && currentSprint && (
+              <button
+                onClick={() => onUpdate({ ...feature, sprint: currentSprint, status: "active" })}
+                className="text-xs text-stone-400 hover:text-brand cursor-pointer"
+              >
+                Move to Sprint
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(feature.id)}
+              className="text-xs text-stone-400 hover:text-red-500 cursor-pointer"
+            >
+              Delete
+            </button>
+            {mode === "sprint" && feature.status !== "done" && (
+              <button
+                onClick={() => onUpdate({ ...feature, status: "done" })}
+                className="text-xs text-stone-400 hover:text-green-600 cursor-pointer"
+              >
+                Done
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: assigned people */}
+        <div className="ml-[22px] mt-0.5">
+          <AssignDropdown
+            owners={feature.owners}
+            allPeople={allPeople}
+            onChange={(owners) => onUpdate({ ...feature, owners })}
+          />
         </div>
       </div>
 
