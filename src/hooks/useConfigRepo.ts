@@ -64,7 +64,16 @@ export function useSaveFeatures() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (features: Feature[]) => saveFeatures(selectedOrg!, features),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
+    onMutate: async (features) => {
+      await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
+      const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
+      qc.setQueryData(["features", selectedOrg], features);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }
 
@@ -73,7 +82,16 @@ export function useSaveSprint() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (sprint: SprintConfig) => saveSprint(selectedOrg!, sprint),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] }),
+    onMutate: async (sprint) => {
+      await qc.cancelQueries({ queryKey: ["sprint", selectedOrg] });
+      const previous = qc.getQueryData<SprintConfig>(["sprint", selectedOrg]);
+      qc.setQueryData(["sprint", selectedOrg], sprint);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["sprint", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] }),
   });
 }
 
@@ -82,7 +100,16 @@ export function useSavePeople() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (people: Person[]) => savePeople(selectedOrg!, people),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["people", selectedOrg] }),
+    onMutate: async (people) => {
+      await qc.cancelQueries({ queryKey: ["people", selectedOrg] });
+      const previous = qc.getQueryData<Person[]>(["people", selectedOrg]);
+      qc.setQueryData(["people", selectedOrg], people);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["people", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["people", selectedOrg] }),
   });
 }
 

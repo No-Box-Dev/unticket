@@ -3,11 +3,16 @@ import type { SprintConfig, Feature, Person, OrgSettings } from "./types";
 
 const REPO_NAME = ".gitpulse";
 
+// SHA cache to avoid fetching before every write
+const shaCache = new Map<string, string>();
+
 async function getFileContent<T>(org: string, path: string): Promise<{ data: T; sha: string } | null> {
   const ok = getOctokit();
   try {
     const { data } = await ok.rest.repos.getContent({ owner: org, repo: REPO_NAME, path });
     if ("content" in data && typeof data.content === "string") {
+      const cacheKey = `${org}/${path}`;
+      shaCache.set(cacheKey, data.sha);
       const decoded = JSON.parse(atob(data.content)) as T;
       return { data: decoded, sha: data.sha };
     }
@@ -20,15 +25,21 @@ async function getFileContent<T>(org: string, path: string): Promise<{ data: T; 
 
 async function putFileContent(org: string, path: string, content: unknown, sha?: string, message?: string) {
   const ok = getOctokit();
+  const cacheKey = `${org}/${path}`;
+  const resolvedSha = sha ?? shaCache.get(cacheKey);
   const encoded = btoa(JSON.stringify(content, null, 2));
-  await ok.rest.repos.createOrUpdateFileContents({
+  const { data } = await ok.rest.repos.createOrUpdateFileContents({
     owner: org,
     repo: REPO_NAME,
     path,
     message: message ?? `Update ${path}`,
     content: encoded,
-    ...(sha ? { sha } : {}),
+    ...(resolvedSha ? { sha: resolvedSha } : {}),
   });
+  // Update cache with new SHA
+  if (data.content?.sha) {
+    shaCache.set(cacheKey, data.content.sha);
+  }
 }
 
 // Sprint
@@ -38,8 +49,7 @@ export async function fetchSprint(org: string): Promise<SprintConfig | null> {
 }
 
 export async function saveSprint(org: string, sprint: SprintConfig) {
-  const existing = await getFileContent<SprintConfig>(org, "sprint.json");
-  await putFileContent(org, "sprint.json", sprint, existing?.sha, `Update sprint ${sprint.number}`);
+  await putFileContent(org, "sprint.json", sprint, undefined, `Update sprint ${sprint.number}`);
 }
 
 // Features
@@ -49,8 +59,7 @@ export async function fetchFeatures(org: string): Promise<Feature[]> {
 }
 
 export async function saveFeatures(org: string, features: Feature[]) {
-  const existing = await getFileContent<Feature[]>(org, "features.json");
-  await putFileContent(org, "features.json", features, existing?.sha, "Update features");
+  await putFileContent(org, "features.json", features, undefined, "Update features");
 }
 
 // People
@@ -60,8 +69,7 @@ export async function fetchPeople(org: string): Promise<Person[]> {
 }
 
 export async function savePeople(org: string, people: Person[]) {
-  const existing = await getFileContent<Person[]>(org, "people.json");
-  await putFileContent(org, "people.json", people, existing?.sha, "Update people");
+  await putFileContent(org, "people.json", people, undefined, "Update people");
 }
 
 // Settings
@@ -71,8 +79,7 @@ export async function fetchSettings(org: string): Promise<OrgSettings | null> {
 }
 
 export async function saveSettings(org: string, settings: OrgSettings) {
-  const existing = await getFileContent<OrgSettings>(org, "settings.json");
-  await putFileContent(org, "settings.json", settings, existing?.sha, "Update settings");
+  await putFileContent(org, "settings.json", settings, undefined, "Update settings");
 }
 
 // Ensure .gitpulse repo exists
