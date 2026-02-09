@@ -1,9 +1,9 @@
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
-import { Activity, Building2, User } from "lucide-react";
+import { Activity, Building2 } from "lucide-react";
 
 export function OrgPickerPage() {
-  const { user, setSelectedOrg, logout } = useAuth();
+  const { setSelectedOrg, logout } = useAuth();
   const { data: orgs, isLoading } = useOrgs();
 
   return (
@@ -24,24 +24,6 @@ export function OrgPickerPage() {
             <p className="text-center text-stone-400 py-4">Loading orgs...</p>
           ) : (
             <>
-              {/* Personal account option */}
-              {user && (
-                <button
-                  onClick={() => setSelectedOrg(user.login)}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-stone-50 border border-transparent hover:border-stone-200 transition-colors text-left cursor-pointer"
-                >
-                  <User className="w-5 h-5 text-stone-400" />
-                  <div>
-                    <div className="text-sm font-medium text-stone-900">
-                      {user.login}
-                    </div>
-                    <div className="text-xs text-stone-400">
-                      Personal account
-                    </div>
-                  </div>
-                </button>
-              )}
-
               {orgs?.map((org) => (
                 <button
                   key={org.login}
@@ -72,7 +54,7 @@ export function OrgPickerPage() {
 
               {orgs?.length === 0 && (
                 <p className="text-center text-stone-400 py-2 text-sm">
-                  No organisations found. Select your personal account above.
+                  No organisations found. GitPulse requires a GitHub organisation.
                 </p>
               )}
             </>
