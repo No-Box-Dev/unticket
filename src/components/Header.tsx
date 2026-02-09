@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useSprint } from "@/hooks/useConfigRepo";
-import { LogOut, ArrowLeftRight, Settings, ChevronDown } from "lucide-react";
+import { LogOut, ArrowLeftRight, Settings } from "lucide-react";
 
-export function Header() {
+interface HeaderProps {
+  onOpenSettings: () => void;
+}
+
+export function Header({ onOpenSettings }: HeaderProps) {
   const { user, selectedOrg, setSelectedOrg, logout } = useAuth();
   const { data: sprint } = useSprint();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -22,45 +26,40 @@ export function Header() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-bold text-brand">{selectedOrg}</h1>
         {sprint && (
-          <span className="text-sm text-stone-500">
+          <span className="text-sm text-stone-400">
             Sprint {sprint.number}: {sprint.name}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-2" ref={menuRef}>
+      <div className="flex items-center gap-1" ref={menuRef}>
         {user && (
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors cursor-pointer"
           >
-            <img
-              src={user.avatar_url}
-              alt={user.login}
-              className="w-6 h-6 rounded-full"
-            />
-            <span className="text-sm text-stone-700 hidden sm:inline">
-              {user.login}
+            <span className="text-sm text-stone-700">
+              {user.name ?? user.login}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
           </button>
         )}
 
+        <button
+          onClick={onOpenSettings}
+          className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors cursor-pointer text-stone-500 hover:text-stone-700"
+          title="Settings"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+
         {menuOpen && (
-          <div className="absolute right-4 sm:right-8 top-12 z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[180px]">
+          <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[180px]">
             <button
               onClick={() => { setSelectedOrg(null); setMenuOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer"
             >
               <ArrowLeftRight className="w-4 h-4" />
               Switch Organisation
-            </button>
-            <button
-              onClick={() => { setMenuOpen(false); window.dispatchEvent(new CustomEvent("open-settings")); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer"
-            >
-              <Settings className="w-4 h-4" />
-              Settings
             </button>
             <div className="border-t border-stone-100 my-1" />
             <button
