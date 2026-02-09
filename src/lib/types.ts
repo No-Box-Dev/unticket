@@ -46,8 +46,65 @@ export interface IssueInfo {
 }
 
 export type TabId =
-  | "overview"
+  | "sprint"
+  | "backlog"
+  | "team"
+  | "individual"
   | "prs"
   | "issues"
   | "activity"
   | "settings";
+
+// .gitpulse config repo types
+
+export type Effort = "low" | "medium" | "high";
+export type FeatureStatus = "active" | "done" | "future";
+
+export interface SprintConfig {
+  number: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  focus: string;
+}
+
+export interface Feature {
+  id: string;
+  title: string;
+  team: string;
+  owners: string[];
+  status: FeatureStatus;
+  sprint: number | null;
+  effort: Effort;
+  description?: string;
+  specs?: string[];
+}
+
+export interface Person {
+  github: string;
+  name: string;
+  team: string;
+  role: string;
+}
+
+export interface OrgSettings {
+  teams: { name: string; color: string }[];
+}
+
+// Extended issue info with repo context
+export interface IssueWithRepo extends IssueInfo {
+  repo: string;
+}
+
+// Metric types for Team/Individual tabs
+export interface WeeklyBucket {
+  weekStart: string;
+  value: number;
+}
+
+export interface MetricData {
+  current: number;
+  previous: number;
+  change: number;
+  history: WeeklyBucket[];
+}

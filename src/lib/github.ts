@@ -88,3 +88,55 @@ export async function fetchRepoActivity(owner: string, repo: string) {
   });
   return data;
 }
+
+export async function fetchClosedIssues(owner: string, repo: string, since?: string) {
+  const ok = getOctokit();
+  const { data } = await ok.rest.issues.listForRepo({
+    owner,
+    repo,
+    state: "closed",
+    per_page: 100,
+    sort: "updated",
+    direction: "desc",
+    ...(since ? { since } : {}),
+  });
+  return data.filter((issue) => !issue.pull_request);
+}
+
+export async function fetchMergedPRs(owner: string, repo: string, since?: string) {
+  const ok = getOctokit();
+  const { data } = await ok.rest.pulls.list({
+    owner,
+    repo,
+    state: "closed",
+    per_page: 100,
+    sort: "updated",
+    direction: "desc",
+  });
+  // Filter to only merged PRs, and optionally by date
+  return data.filter((pr) => {
+    if (!pr.merged_at) return false;
+    if (since && new Date(pr.merged_at) < new Date(since)) return false;
+    return true;
+  });
+}
+
+export async function fetchOrgMembers(org: string) {
+  const ok = getOctokit();
+  const { data } = await ok.rest.orgs.listMembers({ org, per_page: 100 });
+  return data;
+}
+
+export async function fetchAllIssues(owner: string, repo: string, since?: string) {
+  const ok = getOctokit();
+  const { data } = await ok.rest.issues.listForRepo({
+    owner,
+    repo,
+    state: "all",
+    per_page: 100,
+    sort: "updated",
+    direction: "desc",
+    ...(since ? { since } : {}),
+  });
+  return data.filter((issue) => !issue.pull_request);
+}

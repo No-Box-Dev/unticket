@@ -1,6 +1,9 @@
 import { cn } from "@/lib/cn";
 import {
-  LayoutDashboard,
+  Rocket,
+  Layers,
+  Users,
+  User,
   GitPullRequest,
   CircleDot,
   BarChart3,
@@ -8,8 +11,11 @@ import {
 } from "lucide-react";
 import type { TabId } from "@/lib/types";
 
-const tabs: { id: TabId; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
+const tabs: { id: TabId; label: string; icon: typeof Rocket }[] = [
+  { id: "sprint", label: "Sprint", icon: Rocket },
+  { id: "backlog", label: "Backlog", icon: Layers },
+  { id: "team", label: "Team", icon: Users },
+  { id: "individual", label: "Individual", icon: User },
   { id: "prs", label: "Pull Requests", icon: GitPullRequest },
   { id: "issues", label: "Issues", icon: CircleDot },
   { id: "activity", label: "Activity", icon: BarChart3 },

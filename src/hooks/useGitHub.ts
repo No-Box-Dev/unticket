@@ -4,8 +4,12 @@ import {
   fetchRepos,
   fetchOpenPRs,
   fetchOpenIssues,
+  fetchClosedIssues,
+  fetchMergedPRs,
+  fetchAllIssues,
   fetchMilestones,
   fetchRepoActivity,
+  fetchOrgMembers,
 } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 
@@ -108,5 +112,78 @@ export function useActivity(repos: string[]) {
         );
     },
     enabled: !!selectedOrg && repos.length > 0,
+  });
+}
+
+export function useClosedIssues(repos: string[], since?: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["closedIssues", selectedOrg, repos, since],
+    queryFn: async () => {
+      if (!selectedOrg) return [];
+      const results = await Promise.all(
+        repos.map(async (repo) => {
+          const issues = await fetchClosedIssues(selectedOrg, repo, since);
+          return issues.map((i) => ({ ...i, repo }));
+        }),
+      );
+      return results
+        .flat()
+        .sort(
+          (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+        );
+    },
+    enabled: !!selectedOrg && repos.length > 0,
+  });
+}
+
+export function useMergedPRs(repos: string[], since?: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["mergedPRs", selectedOrg, repos, since],
+    queryFn: async () => {
+      if (!selectedOrg) return [];
+      const results = await Promise.all(
+        repos.map(async (repo) => {
+          const prs = await fetchMergedPRs(selectedOrg, repo, since);
+          return prs.map((pr) => ({ ...pr, repo }));
+        }),
+      );
+      return results
+        .flat()
+        .sort(
+          (a, b) =>
+            new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime(),
+        );
+    },
+    enabled: !!selectedOrg && repos.length > 0,
+  });
+}
+
+export function useAllIssues(repos: string[], since?: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["allIssues", selectedOrg, repos, since],
+    queryFn: async () => {
+      if (!selectedOrg) return [];
+      const results = await Promise.all(
+        repos.map(async (repo) => {
+          const issues = await fetchAllIssues(selectedOrg, repo, since);
+          return issues.map((i) => ({ ...i, repo }));
+        }),
+      );
+      return results.flat();
+    },
+    enabled: !!selectedOrg && repos.length > 0,
+  });
+}
+
+export function useOrgMembers() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["orgMembers", selectedOrg],
+    queryFn: () => fetchOrgMembers(selectedOrg!),
+    enabled: !!selectedOrg,
   });
 }

@@ -50,9 +50,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Check for existing stored token
-    const token = localStorage.getItem("gp_token");
+    // Check for existing stored token (also migrate from old dashboard)
+    const token =
+      localStorage.getItem("gp_token") ??
+      localStorage.getItem("n1_github_token");
     if (token) {
+      localStorage.setItem("gp_token", token);
       fetchUser()
         .then(setUser)
         .catch(() => localStorage.removeItem("gp_token"))
