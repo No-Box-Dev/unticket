@@ -52,8 +52,7 @@ export type TabId =
   | "individual"
   | "prs"
   | "issues"
-  | "activity"
-  | "settings";
+  | "activity";
 
 // .gitpulse config repo types
 
