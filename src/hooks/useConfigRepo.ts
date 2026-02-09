@@ -9,6 +9,7 @@ import {
   savePeople,
   fetchSettings,
   ensureConfigRepo,
+  createConfigRepo,
 } from "@/lib/config-repo";
 import type { SprintConfig, Feature, Person } from "@/lib/types";
 
@@ -82,5 +83,20 @@ export function useSavePeople() {
   return useMutation({
     mutationFn: (people: Person[]) => savePeople(selectedOrg!, people),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["people", selectedOrg] }),
+  });
+}
+
+export function useCreateConfigRepo() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => createConfigRepo(selectedOrg!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["configRepo", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
+    },
   });
 }

@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { useSprint, useFeatures, usePeople, useSettings, useSaveFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useSettings, useSaveFeatures, useCreateConfigRepo } from "@/hooks/useConfigRepo";
 import { useOpenIssues, useClosedIssues } from "@/hooks/useGitHub";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { SprintIssuesTable } from "@/components/sprint/SprintIssuesTable";
 import type { Feature } from "@/lib/types";
-import { Calendar } from "lucide-react";
+import { Calendar, Rocket } from "lucide-react";
 
 interface SprintTabProps {
   repoNames: string[];
@@ -17,6 +17,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: people } = usePeople();
   const { data: settings } = useSettings();
   const saveFeatures = useSaveFeatures();
+  const createRepo = useCreateConfigRepo();
 
   const since = sprint?.startDate;
   const { data: openIssues, isLoading: issuesLoading } = useOpenIssues(repoNames);
@@ -75,11 +76,26 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
   if (!sprint) {
     return (
-      <div className="text-center py-12">
-        <p className="text-stone-500 mb-2">No sprint configured yet.</p>
-        <p className="text-sm text-stone-400">
-          Create a <code>.gitpulse</code> repo in your org with a <code>sprint.json</code> file.
+      <div className="text-center py-16">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand/10 mb-4">
+          <Rocket className="w-7 h-7 text-brand" />
+        </div>
+        <h3 className="text-lg font-semibold text-stone-700 mb-1">No sprint configured yet</h3>
+        <p className="text-sm text-stone-400 mb-6 max-w-sm mx-auto">
+          Create a <code className="bg-stone-100 px-1 rounded">.gitpulse</code> config repo to start tracking sprints, features, and your team.
         </p>
+        <button
+          onClick={() => createRepo.mutate()}
+          disabled={createRepo.isPending}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 cursor-pointer"
+        >
+          {createRepo.isPending ? "Setting up..." : "Set Up GitPulse"}
+        </button>
+        {createRepo.isError && (
+          <p className="text-sm text-red-500 mt-3">
+            {(createRepo.error as any)?.message ?? "Failed to create config repo"}
+          </p>
+        )}
       </div>
     );
   }
