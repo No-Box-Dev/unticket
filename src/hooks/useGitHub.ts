@@ -13,6 +13,14 @@ import {
 } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 
+// Safe parallel fetch — skips repos that error (403, 404, issues disabled)
+async function safeMap<T>(repos: string[], fn: (repo: string) => Promise<T[]>): Promise<T[]> {
+  const results = await Promise.allSettled(repos.map(fn));
+  return results
+    .filter((r): r is PromiseFulfilledResult<T[]> => r.status === "fulfilled")
+    .flatMap((r) => r.value);
+}
+
 export function useOrgs() {
   const { user } = useAuth();
   return useQuery({
@@ -37,16 +45,10 @@ export function useOpenPRs(repos: string[]) {
     queryKey: ["prs", selectedOrg, repos],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map((repo) => fetchOpenPRs(selectedOrg, repo)),
+      const results = await safeMap(repos, (repo) => fetchOpenPRs(selectedOrg, repo));
+      return results.sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
       );
-      return results
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.updated_at).getTime() -
-            new Date(a.updated_at).getTime(),
-        );
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -58,16 +60,10 @@ export function useOpenIssues(repos: string[]) {
     queryKey: ["issues", selectedOrg, repos],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map((repo) => fetchOpenIssues(selectedOrg, repo)),
+      const results = await safeMap(repos, (repo) => fetchOpenIssues(selectedOrg, repo));
+      return results.sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
       );
-      return results
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.updated_at).getTime() -
-            new Date(a.updated_at).getTime(),
-        );
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -79,13 +75,10 @@ export function useMilestones(repos: string[]) {
     queryKey: ["milestones", selectedOrg, repos],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const milestones = await fetchMilestones(selectedOrg, repo);
-          return milestones.map((m) => ({ ...m, repo }));
-        }),
-      );
-      return results.flat();
+      return safeMap(repos, async (repo) => {
+        const milestones = await fetchMilestones(selectedOrg, repo);
+        return milestones.map((m) => ({ ...m, repo }));
+      });
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -97,19 +90,15 @@ export function useActivity(repos: string[]) {
     queryKey: ["activity", selectedOrg, repos],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const commits = await fetchRepoActivity(selectedOrg, repo);
-          return commits.map((c) => ({ ...c, repo }));
-        }),
+      const results = await safeMap(repos, async (repo) => {
+        const commits = await fetchRepoActivity(selectedOrg, repo);
+        return commits.map((c) => ({ ...c, repo }));
+      });
+      return results.sort(
+        (a, b) =>
+          new Date(b.commit.author?.date ?? 0).getTime() -
+          new Date(a.commit.author?.date ?? 0).getTime(),
       );
-      return results
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.commit.author?.date ?? 0).getTime() -
-            new Date(a.commit.author?.date ?? 0).getTime(),
-        );
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -121,18 +110,13 @@ export function useClosedIssues(repos: string[], since?: string) {
     queryKey: ["closedIssues", selectedOrg, repos, since],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const issues = await fetchClosedIssues(selectedOrg, repo, since);
-          return issues.map((i) => ({ ...i, repo }));
-        }),
+      const results = await safeMap(repos, async (repo) => {
+        const issues = await fetchClosedIssues(selectedOrg, repo, since);
+        return issues.map((i) => ({ ...i, repo }));
+      });
+      return results.sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
       );
-      return results
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-        );
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -144,18 +128,13 @@ export function useMergedPRs(repos: string[], since?: string) {
     queryKey: ["mergedPRs", selectedOrg, repos, since],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const prs = await fetchMergedPRs(selectedOrg, repo, since);
-          return prs.map((pr) => ({ ...pr, repo }));
-        }),
+      const results = await safeMap(repos, async (repo) => {
+        const prs = await fetchMergedPRs(selectedOrg, repo, since);
+        return prs.map((pr) => ({ ...pr, repo }));
+      });
+      return results.sort(
+        (a, b) => new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime(),
       );
-      return results
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime(),
-        );
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
@@ -167,13 +146,10 @@ export function useAllIssues(repos: string[], since?: string) {
     queryKey: ["allIssues", selectedOrg, repos, since],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const issues = await fetchAllIssues(selectedOrg, repo, since);
-          return issues.map((i) => ({ ...i, repo }));
-        }),
-      );
-      return results.flat();
+      return safeMap(repos, async (repo) => {
+        const issues = await fetchAllIssues(selectedOrg, repo, since);
+        return issues.map((i) => ({ ...i, repo }));
+      });
     },
     enabled: !!selectedOrg && repos.length > 0,
   });
