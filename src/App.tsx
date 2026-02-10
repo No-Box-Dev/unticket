@@ -22,12 +22,6 @@ export function App() {
       return;
     }
 
-    // If selected org isn't in the org list, clear it
-    if (selectedOrg && !orgLogins.includes(selectedOrg)) {
-      setSelectedOrg(null);
-      return;
-    }
-
     // Auto-select if there's only one org and none selected
     if (!selectedOrg && orgLogins.length === 1) {
       setSelectedOrg(orgLogins[0]);

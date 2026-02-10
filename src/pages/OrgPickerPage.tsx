@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
 import { Activity, Building2 } from "lucide-react";
@@ -5,6 +6,13 @@ import { Activity, Building2 } from "lucide-react";
 export function OrgPickerPage() {
   const { setSelectedOrg, logout } = useAuth();
   const { data: orgs, isLoading } = useOrgs();
+  const [manualOrg, setManualOrg] = useState("");
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = manualOrg.trim();
+    if (trimmed) setSelectedOrg(trimmed);
+  };
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
@@ -54,12 +62,30 @@ export function OrgPickerPage() {
 
               {orgs?.length === 0 && (
                 <p className="text-center text-stone-400 py-2 text-sm">
-                  No organisations found. GitPulse requires a GitHub organisation.
+                  No organisations listed. Your org may have third-party app restrictions.
                 </p>
               )}
             </>
           )}
         </div>
+
+        {/* Manual org entry — works even when API doesn't list the org */}
+        <form onSubmit={handleManualSubmit} className="mt-4 flex gap-2">
+          <input
+            type="text"
+            value={manualOrg}
+            onChange={(e) => setManualOrg(e.target.value)}
+            placeholder="Enter org name (e.g. n1healthcare)"
+            className="flex-1 px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+          />
+          <button
+            type="submit"
+            disabled={!manualOrg.trim()}
+            className="px-4 py-2 text-sm font-medium text-white bg-brand rounded-lg hover:bg-brand/90 disabled:opacity-40 cursor-pointer"
+          >
+            Go
+          </button>
+        </form>
 
         <button
           onClick={logout}
