@@ -146,7 +146,6 @@ export function PRsTab({ repoNames }: PRsTabProps) {
               >
                 Author <SortIcon col="author" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Branch</th>
               <th
                 onClick={() => toggleSort("reviewers")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
@@ -165,13 +164,13 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <tbody className="divide-y divide-stone-50">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-stone-400">
                   Loading pull requests...
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-stone-400">
                   No pull requests found
                 </td>
               </tr>
@@ -195,24 +194,20 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                         {pr.head.repo?.name}#{pr.number}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-stone-800 max-w-md truncate">
-                      {pr.title}
-                      {pr.draft && (
-                        <span className="ml-2 text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">
-                          draft
-                        </span>
-                      )}
+                    <td className="px-4 py-2.5 max-w-md">
+                      <div className="text-stone-800 truncate">
+                        {pr.title}
+                        {pr.draft && (
+                          <span className="ml-2 text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">
+                            draft
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-stone-400 truncate">
+                        {pr.head.ref} → {pr.base.ref}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-stone-500">{pr.user?.login}</td>
-                    <td className="px-4 py-2.5">
-                      <code className="text-xs bg-stone-50 px-1.5 py-0.5 rounded text-stone-600">
-                        {pr.head.ref}
-                      </code>
-                      <span className="text-stone-300 mx-1">&rarr;</span>
-                      <code className="text-xs bg-stone-50 px-1.5 py-0.5 rounded text-stone-600">
-                        {pr.base.ref}
-                      </code>
-                    </td>
                     <td className="px-4 py-2.5 text-stone-500 text-xs">
                       {(pr.requested_reviewers ?? []).length > 0
                         ? (pr.requested_reviewers ?? []).map((r: any) => r.login).join(", ")
