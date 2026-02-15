@@ -37,7 +37,7 @@ export function FeatureDetailModal({ feature, allPeople, allTeams, onClose, onUp
     specs: normalizeSpecs(feature.specs),
   });
   const [newSpec, setNewSpec] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const specs = normalizeSpecs(draft.specs);
 

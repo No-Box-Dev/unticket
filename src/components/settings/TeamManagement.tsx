@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Pencil, Trash2, X, Check, Search } from "lucide-react";
 import type { OrgSettings, Team, RepoInfo } from "@/lib/types";
 import type { UseMutationResult } from "@tanstack/react-query";

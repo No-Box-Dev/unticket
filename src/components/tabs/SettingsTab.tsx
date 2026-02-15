@@ -48,7 +48,7 @@ export function SettingsTab() {
         <TeamManagement
           settings={settings}
           saveSettings={saveSettings}
-          repos={repos}
+          repos={repos as any}
         />
       )}
 
