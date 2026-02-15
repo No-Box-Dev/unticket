@@ -50,6 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Dev mode: auto-inject token and org from env vars (always override)
+    const devToken = import.meta.env.VITE_DEV_TOKEN;
+    if (devToken) {
+      localStorage.setItem("gp_token", devToken);
+      resetOctokit();
+    }
+    const devOrg = import.meta.env.VITE_DEV_ORG;
+    if (devOrg) {
+      localStorage.setItem("gp_org", devOrg);
+      setSelectedOrg(devOrg);
+    }
+
     // Check for existing stored token (also migrate from old dashboard)
     const token =
       localStorage.getItem("gp_token") ??

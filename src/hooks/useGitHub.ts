@@ -60,7 +60,10 @@ export function useOpenIssues(repos: string[]) {
     queryKey: ["issues", selectedOrg, repos],
     queryFn: async () => {
       if (!selectedOrg) return [];
-      const results = await safeMap(repos, (repo) => fetchOpenIssues(selectedOrg, repo));
+      const results = await safeMap(repos, async (repo) => {
+        const issues = await fetchOpenIssues(selectedOrg, repo);
+        return issues.map((i) => ({ ...i, repo }));
+      });
       return results.sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
       );

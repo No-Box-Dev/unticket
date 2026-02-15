@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useOpenIssues, useClosedIssues } from "@/hooks/useGitHub";
-import { useSprint } from "@/hooks/useConfigRepo";
+import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,24 +40,34 @@ interface IssuesTabProps {
 export function IssuesTab({ repoNames }: IssuesTabProps) {
   const qc = useQueryClient();
   const { data: sprint } = useSprint();
+  const { data: settings } = useSettings();
   const { data: openIssues, isLoading } = useOpenIssues(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames, sprint?.startDate);
 
+  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("age");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  // Add repo context to issues
-  const openWithRepo = useMemo(
-    () => (openIssues ?? []).map((i: any) => ({ ...i, repo: i.repository?.name ?? i.repo ?? "" })),
-    [openIssues],
+  const teams = useMemo(
+    () => settings?.teams ?? [],
+    [settings],
   );
 
-  const closedWithRepo = useMemo(
-    () => (closedIssues ?? []).map((i: any) => ({ ...i })),
-    [closedIssues],
-  );
+  // Build repo→team lookup
+  const repoToTeam = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of teams) {
+      for (const r of t.repos ?? []) {
+        map.set(r, t.name);
+      }
+    }
+    return map;
+  }, [teams]);
+
+  const openWithRepo = openIssues ?? [];
+  const closedWithRepo = closedIssues ?? [];
 
   // Unique repos and labels for dropdowns
   const repos = useMemo(() => {
@@ -80,6 +90,9 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
 
   const filterIssues = (list: any[]) => {
     let result = list;
+    if (teamFilter !== "all") {
+      result = result.filter((i) => repoToTeam.get(i.repo) === teamFilter);
+    }
     if (repoFilter !== "all") {
       result = result.filter((i) => i.repo === repoFilter);
     }
@@ -139,6 +152,19 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        {teams.length > 1 && (
+          <select
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
+          >
+            <option value="all">All Teams</option>
+            {teams.map((t) => (
+              <option key={t.name} value={t.name}>{t.name}</option>
+            ))}
+          </select>
+        )}
+
         <select
           value={repoFilter}
           onChange={(e) => setRepoFilter(e.target.value)}
@@ -192,6 +218,7 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
               >
                 Title <SortIcon col="title" />
               </th>
+              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Team</th>
               <th
                 onClick={() => toggleSort("repo")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
@@ -212,26 +239,26 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
           <tbody className="divide-y divide-stone-50">
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-stone-400">
                   Loading issues...
                 </td>
               </tr>
             ) : filteredOpen.length === 0 && filteredClosed.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-stone-400">
                   No issues found
                 </td>
               </tr>
             ) : (
               <>
                 {filteredOpen.map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed={false} />
+                  <IssueRow key={issue.id} issue={issue} closed={false} teams={teams} />
                 ))}
 
                 {filteredClosed.length > 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider bg-stone-50 border-t-2 border-stone-200"
                     >
                       Closed During Sprint
@@ -240,7 +267,7 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
                 )}
 
                 {filteredClosed.map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed />
+                  <IssueRow key={issue.id} issue={issue} closed teams={teams} />
                 ))}
               </>
             )}
@@ -251,8 +278,9 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
   );
 }
 
-function IssueRow({ issue, closed }: { issue: any; closed: boolean }) {
+function IssueRow({ issue, closed, teams }: { issue: any; closed: boolean; teams: { name: string; color: string; repos: string[] }[] }) {
   const age = daysAgo(issue.created_at);
+  const team = teams.find((t) => (t.repos ?? []).includes(issue.repo));
 
   return (
     <tr className={cn("hover:bg-stone-50", closed && "text-stone-400")}>
@@ -265,6 +293,19 @@ function IssueRow({ issue, closed }: { issue: any; closed: boolean }) {
       </td>
       <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">#{issue.number}</td>
       <td className="px-4 py-2.5 max-w-md truncate">{issue.title}</td>
+      <td className="px-4 py-2.5">
+        {team ? (
+          <span className="flex items-center gap-1.5 text-xs text-stone-500">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: team.color }}
+            />
+            {team.name}
+          </span>
+        ) : (
+          <span className="text-xs text-stone-300">—</span>
+        )}
+      </td>
       <td className="px-4 py-2.5 text-stone-500 text-xs">{issue.repo || "—"}</td>
       <td className="px-4 py-2.5">
         <div className="flex gap-1 flex-wrap">

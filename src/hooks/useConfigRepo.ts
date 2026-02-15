@@ -8,10 +8,11 @@ import {
   fetchPeople,
   savePeople,
   fetchSettings,
+  saveSettings,
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
-import type { SprintConfig, Feature, Person } from "@/lib/types";
+import type { SprintConfig, Feature, Person, OrgSettings } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -110,6 +111,24 @@ export function useSavePeople() {
       if (context?.previous) qc.setQueryData(["people", selectedOrg], context.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["people", selectedOrg] }),
+  });
+}
+
+export function useSaveSettings() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: OrgSettings) => saveSettings(selectedOrg!, settings),
+    onMutate: async (settings) => {
+      await qc.cancelQueries({ queryKey: ["settings", selectedOrg] });
+      const previous = qc.getQueryData<OrgSettings>(["settings", selectedOrg]);
+      qc.setQueryData(["settings", selectedOrg], settings);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["settings", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["settings", selectedOrg] }),
   });
 }
 

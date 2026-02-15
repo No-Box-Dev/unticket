@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { usePeople } from "@/hooks/useConfigRepo";
+import { usePeople, useSettings } from "@/hooks/useConfigRepo";
 import { useMergedPRs, useClosedIssues, useAllIssues, useOrgMembers } from "@/hooks/useGitHub";
 import { MetricCard } from "@/components/MetricCard";
 import { Sparkline } from "@/components/Sparkline";
@@ -15,8 +15,15 @@ const METRIC_WEEKS = 10;
 
 export function IndividualTab({ repoNames }: IndividualTabProps) {
   const { data: people } = usePeople();
+  const { data: settings } = useSettings();
   const { data: orgMembers } = useOrgMembers();
   const [selected, setSelected] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+
+  const teams = useMemo(
+    () => settings?.teams ?? [],
+    [settings],
+  );
 
   const since = useMemo(() => {
     const d = new Date();
@@ -34,13 +41,20 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
     return (orgMembers ?? []).map((m: any) => ({
       github: m.login,
       name: m.login,
-      team: "",
+      teams: [] as string[],
       role: "",
     }));
   }, [people, orgMembers]);
 
-  const selectedPerson = selected ?? (personList.length > 0 ? personList[0].github : null);
+  // Filter people by team
+  const filteredPersonList = useMemo(() => {
+    if (teamFilter === "all") return personList;
+    return personList.filter((p) => p.teams.includes(teamFilter));
+  }, [personList, teamFilter]);
+
+  const selectedPerson = selected ?? (filteredPersonList.length > 0 ? filteredPersonList[0].github : null);
   const personInfo = personList.find((p) => p.github === selectedPerson);
+  const personTeams = personInfo ? teams.filter((t) => personInfo.teams.includes(t.name)) : [];
 
   // Filter data for selected person
   const personMergedPRs = useMemo(
@@ -123,9 +137,46 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Person picker */}
+      {/* Team filter + Person picker */}
+      {teams.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Team</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setTeamFilter("all"); setSelected(null); }}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                teamFilter === "all"
+                  ? "bg-brand text-white"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200",
+              )}
+            >
+              All
+            </button>
+            {teams.map((team) => (
+              <button
+                key={team.name}
+                onClick={() => {
+                  const next = team.name === teamFilter ? "all" : team.name;
+                  setTeamFilter(next);
+                  setSelected(null);
+                }}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                  teamFilter === team.name
+                    ? "bg-brand text-white"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200",
+                )}
+              >
+                {team.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        {personList.map((person) => (
+        {filteredPersonList.map((person) => (
           <button
             key={person.github}
             onClick={() => setSelected(person.github)}
@@ -152,12 +203,20 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
                   {personInfo.name || personInfo.github}
                 </h2>
               </div>
-              {personInfo.role && (
-                <p className="text-sm text-stone-500 ml-8">{personInfo.role}</p>
-              )}
-              {personInfo.team && (
-                <p className="text-xs text-stone-400 ml-8">Team: {personInfo.team}</p>
-              )}
+              <div className="ml-8 flex items-center gap-3">
+                {personInfo.role && (
+                  <span className="text-sm text-stone-500">{personInfo.role}</span>
+                )}
+                {personTeams.map((t) => (
+                  <span key={t.name} className="flex items-center gap-1.5 text-xs text-stone-400">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    {t.name}
+                  </span>
+                ))}
+              </div>
 
               <div className="mt-4">
                 <span className="text-xs text-stone-500 block mb-2">Contributions Over Time</span>

@@ -3,7 +3,7 @@ import type { Effort } from "@/lib/types";
 
 const effortConfig: Record<Effort, { label: string; bg: string; text: string; border: string }> = {
   low: { label: "Low", bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
-  medium: { label: "Effort", bg: "bg-transparent", text: "text-stone-400", border: "border-stone-300 border-dashed" },
+  medium: { label: "Medium", bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
   high: { label: "High", bg: "bg-red-50", text: "text-red-600", border: "border-red-200" },
 };
 

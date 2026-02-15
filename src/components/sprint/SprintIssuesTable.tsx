@@ -1,4 +1,3 @@
-import { CircleDot, CircleCheck, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 function daysAgo(date: string): number {
@@ -29,66 +28,61 @@ interface SprintIssuesTableProps {
 
 export function SprintIssuesTable({ openIssues, closedIssues, isLoading }: SprintIssuesTableProps) {
   const openCount = openIssues.length;
-  const closedCount = closedIssues.length;
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
-        <span className="text-sm font-medium text-stone-700">
-          Issues{" "}
-          <span className="text-stone-400 font-normal">
-            {openCount} open, {closedCount} closed
-          </span>
-        </span>
+        <span className="text-sm font-medium text-stone-700">Issues</span>
+        <span className="text-xs text-stone-400">{openCount} open</span>
       </div>
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-stone-100 text-left">
-            <th className="px-3 py-2 text-xs font-medium text-stone-500 w-8"></th>
-            <th className="px-3 py-2 text-xs font-medium text-stone-500">#</th>
-            <th className="px-3 py-2 text-xs font-medium text-stone-500">Title</th>
-            <th className="px-3 py-2 text-xs font-medium text-stone-500">Repo</th>
-            <th className="px-3 py-2 text-xs font-medium text-stone-500">Assignee</th>
-            <th className="px-3 py-2 text-xs font-medium text-stone-500 text-right">Age</th>
-            <th className="px-3 py-2 w-6"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-stone-50">
-          {isLoading ? (
-            <tr>
-              <td colSpan={7} className="px-3 py-6 text-center text-stone-400">
-                Loading issues...
-              </td>
+      <div className="overflow-auto max-h-[400px]">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-stone-100 text-left">
+              <th className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider">#</th>
+              <th className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider">Title</th>
+              <th className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider">Repo</th>
+              <th className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider">Assignee</th>
+              <th className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider text-right">Age</th>
             </tr>
-          ) : openIssues.length === 0 && closedIssues.length === 0 ? (
-            <tr>
-              <td colSpan={7} className="px-3 py-6 text-center text-stone-400">
-                No issues found
-              </td>
-            </tr>
-          ) : (
-            <>
-              {openIssues.map((issue) => (
-                <IssueRow key={issue.id} issue={issue} closed={false} />
-              ))}
-              {closedIssues.length > 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider bg-stone-50"
-                  >
-                    Closed this sprint
-                  </td>
-                </tr>
-              )}
-              {closedIssues.map((issue) => (
-                <IssueRow key={issue.id} issue={issue} closed />
-              ))}
-            </>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-stone-50">
+            {isLoading ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-stone-400">
+                  Loading issues...
+                </td>
+              </tr>
+            ) : openIssues.length === 0 && closedIssues.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-stone-400">
+                  No issues found
+                </td>
+              </tr>
+            ) : (
+              <>
+                {openIssues.map((issue) => (
+                  <IssueRow key={issue.id} issue={issue} closed={false} />
+                ))}
+                {closedIssues.length > 0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider bg-stone-50"
+                    >
+                      Closed this sprint
+                    </td>
+                  </tr>
+                )}
+                {closedIssues.map((issue) => (
+                  <IssueRow key={issue.id} issue={issue} closed />
+                ))}
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -96,27 +90,23 @@ export function SprintIssuesTable({ openIssues, closedIssues, isLoading }: Sprin
 function IssueRow({ issue, closed }: { issue: SprintIssue; closed: boolean }) {
   const age = daysAgo(issue.created_at);
   return (
-    <tr className={cn("hover:bg-stone-50", closed && "text-stone-400")}>
-      <td className="px-3 py-2">
-        {closed ? (
-          <CircleCheck className="w-4 h-4 text-purple-500" />
-        ) : (
-          <CircleDot className="w-4 h-4 text-green-600" />
-        )}
-      </td>
+    <tr
+      className={cn("hover:bg-stone-50 cursor-pointer", closed && "text-stone-400")}
+      onClick={() => window.open(issue.html_url, "_blank")}
+    >
       <td className="px-3 py-2 text-stone-500 whitespace-nowrap">#{issue.number}</td>
-      <td className="px-3 py-2 max-w-xs truncate">{issue.title}</td>
-      <td className="px-3 py-2 text-stone-500 text-xs">{issue.repo}</td>
+      <td className="px-3 py-2 max-w-[280px] truncate">{issue.title}</td>
+      <td className="px-3 py-2 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1.5 text-xs text-stone-500">
+          <span className={cn("w-2 h-2 rounded-full shrink-0", closed ? "bg-stone-300" : "bg-green-500")} />
+          <span className="truncate max-w-[120px]">{issue.repo}</span>
+        </span>
+      </td>
       <td className="px-3 py-2 text-stone-500 text-xs">
         {issue.assignees.length > 0 ? issue.assignees.map((a) => a.login).join(", ") : "—"}
       </td>
       <td className={cn("px-3 py-2 text-right tabular-nums text-xs", age > 14 && !closed && "text-amber-600 font-medium")}>
         {age}d
-      </td>
-      <td className="px-3 py-2">
-        <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-brand">
-          <ExternalLink className="w-3 h-3" />
-        </a>
       </td>
     </tr>
   );

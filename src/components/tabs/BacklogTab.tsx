@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSprint, useFeatures, usePeople, useSettings, useSaveFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
+import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import type { Feature } from "@/lib/types";
 import { Archive } from "lucide-react";
@@ -11,9 +12,10 @@ export function BacklogTab() {
   const { data: people } = usePeople();
   const { data: settings } = useSettings();
   const saveFeatures = useSaveFeatures();
+  const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
 
   const teams = useMemo(
-    () => settings?.teams ?? [{ name: "Team", color: "#1B6971" }],
+    () => settings?.teams ?? [{ name: "Team", color: "#1B6971", repos: [] }],
     [settings],
   );
 
@@ -31,6 +33,9 @@ export function BacklogTab() {
     const all = features ?? [];
     const next = all.map((f) => (f.id === updated.id ? updated : f));
     saveFeatures.mutate(next);
+    if (detailFeature?.id === updated.id) {
+      setDetailFeature(updated);
+    }
   };
 
   const deleteFeature = (id: string) => {
@@ -69,7 +74,7 @@ export function BacklogTab() {
       {teams.map((team) => {
         const teamFeatures = futureFeatures.filter((f) => f.team === team.name);
         const teamPeople = (people ?? [])
-          .filter((p) => p.team === team.name)
+          .filter((p) => p.teams?.includes(team.name))
           .map((p) => p.github);
 
         return (
@@ -92,6 +97,7 @@ export function BacklogTab() {
                     allPeople={teamPeople.length > 0 ? teamPeople : allPeopleNames}
                     onUpdate={updateFeature}
                     onDelete={deleteFeature}
+                    onOpenDetail={setDetailFeature}
                     mode="backlog"
                     currentSprint={sprint?.number}
                   />
@@ -109,6 +115,18 @@ export function BacklogTab() {
           </div>
         );
       })}
+
+      {/* Detail modal — rendered at tab level so team changes don't unmount it */}
+      {detailFeature && (
+        <FeatureDetailModal
+          key={detailFeature.id}
+          feature={detailFeature}
+          allPeople={allPeopleNames}
+          allTeams={teams}
+          onClose={() => setDetailFeature(null)}
+          onUpdate={updateFeature}
+        />
+      )}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export type TabId =
 // .gitpulse config repo types
 
 export type Effort = "low" | "medium" | "high";
+export type Priority = "high" | "medium" | "low" | "none";
 export type FeatureStatus = "active" | "done" | "future";
 
 export interface SprintConfig {
@@ -67,6 +68,11 @@ export interface SprintConfig {
   focus: string;
 }
 
+export interface Spec {
+  text: string;
+  owner?: string;
+}
+
 export interface Feature {
   id: string;
   title: string;
@@ -75,19 +81,28 @@ export interface Feature {
   status: FeatureStatus;
   sprint: number | null;
   effort: Effort;
+  priority?: Priority;
   description?: string;
-  specs?: string[];
+  specs?: (string | Spec)[];
 }
 
 export interface Person {
   github: string;
   name: string;
-  team: string;
+  teams: string[];
   role: string;
+  /** @deprecated — use `teams` */
+  team?: string;
+}
+
+export interface Team {
+  name: string;
+  color: string;
+  repos: string[];
 }
 
 export interface OrgSettings {
-  teams: { name: string; color: string }[];
+  teams: Team[];
 }
 
 // Extended issue info with repo context
