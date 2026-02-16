@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { usePeople, useSettings } from "@/hooks/useConfigRepo";
 import { useMergedPRs, useClosedIssues, useAllIssues, useOrgMembers } from "@/hooks/useGitHub";
+import { useAuth } from "@/lib/auth";
 import { MetricCard } from "@/components/MetricCard";
 import { Sparkline } from "@/components/Sparkline";
 import { computeMetric, extractMergedDates, extractClosedDates, extractCreatedDates } from "@/lib/metrics";
@@ -14,6 +15,7 @@ interface IndividualTabProps {
 const METRIC_WEEKS = 10;
 
 export function IndividualTab({ repoNames }: IndividualTabProps) {
+  const { user } = useAuth();
   const { data: people } = usePeople();
   const { data: settings } = useSettings();
   const { data: orgMembers } = useOrgMembers();
@@ -31,20 +33,30 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
     return d.toISOString();
   }, []);
 
-  const { data: mergedPRs } = useMergedPRs(repoNames, since);
-  const { data: closedIssues } = useClosedIssues(repoNames, since);
-  const { data: allIssues } = useAllIssues(repoNames, since);
+  const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(repoNames, since);
+  const { data: closedIssues, isLoading: closedLoading } = useClosedIssues(repoNames, since);
+  const { data: allIssues, isLoading: allLoading } = useAllIssues(repoNames, since);
+
+  const isLoading = mergedLoading || closedLoading || allLoading;
 
   // Use people from config, or fall back to org members
+  // Sort: current user first, then alphabetical by name
   const personList = useMemo(() => {
-    if (people && people.length > 0) return people;
-    return (orgMembers ?? []).map((m: any) => ({
-      github: m.login,
-      name: m.login,
-      teams: [] as string[],
-      role: "",
-    }));
-  }, [people, orgMembers]);
+    const raw = (people && people.length > 0)
+      ? people
+      : (orgMembers ?? []).map((m: any) => ({
+          github: m.login,
+          name: m.login,
+          teams: [] as string[],
+          role: "",
+        }));
+    const myLogin = user?.login?.toLowerCase();
+    return [...raw].sort((a, b) => {
+      if (a.github.toLowerCase() === myLogin) return -1;
+      if (b.github.toLowerCase() === myLogin) return 1;
+      return (a.name || a.github).localeCompare(b.name || b.github);
+    });
+  }, [people, orgMembers, user]);
 
   // Filter people by team
   const filteredPersonList = useMemo(() => {
@@ -52,28 +64,34 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
     return personList.filter((p) => p.teams.includes(teamFilter));
   }, [personList, teamFilter]);
 
-  const selectedPerson = selected ?? (filteredPersonList.length > 0 ? filteredPersonList[0].github : null);
+  // Default to current user if in the list, otherwise first person
+  const selectedPerson = selected
+    ?? (user && filteredPersonList.some((p) => p.github.toLowerCase() === user.login.toLowerCase()) ? user.login : null)
+    ?? (filteredPersonList.length > 0 ? filteredPersonList[0].github : null);
   const personInfo = personList.find((p) => p.github === selectedPerson);
   const personTeams = personInfo ? teams.filter((t) => personInfo.teams.includes(t.name)) : [];
 
+  // Case-insensitive login match (GitHub usernames are case-insensitive)
+  const selectedLower = selectedPerson?.toLowerCase();
+
   // Filter data for selected person
   const personMergedPRs = useMemo(
-    () => (mergedPRs ?? []).filter((pr: any) => pr.user?.login === selectedPerson),
-    [mergedPRs, selectedPerson],
+    () => (mergedPRs ?? []).filter((pr: any) => pr.user?.login?.toLowerCase() === selectedLower),
+    [mergedPRs, selectedLower],
   );
 
   const personClosedIssues = useMemo(
     () =>
       (closedIssues ?? []).filter((i: any) =>
-        (i.assignees ?? []).some((a: any) => a.login === selectedPerson),
+        (i.assignees ?? []).some((a: any) => a.login?.toLowerCase() === selectedLower),
       ),
-    [closedIssues, selectedPerson],
+    [closedIssues, selectedLower],
   );
 
   const personCreatedIssues = useMemo(
     () =>
-      (allIssues ?? []).filter((i: any) => i.user?.login === selectedPerson),
-    [allIssues, selectedPerson],
+      (allIssues ?? []).filter((i: any) => i.user?.login?.toLowerCase() === selectedLower),
+    [allIssues, selectedLower],
   );
 
   // Metrics
@@ -192,68 +210,76 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
         ))}
       </div>
 
-      {/* Hero card */}
-      {personInfo && (
-        <div className="bg-white rounded-xl border border-stone-200 p-5">
-          <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <User className="w-5 h-5 text-stone-400" />
-                <h2 className="text-lg font-semibold text-stone-800">
-                  {personInfo.name || personInfo.github}
-                </h2>
-              </div>
-              <div className="ml-8 flex items-center gap-3">
-                {personInfo.role && (
-                  <span className="text-sm text-stone-500">{personInfo.role}</span>
-                )}
-                {personTeams.map((t) => (
-                  <span key={t.name} className="flex items-center gap-1.5 text-xs text-stone-400">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: t.color }}
-                    />
-                    {t.name}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <span className="text-xs text-stone-500 block mb-2">Contributions Over Time</span>
-                <Sparkline data={activityMetric.history} color="#1B6971" width={300} height={80} labels />
-              </div>
-            </div>
-
-            <div className="md:w-64">
-              <span className="text-xs text-stone-500 block mb-2">Recent Activity</span>
-              <div className="space-y-1.5">
-                {recentActivity.length === 0 ? (
-                  <p className="text-xs text-stone-400">No recent activity</p>
-                ) : (
-                  recentActivity.map((item, i) => (
-                    <div key={i} className="text-xs text-stone-600 flex items-start gap-1.5">
-                      <span
-                        className={cn(
-                          "w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1",
-                          item.type === "pr" ? "bg-blue-500" : "bg-green-500",
-                        )}
-                      />
-                      {item.text}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12 text-stone-400">
+          Loading metrics...
         </div>
-      )}
+      ) : (
+        <>
+          {/* Hero card */}
+          {personInfo && (
+            <div className="bg-white rounded-xl border border-stone-200 p-5">
+              <div className="flex flex-col md:flex-row md:items-start gap-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    <User className="w-5 h-5 text-stone-400" />
+                    <h2 className="text-lg font-semibold text-stone-800">
+                      {personInfo.name || personInfo.github}
+                    </h2>
+                  </div>
+                  <div className="ml-8 flex items-center gap-3">
+                    {personInfo.role && (
+                      <span className="text-sm text-stone-500">{personInfo.role}</span>
+                    )}
+                    {personTeams.map((t) => (
+                      <span key={t.name} className="flex items-center gap-1.5 text-xs text-stone-400">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: t.color }}
+                        />
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard title="PRs Merged" metric={prsMergedMetric} color="#3b82f6" />
-        <MetricCard title="Issues Solved" metric={issuesSolvedMetric} color="#10b981" />
-        <MetricCard title="Issues Identified" metric={issuesIdentifiedMetric} color="#d97706" />
-      </div>
+                  <div className="mt-4">
+                    <span className="text-xs text-stone-500 block mb-2">Contributions Over Time</span>
+                    <Sparkline data={activityMetric.history} color="#1B6971" width={300} height={80} labels />
+                  </div>
+                </div>
+
+                <div className="md:w-64">
+                  <span className="text-xs text-stone-500 block mb-2">Recent Activity</span>
+                  <div className="space-y-1.5">
+                    {recentActivity.length === 0 ? (
+                      <p className="text-xs text-stone-400">No recent activity</p>
+                    ) : (
+                      recentActivity.map((item, i) => (
+                        <div key={i} className="text-xs text-stone-600 flex items-start gap-1.5">
+                          <span
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1",
+                              item.type === "pr" ? "bg-blue-500" : "bg-green-500",
+                            )}
+                          />
+                          {item.text}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Metric cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <MetricCard title="PRs Merged" metric={prsMergedMetric} color="#3b82f6" />
+            <MetricCard title="Issues Solved" metric={issuesSolvedMetric} color="#10b981" />
+            <MetricCard title="Issues Identified" metric={issuesIdentifiedMetric} color="#d97706" />
+          </div>
+        </>
+      )}
     </div>
   );
 }

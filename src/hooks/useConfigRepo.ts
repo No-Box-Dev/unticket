@@ -18,7 +18,7 @@ export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["configRepo", selectedOrg],
-    queryFn: () => ensureConfigRepo(selectedOrg!),
+    queryFn: ensureConfigRepo,
     enabled: !!selectedOrg,
     staleTime: 5 * 60 * 1000,
   });
@@ -28,7 +28,7 @@ export function useSprint() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["sprint", selectedOrg],
-    queryFn: () => fetchSprint(selectedOrg!),
+    queryFn: fetchSprint,
     enabled: !!selectedOrg,
   });
 }
@@ -37,7 +37,7 @@ export function useFeatures() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["features", selectedOrg],
-    queryFn: () => fetchFeatures(selectedOrg!),
+    queryFn: fetchFeatures,
     enabled: !!selectedOrg,
   });
 }
@@ -46,7 +46,7 @@ export function usePeople() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["people", selectedOrg],
-    queryFn: () => fetchPeople(selectedOrg!),
+    queryFn: fetchPeople,
     enabled: !!selectedOrg,
   });
 }
@@ -55,7 +55,7 @@ export function useSettings() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["settings", selectedOrg],
-    queryFn: () => fetchSettings(selectedOrg!),
+    queryFn: fetchSettings,
     enabled: !!selectedOrg,
   });
 }
@@ -64,7 +64,7 @@ export function useSaveFeatures() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (features: Feature[]) => saveFeatures(selectedOrg!, features),
+    mutationFn: (features: Feature[]) => saveFeatures(features),
     onMutate: async (features) => {
       await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
       const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
@@ -82,7 +82,7 @@ export function useSaveSprint() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (sprint: SprintConfig) => saveSprint(selectedOrg!, sprint),
+    mutationFn: (sprint: SprintConfig) => saveSprint(sprint),
     onMutate: async (sprint) => {
       await qc.cancelQueries({ queryKey: ["sprint", selectedOrg] });
       const previous = qc.getQueryData<SprintConfig>(["sprint", selectedOrg]);
@@ -100,7 +100,7 @@ export function useSavePeople() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (people: Person[]) => savePeople(selectedOrg!, people),
+    mutationFn: (people: Person[]) => savePeople(people),
     onMutate: async (people) => {
       await qc.cancelQueries({ queryKey: ["people", selectedOrg] });
       const previous = qc.getQueryData<Person[]>(["people", selectedOrg]);
@@ -118,7 +118,7 @@ export function useSaveSettings() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (settings: OrgSettings) => saveSettings(selectedOrg!, settings),
+    mutationFn: (settings: OrgSettings) => saveSettings(settings),
     onMutate: async (settings) => {
       await qc.cancelQueries({ queryKey: ["settings", selectedOrg] });
       const previous = qc.getQueryData<OrgSettings>(["settings", selectedOrg]);
@@ -136,7 +136,7 @@ export function useCreateConfigRepo() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => createConfigRepo(selectedOrg!),
+    mutationFn: createConfigRepo,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["configRepo", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });

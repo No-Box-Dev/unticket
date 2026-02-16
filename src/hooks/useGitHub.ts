@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchOrgs,
   fetchRepos,
@@ -10,16 +10,10 @@ import {
   fetchMilestones,
   fetchRepoActivity,
   fetchOrgMembers,
+  fetchSyncStatus,
+  triggerSync,
 } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
-
-// Safe parallel fetch — skips repos that error (403, 404, issues disabled)
-async function safeMap<T>(repos: string[], fn: (repo: string) => Promise<T[]>): Promise<T[]> {
-  const results = await Promise.allSettled(repos.map(fn));
-  return results
-    .filter((r): r is PromiseFulfilledResult<T[]> => r.status === "fulfilled")
-    .flatMap((r) => r.value);
-}
 
 export function useOrgs() {
   const { user } = useAuth();
@@ -34,7 +28,7 @@ export function useRepos() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["repos", selectedOrg],
-    queryFn: () => fetchRepos(selectedOrg!),
+    queryFn: fetchRepos,
     enabled: !!selectedOrg,
   });
 }
@@ -43,13 +37,7 @@ export function useOpenPRs(repos: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["prs", selectedOrg, repos],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      const results = await safeMap(repos, (repo) => fetchOpenPRs(selectedOrg, repo));
-      return results.sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-      );
-    },
+    queryFn: fetchOpenPRs,
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -58,16 +46,7 @@ export function useOpenIssues(repos: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["issues", selectedOrg, repos],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      const results = await safeMap(repos, async (repo) => {
-        const issues = await fetchOpenIssues(selectedOrg, repo);
-        return issues.map((i) => ({ ...i, repo }));
-      });
-      return results.sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-      );
-    },
+    queryFn: fetchOpenIssues,
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -76,13 +55,7 @@ export function useMilestones(repos: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["milestones", selectedOrg, repos],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      return safeMap(repos, async (repo) => {
-        const milestones = await fetchMilestones(selectedOrg, repo);
-        return milestones.map((m) => ({ ...m, repo }));
-      });
-    },
+    queryFn: fetchMilestones,
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -91,18 +64,7 @@ export function useActivity(repos: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["activity", selectedOrg, repos],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      const results = await safeMap(repos, async (repo) => {
-        const commits = await fetchRepoActivity(selectedOrg, repo);
-        return commits.map((c) => ({ ...c, repo }));
-      });
-      return results.sort(
-        (a, b) =>
-          new Date(b.commit.author?.date ?? 0).getTime() -
-          new Date(a.commit.author?.date ?? 0).getTime(),
-      );
-    },
+    queryFn: fetchRepoActivity,
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -111,16 +73,7 @@ export function useClosedIssues(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["closedIssues", selectedOrg, repos, since],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      const results = await safeMap(repos, async (repo) => {
-        const issues = await fetchClosedIssues(selectedOrg, repo, since);
-        return issues.map((i) => ({ ...i, repo }));
-      });
-      return results.sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-      );
-    },
+    queryFn: () => fetchClosedIssues(since),
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -129,16 +82,7 @@ export function useMergedPRs(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["mergedPRs", selectedOrg, repos, since],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      const results = await safeMap(repos, async (repo) => {
-        const prs = await fetchMergedPRs(selectedOrg, repo, since);
-        return prs.map((pr) => ({ ...pr, repo }));
-      });
-      return results.sort(
-        (a, b) => new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime(),
-      );
-    },
+    queryFn: () => fetchMergedPRs(since),
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -147,13 +91,7 @@ export function useAllIssues(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["allIssues", selectedOrg, repos, since],
-    queryFn: async () => {
-      if (!selectedOrg) return [];
-      return safeMap(repos, async (repo) => {
-        const issues = await fetchAllIssues(selectedOrg, repo, since);
-        return issues.map((i) => ({ ...i, repo }));
-      });
-    },
+    queryFn: () => fetchAllIssues(since),
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
@@ -162,7 +100,38 @@ export function useOrgMembers() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["orgMembers", selectedOrg],
-    queryFn: () => fetchOrgMembers(selectedOrg!),
+    queryFn: fetchOrgMembers,
     enabled: !!selectedOrg,
+  });
+}
+
+// ---------- Sync hooks ----------
+
+export function useSyncStatus() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["syncStatus", selectedOrg],
+    queryFn: fetchSyncStatus,
+    enabled: !!selectedOrg,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useTriggerSync() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: triggerSync,
+    onSuccess: () => {
+      // Invalidate all cached data after sync
+      qc.invalidateQueries({ queryKey: ["repos", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["prs", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["issues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["closedIssues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["mergedPRs", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });
+    },
   });
 }
