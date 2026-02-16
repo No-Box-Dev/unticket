@@ -1,0 +1,7 @@
+name = "gitpulse"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gitpulse"
+database_id = "328738d6-f12b-4a6c-921b-bc9670f6c0b2"

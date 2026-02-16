@@ -3,7 +3,7 @@ import { X, Plus, Trash2 } from "lucide-react";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
-import type { Feature, Effort, Priority, Team, Spec } from "@/lib/types";
+import type { Feature, Effort, Priority, Spec } from "@/lib/types";
 
 // Normalize legacy string specs to Spec objects
 function normalizeSpecs(specs?: (string | Spec)[]): Spec[] {
@@ -25,12 +25,11 @@ function cleanFeature(draft: Feature, specs: Spec[]): Feature {
 interface FeatureDetailModalProps {
   feature: Feature;
   allPeople: string[];
-  allTeams: Team[];
   onClose: () => void;
   onUpdate: (updated: Feature) => void;
 }
 
-export function FeatureDetailModal({ feature, allPeople, allTeams, onClose, onUpdate }: FeatureDetailModalProps) {
+export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({
     ...feature,
     description: feature.description ?? "",
@@ -112,14 +111,6 @@ export function FeatureDetailModal({ feature, allPeople, allTeams, onClose, onUp
         </div>
         <div className="px-5 py-4 space-y-5">
           <div className="flex items-center gap-4">
-            <div>
-              <span className="text-xs text-stone-500 block mb-1">Team</span>
-              <TeamDropdown
-                value={draft.team}
-                teams={allTeams}
-                onChange={(team) => update({ team })}
-              />
-            </div>
             <div>
               <span className="text-xs text-stone-500 block mb-1">Sprint</span>
               <span className="text-sm text-stone-700">{draft.sprint ?? "Backlog"}</span>
@@ -286,69 +277,3 @@ function SpecOwnerPicker({
   );
 }
 
-function TeamDropdown({
-  value,
-  teams,
-  onChange,
-}: {
-  value: string;
-  teams: Team[];
-  onChange: (team: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const currentTeam = teams.find((t) => t.name === value);
-
-  return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-sm text-stone-700 hover:text-stone-900 cursor-pointer"
-      >
-        {currentTeam && (
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: currentTeam.color }}
-          />
-        )}
-        {value}
-      </button>
-      {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[140px]">
-          {teams.map((team) => (
-            <button
-              key={team.name}
-              onClick={() => {
-                onChange(team.name);
-                setOpen(false);
-              }}
-              className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer text-left ${
-                team.name === value ? "font-medium text-stone-800" : "text-stone-600"
-              }`}
-            >
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: team.color }}
-              />
-              {team.name}
-            </button>
-          ))}
-          {teams.length === 0 && (
-            <div className="px-3 py-1.5 text-xs text-stone-400">
-              No teams configured
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

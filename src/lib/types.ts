@@ -76,7 +76,7 @@ export interface Spec {
 export interface Feature {
   id: string;
   title: string;
-  team: string;
+  team?: string;
   owners: string[];
   status: FeatureStatus;
   sprint: number | null;
@@ -103,6 +103,7 @@ export interface Team {
 
 export interface OrgSettings {
   teams: Team[];
+  draftRepos?: string[];
 }
 
 // Extended issue info with repo context

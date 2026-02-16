@@ -22,7 +22,6 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const saveFeatures = useSaveFeatures();
   const createRepo = useCreateConfigRepo();
 
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [justMe, setJustMe] = useState(false);
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
 
@@ -35,9 +34,9 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     [settings],
   );
 
-  const visibleTeams = useMemo(
-    () => (selectedTeam ? teams.filter((t) => t.name === selectedTeam) : teams),
-    [teams, selectedTeam],
+  const draftRepos = useMemo(
+    () => new Set(settings?.draftRepos ?? []),
+    [settings],
   );
 
   const allPeopleNames = useMemo(
@@ -45,19 +44,46 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     [people],
   );
 
-  const sprintFeatures = useMemo(
-    () =>
-      (features ?? []).filter(
-        (f) => f.sprint === sprint?.number && f.status !== "future",
-      ),
-    [features, sprint],
+  // Flat sprint features (no team grouping)
+  const sprintFeatures = useMemo(() => {
+    let feats = (features ?? []).filter(
+      (f) => f.sprint === sprint?.number && f.status !== "future",
+    );
+    if (justMe && user) {
+      feats = feats.filter((f) => f.owners.includes(user.login));
+    }
+    return feats;
+  }, [features, sprint, justMe, user]);
+
+  const doneCount = useMemo(
+    () => sprintFeatures.filter((f) => f.status === "done").length,
+    [sprintFeatures],
   );
+
+  // Issues grouped by team, excluding draft repos
+  const issuesByTeam = useMemo(() => {
+    return teams.map((team) => {
+      const teamRepos = (team.repos ?? []).filter((r) => !draftRepos.has(r));
+      let teamOpen = (openIssues ?? []).filter((i: any) => teamRepos.includes(i.repo));
+      let teamClosed = (closedIssues ?? []).filter((i: any) => teamRepos.includes(i.repo));
+
+      if (justMe && user) {
+        teamOpen = teamOpen.filter((i: any) =>
+          i.assignees?.some((a: any) => a.login === user.login),
+        );
+        teamClosed = teamClosed.filter((i: any) =>
+          i.assignees?.some((a: any) => a.login === user.login),
+        );
+      }
+
+      return { team, openIssues: teamOpen, closedIssues: teamClosed };
+    }).filter((t) => t.team.repos.length > 0);
+  }, [teams, openIssues, closedIssues, draftRepos, justMe, user]);
 
   const updateFeature = (updated: Feature) => {
     const all = features ?? [];
     const next = all.map((f) => (f.id === updated.id ? updated : f));
     saveFeatures.mutate(next);
-    // Keep modal in sync if open
     if (detailFeature?.id === updated.id) {
       setDetailFeature(updated);
     }
@@ -68,12 +94,11 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     saveFeatures.mutate(all.filter((f) => f.id !== id));
   };
 
-  const addFeature = (team: string, title: string) => {
+  const addFeature = (title: string) => {
     const all = features ?? [];
     const newFeature: Feature = {
       id: `feat-${Date.now()}`,
       title,
-      team,
       owners: [],
       status: "active",
       sprint: sprint?.number ?? null,
@@ -118,36 +143,20 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Team Filter Bar */}
-      {teams.length > 1 && (
+      {/* Sprint Header + Just Me */}
+      <div className="bg-white rounded-xl border border-stone-200 border-l-4 border-l-brand px-4 py-2.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">Team</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setSelectedTeam(null)}
-                className={`px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors ${
-                  selectedTeam === null
-                    ? "bg-brand text-white"
-                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                }`}
-              >
-                All
-              </button>
-              {teams.map((team) => (
-                <button
-                  key={team.name}
-                  onClick={() => setSelectedTeam(team.name === selectedTeam ? null : team.name)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors ${
-                    selectedTeam === team.name
-                      ? "bg-brand text-white"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  {team.name}
-                </button>
-              ))}
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-stone-800">
+              Sprint {sprint.number}: {sprint.name}
+            </h2>
+            <div className="flex items-center gap-1.5 text-xs text-stone-400">
+              <Calendar className="w-3.5 h-3.5" />
+              {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
             </div>
+            {sprint.focus && (
+              <span className="text-xs text-brand">{sprint.focus}</span>
+            )}
           </div>
           <button
             onClick={() => setJustMe(!justMe)}
@@ -160,110 +169,78 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             Just Me
           </button>
         </div>
-      )}
-
-      {/* Sprint Header */}
-      <div className="bg-white rounded-xl border border-stone-200 border-l-4 border-l-brand p-5">
-        <h2 className="text-lg font-semibold text-stone-800">
-          Sprint {sprint.number}: {sprint.name}
-        </h2>
-        <div className="flex items-center gap-2 mt-1 text-sm text-stone-500">
-          <Calendar className="w-4 h-4" />
-          {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
-        </div>
-        {sprint.focus && (
-          <p className="mt-2 text-sm text-brand">{sprint.focus}</p>
-        )}
       </div>
 
-      {/* Per-team sections */}
-      {visibleTeams.map((team) => {
-        let teamFeatures = sprintFeatures.filter((f) => f.team === team.name);
-        if (justMe && user) {
-          teamFeatures = teamFeatures.filter((f) => f.owners.includes(user.login));
-        }
-        const doneCount = teamFeatures.filter((f) => f.status === "done").length;
-        const teamPeople = (people ?? [])
-          .filter((p) => p.teams?.includes(team.name))
-          .map((p) => p.github);
-
-        // Filter issues by team's assigned repos
-        const teamRepos = team.repos ?? [];
-        let teamOpenIssues = (openIssues ?? [])
-          .filter((i: any) => teamRepos.includes(i.repo));
-        let teamClosedIssues = (closedIssues ?? [])
-          .filter((i: any) => teamRepos.includes(i.repo));
-
-        if (justMe && user) {
-          teamOpenIssues = teamOpenIssues.filter((i: any) =>
-            i.assignees?.some((a: any) => a.login === user.login),
-          );
-          teamClosedIssues = teamClosedIssues.filter((i: any) =>
-            i.assignees?.some((a: any) => a.login === user.login),
-          );
-        }
-
-        return (
-          <div key={team.name}>
-            <h3
-              className="text-xs font-bold uppercase tracking-wider mb-3"
-              style={{ color: team.color }}
-            >
-              {team.name}
-            </h3>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Features Panel */}
-              <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-stone-100">
-                  <span className="text-sm font-medium text-stone-700">
-                    Features{" "}
-                    <span className="text-stone-400 font-normal">
-                      {doneCount}/{teamFeatures.length}
-                    </span>
-                  </span>
-                </div>
-                <div className="p-2 space-y-0.5">
-                  {teamFeatures.map((feature) => (
-                    <FeatureCard
-                      key={feature.id}
-                      feature={feature}
-                      allPeople={teamPeople.length > 0 ? teamPeople : allPeopleNames}
-                      onUpdate={updateFeature}
-                      onDelete={deleteFeature}
-                      onOpenDetail={setDetailFeature}
-                      mode="sprint"
-                    />
-                  ))}
-                  {teamFeatures.length === 0 && (
-                    <div className="px-3 py-4 text-sm text-stone-400 text-center">
-                      No features for this sprint
-                    </div>
-                  )}
-                  <div className="px-2">
-                    <AddFeatureInput onAdd={(title) => addFeature(team.name, title)} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Issues Panel */}
-              <SprintIssuesTable
-                openIssues={teamOpenIssues as any}
-                closedIssues={teamClosedIssues as any}
-                isLoading={issuesLoading}
+      {/* Two-column layout: Features left, Issues right */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Flat feature list */}
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <span className="text-sm font-medium text-stone-700">
+              Features{" "}
+              <span className="text-stone-400 font-normal">
+                {doneCount}/{sprintFeatures.length}
+              </span>
+            </span>
+          </div>
+          <div className="p-2 space-y-0.5 overflow-y-auto max-h-[600px]">
+            {sprintFeatures.map((feature) => (
+              <FeatureCard
+                key={feature.id}
+                feature={feature}
+                allPeople={allPeopleNames}
+                onUpdate={updateFeature}
+                onDelete={deleteFeature}
+                onOpenDetail={setDetailFeature}
+                mode="sprint"
               />
+            ))}
+            {sprintFeatures.length === 0 && (
+              <div className="px-3 py-4 text-sm text-stone-400 text-center">
+                No features for this sprint
+              </div>
+            )}
+            <div className="px-2">
+              <AddFeatureInput onAdd={addFeature} />
             </div>
           </div>
-        );
-      })}
+        </div>
 
-      {/* Detail modal — rendered at tab level so team changes don't unmount it */}
+        {/* Right: Issues organized by team */}
+        <div className="space-y-4">
+          {issuesByTeam.map(({ team, openIssues: teamOpen, closedIssues: teamClosed }) => (
+            <div key={team.name}>
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: team.color }}
+                />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                  {team.name}
+                </h3>
+              </div>
+              <SprintIssuesTable
+                openIssues={teamOpen as any}
+                closedIssues={teamClosed as any}
+                isLoading={issuesLoading}
+                sprintStart={sprint.startDate}
+              />
+            </div>
+          ))}
+          {issuesByTeam.length === 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 px-4 py-8 text-sm text-stone-400 text-center">
+              No teams have repos assigned
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Detail modal */}
       {detailFeature && (
         <FeatureDetailModal
           key={detailFeature.id}
           feature={detailFeature}
           allPeople={allPeopleNames}
-          allTeams={teams}
           onClose={() => setDetailFeature(null)}
           onUpdate={updateFeature}
         />
