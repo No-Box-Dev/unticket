@@ -67,21 +67,39 @@ export function SettingsTab() {
           Tracked Repositories ({repos?.length ?? 0})
         </h2>
         <p className="text-xs text-stone-400">
-          All repositories in {selectedOrg} are tracked by default. Assign repos
-          to teams above to organise your dashboard.
+          All repositories in {selectedOrg} are tracked by default. Mark repos as
+          draft to hide their issues from the Sprint view.
         </p>
         <div className="grid grid-cols-2 gap-1.5 max-h-60 overflow-y-auto">
-          {repos?.map((repo) => (
-            <div
-              key={repo.id}
-              className="text-xs text-stone-600 px-2 py-1 rounded bg-stone-50"
-            >
-              {repo.name}
-              {repo.language && (
-                <span className="text-stone-300 ml-1">({repo.language})</span>
-              )}
-            </div>
-          ))}
+          {repos?.map((repo) => {
+            const isDraft = settings?.draftRepos?.includes(repo.name) ?? false;
+            return (
+              <button
+                key={repo.id}
+                onClick={() => {
+                  if (!settings) return;
+                  const current = settings.draftRepos ?? [];
+                  const next = isDraft
+                    ? current.filter((r) => r !== repo.name)
+                    : [...current, repo.name];
+                  saveSettings.mutate({ ...settings, draftRepos: next });
+                }}
+                className={`text-xs text-left px-2 py-1 rounded cursor-pointer transition-colors ${
+                  isDraft
+                    ? "bg-stone-100 text-stone-400"
+                    : "bg-stone-50 text-stone-600 hover:bg-stone-100"
+                }`}
+              >
+                {repo.name}
+                {isDraft && (
+                  <span className="ml-1 text-stone-300">(draft)</span>
+                )}
+                {!isDraft && repo.language && (
+                  <span className="text-stone-300 ml-1">({repo.language})</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 

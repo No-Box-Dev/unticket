@@ -1,0 +1,312 @@
+import { getSyncState, setSyncState } from "./db";
+
+// Paginated GitHub API fetcher
+async function fetchAllPages(token, url, params = {}) {
+  const all = [];
+  let page = 1;
+
+  while (true) {
+    const searchParams = new URLSearchParams({
+      ...params,
+      per_page: "100",
+      page: String(page),
+    });
+
+    const res = await fetch(`${url}?${searchParams}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "GitPulse",
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 404) break;
+      throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    all.push(...data);
+
+    if (data.length < 100) break;
+    page++;
+  }
+
+  return all;
+}
+
+// ---------- Sync repos ----------
+
+export async function syncRepos(db, token, orgId, orgLogin) {
+  const repos = await fetchAllPages(
+    token,
+    `https://api.github.com/orgs/${orgLogin}/repos`,
+    { sort: "pushed" }
+  );
+
+  const stmt = db.prepare(
+    `INSERT INTO repos (org_id, name, language, pushed_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(org_id, name) DO UPDATE SET
+       language = excluded.language,
+       pushed_at = excluded.pushed_at`
+  );
+
+  for (let i = 0; i < repos.length; i += 50) {
+    const batch = repos.slice(i, i + 50);
+    await db.batch(
+      batch.map((r) => stmt.bind(orgId, r.name, r.language, r.pushed_at))
+    );
+  }
+
+  await setSyncState(db, orgId, "repos");
+}
+
+// ---------- Sync PRs ----------
+
+export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
+  const params = {
+    state: "all",
+    sort: "updated",
+    direction: "desc",
+  };
+  if (since) params.since = since;
+
+  const prs = await fetchAllPages(
+    token,
+    `https://api.github.com/repos/${orgLogin}/${repo}/pulls`,
+    params
+  );
+
+  const stmt = db.prepare(
+    `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(org_id, repo, number) DO UPDATE SET
+       title = excluded.title,
+       state = excluded.state,
+       author = excluded.author,
+       author_avatar = excluded.author_avatar,
+       draft = excluded.draft,
+       head_ref = excluded.head_ref,
+       base_ref = excluded.base_ref,
+       merged_at = excluded.merged_at,
+       updated_at = excluded.updated_at,
+       html_url = excluded.html_url,
+       requested_reviewers_json = excluded.requested_reviewers_json,
+       labels_json = excluded.labels_json`
+  );
+
+  for (let i = 0; i < prs.length; i += 50) {
+    const batch = prs.slice(i, i + 50);
+    await db.batch(
+      batch.map((pr) =>
+        stmt.bind(
+          orgId,
+          repo,
+          pr.number,
+          pr.title,
+          pr.merged_at ? "merged" : pr.state,
+          pr.user?.login ?? null,
+          pr.user?.avatar_url ?? null,
+          pr.draft ? 1 : 0,
+          pr.head?.ref ?? null,
+          pr.base?.ref ?? null,
+          pr.merged_at,
+          pr.created_at,
+          pr.updated_at,
+          pr.html_url,
+          JSON.stringify(pr.requested_reviewers?.map((r) => ({ login: r.login })) ?? []),
+          JSON.stringify(pr.labels?.map((l) => ({ name: l.name, color: l.color })) ?? [])
+        )
+      )
+    );
+  }
+
+  await setSyncState(db, orgId, `prs:${repo}`);
+}
+
+// ---------- Sync Issues ----------
+
+export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
+  const params = {
+    state: "all",
+    sort: "updated",
+    direction: "desc",
+  };
+  if (since) params.since = since;
+
+  const allItems = await fetchAllPages(
+    token,
+    `https://api.github.com/repos/${orgLogin}/${repo}/issues`,
+    params
+  );
+
+  const issues = allItems.filter((i) => !i.pull_request);
+
+  const stmt = db.prepare(
+    `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(org_id, repo, number) DO UPDATE SET
+       title = excluded.title,
+       state = excluded.state,
+       author = excluded.author,
+       author_avatar = excluded.author_avatar,
+       updated_at = excluded.updated_at,
+       closed_at = excluded.closed_at,
+       html_url = excluded.html_url,
+       assignees_json = excluded.assignees_json,
+       labels_json = excluded.labels_json,
+       milestone_title = excluded.milestone_title`
+  );
+
+  for (let i = 0; i < issues.length; i += 50) {
+    const batch = issues.slice(i, i + 50);
+    await db.batch(
+      batch.map((issue) =>
+        stmt.bind(
+          orgId,
+          repo,
+          issue.number,
+          issue.title,
+          issue.state,
+          issue.user?.login ?? null,
+          issue.user?.avatar_url ?? null,
+          issue.created_at,
+          issue.updated_at,
+          issue.closed_at,
+          issue.html_url,
+          JSON.stringify(issue.assignees.map((a) => ({ login: a.login, avatar_url: a.avatar_url }))),
+          JSON.stringify(issue.labels.map((l) => ({ name: l.name, color: l.color }))),
+          issue.milestone?.title ?? null
+        )
+      )
+    );
+  }
+
+  await setSyncState(db, orgId, `issues:${repo}`);
+}
+
+// ---------- Sync Members ----------
+
+export async function syncMembers(db, token, orgId, orgLogin) {
+  const members = await fetchAllPages(
+    token,
+    `https://api.github.com/orgs/${orgLogin}/members`
+  );
+
+  const stmt = db.prepare(
+    `INSERT INTO members (org_id, login, avatar_url)
+     VALUES (?, ?, ?)
+     ON CONFLICT(org_id, login) DO UPDATE SET
+       avatar_url = excluded.avatar_url`
+  );
+
+  for (let i = 0; i < members.length; i += 50) {
+    const batch = members.slice(i, i + 50);
+    await db.batch(
+      batch.map((m) => stmt.bind(orgId, m.login, m.avatar_url))
+    );
+  }
+
+  await setSyncState(db, orgId, "members");
+}
+
+// ---------- Migrate .gitpulse config ----------
+
+export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
+  const existing = await db
+    .prepare("SELECT COUNT(*) as count FROM config WHERE org_id = ?")
+    .bind(orgId)
+    .first();
+
+  if (existing && existing.count > 0) return;
+
+  const repoRes = await fetch(
+    `https://api.github.com/repos/${orgLogin}/.gitpulse`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "GitPulse",
+      },
+    }
+  );
+
+  if (!repoRes.ok) return;
+
+  const files = ["sprint", "features", "people", "settings"];
+
+  for (const key of files) {
+    const fileRes = await fetch(
+      `https://api.github.com/repos/${orgLogin}/.gitpulse/contents/${key}.json`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "GitPulse",
+          Accept: "application/vnd.github+json",
+        },
+      }
+    );
+
+    if (!fileRes.ok) continue;
+
+    const fileData = await fileRes.json();
+    if (!fileData.content) continue;
+
+    const decoded = atob(fileData.content.replace(/\n/g, ""));
+
+    await db
+      .prepare(
+        `INSERT INTO config (org_id, key, data, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(org_id, key) DO UPDATE SET
+           data = excluded.data,
+           updated_at = datetime('now')`
+      )
+      .bind(orgId, key, decoded)
+      .run();
+  }
+}
+
+// ---------- Full sync orchestrator ----------
+
+export async function runFullSync(db, token, orgId, orgLogin) {
+  await migrateGitPulseConfig(db, token, orgId, orgLogin);
+  await syncRepos(db, token, orgId, orgLogin);
+
+  const repoRows = await db
+    .prepare("SELECT name FROM repos WHERE org_id = ?")
+    .bind(orgId)
+    .all();
+  const repoNames = repoRows.results.map((r) => r.name);
+
+  for (const repo of repoNames) {
+    const prSync = await getSyncState(db, orgId, `prs:${repo}`);
+    await syncPRs(db, token, orgId, orgLogin, repo, prSync?.lastSynced);
+
+    const issueSync = await getSyncState(db, orgId, `issues:${repo}`);
+    await syncIssues(db, token, orgId, orgLogin, repo, issueSync?.lastSynced);
+  }
+
+  const prCount = await db
+    .prepare("SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?")
+    .bind(orgId)
+    .first();
+
+  const issueCount = await db
+    .prepare("SELECT COUNT(*) as count FROM issues WHERE org_id = ?")
+    .bind(orgId)
+    .first();
+
+  await syncMembers(db, token, orgId, orgLogin);
+  const memberCount = await db
+    .prepare("SELECT COUNT(*) as count FROM members WHERE org_id = ?")
+    .bind(orgId)
+    .first();
+
+  return {
+    repos: repoNames.length,
+    prs: prCount?.count ?? 0,
+    issues: issueCount?.count ?? 0,
+    members: memberCount?.count ?? 0,
+  };
+}

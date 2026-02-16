@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSprint, useFeatures, usePeople, useSettings, useSaveFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useSaveFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
@@ -10,14 +10,8 @@ export function BacklogTab() {
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
-  const { data: settings } = useSettings();
   const saveFeatures = useSaveFeatures();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
-
-  const teams = useMemo(
-    () => settings?.teams ?? [{ name: "Team", color: "#1B6971", repos: [] }],
-    [settings],
-  );
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -43,12 +37,11 @@ export function BacklogTab() {
     saveFeatures.mutate(all.filter((f) => f.id !== id));
   };
 
-  const addFeature = (team: string, title: string) => {
+  const addFeature = (title: string) => {
     const all = features ?? [];
     const newFeature: Feature = {
       id: `feat-${Date.now()}`,
       title,
-      team,
       owners: [],
       status: "future",
       sprint: null,
@@ -70,59 +63,38 @@ export function BacklogTab() {
         </div>
       </div>
 
-      {/* Per-team sections */}
-      {teams.map((team) => {
-        const teamFeatures = futureFeatures.filter((f) => f.team === team.name);
-        const teamPeople = (people ?? [])
-          .filter((p) => p.teams?.includes(team.name))
-          .map((p) => p.github);
-
-        return (
-          <div key={team.name}>
-            <div className="flex items-center gap-2 mb-3">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: team.color }}
-              />
-              <h3 className="text-sm font-semibold text-stone-700">{team.name}</h3>
-              <span className="text-xs text-stone-400">{teamFeatures.length} features</span>
+      {/* Flat feature list */}
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+        <div className="p-2 space-y-0.5">
+          {futureFeatures.map((feature) => (
+            <FeatureCard
+              key={feature.id}
+              feature={feature}
+              allPeople={allPeopleNames}
+              onUpdate={updateFeature}
+              onDelete={deleteFeature}
+              onOpenDetail={setDetailFeature}
+              mode="backlog"
+              currentSprint={sprint?.number}
+            />
+          ))}
+          {futureFeatures.length === 0 && (
+            <div className="px-3 py-4 text-sm text-stone-400 text-center">
+              No backlog features
             </div>
-
-            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-              <div className="p-2 space-y-0.5">
-                {teamFeatures.map((feature) => (
-                  <FeatureCard
-                    key={feature.id}
-                    feature={feature}
-                    allPeople={teamPeople.length > 0 ? teamPeople : allPeopleNames}
-                    onUpdate={updateFeature}
-                    onDelete={deleteFeature}
-                    onOpenDetail={setDetailFeature}
-                    mode="backlog"
-                    currentSprint={sprint?.number}
-                  />
-                ))}
-                {teamFeatures.length === 0 && (
-                  <div className="px-3 py-4 text-sm text-stone-400 text-center">
-                    No backlog features
-                  </div>
-                )}
-                <div className="px-2">
-                  <AddFeatureInput onAdd={(title) => addFeature(team.name, title)} />
-                </div>
-              </div>
-            </div>
+          )}
+          <div className="px-2">
+            <AddFeatureInput onAdd={addFeature} />
           </div>
-        );
-      })}
+        </div>
+      </div>
 
-      {/* Detail modal — rendered at tab level so team changes don't unmount it */}
+      {/* Detail modal */}
       {detailFeature && (
         <FeatureDetailModal
           key={detailFeature.id}
           feature={detailFeature}
           allPeople={allPeopleNames}
-          allTeams={teams}
           onClose={() => setDetailFeature(null)}
           onUpdate={updateFeature}
         />
