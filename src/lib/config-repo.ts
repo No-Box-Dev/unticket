@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from "./api";
-import type { SprintConfig, Feature, Person, OrgSettings } from "./types";
+import type { SprintConfig, Feature, Person, OrgSettings, Todo } from "./types";
 
 // Sprint
 export async function fetchSprint(): Promise<SprintConfig | null> {
@@ -47,6 +47,16 @@ export async function fetchSettings(): Promise<OrgSettings | null> {
 
 export async function saveSettings(settings: OrgSettings) {
   await apiPut("/api/config/settings", settings);
+}
+
+// Todos
+export async function fetchTodos(): Promise<Todo[]> {
+  const data = await apiGet<Todo[] | null>("/api/config/todos");
+  return data ?? [];
+}
+
+export async function saveTodos(todos: Todo[]) {
+  await apiPut("/api/config/todos", todos);
 }
 
 // Config repo is no longer needed — D1 stores config

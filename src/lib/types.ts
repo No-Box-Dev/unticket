@@ -52,7 +52,16 @@ export type TabId =
   | "individual"
   | "prs"
   | "issues"
-  | "activity";
+  | "activity"
+  | "todos";
+
+export interface Todo {
+  id: string;
+  title: string;
+  owner: string;
+  done: boolean;
+  createdAt: string;
+}
 
 // .gitpulse config repo types
 
@@ -68,11 +77,6 @@ export interface SprintConfig {
   focus: string;
 }
 
-export interface Spec {
-  text: string;
-  owner?: string;
-}
-
 export interface Feature {
   id: string;
   title: string;
@@ -82,8 +86,8 @@ export interface Feature {
   sprint: number | null;
   effort: Effort;
   priority?: Priority;
-  description?: string;
-  specs?: (string | Spec)[];
+  /** Repo where the plan .md lives (e.g. "my-app") */
+  planRepo?: string;
 }
 
 export interface Person {

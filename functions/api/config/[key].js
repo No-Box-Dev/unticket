@@ -1,6 +1,6 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 
-const VALID_KEYS = ["sprint", "features", "people", "settings"];
+const VALID_KEYS = ["sprint", "features", "people", "settings", "todos"];
 
 // GET /api/config/:key — read config
 export async function onRequestGet(context) {
@@ -23,6 +23,7 @@ export async function onRequestGet(context) {
       features: [],
       people: [],
       settings: { teams: [{ name: "Team", color: "#1B6971", repos: [] }] },
+      todos: [],
     };
     return jsonResponse(defaults[key]);
   }
