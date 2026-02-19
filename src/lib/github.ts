@@ -157,6 +157,13 @@ export async function fetchMergedPRs(since?: string) {
   return prs.map(transformPR);
 }
 
+export async function fetchAllPRs(since?: string) {
+  const params = new URLSearchParams({ state: "all" });
+  if (since) params.set("since", since);
+  const prs = await apiGet<ApiPR[]>(`/api/prs?${params}`);
+  return prs.map(transformPR);
+}
+
 export async function fetchOpenIssues() {
   const issues = await apiGet<ApiIssue[]>("/api/issues?state=open");
   return issues.map(transformIssue);

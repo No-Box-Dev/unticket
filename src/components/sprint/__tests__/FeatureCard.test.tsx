@@ -9,7 +9,7 @@ const baseFeature: Feature = {
   title: "Test Feature",
   team: "Engineering",
   owners: [],
-  status: "active",
+  status: "plan",
   sprint: 1,
   effort: "medium",
   priority: "high",
@@ -25,9 +25,11 @@ const defaultProps = {
 };
 
 describe("FeatureCard", () => {
-  it("renders feature title", () => {
-    render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Test Feature")).toBeInTheDocument();
+  it("renders feature title without truncation", () => {
+    const longTitle = "This is a very long feature title that should not be truncated";
+    const feat = { ...baseFeature, title: longTitle };
+    render(<FeatureCard {...defaultProps} feature={feat} />);
+    expect(screen.getByText(longTitle)).toBeInTheDocument();
   });
 
   it("renders effort tag", () => {
@@ -47,18 +49,6 @@ describe("FeatureCard", () => {
     expect(onOpenDetail).toHaveBeenCalledWith(baseFeature);
   });
 
-  it("shows Done button in sprint mode for active features", () => {
-    render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Done")).toBeInTheDocument();
-  });
-
-  it("Done button calls onUpdate with status 'done'", async () => {
-    const onUpdate = vi.fn();
-    render(<FeatureCard {...defaultProps} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByText("Done"));
-    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
-  });
-
   it("Delete button calls onDelete", async () => {
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} />);
@@ -66,47 +56,45 @@ describe("FeatureCard", () => {
     expect(onDelete).toHaveBeenCalledWith("feat-1");
   });
 
-  it("shows Future button in sprint mode", () => {
+  it("shows Backlog button in sprint mode", () => {
     render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Future")).toBeInTheDocument();
+    expect(screen.getByText("Backlog")).toBeInTheDocument();
   });
 
-  it("Future button moves to backlog", async () => {
+  it("Backlog button moves to backlog", async () => {
     const onUpdate = vi.fn();
     render(<FeatureCard {...defaultProps} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByText("Future"));
+    await userEvent.click(screen.getByText("Backlog"));
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: "future", sprint: null }),
     );
   });
 
-  it("shows 'Move to Sprint' in backlog mode", () => {
+  it("shows 'Sprint' in backlog mode", () => {
     render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} />);
-    expect(screen.getByText("Move to Sprint")).toBeInTheDocument();
-    expect(screen.queryByText("Done")).not.toBeInTheDocument();
-    expect(screen.queryByText("Future")).not.toBeInTheDocument();
+    expect(screen.getByText("Sprint")).toBeInTheDocument();
+    expect(screen.queryByText("Backlog")).not.toBeInTheDocument();
   });
 
-  it("Move to Sprint updates sprint and status", async () => {
+  it("Sprint button updates sprint and status", async () => {
     const onUpdate = vi.fn();
     render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByText("Move to Sprint"));
+    await userEvent.click(screen.getByText("Sprint"));
     expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ sprint: 2, status: "active" }),
+      expect.objectContaining({ sprint: 2, status: "plan" }),
     );
   });
 
-  it("done feature has reduced opacity", () => {
-    const doneFeature = { ...baseFeature, status: "done" as const };
-    const { container } = render(<FeatureCard {...defaultProps} feature={doneFeature} />);
+  it("production feature has reduced opacity", () => {
+    const prodFeature = { ...baseFeature, status: "production" as const };
+    const { container } = render(<FeatureCard {...defaultProps} feature={prodFeature} />);
     const wrapper = container.firstElementChild!;
-    expect(wrapper.className).toContain("opacity-50");
+    expect(wrapper.className).toContain("opacity-60");
   });
 
-  it("done feature does not show Done or Future buttons", () => {
-    const doneFeature = { ...baseFeature, status: "done" as const };
-    render(<FeatureCard {...defaultProps} feature={doneFeature} />);
-    expect(screen.queryByText("Done")).not.toBeInTheDocument();
-    expect(screen.queryByText("Future")).not.toBeInTheDocument();
+  it("shows drag handle when draggable", () => {
+    const { container } = render(<FeatureCard {...defaultProps} draggable />);
+    const wrapper = container.firstElementChild!;
+    expect(wrapper.getAttribute("draggable")).toBe("true");
   });
 });

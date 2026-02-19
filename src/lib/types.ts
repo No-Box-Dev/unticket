@@ -67,7 +67,7 @@ export interface Todo {
 
 export type Effort = "low" | "medium" | "high";
 export type Priority = "high" | "medium" | "low" | "none";
-export type FeatureStatus = "active" | "done" | "future";
+export type FeatureStatus = "plan" | "demo" | "production" | "future";
 
 export interface SprintConfig {
   number: number;

@@ -6,6 +6,7 @@ import {
   fetchOpenIssues,
   fetchClosedIssues,
   fetchMergedPRs,
+  fetchAllPRs,
   fetchAllIssues,
   fetchMilestones,
   fetchRepoActivity,
@@ -87,6 +88,15 @@ export function useMergedPRs(repos: string[], since?: string) {
   });
 }
 
+export function useAllPRs(repos: string[], since?: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["allPRs", selectedOrg, repos, since],
+    queryFn: () => fetchAllPRs(since),
+    enabled: !!selectedOrg && repos.length > 0,
+  });
+}
+
 export function useAllIssues(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
   return useQuery({
@@ -129,6 +139,7 @@ export function useTriggerSync() {
       qc.invalidateQueries({ queryKey: ["issues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["closedIssues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["mergedPRs", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["allPRs", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });
