@@ -4,11 +4,11 @@ import type { TabId } from "@/lib/types";
 const tabs: { id: TabId; label: string }[] = [
   { id: "sprint", label: "Sprint" },
   { id: "backlog", label: "Future Features" },
-  { id: "team", label: "Team Dashboard" },
-  { id: "individual", label: "Individual Dashboard" },
+  // { id: "team", label: "Team Dashboard" },
+  // { id: "individual", label: "Individual Dashboard" },
   { id: "prs", label: "Open PRs" },
   { id: "issues", label: "Open Issues" },
-  { id: "activity", label: "Activity" },
+  // { id: "activity", label: "Activity" },
   { id: "todos", label: "Todos" },
 ];
 

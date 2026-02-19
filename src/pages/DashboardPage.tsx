@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos } from "@/hooks/useGitHub";
+import { useRepos, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";
 import { Header } from "@/components/Header";
 import { TabBar } from "@/components/TabBar";
 import { SprintTab } from "@/components/tabs/SprintTab";
@@ -24,6 +24,15 @@ export function DashboardPage() {
     () => repos?.map((r) => r.name) ?? [],
     [repos],
   );
+
+  // Auto-sync from GitHub when data is stale
+  const { data: syncStatus } = useSyncStatus();
+  const { mutate: sync, isPending: isSyncing } = useTriggerSync();
+  useEffect(() => {
+    if (syncStatus?.isStale && !isSyncing) {
+      sync();
+    }
+  }, [syncStatus?.isStale, isSyncing, sync]);
 
   const handleTabChange = useCallback((tab: TabId) => {
     setActiveTab(tab);
