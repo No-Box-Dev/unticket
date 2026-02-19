@@ -9,10 +9,12 @@ import {
   savePeople,
   fetchSettings,
   saveSettings,
+  fetchTodos,
+  saveTodos,
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
-import type { SprintConfig, Feature, Person, OrgSettings } from "@/lib/types";
+import type { SprintConfig, Feature, Person, OrgSettings, Todo } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -129,6 +131,33 @@ export function useSaveSettings() {
       if (context?.previous) qc.setQueryData(["settings", selectedOrg], context.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["settings", selectedOrg] }),
+  });
+}
+
+export function useTodos() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["todos", selectedOrg],
+    queryFn: fetchTodos,
+    enabled: !!selectedOrg,
+  });
+}
+
+export function useSaveTodos() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (todos: Todo[]) => saveTodos(todos),
+    onMutate: async (todos) => {
+      await qc.cancelQueries({ queryKey: ["todos", selectedOrg] });
+      const previous = qc.getQueryData<Todo[]>(["todos", selectedOrg]);
+      qc.setQueryData(["todos", selectedOrg], todos);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["todos", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["todos", selectedOrg] }),
   });
 }
 

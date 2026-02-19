@@ -1,8 +1,16 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 
-const VALID_KEYS = ["sprint", "features", "people", "settings"];
+const VALID_KEYS = ["sprint", "features", "people", "settings", "todos"];
 
-// GET /api/config/:key — read config
+const DEFAULTS = {
+  sprint: null,
+  features: [],
+  people: [],
+  settings: null,
+  todos: [],
+};
+
+// GET /api/config/:key
 export async function onRequestGet(context) {
   const key = context.params.key;
   if (!VALID_KEYS.includes(key)) {
@@ -10,27 +18,19 @@ export async function onRequestGet(context) {
   }
 
   const { orgId } = getCtx(context);
-
   const row = await context.env.DB
-    .prepare("SELECT data, updated_at FROM config WHERE org_id = ? AND key = ?")
+    .prepare("SELECT data FROM config WHERE org_id = ? AND key = ?")
     .bind(orgId, key)
     .first();
 
   if (!row) {
-    // Return sensible defaults
-    const defaults = {
-      sprint: null,
-      features: [],
-      people: [],
-      settings: { teams: [{ name: "Team", color: "#1B6971", repos: [] }] },
-    };
-    return jsonResponse(defaults[key]);
+    return jsonResponse(DEFAULTS[key]);
   }
 
   return jsonResponse(JSON.parse(row.data));
 }
 
-// PUT /api/config/:key — write config
+// PUT /api/config/:key
 export async function onRequestPut(context) {
   const key = context.params.key;
   if (!VALID_KEYS.includes(key)) {
@@ -39,7 +39,6 @@ export async function onRequestPut(context) {
 
   const { orgId } = getCtx(context);
   const body = await context.request.json();
-  const data = JSON.stringify(body);
 
   await context.env.DB
     .prepare(
@@ -49,7 +48,7 @@ export async function onRequestPut(context) {
          data = excluded.data,
          updated_at = datetime('now')`
     )
-    .bind(orgId, key, data)
+    .bind(orgId, key, JSON.stringify(body))
     .run();
 
   return jsonResponse({ ok: true });
