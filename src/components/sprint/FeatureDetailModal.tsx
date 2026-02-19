@@ -54,11 +54,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
       return;
     }
     setPlanLoading(true);
-    fetchPlanFile(selectedOrg, draft.title)
+    fetchPlanFile(selectedOrg, draft.id)
       .then((result) => setPlan(result?.content ?? null))
       .catch(() => setPlan(null))
       .finally(() => setPlanLoading(false));
-  }, [selectedOrg, draft.title]);
+  }, [selectedOrg, draft.id]);
 
   function handleClose() {
     clearTimeout(debounceRef.current);
@@ -67,7 +67,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   }
 
   const planUrl = selectedOrg
-    ? `https://github.com/${selectedOrg}/.gitpulse/blob/main/${planFilePath(draft.title)}`
+    ? `https://github.com/${selectedOrg}/.gitpulse/blob/main/${planFilePath(draft.id)}`
     : null;
 
   return (
@@ -141,7 +141,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 No plan found.
                 <br />
                 <span className="text-xs">
-                  Create <code className="text-stone-500">{planFilePath(draft.title)}</code> via Claude Code.
+                  Create <code className="text-stone-500">{planFilePath(draft.id)}</code> via Claude Code.
                 </span>
               </div>
             )}

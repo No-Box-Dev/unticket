@@ -42,8 +42,9 @@ Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
 **`.gitpulse` repo (plans only, readable by Claude Code via `gh api`):**
-- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchPlanFile()`, `planFilePath()`, `slugify()`
-- Repo structure: `CLAUDE.md`, `plans/PLAN-*.md`
+- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchPlanFile()`, `planFilePath()`
+- Plan filenames use the feature's stable `id` (e.g. `plans/PLAN-feat-1739482930123.md`) — renaming features won't break the link
+- Repo structure: `CLAUDE.md`, `plans/PLAN-{featureId}.md`
 - CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
 
 ### Auth

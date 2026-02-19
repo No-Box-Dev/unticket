@@ -37,20 +37,20 @@ CLAUDE.md     # This file
 # List all plans
 gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'
 
-# Read a specific plan
-gh api repos/{org}/.gitpulse/contents/plans/PLAN-my-feature.md --jq '.content' | base64 -d
+# Read a specific plan (feature ID is visible in the GitPulse modal hint text)
+gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md --jq '.content' | base64 -d
 \`\`\`
 
 ## Writing plans via CLI
 
 \`\`\`bash
-# Create a new plan
-echo '# Plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-my-feature.md \\
+# Create a new plan (use the feature ID from the GitPulse modal)
+echo '# Plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md \\
   -X PUT -f message="Add plan" -f content=@-
 
 # Update existing plan (get SHA first)
-SHA=$(gh api repos/{org}/.gitpulse/contents/plans/PLAN-my-feature.md --jq '.sha')
-echo '# Updated plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-my-feature.md \\
+SHA=$(gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md --jq '.sha')
+echo '# Updated plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md \\
   -X PUT -f message="Update plan" -f content=@- -f sha="$SHA"
 \`\`\`
 `;
@@ -90,27 +90,20 @@ export async function createGitPulseRepo(org: string): Promise<void> {
 
 // ---------- Plan files ----------
 
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-export function planFilePath(title: string): string {
-  return `plans/PLAN-${slugify(title)}.md`;
+export function planFilePath(featureId: string): string {
+  return `plans/PLAN-${featureId}.md`;
 }
 
 export async function fetchPlanFile(
   org: string,
-  title: string,
+  featureId: string,
 ): Promise<{ content: string } | null> {
   const ok = getOctokit();
   try {
     const { data } = await ok.rest.repos.getContent({
       owner: org,
       repo: REPO_NAME,
-      path: planFilePath(title),
+      path: planFilePath(featureId),
     });
     if ("content" in data && data.type === "file") {
       return { content: atob(data.content) };
