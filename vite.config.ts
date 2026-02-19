@@ -80,4 +80,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      "/api": {
+        target: "https://gitpulse-rm8.pages.dev",
+        changeOrigin: true,
+        // Don't proxy the OAuth callback — handled by oauthDevProxy above
+        bypass(req) {
+          if (req.url?.startsWith("/api/auth/callback")) return req.url;
+        },
+      },
+    },
+  },
 });

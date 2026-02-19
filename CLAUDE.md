@@ -63,7 +63,7 @@ Future features not yet assigned to a sprint.
 Aggregated metrics per team — PRs, issues, activity across repos.
 
 ### Individual Dashboard (`individual` tab)
-Per-person metrics and activity.
+Per-person activity dashboard with date range selector (1m/10w/6m/1y). Shows 3 bar chart cards: PRs Created (all PRs, not just merged), Issues Closed, Issues Created. Each card shows weekly bar chart, total count, and week-over-week change.
 
 ### Open PRs (`prs` tab)
 Live view of open pull requests across all org repos.

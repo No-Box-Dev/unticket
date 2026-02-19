@@ -14,7 +14,13 @@ export async function saveSprint(sprint: SprintConfig) {
 // Features
 export async function fetchFeatures(): Promise<Feature[]> {
   const data = await apiGet<Feature[]>("/api/config/features");
-  return data ?? [];
+  // Migrate legacy statuses: active → plan, done → production
+  return (data ?? []).map((f) => ({
+    ...f,
+    status: f.status === ("active" as string) ? "plan"
+      : f.status === ("done" as string) ? "production"
+      : f.status,
+  }));
 }
 
 export async function saveFeatures(features: Feature[]) {
@@ -67,11 +73,16 @@ export async function ensureConfigRepo(): Promise<boolean> {
 
 export async function createConfigRepo(): Promise<void> {
   // Seed D1 with defaults
+  // Start next Monday, run 2 weeks
+  const now = new Date();
+  const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
+  const start = new Date(now.getTime() + daysUntilMonday * 86400000);
+  const end = new Date(start.getTime() + 13 * 86400000);
   await apiPut("/api/config/sprint", {
     number: 1,
     name: "Getting Started",
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
     focus: "Set up your first sprint",
   });
   await apiPut("/api/config/features", []);

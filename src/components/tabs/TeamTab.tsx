@@ -95,7 +95,7 @@ export function TeamTab({ repoNames }: TeamTabProps) {
     const issuesSolved = computeMetric(solvedDates, METRIC_WEEKS);
 
     // Features Complete
-    const doneFeatures = teamFeatures.filter((f) => f.status === "done");
+    const doneFeatures = teamFeatures.filter((f) => f.status === "production");
     const featuresComplete: MetricData = {
       current: doneFeatures.length,
       previous: 0,

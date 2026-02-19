@@ -1,13 +1,28 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
-import { useTodos, useSaveTodos } from "@/hooks/useConfigRepo";
+import { useTodos, useSaveTodos, useFeatures } from "@/hooks/useConfigRepo";
 import { Plus, X, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Todo } from "@/lib/types";
+import type { Todo, FeatureStatus } from "@/lib/types";
+
+const STATUS_LABEL: Record<FeatureStatus, string> = {
+  plan: "Plan",
+  demo: "Demo",
+  production: "Production",
+  future: "Backlog",
+};
+
+const STATUS_DOT: Record<FeatureStatus, string> = {
+  plan: "bg-brand",
+  demo: "bg-amber-500",
+  production: "bg-green-500",
+  future: "bg-stone-300",
+};
 
 export function TodoTab() {
   const { user } = useAuth();
   const { data: allTodos, isLoading } = useTodos();
+  const { data: features } = useFeatures();
   const saveTodos = useSaveTodos();
   const [input, setInput] = useState("");
 
@@ -18,6 +33,11 @@ export function TodoTab() {
 
   const pending = useMemo(() => myTodos.filter((t) => !t.done), [myTodos]);
   const done = useMemo(() => myTodos.filter((t) => t.done), [myTodos]);
+
+  const myFeatures = useMemo(() => {
+    if (!features || !user) return [];
+    return features.filter((f) => f.owners.includes(user.login) && f.status !== "future");
+  }, [features, user]);
 
   function updateAll(next: Todo[]) {
     if (!allTodos) return;
@@ -57,60 +77,87 @@ export function TodoTab() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addTodo()}
-          placeholder="Add a todo..."
-          className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-        />
-        <button
-          onClick={addTodo}
-          disabled={!input.trim()}
-          className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-        >
-          <Plus size={16} />
-          Add
-        </button>
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+      {/* Main: Todos */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addTodo()}
+            placeholder="Add a todo..."
+            className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+          />
+          <button
+            onClick={addTodo}
+            disabled={!input.trim()}
+            className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+          >
+            <Plus size={16} />
+            Add
+          </button>
+        </div>
+
+        {pending.length === 0 && done.length === 0 && (
+          <div className="text-center py-16 text-stone-400 text-sm">
+            No todos yet. Add one above!
+          </div>
+        )}
+
+        {pending.length > 0 && (
+          <div className="space-y-2">
+            {pending.map((todo) => (
+              <TodoCard
+                key={todo.id}
+                todo={todo}
+                onToggle={() => toggleDone(todo.id)}
+                onDelete={() => deleteTodo(todo.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {done.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wide pt-4">
+              Done
+            </h3>
+            {done.map((todo) => (
+              <TodoCard
+                key={todo.id}
+                todo={todo}
+                onToggle={() => toggleDone(todo.id)}
+                onDelete={() => deleteTodo(todo.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {pending.length === 0 && done.length === 0 && (
-        <div className="text-center py-16 text-stone-400 text-sm">
-          No todos yet. Add one above!
+      {/* Sidebar: My Features */}
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden h-fit">
+        <div className="px-4 py-3 border-b border-stone-100">
+          <span className="text-sm font-medium text-stone-700">
+            My Features{" "}
+            <span className="text-stone-400 font-normal">({myFeatures.length})</span>
+          </span>
         </div>
-      )}
-
-      {pending.length > 0 && (
-        <div className="space-y-2">
-          {pending.map((todo) => (
-            <TodoCard
-              key={todo.id}
-              todo={todo}
-              onToggle={() => toggleDone(todo.id)}
-              onDelete={() => deleteTodo(todo.id)}
-            />
+        <div className="p-2 space-y-0.5 overflow-y-auto max-h-[500px]">
+          {myFeatures.map((f) => (
+            <div key={f.id} className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-stone-50">
+              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_DOT[f.status])} />
+              <span className="text-sm text-stone-700 truncate flex-1">{f.title}</span>
+              <span className="text-[11px] text-stone-400">{STATUS_LABEL[f.status]}</span>
+            </div>
           ))}
+          {myFeatures.length === 0 && (
+            <div className="px-3 py-4 text-sm text-stone-400 text-center">
+              No features assigned
+            </div>
+          )}
         </div>
-      )}
-
-      {done.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wide pt-4">
-            Done
-          </h3>
-          {done.map((todo) => (
-            <TodoCard
-              key={todo.id}
-              todo={todo}
-              onToggle={() => toggleDone(todo.id)}
-              onDelete={() => deleteTodo(todo.id)}
-            />
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
