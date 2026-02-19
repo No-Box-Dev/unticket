@@ -32,12 +32,19 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 3. Add entry in `src/components/TabBar.tsx`
 4. Render in `src/pages/DashboardPage.tsx`
 
-### Config System (D1)
-Org-scoped key-value config stored in a D1 `config` table (keyed by `org_id` + `key`).
-- Backend: `functions/api/config/[key].js` — valid keys whitelist + defaults
-- API helpers: `src/lib/config-repo.ts` — `fetch<X>()` / `save<X>()` wrappers
+### Config System (Hybrid: D1 + .gitpulse)
+Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1** via `functions/api/config/[key].js`. Implementation plans stored in **`{org}/.gitpulse`** GitHub repo as markdown files.
+
+**D1 config (fast, no rate limits):**
+- API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
+- API helpers: `src/lib/config-repo.ts` — `fetch<X>()` / `save<X>()` using `apiGet`/`apiPut`
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
-- To add a new config key: add to `VALID_KEYS` + `defaults` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
+- To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
+
+**`.gitpulse` repo (plans only, readable by Claude Code via `gh api`):**
+- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchPlanFile()`, `planFilePath()`, `slugify()`
+- Repo structure: `CLAUDE.md`, `plans/PLAN-*.md`
+- CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
 
 ### Auth
 - `useAuth()` provides `user` (with `login`, `avatar_url`, `name`) and `selectedOrg`

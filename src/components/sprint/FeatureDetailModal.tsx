@@ -4,8 +4,7 @@ import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { useAuth } from "@/lib/auth";
-import { useRepos } from "@/hooks/useGitHub";
-import { fetchPlanFile, planFilePath } from "@/lib/github";
+import { fetchPlanFile, planFilePath } from "@/lib/config-repo";
 import type { Feature, Effort, Priority } from "@/lib/types";
 
 interface FeatureDetailModalProps {
@@ -17,8 +16,6 @@ interface FeatureDetailModalProps {
 
 export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
   const { selectedOrg } = useAuth();
-  const { data: repos } = useRepos();
-  const repoNames = repos?.map((r) => r.name) ?? [];
 
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [plan, setPlan] = useState<string | null>(null);
@@ -50,18 +47,18 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     });
   }
 
-  // Load plan from repo when planRepo changes
+  // Load plan from .gitpulse repo on mount
   useEffect(() => {
-    if (!draft.planRepo || !selectedOrg) {
+    if (!selectedOrg) {
       setPlan(null);
       return;
     }
     setPlanLoading(true);
-    fetchPlanFile(selectedOrg, draft.planRepo, draft.title)
+    fetchPlanFile(selectedOrg, draft.title)
       .then((result) => setPlan(result?.content ?? null))
       .catch(() => setPlan(null))
       .finally(() => setPlanLoading(false));
-  }, [draft.planRepo, selectedOrg, draft.title]);
+  }, [selectedOrg, draft.title]);
 
   function handleClose() {
     clearTimeout(debounceRef.current);
@@ -69,10 +66,9 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     onClose();
   }
 
-  const planUrl =
-    draft.planRepo && selectedOrg
-      ? `https://github.com/${selectedOrg}/${draft.planRepo}/blob/main/${planFilePath(draft.title)}`
-      : null;
+  const planUrl = selectedOrg
+    ? `https://github.com/${selectedOrg}/.gitpulse/blob/main/${planFilePath(draft.title)}`
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
@@ -116,56 +112,33 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             </div>
           </div>
 
-          {/* Implementation Plan (read-only, from repo) */}
+          {/* Implementation Plan (read-only, from .gitpulse repo) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-stone-500">Implementation Plan</span>
-              <div className="flex items-center gap-2">
-                <select
-                  value={draft.planRepo ?? ""}
-                  onChange={(e) => update({ planRepo: e.target.value || undefined })}
-                  className="text-xs border border-stone-200 rounded px-2 py-1 text-stone-600 focus:outline-none focus:border-teal-600"
+              {planUrl && plan !== null && (
+                <a
+                  href={planUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-stone-400 hover:text-brand flex items-center gap-1"
+                  title="View on GitHub"
                 >
-                  <option value="">Select repo...</option>
-                  {repoNames.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-                {draft.planRepo && planUrl && (
-                  <a
-                    href={planUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-stone-400 hover:text-brand flex items-center gap-1"
-                    title="View on GitHub"
-                  >
-                    <ExternalLink size={12} />
-                  </a>
-                )}
-              </div>
+                  <ExternalLink size={12} />
+                </a>
+              )}
             </div>
 
-            {!draft.planRepo && (
-              <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
-                Select a repo to view the implementation plan.
-                <br />
-                <span className="text-xs">
-                  Plans are created via Claude Code as{" "}
-                  <code className="text-stone-500">plans/PLAN-*.md</code>
-                </span>
-              </div>
-            )}
-
-            {draft.planRepo && planLoading && (
+            {planLoading && (
               <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 Loading plan...
               </div>
             )}
 
-            {draft.planRepo && !planLoading && plan === null && (
+            {!planLoading && plan === null && (
               <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300" />
-                No plan file found.
+                No plan found.
                 <br />
                 <span className="text-xs">
                   Create <code className="text-stone-500">{planFilePath(draft.title)}</code> via Claude Code.
@@ -173,7 +146,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               </div>
             )}
 
-            {draft.planRepo && !planLoading && plan !== null && (
+            {!planLoading && plan !== null && (
               <pre className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
                 {plan}
               </pre>

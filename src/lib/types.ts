@@ -86,8 +86,6 @@ export interface Feature {
   sprint: number | null;
   effort: Effort;
   priority?: Priority;
-  /** Repo where the plan .md lives (e.g. "my-app") */
-  planRepo?: string;
 }
 
 export interface Person {

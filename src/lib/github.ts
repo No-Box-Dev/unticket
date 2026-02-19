@@ -203,39 +203,3 @@ export async function fetchRepoActivity(): Promise<CommitResult[]> {
   return [];
 }
 
-// ---------- Plan files ----------
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-/** Standard path for a feature's implementation plan */
-export function planFilePath(title: string): string {
-  return `plans/PLAN-${slugify(title)}.md`;
-}
-
-/** Read a plan file from a repo. Returns null if not found. */
-export async function fetchPlanFile(
-  org: string,
-  repo: string,
-  title: string,
-): Promise<{ content: string } | null> {
-  const ok = getOctokit();
-  try {
-    const { data } = await ok.rest.repos.getContent({
-      owner: org,
-      repo,
-      path: planFilePath(title),
-    });
-    if ("content" in data && data.type === "file") {
-      return { content: atob(data.content) };
-    }
-    return null;
-  } catch (e: unknown) {
-    if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 404) return null;
-    throw e;
-  }
-}
