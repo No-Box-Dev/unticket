@@ -202,3 +202,4 @@ export interface CommitResult {
 export async function fetchRepoActivity(): Promise<CommitResult[]> {
   return [];
 }
+

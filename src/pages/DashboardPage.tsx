@@ -10,6 +10,7 @@ import { IndividualTab } from "@/components/tabs/IndividualTab";
 import { PRsTab } from "@/components/tabs/PRsTab";
 import { IssuesTab } from "@/components/tabs/IssuesTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
+import { TodoTab } from "@/components/tabs/TodoTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import type { TabId } from "@/lib/types";
 
@@ -55,6 +56,7 @@ export function DashboardPage() {
             {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
             {activeTab === "activity" && <ActivityTab repoNames={repoNames} />}
+            {activeTab === "todos" && <TodoTab />}
           </>
         )}
       </main>
