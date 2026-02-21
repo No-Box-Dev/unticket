@@ -19,7 +19,7 @@ export async function ensureGitPulseRepo(org: string): Promise<boolean> {
 
 const CLAUDE_MD = `# .gitpulse
 
-Plans repository for GitPulse. Contains implementation plans for features.
+Plans repository for GitPulse. Contains implementation plans for features and todos.
 
 Config (sprint, features, people, settings, todos) is stored in D1 — not here.
 
@@ -27,7 +27,8 @@ Config (sprint, features, people, settings, todos) is stored in D1 — not here.
 
 \`\`\`
 plans/
-  PLAN-*.md   # Implementation plans per feature
+  PLAN-*.md   # Implementation plans per feature (e.g. PLAN-feat-1739482930123.md)
+  TODO-*.md   # Implementation plans per todo (e.g. TODO-a1b2c3d4-uuid.md)
 CLAUDE.md     # This file
 \`\`\`
 
@@ -98,12 +99,34 @@ export async function fetchPlanFile(
   org: string,
   featureId: string,
 ): Promise<{ content: string } | null> {
+  return fetchFileFromGitPulse(org, planFilePath(featureId));
+}
+
+// ---------- Todo plan files ----------
+
+export function todoPlanFilePath(todoId: string): string {
+  return `plans/TODO-${todoId}.md`;
+}
+
+export async function fetchTodoPlanFile(
+  org: string,
+  todoId: string,
+): Promise<{ content: string } | null> {
+  return fetchFileFromGitPulse(org, todoPlanFilePath(todoId));
+}
+
+// ---------- Shared helpers ----------
+
+async function fetchFileFromGitPulse(
+  org: string,
+  path: string,
+): Promise<{ content: string } | null> {
   const ok = getOctokit();
   try {
     const { data } = await ok.rest.repos.getContent({
       owner: org,
       repo: REPO_NAME,
-      path: planFilePath(featureId),
+      path,
     });
     if ("content" in data && data.type === "file") {
       return { content: atob(data.content) };

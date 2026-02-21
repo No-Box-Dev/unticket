@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from "./api";
-import { fetchPlanFile, planFilePath } from "./gitpulse-repo";
+import { fetchPlanFile, planFilePath, fetchTodoPlanFile, todoPlanFilePath } from "./gitpulse-repo";
 import type { SprintConfig, Feature, Person, OrgSettings, Todo } from "./types";
 
 // Sprint
@@ -94,4 +94,4 @@ export async function createConfigRepo(): Promise<void> {
 }
 
 // Re-export plan helpers
-export { fetchPlanFile, planFilePath };
+export { fetchPlanFile, planFilePath, fetchTodoPlanFile, todoPlanFilePath };

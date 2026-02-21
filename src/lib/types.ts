@@ -55,13 +55,18 @@ export type TabId =
   | "activity"
   | "todos";
 
+export type TodoStatus = "backlog" | "in_progress" | "done";
+
 export interface Todo {
   id: string;
   title: string;
   owner: string;
-  done: boolean;
+  status: TodoStatus;
   createdAt: string;
   featureId?: string;
+  repo?: string;
+  /** @deprecated — use `status === "done"` */
+  done?: boolean;
 }
 
 // .gitpulse config repo types
