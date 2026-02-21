@@ -17,6 +17,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  authError: string | null;
   authMode: "oauth" | "pat";
   loginWithToken: (token: string) => Promise<void>;
   loginWithOAuth: () => void;
@@ -25,11 +26,24 @@ interface AuthContextType {
   setSelectedOrg: (org: string | null) => void;
 }
 
+function parseAuthError(err: unknown): string {
+  const msg =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  if (/rate limit/i.test(msg) || /API rate limit/i.test(msg))
+    return "GitHub API rate limit exceeded. Wait a few minutes and try again.";
+  if (/Bad credentials/i.test(msg) || /401/i.test(msg))
+    return "Invalid or expired GitHub token. Please sign in again.";
+  if (/403/i.test(msg))
+    return "Access denied. Your token may lack the required scopes (repo, read:org).";
+  return "Could not connect to GitHub. Check your network and try again.";
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<string | null>(
     localStorage.getItem("gp_org"),
   );
@@ -45,7 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetOctokit();
       fetchUser()
         .then(setUser)
-        .catch(() => localStorage.removeItem("gp_token"))
+        .catch((err) => {
+          localStorage.removeItem("gp_token");
+          setAuthError(parseAuthError(err));
+        })
         .finally(() => setIsLoading(false));
       return;
     }
@@ -70,7 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("gp_token", token);
       fetchUser()
         .then(setUser)
-        .catch(() => localStorage.removeItem("gp_token"))
+        .catch((err) => {
+          localStorage.removeItem("gp_token");
+          setAuthError(parseAuthError(err));
+        })
         .finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
@@ -107,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
+        authError,
         authMode,
         loginWithToken,
         loginWithOAuth,

@@ -25,10 +25,11 @@ export function DashboardPage() {
     [repos],
   );
 
-  // Auto-sync from GitHub when data is stale
+  // Auto-sync from GitHub when data is stale (disabled in dev to save rate limits)
   const { data: syncStatus } = useSyncStatus();
   const { mutate: sync, isPending: isSyncing } = useTriggerSync();
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     if (syncStatus?.isStale && !isSyncing) {
       sync();
     }
@@ -44,6 +45,17 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <Header onOpenSettings={() => setShowSettings(true)} />
+      {import.meta.env.DEV && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2">
+          <button
+            onClick={() => sync()}
+            disabled={isSyncing}
+            className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded hover:bg-amber-200 disabled:opacity-50 cursor-pointer"
+          >
+            {isSyncing ? "Syncing..." : "Sync now (dev)"}
+          </button>
+        </div>
+      )}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {showSettings ? (

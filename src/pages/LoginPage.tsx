@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Activity, Github, ChevronDown } from "lucide-react";
 
-export function LoginPage() {
+export function LoginPage({ error: authError }: { error?: string | null }) {
   const { authMode, loginWithToken, loginWithOAuth } = useAuth();
   const [showPAT, setShowPAT] = useState(false);
   const [token, setToken] = useState("");
@@ -42,6 +42,12 @@ export function LoginPage() {
             AI-powered project management for GitHub
           </p>
         </div>
+
+        {authError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4">
+            <p className="text-sm text-red-700">{authError}</p>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl border border-stone-200 p-6 space-y-4">
           {/* Always show the Sign in with GitHub button */}

@@ -6,7 +6,7 @@ import { OrgPickerPage } from "@/pages/OrgPickerPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 
 export function App() {
-  const { user, isLoading, selectedOrg, setSelectedOrg } = useAuth();
+  const { user, isLoading, authError, selectedOrg, setSelectedOrg } = useAuth();
   const { data: orgs, isLoading: orgsLoading } = useOrgs();
 
   // Validate stored org is an actual org (not personal account)
@@ -36,7 +36,7 @@ export function App() {
     );
   }
 
-  if (!user) return <LoginPage />;
+  if (!user) return <LoginPage error={authError} />;
   if (!selectedOrg) return <OrgPickerPage />;
   return <DashboardPage />;
 }

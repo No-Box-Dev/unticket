@@ -123,7 +123,7 @@ export function useSyncStatus() {
     queryKey: ["syncStatus", selectedOrg],
     queryFn: fetchSyncStatus,
     enabled: !!selectedOrg,
-    refetchInterval: 60_000,
+    refetchInterval: import.meta.env.DEV ? false : 60_000,
   });
 }
 
