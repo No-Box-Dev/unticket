@@ -60,8 +60,8 @@ export function FeatureCard({
         </button>
       </div>
 
-      {/* Row 2: tags */}
-      <div className="flex items-center gap-2 mt-2 ml-6">
+      {/* Row 2: tags + people + hover actions */}
+      <div className="flex items-center gap-2 mt-1.5 ml-6">
         <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
         <PriorityTag
           priority={feature.priority ?? "none"}
@@ -71,15 +71,12 @@ export function FeatureCard({
           effort={feature.effort}
           onChange={(effort: Effort) => onUpdate({ ...feature, effort })}
         />
-      </div>
-
-      {/* Row 3: people + hover actions */}
-      <div className="flex items-center justify-between mt-2 ml-6">
         <AssignDropdown
           owners={feature.owners}
           allPeople={allPeople}
           onChange={(owners) => onUpdate({ ...feature, owners })}
         />
+        <div className="flex-1" />
         <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
           {mode === "sprint" && (
             <button

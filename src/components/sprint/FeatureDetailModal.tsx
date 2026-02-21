@@ -77,7 +77,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-          <h2 className="text-lg font-semibold text-stone-800">{draft.title}</h2>
+          <input
+            value={draft.title}
+            onChange={(e) => update({ title: e.target.value }, true)}
+            className="text-lg font-semibold text-stone-800 bg-transparent border-none outline-none focus:ring-0 w-full"
+          />
           <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
@@ -156,14 +160,16 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           <div className="flex items-center gap-2 text-[10px] text-stone-400 pt-1">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
-                draft.status === "done"
+                draft.status === "production"
                   ? "bg-green-500"
-                  : draft.status === "active"
-                    ? "bg-blue-500"
-                    : "bg-stone-300"
+                  : draft.status === "demo"
+                    ? "bg-amber-500"
+                    : draft.status === "plan"
+                      ? "bg-brand"
+                      : "bg-stone-300"
               }`}
             />
-            {draft.status === "done" ? "Completed" : draft.status === "active" ? "Active" : "Future"}
+            {draft.status === "production" ? "Production" : draft.status === "demo" ? "Demo" : draft.status === "plan" ? "Plan" : "Future"}
           </div>
         </div>
       </div>

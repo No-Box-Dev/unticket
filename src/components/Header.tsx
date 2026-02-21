@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useSprint } from "@/hooks/useConfigRepo";
 import { LogOut, ArrowLeftRight, Settings } from "lucide-react";
 
 interface HeaderProps {
@@ -8,8 +7,7 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenSettings }: HeaderProps) {
-  const { user, selectedOrg, setSelectedOrg, logout } = useAuth();
-  const { data: sprint } = useSprint();
+  const { user, setSelectedOrg, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -24,12 +22,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
   return (
     <header className="bg-white border-b border-stone-200 px-4 sm:px-8 py-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-bold text-brand">{selectedOrg}</h1>
-        {sprint && (
-          <span className="text-sm text-stone-400">
-            Sprint {sprint.number}: {sprint.name}
-          </span>
-        )}
+        <h1 className="text-lg font-bold text-brand">GitPulse</h1>
       </div>
 
       <div className="flex items-center gap-1" ref={menuRef}>
