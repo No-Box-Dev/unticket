@@ -388,12 +388,14 @@ function TodoDetailModal({
   const [planLoading, setPlanLoading] = useState(false);
 
   useEffect(() => {
-    if (!org) { setPlan(null); return; }
+    let cancelled = false;
+    if (!org) { setPlan(null); setPlanLoading(false); return; }
     setPlanLoading(true);
     fetchTodoPlanFile(org, todo.id)
-      .then((result) => setPlan(result?.content ?? null))
-      .catch(() => setPlan(null))
-      .finally(() => setPlanLoading(false));
+      .then((result) => { if (!cancelled) setPlan(result?.content ?? null); })
+      .catch(() => { if (!cancelled) setPlan(null); })
+      .finally(() => { if (!cancelled) setPlanLoading(false); });
+    return () => { cancelled = true; };
   }, [org, todo.id]);
 
   const planUrl = org
@@ -404,15 +406,26 @@ function TodoDetailModal({
     ? `https://github.com/${org}/${todo.repo}`
     : null;
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="todo-detail-title"
         className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-          <span className="text-lg font-semibold text-stone-800 truncate">{todo.title}</span>
+          <span id="todo-detail-title" className="text-lg font-semibold text-stone-800 truncate">{todo.title}</span>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
