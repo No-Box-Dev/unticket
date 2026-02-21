@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface AssignDropdownProps {
   owners: string[];
@@ -9,23 +10,43 @@ interface AssignDropdownProps {
 export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, flip: false });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const updatePos = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    // Flip upward if less than 200px below trigger
+    if (spaceBelow < 200) {
+      setPos({ top: rect.top - 4, left: rect.left, flip: true });
+    } else {
+      setPos({ top: rect.bottom + 4, left: rect.left, flip: false });
+    }
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSearch("");
-      }
+      const target = e.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) return;
+      setOpen(false);
+      setSearch("");
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    if (open) {
+      updatePos();
+      inputRef.current?.focus();
+    }
+  }, [open, updatePos]);
 
   const filtered = allPeople.filter((p) =>
     p.toLowerCase().includes(search.toLowerCase()),
@@ -39,8 +60,9 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
   };
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         className="text-xs cursor-pointer"
       >
@@ -50,8 +72,18 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
           <span className="text-stone-400 hover:text-stone-600">{owners.join(", ")}</span>
         )}
       </button>
-      {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            left: pos.left,
+            ...(pos.flip
+              ? { bottom: window.innerHeight - pos.top }
+              : { top: pos.top }),
+          }}
+          className="z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[160px]"
+        >
           <div className="px-2 pb-1">
             <input
               ref={inputRef}
@@ -81,8 +113,9 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               {allPeople.length === 0 ? "No people configured" : "No matches"}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }

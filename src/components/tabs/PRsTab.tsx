@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { useOpenPRs } from "@/hooks/useGitHub";
+import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
-import { GitPullRequest, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
+import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 function daysAgo(date: string): number {
@@ -17,12 +17,19 @@ interface PRsTabProps {
   repoNames: string[];
 }
 
+type PRView = "open" | "merged";
+
 export function PRsTab({ repoNames }: PRsTabProps) {
-  const { data: prs, isLoading } = useOpenPRs(repoNames);
+  const [view, setView] = useState<PRView>("open");
+  const { data: openPRs, isLoading: openLoading } = useOpenPRs(repoNames);
+  const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(repoNames);
   const { data: settings } = useSettings();
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [personFilter, setPersonFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
+
+  const prs = view === "open" ? openPRs : mergedPRs;
+  const isLoading = view === "open" ? openLoading : mergedLoading;
   const [sortKey, setSortKey] = useState<SortKey>("age");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -119,8 +126,33 @@ export function PRsTab({ repoNames }: PRsTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
+      {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+          <button
+            onClick={() => setView("open")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
+              view === "open"
+                ? "bg-brand text-white"
+                : "bg-white text-stone-600 hover:bg-stone-50",
+            )}
+          >
+            Open
+          </button>
+          <button
+            onClick={() => setView("merged")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors border-l border-stone-200",
+              view === "merged"
+                ? "bg-brand text-white"
+                : "bg-white text-stone-600 hover:bg-stone-50",
+            )}
+          >
+            Merged
+          </button>
+        </div>
+
         {teams.length > 1 && (
           <select
             value={teamFilter}
@@ -226,12 +258,16 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                   >
                     <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
-                        <GitPullRequest
-                          className={cn(
-                            "w-4 h-4",
-                            pr.draft ? "text-stone-400" : "text-green-600",
-                          )}
-                        />
+                        {view === "merged" ? (
+                          <GitMerge className="w-4 h-4 text-purple-600" />
+                        ) : (
+                          <GitPullRequest
+                            className={cn(
+                              "w-4 h-4",
+                              pr.draft ? "text-stone-400" : "text-green-600",
+                            )}
+                          />
+                        )}
                         {repoName}#{pr.number}
                       </div>
                     </td>

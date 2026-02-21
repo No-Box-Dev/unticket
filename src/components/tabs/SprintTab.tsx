@@ -140,30 +140,43 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Sprint Header */}
-      <div className="bg-white rounded-xl border border-stone-200 border-l-4 border-l-brand px-4 py-2.5">
-        <div className="flex items-center gap-3">
+    <div className="flex gap-4 pb-8">
+      {/* Left sidebar: Sprint info + Add Feature */}
+      <div className="hidden lg:flex flex-col gap-4 w-48 shrink-0 pt-1">
+        <div className="space-y-2">
           <h2 className="text-sm font-semibold text-stone-800">
-            Sprint {sprint.number}: {sprint.name}
+            Sprint {sprint.number}
           </h2>
+          <p className="text-xs text-stone-500">{sprint.name}</p>
           <div className="flex items-center gap-1.5 text-xs text-stone-400">
             <Calendar className="w-3.5 h-3.5" />
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </div>
           {sprint.focus && (
-            <span className="text-xs text-brand">{sprint.focus}</span>
+            <p className="text-xs text-brand">{sprint.focus}</p>
           )}
+        </div>
+        <div className="border-t border-stone-200 pt-3">
+          <AddFeatureInput onAdd={addFeature} />
         </div>
       </div>
 
-      {/* Add feature input */}
-      <div className="px-1">
+      {/* Mobile: inline sprint header */}
+      <div className="lg:hidden w-full space-y-3 mb-4">
+        <div className="bg-white rounded-xl border border-stone-200 border-l-4 border-l-brand px-4 py-2.5 flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-stone-800 whitespace-nowrap">
+            Sprint {sprint.number}: {sprint.name}
+          </h2>
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 whitespace-nowrap">
+            <Calendar className="w-3.5 h-3.5" />
+            {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+          </div>
+        </div>
         <AddFeatureInput onAdd={addFeature} />
       </div>
 
       {/* Kanban columns: Plan | Demo | Production */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-w-0">
         {(
           [
             { status: "plan" as const, label: "Plan", items: planFeatures },
@@ -177,17 +190,17 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, status)}
             className={cn(
-              "rounded-xl border border-stone-200 overflow-hidden bg-stone-50 transition-colors",
+              "rounded-xl border border-stone-200 bg-stone-50 transition-colors",
               dragOverCol === status && "border-brand/50 bg-brand/5",
             )}
           >
-            <div className="px-4 py-3 border-b border-stone-100 bg-white">
+            <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl">
               <span className="text-sm font-medium text-stone-700">
                 {label}{" "}
                 <span className="text-stone-400 font-normal">({items.length})</span>
               </span>
             </div>
-            <div className="p-2 space-y-2 overflow-y-auto max-h-[600px]">
+            <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-220px)]">
               {items.map((feature) => (
                 <FeatureCard
                   key={feature.id}

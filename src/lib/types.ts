@@ -61,6 +61,7 @@ export interface Todo {
   owner: string;
   done: boolean;
   createdAt: string;
+  featureId?: string;
 }
 
 // .gitpulse config repo types
