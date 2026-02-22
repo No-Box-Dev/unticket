@@ -12,7 +12,7 @@ export function getOctokit(): Octokit {
     octokitInstance = new Octokit({
       auth: token,
       throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
-      retry: { doNotRetry: [401, 403, 404, 422] },
+      retry: { doNotRetry: [400, 401, 403, 404, 422, 451] },
     });
   }
   return octokitInstance;

@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithToken = async (token: string) => {
     localStorage.setItem("gp_token", token);
     resetOctokit();
-    const userData = await fetchUser();
+    const userData = await fetchUserWithTimeout();
     setUser(userData);
   };
 
