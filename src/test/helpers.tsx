@@ -1,4 +1,5 @@
 import React from "react";
+import { vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export function mockFetch(status: number, body: unknown) {

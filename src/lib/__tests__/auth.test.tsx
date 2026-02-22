@@ -96,7 +96,7 @@ describe("useAuth", () => {
 
   it("isLoading starts true, becomes false", async () => {
     storage.gp_token = "tok";
-    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null });
+    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null } as any);
 
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,
@@ -109,7 +109,7 @@ describe("useAuth", () => {
 
   it("loads user from existing gp_token in localStorage", async () => {
     storage.gp_token = "tok";
-    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: "Alice" });
+    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: "Alice" } as any);
 
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,
@@ -142,7 +142,7 @@ describe("useAuth", () => {
       writable: true,
       configurable: true,
     });
-    mockFetchUser.mockResolvedValue({ login: "oauth-user", avatar_url: "", name: null });
+    mockFetchUser.mockResolvedValue({ login: "oauth-user", avatar_url: "", name: null } as any);
 
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,
@@ -156,7 +156,7 @@ describe("useAuth", () => {
   });
 
   it("loginWithToken: stores token, resets octokit, sets user", async () => {
-    mockFetchUser.mockResolvedValue({ login: "bob", avatar_url: "", name: null });
+    mockFetchUser.mockResolvedValue({ login: "bob", avatar_url: "", name: null } as any);
 
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,
@@ -180,7 +180,7 @@ describe("useAuth", () => {
   it("logout: clears localStorage, resets user + org", async () => {
     storage.gp_token = "tok";
     storage.gp_org = "org1";
-    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null });
+    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null } as any);
 
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,

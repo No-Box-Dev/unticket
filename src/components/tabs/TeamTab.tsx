@@ -67,7 +67,7 @@ export function TeamTab({ repoNames }: TeamTabProps) {
   // Priority breakdown
   const priorityBreakdown = useMemo(() => {
     const counts = { high: 0, medium: 0, low: 0, none: 0 };
-    for (const f of teamFeatures.filter((f) => f.status !== "done")) {
+    for (const f of teamFeatures.filter((f) => f.status !== "production")) {
       const p = f.priority ?? "none";
       counts[p]++;
     }
@@ -212,7 +212,7 @@ export function TeamTab({ repoNames }: TeamTabProps) {
                 <Flag className="w-4 h-4 text-stone-400" />
                 <h3 className="text-sm font-semibold text-stone-700">Feature Priority</h3>
                 <span className="text-xs text-stone-400">
-                  {teamFeatures.filter((f) => f.status !== "done").length} active/future
+                  {teamFeatures.filter((f) => f.status !== "production").length} active/future
                 </span>
               </div>
               <div className="flex items-center gap-6">
