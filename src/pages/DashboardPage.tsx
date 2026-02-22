@@ -63,7 +63,7 @@ export function DashboardPage() {
             {activeTab === "team" && <TeamTab repoNames={repoNames} />}
             {activeTab === "individual" && <IndividualTab repoNames={repoNames} />}
             {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
-            {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
+            {/* {activeTab === "issues" && <IssuesTab repoNames={repoNames} />} */}
             {activeTab === "activity" && <ActivityTab repoNames={repoNames} />}
             {activeTab === "todos" && <TodoTab />}
           </>
