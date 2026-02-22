@@ -9,7 +9,10 @@ export function getOctokit(): Octokit {
   if (!octokitInstance) {
     const token = localStorage.getItem("gp_token");
     if (!token) throw new Error("Not authenticated");
-    octokitInstance = new Octokit({ auth: token });
+    octokitInstance = new Octokit({
+      auth: token,
+      throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
+    });
   }
   return octokitInstance;
 }

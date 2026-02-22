@@ -1,12 +1,9 @@
 /**
  * Lightweight OAuth token exchange.
  *
- * - Vercel: uses /api/auth/callback serverless function (has client_secret)
- * - GitHub Pages: uses a tiny Cloudflare Worker proxy (deploy your own)
- * - Dev fallback: PAT token input
- *
- * The proxy URL is configured via VITE_OAUTH_PROXY_URL.
- * If not set, falls back to Vercel's /api/auth/callback.
+ * Uses Cloudflare Pages Function at /api/auth/callback.
+ * VITE_OAUTH_PROXY_URL can override with an external proxy.
+ * Falls back to PAT token input when CLIENT_ID is not set.
  */
 
 const PROXY_URL = import.meta.env.VITE_OAUTH_PROXY_URL as string | undefined;
