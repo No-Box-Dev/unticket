@@ -76,7 +76,7 @@ export async function createGitPulseRepo(org: string): Promise<void> {
     repo: REPO_NAME,
     path: "CLAUDE.md",
     message: "Initialize CLAUDE.md",
-    content: btoa(unescape(encodeURIComponent(CLAUDE_MD))),
+    content: encodeBase64Utf8(CLAUDE_MD),
   });
 
   // Create empty plans directory with .gitkeep
@@ -131,6 +131,21 @@ export async function saveTodoPlanFile(
   await saveFileToGitPulse(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
 }
 
+// ---------- Base64 helpers (UTF-8 safe) ----------
+
+function encodeBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
+function decodeBase64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 // ---------- Shared helpers ----------
 
 async function saveFileToGitPulse(
@@ -164,7 +179,7 @@ async function saveFileToGitPulse(
     repo: REPO_NAME,
     path,
     message,
-    content: btoa(unescape(encodeURIComponent(content))),
+    content: encodeBase64Utf8(content),
     ...(sha ? { sha } : {}),
   });
 }
@@ -181,7 +196,7 @@ async function fetchFileFromGitPulse(
       path,
     });
     if ("content" in data && data.type === "file") {
-      return { content: atob(data.content) };
+      return { content: decodeBase64Utf8(data.content) };
     }
     return null;
   } catch (e: unknown) {

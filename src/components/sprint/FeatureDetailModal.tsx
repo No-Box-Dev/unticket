@@ -125,7 +125,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-stone-500">Implementation Plan</span>
               <div className="flex items-center gap-2">
-                {planUrl && (plan !== null || editMode) && (
+                {planUrl && plan !== null && (
                   <a
                     href={planUrl}
                     target="_blank"
