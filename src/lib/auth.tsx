@@ -25,6 +25,18 @@ interface AuthContextType {
   setSelectedOrg: (org: string | null) => void;
 }
 
+const AUTH_TIMEOUT_MS = 10_000;
+
+/** Race fetchUser against a timeout so the app never hangs on a bad token. */
+function fetchUserWithTimeout(): Promise<User> {
+  return Promise.race([
+    fetchUser(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Auth timeout")), AUTH_TIMEOUT_MS),
+    ),
+  ]) as Promise<User>;
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -43,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.history.replaceState({}, "", window.location.pathname);
       localStorage.setItem("gp_token", callbackToken);
       resetOctokit();
-      fetchUser()
+      fetchUserWithTimeout()
         .then(setUser)
         .catch(() => localStorage.removeItem("gp_token"))
         .finally(() => setIsLoading(false));
@@ -68,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.getItem("n1_github_token");
     if (token) {
       localStorage.setItem("gp_token", token);
-      fetchUser()
+      fetchUserWithTimeout()
         .then(setUser)
         .catch(() => localStorage.removeItem("gp_token"))
         .finally(() => setIsLoading(false));
@@ -80,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithToken = async (token: string) => {
     localStorage.setItem("gp_token", token);
     resetOctokit();
-    const userData = await fetchUser();
+    const userData = await fetchUserWithTimeout();
     setUser(userData);
   };
 
