@@ -8,7 +8,7 @@ import { BacklogTab } from "@/components/tabs/BacklogTab";
 import { TeamTab } from "@/components/tabs/TeamTab";
 import { IndividualTab } from "@/components/tabs/IndividualTab";
 import { PRsTab } from "@/components/tabs/PRsTab";
-import { IssuesTab } from "@/components/tabs/IssuesTab";
+// import { IssuesTab } from "@/components/tabs/IssuesTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
 import { TodoTab } from "@/components/tabs/TodoTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";

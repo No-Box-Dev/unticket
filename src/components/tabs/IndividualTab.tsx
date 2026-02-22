@@ -4,6 +4,7 @@ import { useAllPRs, useClosedIssues, useAllIssues, useOrgMembers } from "@/hooks
 import { useAuth } from "@/lib/auth";
 import { BarChart } from "@/components/BarChart";
 import { computeMetric, extractClosedDates, extractCreatedDates } from "@/lib/metrics";
+import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
@@ -215,7 +216,7 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
   );
 }
 
-function ActivityCard({ title, metric, color }: { title: string; metric: { current: number; change: number; history: { value: number }[] }; color: string }) {
+function ActivityCard({ title, metric, color }: { title: string; metric: MetricData; color: string }) {
   const total = metric.history.reduce((sum, b) => sum + b.value, 0);
   const isPositive = metric.change > 0;
   const isNeutral = metric.change === 0;
