@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ExternalLink, FileText } from "lucide-react";
+import { X, ExternalLink, FileText, Pencil, Save, Loader2 } from "lucide-react";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { useAuth } from "@/lib/auth";
-import { fetchPlanFile, planFilePath } from "@/lib/config-repo";
+import { fetchPlanFile, planFilePath, savePlanFile } from "@/lib/config-repo";
 import type { Feature, Effort, Priority } from "@/lib/types";
 
 interface FeatureDetailModalProps {
@@ -20,6 +20,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [plan, setPlan] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -116,21 +120,32 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             </div>
           </div>
 
-          {/* Implementation Plan (read-only, from .gitpulse repo) */}
+          {/* Implementation Plan */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-stone-500">Implementation Plan</span>
-              {planUrl && plan !== null && (
-                <a
-                  href={planUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-stone-400 hover:text-brand flex items-center gap-1"
-                  title="View on GitHub"
-                >
-                  <ExternalLink size={12} />
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {planUrl && (plan !== null || editMode) && (
+                  <a
+                    href={planUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-stone-400 hover:text-brand flex items-center gap-1"
+                    title="View on GitHub"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+                {!planLoading && !editMode && plan !== null && (
+                  <button
+                    onClick={() => { setEditContent(plan); setEditMode(true); setSaveError(null); }}
+                    className="text-xs text-stone-400 hover:text-brand flex items-center gap-1 cursor-pointer"
+                  >
+                    <Pencil size={12} />
+                    Edit
+                  </button>
+                )}
+              </div>
             </div>
 
             {planLoading && (
@@ -139,21 +154,68 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               </div>
             )}
 
-            {!planLoading && plan === null && (
+            {!planLoading && !editMode && plan === null && (
               <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300" />
                 No plan found.
                 <br />
-                <span className="text-xs">
-                  Create <code className="text-stone-500">{planFilePath(draft.id)}</code> via Claude Code.
-                </span>
+                <button
+                  onClick={() => { setEditContent(""); setEditMode(true); setSaveError(null); }}
+                  className="mt-2 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
+                >
+                  Create Plan
+                </button>
               </div>
             )}
 
-            {!planLoading && plan !== null && (
+            {!planLoading && !editMode && plan !== null && (
               <pre className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
                 {plan}
               </pre>
+            )}
+
+            {editMode && (
+              <div className="space-y-2">
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
+                  rows={12}
+                />
+                {saveError && (
+                  <p className="text-xs text-red-500">{saveError}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!selectedOrg) return;
+                      setSaving(true);
+                      setSaveError(null);
+                      try {
+                        await savePlanFile(selectedOrg, draft.id, editContent);
+                        setPlan(editContent);
+                        setEditMode(false);
+                      } catch (err) {
+                        setSaveError(err instanceof Error ? err.message : "Failed to save plan");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+                  >
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    {saving ? "Saving..." : "Save & Sync"}
+                  </button>
+                  <button
+                    onClick={() => { setEditMode(false); setSaveError(null); }}
+                    disabled={saving}
+                    className="px-3 py-1.5 rounded-md border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 disabled:opacity-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

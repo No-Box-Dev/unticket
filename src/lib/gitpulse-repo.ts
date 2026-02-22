@@ -102,6 +102,14 @@ export async function fetchPlanFile(
   return fetchFileFromGitPulse(org, planFilePath(featureId));
 }
 
+export async function savePlanFile(
+  org: string,
+  featureId: string,
+  content: string,
+): Promise<void> {
+  await saveFileToGitPulse(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
+}
+
 // ---------- Todo plan files ----------
 
 export function todoPlanFilePath(todoId: string): string {
@@ -115,7 +123,51 @@ export async function fetchTodoPlanFile(
   return fetchFileFromGitPulse(org, todoPlanFilePath(todoId));
 }
 
+export async function saveTodoPlanFile(
+  org: string,
+  todoId: string,
+  content: string,
+): Promise<void> {
+  await saveFileToGitPulse(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
+}
+
 // ---------- Shared helpers ----------
+
+async function saveFileToGitPulse(
+  org: string,
+  path: string,
+  content: string,
+  message: string,
+): Promise<void> {
+  const ok = getOctokit();
+
+  // Get current SHA if the file already exists
+  let sha: string | undefined;
+  try {
+    const { data } = await ok.rest.repos.getContent({
+      owner: org,
+      repo: REPO_NAME,
+      path,
+    });
+    if ("sha" in data) {
+      sha = data.sha;
+    }
+  } catch (e: unknown) {
+    if (!(e && typeof e === "object" && "status" in e && (e as { status: number }).status === 404)) {
+      throw e;
+    }
+    // 404 means new file — no SHA needed
+  }
+
+  await ok.rest.repos.createOrUpdateFileContents({
+    owner: org,
+    repo: REPO_NAME,
+    path,
+    message,
+    content: btoa(unescape(encodeURIComponent(content))),
+    ...(sha ? { sha } : {}),
+  });
+}
 
 async function fetchFileFromGitPulse(
   org: string,
