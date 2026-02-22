@@ -50,6 +50,7 @@ describe("useRepos", () => {
     const { wrapper } = createQueryWrapper();
     const { result } = renderHook(() => useRepos(), { wrapper });
     expect(result.current.isFetching).toBe(false);
+    expect(mockFetchRepos).not.toHaveBeenCalled();
   });
 
   it("fetches when selectedOrg is set", async () => {
@@ -106,7 +107,7 @@ describe("useTriggerSync", () => {
 });
 
 describe("useSyncStatus", () => {
-  it("has refetchInterval 60_000", () => {
+  it("starts fetching when selectedOrg is set", () => {
     mockUseAuth.mockReturnValue({
       selectedOrg: "my-org",
       user: { login: "alice", avatar_url: "", name: null },

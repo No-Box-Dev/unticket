@@ -85,10 +85,13 @@ afterEach(() => {
 describe("useAuth", () => {
   it("throws outside AuthProvider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(<TestConsumer />)).toThrow(
-      "useAuth must be used within AuthProvider",
-    );
-    spy.mockRestore();
+    try {
+      expect(() => render(<TestConsumer />)).toThrow(
+        "useAuth must be used within AuthProvider",
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("isLoading starts true, becomes false", async () => {
