@@ -76,7 +76,7 @@ export async function createGitPulseRepo(org: string): Promise<void> {
     repo: REPO_NAME,
     path: "CLAUDE.md",
     message: "Initialize CLAUDE.md",
-    content: btoa(unescape(encodeURIComponent(CLAUDE_MD))),
+    content: encodeBase64Utf8(CLAUDE_MD),
   });
 
   // Create empty plans directory with .gitkeep
@@ -102,6 +102,14 @@ export async function fetchPlanFile(
   return fetchFileFromGitPulse(org, planFilePath(featureId));
 }
 
+export async function savePlanFile(
+  org: string,
+  featureId: string,
+  content: string,
+): Promise<void> {
+  await saveFileToGitPulse(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
+}
+
 // ---------- Todo plan files ----------
 
 export function todoPlanFilePath(todoId: string): string {
@@ -115,7 +123,66 @@ export async function fetchTodoPlanFile(
   return fetchFileFromGitPulse(org, todoPlanFilePath(todoId));
 }
 
+export async function saveTodoPlanFile(
+  org: string,
+  todoId: string,
+  content: string,
+): Promise<void> {
+  await saveFileToGitPulse(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
+}
+
+// ---------- Base64 helpers (UTF-8 safe) ----------
+
+function encodeBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
+function decodeBase64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 // ---------- Shared helpers ----------
+
+async function saveFileToGitPulse(
+  org: string,
+  path: string,
+  content: string,
+  message: string,
+): Promise<void> {
+  const ok = getOctokit();
+
+  // Get current SHA if the file already exists
+  let sha: string | undefined;
+  try {
+    const { data } = await ok.rest.repos.getContent({
+      owner: org,
+      repo: REPO_NAME,
+      path,
+    });
+    if ("sha" in data) {
+      sha = data.sha;
+    }
+  } catch (e: unknown) {
+    if (!(e && typeof e === "object" && "status" in e && (e as { status: number }).status === 404)) {
+      throw e;
+    }
+    // 404 means new file — no SHA needed
+  }
+
+  await ok.rest.repos.createOrUpdateFileContents({
+    owner: org,
+    repo: REPO_NAME,
+    path,
+    message,
+    content: encodeBase64Utf8(content),
+    ...(sha ? { sha } : {}),
+  });
+}
 
 async function fetchFileFromGitPulse(
   org: string,
@@ -129,7 +196,7 @@ async function fetchFileFromGitPulse(
       path,
     });
     if ("content" in data && data.type === "file") {
-      return { content: atob(data.content) };
+      return { content: decodeBase64Utf8(data.content) };
     }
     return null;
   } catch (e: unknown) {
