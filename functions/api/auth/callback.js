@@ -41,7 +41,14 @@ export async function onRequestGet(context) {
     });
   }
 
-  // Redirect back to app with token
+  // Redirect back to app with token (never cache — token is per-user)
   const origin = url.origin;
-  return Response.redirect(`${origin}/?token=${data.access_token}`, 302);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: `${origin}/?token=${data.access_token}`,
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
+    },
+  });
 }
