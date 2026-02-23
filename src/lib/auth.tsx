@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem("gp_token");
+    localStorage.removeItem("n1_github_token");
     localStorage.removeItem("gp_org");
     resetOctokit();
     setUser(null);
