@@ -3,9 +3,30 @@ import { useSprint, useFeatures, usePeople, useSaveFeatures, useCreateConfigRepo
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
-import type { Feature, FeatureStatus } from "@/lib/types";
-import { Calendar, Rocket } from "lucide-react";
+import type { Feature, FeatureStatus, Priority } from "@/lib/types";
+import { Calendar, Rocket, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/cn";
+
+type SortKey = "default" | "priority" | "effort" | "title";
+
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
+const EFFORT_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+function sortFeatures(features: Feature[], key: SortKey): Feature[] {
+  if (key === "default") return features;
+  return [...features].sort((a, b) => {
+    switch (key) {
+      case "priority":
+        return (PRIORITY_ORDER[a.priority ?? "none"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "none"] ?? 3);
+      case "effort":
+        return (EFFORT_ORDER[a.effort] ?? 1) - (EFFORT_ORDER[b.effort] ?? 1);
+      case "title":
+        return a.title.localeCompare(b.title);
+      default:
+        return 0;
+    }
+  });
+}
 
 interface SprintTabProps {
   repoNames: string[];
@@ -19,6 +40,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const createRepo = useCreateConfigRepo();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>("default");
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -46,6 +68,12 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
     () => sprintFeatures.filter((f) => f.status === "production"),
     [sprintFeatures],
   );
+
+  const sortedColumns = useMemo(() => ({
+    plan: sortFeatures(planFeatures, sortBy),
+    demo: sortFeatures(demoFeatures, sortBy),
+    production: sortFeatures(productionFeatures, sortBy),
+  }), [planFeatures, demoFeatures, productionFeatures, sortBy]);
 
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
 
@@ -176,12 +204,28 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
       </div>
 
       {/* Kanban columns: Plan | Demo | Production */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex items-center justify-end">
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown size={13} className="text-stone-400" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+              className="px-2 py-1 rounded-md border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-brand cursor-pointer"
+            >
+              <option value="default">Default order</option>
+              <option value="priority">Priority</option>
+              <option value="effort">Effort</option>
+              <option value="title">Title A-Z</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {(
           [
-            { status: "plan" as const, label: "Plan", items: planFeatures },
-            { status: "demo" as const, label: "Demo", items: demoFeatures },
-            { status: "production" as const, label: "Production", items: productionFeatures },
+            { status: "plan" as const, label: "Plan", items: sortedColumns.plan },
+            { status: "demo" as const, label: "Demo", items: sortedColumns.demo },
+            { status: "production" as const, label: "Production", items: sortedColumns.production },
           ] as const
         ).map(({ status, label, items }) => (
           <div
@@ -222,6 +266,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Detail modal */}

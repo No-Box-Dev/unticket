@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useSaveTodos, useFeatures } from "@/hooks/useConfigRepo";
 import { useRepos } from "@/hooks/useGitHub";
@@ -35,6 +35,8 @@ export function TodoTab() {
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const dragOverCardIdRef = useRef<string | null>(null);
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
   const { data: repos } = useRepos();
 
@@ -118,11 +120,37 @@ export function TodoTab() {
   const handleDrop = useCallback(
     (e: React.DragEvent, targetStatus: TodoStatus) => {
       e.preventDefault();
-      setDragOverCol(null);
       const todoId = e.dataTransfer.getData("text/plain");
       const todo = myTodos.find((t) => t.id === todoId);
-      if (!todo || todo.status === targetStatus) return;
-      updateAll(myTodos.map((t) => (t.id === todoId ? { ...t, status: targetStatus } : t)));
+      const targetCardId = dragOverCardIdRef.current;
+
+      setDragOverCol(null);
+      setDragOverCardId(null);
+      dragOverCardIdRef.current = null;
+
+      if (!todo) return;
+
+      const isSameColumn = todo.status === targetStatus;
+      const hasTargetCard = targetCardId && targetCardId !== todoId;
+
+      // Same column, no target card — nothing to do
+      if (isSameColumn && !hasTargetCard) return;
+
+      const updatedTodo = { ...todo, status: targetStatus };
+      const withoutDragged = myTodos.filter((t) => t.id !== todoId);
+
+      if (hasTargetCard) {
+        const targetCard = withoutDragged.find((t) => t.id === targetCardId);
+        if (targetCard?.status === targetStatus) {
+          const targetIndex = withoutDragged.findIndex((t) => t.id === targetCardId);
+          withoutDragged.splice(targetIndex, 0, updatedTodo);
+          updateAll(withoutDragged);
+          return;
+        }
+      }
+
+      // No valid target card — append (end of column)
+      updateAll([...withoutDragged, updatedTodo]);
     },
     [myTodos],
   );
@@ -133,8 +161,15 @@ export function TodoTab() {
     setDragOverCol(status);
   }, []);
 
+  const handleCardDragOver = useCallback((cardId: string) => {
+    dragOverCardIdRef.current = cardId;
+    setDragOverCardId(cardId);
+  }, []);
+
   const handleDragLeave = useCallback(() => {
     setDragOverCol(null);
+    setDragOverCardId(null);
+    dragOverCardIdRef.current = null;
   }, []);
 
   if (isLoading) {
@@ -232,6 +267,8 @@ export function TodoTab() {
                     onDelete={() => deleteTodo(todo.id)}
                     onClick={() => setDetailTodo(todo)}
                     onDragStart={handleDragStart}
+                    onCardDragOver={handleCardDragOver}
+                    isDropTarget={dragOverCardId === todo.id}
                   />
                 ))}
                 {columns[status].length === 0 && (
@@ -303,6 +340,8 @@ function TodoCard({
   onDelete,
   onClick,
   onDragStart,
+  onCardDragOver,
+  isDropTarget,
 }: {
   todo: Todo;
   feature?: Feature;
@@ -310,6 +349,8 @@ function TodoCard({
   onDelete: () => void;
   onClick: () => void;
   onDragStart: (e: React.DragEvent, todo: Todo) => void;
+  onCardDragOver: (cardId: string) => void;
+  isDropTarget: boolean;
 }) {
   const isDone = todo.status === "done";
 
@@ -317,10 +358,15 @@ function TodoCard({
     <div
       draggable
       onDragStart={(e) => onDragStart(e, todo)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onCardDragOver(todo.id);
+      }}
       onClick={onClick}
       className={cn(
         "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-grab active:cursor-grabbing",
         isDone ? "border-stone-100 opacity-50" : "border-stone-200 hover:border-stone-300",
+        isDropTarget && "border-t-2 border-t-brand",
       )}
     >
       <div className="flex-1 min-w-0">
@@ -429,7 +475,12 @@ function TodoDetailModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-          <span id="todo-detail-title" className="text-lg font-semibold text-stone-800 truncate">{todo.title}</span>
+          <input
+            id="todo-detail-title"
+            value={todo.title}
+            onChange={(e) => onUpdate({ title: e.target.value })}
+            className="text-lg font-semibold text-stone-800 bg-transparent border-none outline-none focus:ring-0 w-full truncate"
+          />
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
