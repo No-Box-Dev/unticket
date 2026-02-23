@@ -48,7 +48,10 @@ export async function onRequestGet(context) {
     headers: {
       Location: `${origin}/?token=${data.access_token}`,
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      "CDN-Cache-Control": "no-store",
+      "Cloudflare-CDN-Cache-Control": "no-store",
       Pragma: "no-cache",
+      Vary: "*",
     },
   });
 }
