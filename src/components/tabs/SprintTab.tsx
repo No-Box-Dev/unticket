@@ -3,7 +3,7 @@ import { useSprint, useFeatures, usePeople, useSaveFeatures, useCreateConfigRepo
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
-import type { Feature, FeatureStatus, Priority } from "@/lib/types";
+import type { Feature, FeatureStatus } from "@/lib/types";
 import { Calendar, Rocket, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 
