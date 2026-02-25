@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { useOpenIssues, useClosedIssues } from "@/hooks/useGitHub";
+import { usePaginatedIssues, useIssueLabels, useRepos } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -11,8 +11,7 @@ function daysAgo(date: string): number {
   );
 }
 
-type SortKey = "issue" | "title" | "repo" | "age";
-type SortDir = "asc" | "desc";
+type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
 const labelColors: Record<string, { bg: string; text: string }> = {
   bug: { bg: "bg-red-50", text: "text-red-700" },
@@ -33,97 +32,76 @@ function getLabelStyle(name: string, color: string) {
   };
 }
 
+const PAGE_SIZE = 30;
+
 interface IssuesTabProps {
   repoNames: string[];
 }
 
-export function IssuesTab({ repoNames }: IssuesTabProps) {
+export function IssuesTab(_props: IssuesTabProps) {
   const qc = useQueryClient();
-  const { data: sprint } = useSprint();
+  const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: settings } = useSettings();
-  const { data: openIssues, isLoading } = useOpenIssues(repoNames);
-  const { data: closedIssues } = useClosedIssues(repoNames, sprint?.startDate);
+  const { data: labels } = useIssueLabels();
+  const { data: repos } = useRepos();
 
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [labelFilter, setLabelFilter] = useState<string>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("age");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [openPage, setOpenPage] = useState(1);
+  const [closedPage, setClosedPage] = useState(1);
 
-  const teams = useMemo(
-    () => settings?.teams ?? [],
-    [settings],
-  );
+  const teams = useMemo(() => settings?.teams ?? [], [settings]);
 
-  // Build repo→team lookup
-  const repoToTeam = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of teams) {
-      for (const r of t.repos ?? []) {
-        map.set(r, t.name);
-      }
-    }
-    return map;
-  }, [teams]);
-
-  const openWithRepo = openIssues ?? [];
-  const closedWithRepo = closedIssues ?? [];
-
-  // Unique repos and labels for dropdowns
-  const repos = useMemo(() => {
-    const set = new Set<string>();
-    for (const i of [...openWithRepo, ...closedWithRepo]) {
-      if ((i as any).repo) set.add((i as any).repo);
-    }
-    return Array.from(set).sort();
-  }, [openWithRepo, closedWithRepo]);
-
-  const labels = useMemo(() => {
-    const set = new Set<string>();
-    for (const i of [...openWithRepo, ...closedWithRepo]) {
-      for (const l of i.labels ?? []) {
-        set.add((l as any).name);
-      }
-    }
-    return Array.from(set).sort();
-  }, [openWithRepo, closedWithRepo]);
-
-  const filterIssues = (list: any[]) => {
-    let result = list;
+  // Resolve team filter → repo names
+  const filteredRepos = useMemo(() => {
     if (teamFilter !== "all") {
-      result = result.filter((i) => repoToTeam.get(i.repo) === teamFilter);
+      const team = teams.find((t) => t.name === teamFilter);
+      return team?.repos ?? [];
     }
     if (repoFilter !== "all") {
-      result = result.filter((i) => i.repo === repoFilter);
+      return [repoFilter];
     }
-    if (labelFilter !== "all") {
-      result = result.filter((i) =>
-        (i.labels ?? []).some((l: any) => l.name === labelFilter),
-      );
-    }
-    return result;
-  };
+    return undefined; // no repo filter
+  }, [teamFilter, repoFilter, teams]);
 
-  const sortIssues = (list: any[]) => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    return [...list].sort((a, b) => {
-      switch (sortKey) {
-        case "issue":
-          return dir * (a.number - b.number);
-        case "title":
-          return dir * a.title.localeCompare(b.title);
-        case "repo":
-          return dir * (a.repo ?? "").localeCompare(b.repo ?? "");
-        case "age":
-          return dir * (daysAgo(a.created_at) - daysAgo(b.created_at));
-        default:
-          return 0;
-      }
-    });
-  };
+  // Open issues query
+  const {
+    data: openData,
+    isLoading: openLoading,
+    isFetching: openFetching,
+  } = usePaginatedIssues({
+    state: "open",
+    page: openPage,
+    pageSize: PAGE_SIZE,
+    repos: filteredRepos,
+    label: labelFilter !== "all" ? labelFilter : undefined,
+    sort: sortKey,
+    sortDir,
+  });
 
-  const filteredOpen = sortIssues(filterIssues(openWithRepo));
-  const filteredClosed = sortIssues(filterIssues(closedWithRepo));
+  // Closed issues query (since sprint start, waits for sprint config)
+  const {
+    data: closedData,
+    isLoading: closedLoading,
+    isFetching: closedFetching,
+  } = usePaginatedIssues({
+    state: "closed",
+    page: closedPage,
+    pageSize: PAGE_SIZE,
+    repos: filteredRepos,
+    label: labelFilter !== "all" ? labelFilter : undefined,
+    sort: sortKey,
+    sortDir,
+    closedSince: sprint?.startDate,
+  }, !!sprint?.startDate);
+
+  const resetPages = () => {
+    setOpenPage(1);
+    setClosedPage(1);
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -132,6 +110,7 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
       setSortKey(key);
       setSortDir("desc");
     }
+    resetPages();
   };
 
   const SortIcon = ({ col }: { col: SortKey }) => {
@@ -145,8 +124,22 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["issues"] });
-    qc.invalidateQueries({ queryKey: ["closedIssues"] });
   };
+
+  const repoList = useMemo(() => {
+    return repos?.map((r) => r.name).sort() ?? [];
+  }, [repos]);
+
+  const labelList = useMemo(() => {
+    return labels?.map((l) => l.name).sort() ?? [];
+  }, [labels]);
+
+  const openTotal = openData?.totalCount ?? 0;
+  const closedTotal = closedData?.totalCount ?? 0;
+  const openPages = Math.ceil(openTotal / PAGE_SIZE);
+  const closedPages = Math.ceil(closedTotal / PAGE_SIZE);
+
+  const isLoading = openLoading || closedLoading || sprintLoading;
 
   return (
     <div className="space-y-4">
@@ -155,7 +148,11 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
         {teams.length > 1 && (
           <select
             value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
+            onChange={(e) => {
+              setTeamFilter(e.target.value);
+              setRepoFilter("all");
+              resetPages();
+            }}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
           >
             <option value="all">All Teams</option>
@@ -167,22 +164,29 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
 
         <select
           value={repoFilter}
-          onChange={(e) => setRepoFilter(e.target.value)}
+          onChange={(e) => {
+            setRepoFilter(e.target.value);
+            setTeamFilter("all");
+            resetPages();
+          }}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Repos</option>
-          {repos.map((r) => (
+          {repoList.map((r) => (
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
 
         <select
           value={labelFilter}
-          onChange={(e) => setLabelFilter(e.target.value)}
+          onChange={(e) => {
+            setLabelFilter(e.target.value);
+            resetPages();
+          }}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Labels</option>
-          {labels.map((l) => (
+          {labelList.map((l) => (
             <option key={l} value={l}>{l}</option>
           ))}
         </select>
@@ -191,12 +195,12 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
           onClick={refresh}
           className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-brand cursor-pointer"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className={cn("w-3.5 h-3.5", (openFetching || closedFetching) && "animate-spin")} />
           Refresh
         </button>
 
         <span className="text-xs text-stone-400 ml-auto">
-          {filteredOpen.length} open, {filteredClosed.length} closed
+          {openTotal} open, {closedTotal} closed
         </span>
       </div>
 
@@ -207,10 +211,10 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
             <tr className="border-b border-stone-100 text-left">
               <th className="px-4 py-2.5 w-8"></th>
               <th
-                onClick={() => toggleSort("issue")}
+                onClick={() => toggleSort("number")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
               >
-                Issue <SortIcon col="issue" />
+                Issue <SortIcon col="number" />
               </th>
               <th
                 onClick={() => toggleSort("title")}
@@ -228,10 +232,10 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
               <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Labels</th>
               <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Assignees</th>
               <th
-                onClick={() => toggleSort("age")}
+                onClick={() => toggleSort("created_at")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
-                Age <SortIcon col="age" />
+                Age <SortIcon col="created_at" />
               </th>
               <th className="px-4 py-2.5 w-8"></th>
             </tr>
@@ -243,7 +247,7 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
                   Loading issues...
                 </td>
               </tr>
-            ) : filteredOpen.length === 0 && filteredClosed.length === 0 ? (
+            ) : openTotal === 0 && closedTotal === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-stone-400">
                   No issues found
@@ -251,11 +255,25 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
               </tr>
             ) : (
               <>
-                {filteredOpen.map((issue) => (
+                {(openData?.data ?? []).map((issue) => (
                   <IssueRow key={issue.id} issue={issue} closed={false} teams={teams} />
                 ))}
 
-                {filteredClosed.length > 0 && (
+                {/* Open pagination */}
+                {openPages > 1 && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-2">
+                      <PaginationControls
+                        page={openPage}
+                        totalPages={openPages}
+                        onPageChange={setOpenPage}
+                        isFetching={openFetching}
+                      />
+                    </td>
+                  </tr>
+                )}
+
+                {closedTotal > 0 && (
                   <tr>
                     <td
                       colSpan={9}
@@ -266,14 +284,62 @@ export function IssuesTab({ repoNames }: IssuesTabProps) {
                   </tr>
                 )}
 
-                {filteredClosed.map((issue) => (
+                {(closedData?.data ?? []).map((issue) => (
                   <IssueRow key={issue.id} issue={issue} closed teams={teams} />
                 ))}
+
+                {/* Closed pagination */}
+                {closedPages > 1 && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-2">
+                      <PaginationControls
+                        page={closedPage}
+                        totalPages={closedPages}
+                        onPageChange={setClosedPage}
+                        isFetching={closedFetching}
+                      />
+                    </td>
+                  </tr>
+                )}
               </>
             )}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  onPageChange,
+  isFetching,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  isFetching: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page <= 1}
+        className="p-1 text-stone-400 hover:text-stone-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      <span className={cn("text-xs text-stone-500 tabular-nums", isFetching && "opacity-50")}>
+        Page {page} of {totalPages}
+      </span>
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page >= totalPages}
+        className="p-1 text-stone-400 hover:text-stone-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
     </div>
   );
 }

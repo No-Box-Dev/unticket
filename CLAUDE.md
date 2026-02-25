@@ -61,7 +61,7 @@ Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1
 `DashboardPage` auto-triggers a GitHub-to-D1 sync when data is stale. Status checked via `useSyncStatus()`, triggered via `useTriggerSync()` (both in `src/hooks/useGitHub.ts`).
 
 ### GitHub Data Hooks (`src/hooks/useGitHub.ts`)
-TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`.
+TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`.
 
 ### Auth
 - `useAuth()` returns `user` (with `login`, `avatar_url`, `name`), `selectedOrg`, `isLoading`, `authMode` (`"oauth" | "pat"`), `loginWithToken()`, `loginWithOAuth()`, `logout()`, `setSelectedOrg()`
@@ -79,8 +79,8 @@ Sprint config + feature cards. Features have owners, effort, priority, status. D
 #### Backlog (`backlog` tab)
 Future features not yet assigned to a sprint.
 
-#### Open Issues (`issues` tab)
-Live view of open/closed issues with filtering by team, repo, label.
+#### Issues (`issues` tab)
+Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination.
 
 #### Todos (`todos` tab)
 Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature, a repo (with GitHub link), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo/status selectors and plan view.
