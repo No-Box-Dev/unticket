@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   fetchOrgs,
   fetchRepos,
@@ -13,7 +13,10 @@ import {
   fetchOrgMembers,
   fetchSyncStatus,
   triggerSync,
+  fetchPaginatedIssues,
+  fetchIssueLabels,
 } from "@/lib/github";
+import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 
 export function useOrgs() {
@@ -111,6 +114,27 @@ export function useOrgMembers() {
   return useQuery({
     queryKey: ["orgMembers", selectedOrg],
     queryFn: fetchOrgMembers,
+    enabled: !!selectedOrg,
+  });
+}
+
+// ---------- Paginated issues hooks ----------
+
+export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issues", selectedOrg, params],
+    queryFn: () => fetchPaginatedIssues(params),
+    enabled: !!selectedOrg && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useIssueLabels() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issues", selectedOrg, "labels"],
+    queryFn: fetchIssueLabels,
     enabled: !!selectedOrg,
   });
 }

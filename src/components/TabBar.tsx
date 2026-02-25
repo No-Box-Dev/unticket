@@ -7,7 +7,7 @@ const tabs: { id: TabId; label: string }[] = [
   // { id: "team", label: "Team Dashboard" },
   // { id: "individual", label: "Individual Dashboard" },
   // { id: "prs", label: "PRs" },
-  // { id: "issues", label: "Open Issues" },
+  { id: "issues", label: "Issues" },
   // { id: "activity", label: "Activity" },
   { id: "todos", label: "Todos" },
 ];
