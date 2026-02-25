@@ -82,7 +82,7 @@ export function IssuesTab(_props: IssuesTabProps) {
     sortDir,
   });
 
-  // Closed issues query (since sprint start)
+  // Closed issues query (since sprint start, waits for sprint config)
   const {
     data: closedData,
     isLoading: closedLoading,
@@ -96,7 +96,7 @@ export function IssuesTab(_props: IssuesTabProps) {
     sort: sortKey,
     sortDir,
     closedSince: sprint?.startDate,
-  });
+  }, !!sprint?.startDate);
 
   const resetPages = () => {
     setOpenPage(1);
@@ -139,7 +139,7 @@ export function IssuesTab(_props: IssuesTabProps) {
   const openPages = Math.ceil(openTotal / PAGE_SIZE);
   const closedPages = Math.ceil(closedTotal / PAGE_SIZE);
 
-  const isLoading = openLoading && closedLoading;
+  const isLoading = openLoading || closedLoading;
 
   return (
     <div className="space-y-4">

@@ -120,12 +120,12 @@ export function useOrgMembers() {
 
 // ---------- Paginated issues hooks ----------
 
-export function usePaginatedIssues(params: IssueQueryParams) {
+export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["issues", selectedOrg, params],
     queryFn: () => fetchPaginatedIssues(params),
-    enabled: !!selectedOrg,
+    enabled: !!selectedOrg && enabled,
     placeholderData: keepPreviousData,
   });
 }

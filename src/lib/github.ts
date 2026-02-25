@@ -169,22 +169,22 @@ export async function fetchAllPRs(since?: string) {
 }
 
 export async function fetchOpenIssues() {
-  const issues = await apiGet<ApiIssue[]>("/api/issues?state=open");
-  return issues.map(transformIssue);
+  const res = await apiGet<{ data: ApiIssue[]; totalCount: number }>("/api/issues?state=open");
+  return res.data.map(transformIssue);
 }
 
 export async function fetchClosedIssues(since?: string) {
   const params = new URLSearchParams({ state: "closed" });
   if (since) params.set("closed_since", since);
-  const issues = await apiGet<ApiIssue[]>(`/api/issues?${params}`);
-  return issues.map(transformIssue);
+  const res = await apiGet<{ data: ApiIssue[]; totalCount: number }>(`/api/issues?${params}`);
+  return res.data.map(transformIssue);
 }
 
 export async function fetchAllIssues(since?: string) {
   const params = new URLSearchParams({ state: "all" });
   if (since) params.set("since", since);
-  const issues = await apiGet<ApiIssue[]>(`/api/issues?${params}`);
-  return issues.map(transformIssue);
+  const res = await apiGet<{ data: ApiIssue[]; totalCount: number }>(`/api/issues?${params}`);
+  return res.data.map(transformIssue);
 }
 
 export async function fetchOrgMembers() {
@@ -212,7 +212,7 @@ export interface IssueQueryParams {
   pageSize?: number;
   repos?: string[];
   label?: string;
-  sort?: string;
+  sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
   closedSince?: string;
 }
