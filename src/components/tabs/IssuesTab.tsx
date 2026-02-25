@@ -40,7 +40,7 @@ interface IssuesTabProps {
 
 export function IssuesTab(_props: IssuesTabProps) {
   const qc = useQueryClient();
-  const { data: sprint } = useSprint();
+  const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
@@ -139,7 +139,7 @@ export function IssuesTab(_props: IssuesTabProps) {
   const openPages = Math.ceil(openTotal / PAGE_SIZE);
   const closedPages = Math.ceil(closedTotal / PAGE_SIZE);
 
-  const isLoading = openLoading || closedLoading;
+  const isLoading = openLoading || closedLoading || sprintLoading;
 
   return (
     <div className="space-y-4">
