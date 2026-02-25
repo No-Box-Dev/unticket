@@ -197,6 +197,54 @@ export async function fetchOrgMembers() {
   }));
 }
 
+// ---------- Paginated issues ----------
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface IssueQueryParams {
+  state?: "open" | "closed" | "all";
+  page?: number;
+  pageSize?: number;
+  repos?: string[];
+  label?: string;
+  sort?: string;
+  sortDir?: "asc" | "desc";
+  closedSince?: string;
+}
+
+export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
+  const qs = new URLSearchParams();
+  if (params.state) qs.set("state", params.state);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.pageSize) qs.set("page_size", String(params.pageSize));
+  if (params.repos?.length) qs.set("repos", params.repos.join(","));
+  if (params.label) qs.set("label", params.label);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.sortDir) qs.set("sort_dir", params.sortDir);
+  if (params.closedSince) qs.set("closed_since", params.closedSince);
+
+  const raw = await apiGet<{ data: ApiIssue[]; totalCount: number; page: number; pageSize: number }>(
+    `/api/issues?${qs}`,
+  );
+  return {
+    data: raw.data.map(transformIssue),
+    totalCount: raw.totalCount,
+    page: raw.page,
+    pageSize: raw.pageSize,
+  };
+}
+
+export async function fetchIssueLabels(): Promise<{ name: string; color: string }[]> {
+  return apiGet<{ name: string; color: string }[]>("/api/issues?meta=labels");
+}
+
+// ---------- Other ----------
+
 export async function fetchMilestones(): Promise<{ id: number; title: string; due_on: string | null; state: string; repo: string }[]> {
   return [];
 }

@@ -8,7 +8,7 @@ import { BacklogTab } from "@/components/tabs/BacklogTab";
 import { TeamTab } from "@/components/tabs/TeamTab";
 import { IndividualTab } from "@/components/tabs/IndividualTab";
 import { PRsTab } from "@/components/tabs/PRsTab";
-// import { IssuesTab } from "@/components/tabs/IssuesTab";
+import { IssuesTab } from "@/components/tabs/IssuesTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
 import { TodoTab } from "@/components/tabs/TodoTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
@@ -63,7 +63,7 @@ export function DashboardPage() {
             {activeTab === "team" && <TeamTab repoNames={repoNames} />}
             {activeTab === "individual" && <IndividualTab repoNames={repoNames} />}
             {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
-            {/* {activeTab === "issues" && <IssuesTab repoNames={repoNames} />} */}
+            {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
             {activeTab === "activity" && <ActivityTab repoNames={repoNames} />}
             {activeTab === "todos" && <TodoTab />}
           </>
