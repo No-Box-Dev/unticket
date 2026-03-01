@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -25,10 +25,12 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, flip: false });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxId = useId();
 
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return;
@@ -41,6 +43,7 @@ export function SearchableSelect({
     }
   }, []);
 
+  // Click-outside close
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -50,11 +53,13 @@ export function SearchableSelect({
       ) return;
       setOpen(false);
       setSearch("");
+      setHighlightIndex(-1);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Position + focus on open
   useEffect(() => {
     if (open) {
       updatePos();
@@ -62,18 +67,80 @@ export function SearchableSelect({
     }
   }, [open, updatePos]);
 
+  // Reposition on scroll/resize while open
+  useEffect(() => {
+    if (!open) return;
+    const handleReposition = () => updatePos();
+    window.addEventListener("resize", handleReposition);
+    window.addEventListener("scroll", handleReposition, true);
+    return () => {
+      window.removeEventListener("resize", handleReposition);
+      window.removeEventListener("scroll", handleReposition, true);
+    };
+  }, [open, updatePos]);
+
   const filtered = options.filter((o) =>
     o.label.toLowerCase().includes(search.toLowerCase()),
   );
 
+  // Reset highlight when search changes
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [search]);
+
   const selectedLabel = options.find((o) => o.value === value)?.label;
+
+  const selectOption = useCallback((opt: Option) => {
+    onChange(opt.value);
+    setOpen(false);
+    setSearch("");
+    setHighlightIndex(-1);
+    triggerRef.current?.focus();
+  }, [onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        setOpen(false);
+        setSearch("");
+        setHighlightIndex(-1);
+        triggerRef.current?.focus();
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightIndex((i) => Math.min(i + 1, filtered.length - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightIndex((i) => Math.max(i - 1, 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlightIndex >= 0 && highlightIndex < filtered.length) {
+          selectOption(filtered[highlightIndex]);
+        }
+        break;
+    }
+  }, [filtered, highlightIndex, selectOption]);
 
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setOpen((prev) => {
+            if (prev) {
+              setSearch("");
+              setHighlightIndex(-1);
+            }
+            return !prev;
+          });
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
         className={cn(
           "px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand flex items-center gap-1.5",
           className,
@@ -101,23 +168,27 @@ export function SearchableSelect({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Search..."
+              aria-controls={listboxId}
+              aria-autocomplete="list"
+              aria-activedescendant={highlightIndex >= 0 ? `${listboxId}-opt-${highlightIndex}` : undefined}
               className="w-full px-2 py-1 text-xs border border-stone-200 rounded focus:outline-none focus:border-brand"
             />
           </div>
-          <div className="max-h-[200px] overflow-y-auto">
-            {filtered.map((option) => (
+          <div id={listboxId} role="listbox" className="max-h-[200px] overflow-y-auto">
+            {filtered.map((option, i) => (
               <button
                 key={option.value}
+                id={`${listboxId}-opt-${i}`}
                 type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                  setSearch("");
-                }}
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => selectOption(option)}
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer",
                   option.value === value && "bg-stone-50 font-medium text-brand",
+                  highlightIndex === i && "bg-stone-100",
                 )}
               >
                 {option.label}
