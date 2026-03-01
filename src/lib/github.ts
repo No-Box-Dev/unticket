@@ -67,6 +67,55 @@ export async function triggerSync() {
   return { ok: true, synced: { repos: init.repos ?? 0, prs: 0, issues: 0, members: 0 } };
 }
 
+export interface SyncProgress {
+  phase: "init" | "syncing" | "done" | "error";
+  repo?: string;
+  synced: number;
+  total: number;
+  error?: string;
+}
+
+export async function triggerSyncWithProgress(
+  onProgress: (status: SyncProgress) => void,
+) {
+  try {
+    onProgress({ phase: "init", synced: 0, total: 0 });
+
+    const init = await apiPost<SyncResponse>("/api/sync");
+
+    if (init.done) {
+      onProgress({ phase: "done", synced: 0, total: 0 });
+      return;
+    }
+
+    const total = init.repos ?? 0;
+    let cursor = init.cursor;
+    const maxIterations = total + 5;
+    let iterations = 0;
+    let synced = 0;
+
+    while (cursor && iterations < maxIterations) {
+      onProgress({ phase: "syncing", repo: cursor, synced, total });
+      const res = await apiPost<SyncResponse>(
+        `/api/sync?cursor=${encodeURIComponent(cursor)}`,
+      );
+      synced++;
+      if (res.done) break;
+      cursor = res.cursor;
+      iterations++;
+    }
+
+    onProgress({ phase: "done", synced, total });
+  } catch (err) {
+    onProgress({
+      phase: "error",
+      synced: 0,
+      total: 0,
+      error: err instanceof Error ? err.message : "Sync failed",
+    });
+  }
+}
+
 export async function fetchSyncStatus() {
   return apiGet<{ isStale: boolean; lastSync: string | null }>("/api/sync");
 }
