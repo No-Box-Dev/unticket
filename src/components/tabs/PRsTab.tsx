@@ -3,6 +3,7 @@ import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 function daysAgo(date: string): number {
   return Math.floor(
@@ -177,16 +178,15 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           ))}
         </select>
 
-        <select
+        <SearchableSelect
           value={repoFilter}
-          onChange={(e) => setRepoFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
-        >
-          <option value="all">All Repos</option>
-          {repos.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
+          onChange={setRepoFilter}
+          options={[
+            { value: "all", label: "All Repos" },
+            ...repos.map((r) => ({ value: r, label: r })),
+          ]}
+          placeholder="All Repos"
+        />
 
         <span className="text-xs text-stone-400 ml-auto">
           {sorted.length} of {(prs ?? []).length} PRs
