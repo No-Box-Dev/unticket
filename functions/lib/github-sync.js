@@ -21,7 +21,15 @@ async function fetchAllPages(token, url, params = {}) {
     });
 
     if (!res.ok) {
-      if (res.status === 403 || res.status === 404) break;
+      if (res.status === 403) {
+        const remaining = res.headers.get("X-RateLimit-Remaining");
+        if (remaining === "0") {
+          throw new Error("GitHub API rate limit exceeded");
+        }
+        // Other 403 (permissions etc.) — skip gracefully
+        break;
+      }
+      if (res.status === 404) break;
       throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     }
 
@@ -122,7 +130,10 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
     );
   }
 
-  await setSyncState(db, orgId, `prs:${repo}`);
+  // Only advance sync timestamp if we got data or this is a fresh sync
+  if (prs.length > 0 || !since) {
+    await setSyncState(db, orgId, `prs:${repo}`);
+  }
 }
 
 // ---------- Sync Issues ----------
@@ -183,7 +194,10 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
     );
   }
 
-  await setSyncState(db, orgId, `issues:${repo}`);
+  // Only advance sync timestamp if we got data or this is a fresh sync
+  if (issues.length > 0 || !since) {
+    await setSyncState(db, orgId, `issues:${repo}`);
+  }
 }
 
 // ---------- Sync Members ----------
@@ -267,24 +281,135 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
   }
 }
 
-// ---------- Full sync orchestrator ----------
+// ---------- syncInit: lightweight init (repos + members + config migration) ----------
 
-export async function runFullSync(db, token, orgId, orgLogin) {
+export async function syncInit(db, token, orgId, orgLogin) {
   await migrateGitPulseConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
+  await syncMembers(db, token, orgId, orgLogin);
 
   const repoRows = await db
-    .prepare("SELECT name FROM repos WHERE org_id = ?")
+    .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
     .bind(orgId)
     .all();
-  const repoNames = repoRows.results.map((r) => r.name);
+
+  return repoRows.results.map((r) => r.name);
+}
+
+// ---------- syncRepo: sync PRs + issues for a single repo ----------
+
+export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) {
+  const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
+  await syncPRs(db, token, orgId, orgLogin, repo, prSince);
+
+  const issueSince = force ? null : (await getSyncState(db, orgId, `issues:${repo}`))?.lastSynced;
+  await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
+}
+
+// ---------- Upsert helpers for webhook events ----------
+
+export async function upsertIssue(db, orgId, repo, issue) {
+  await db
+    .prepare(
+      `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(org_id, repo, number) DO UPDATE SET
+         title = excluded.title,
+         state = excluded.state,
+         author = excluded.author,
+         author_avatar = excluded.author_avatar,
+         updated_at = excluded.updated_at,
+         closed_at = excluded.closed_at,
+         html_url = excluded.html_url,
+         assignees_json = excluded.assignees_json,
+         labels_json = excluded.labels_json,
+         milestone_title = excluded.milestone_title`
+    )
+    .bind(
+      orgId,
+      repo,
+      issue.number,
+      issue.title,
+      issue.state,
+      issue.user?.login ?? null,
+      issue.user?.avatar_url ?? null,
+      issue.created_at,
+      issue.updated_at,
+      issue.closed_at ?? null,
+      issue.html_url,
+      JSON.stringify((issue.assignees ?? []).map((a) => ({ login: a.login, avatar_url: a.avatar_url }))),
+      JSON.stringify((issue.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
+      issue.milestone?.title ?? null
+    )
+    .run();
+}
+
+export async function upsertPR(db, orgId, repo, pr) {
+  await db
+    .prepare(
+      `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(org_id, repo, number) DO UPDATE SET
+         title = excluded.title,
+         state = excluded.state,
+         author = excluded.author,
+         author_avatar = excluded.author_avatar,
+         draft = excluded.draft,
+         head_ref = excluded.head_ref,
+         base_ref = excluded.base_ref,
+         merged_at = excluded.merged_at,
+         updated_at = excluded.updated_at,
+         html_url = excluded.html_url,
+         requested_reviewers_json = excluded.requested_reviewers_json,
+         labels_json = excluded.labels_json`
+    )
+    .bind(
+      orgId,
+      repo,
+      pr.number,
+      pr.title,
+      pr.merged ? "merged" : pr.state,
+      pr.user?.login ?? null,
+      pr.user?.avatar_url ?? null,
+      pr.draft ? 1 : 0,
+      pr.head?.ref ?? null,
+      pr.base?.ref ?? null,
+      pr.merged_at ?? null,
+      pr.created_at,
+      pr.updated_at,
+      pr.html_url,
+      JSON.stringify((pr.requested_reviewers ?? []).map((r) => ({ login: r.login }))),
+      JSON.stringify((pr.labels ?? []).map((l) => ({ name: l.name, color: l.color })))
+    )
+    .run();
+}
+
+export async function upsertMember(db, orgId, member) {
+  await db
+    .prepare(
+      `INSERT INTO members (org_id, login, avatar_url)
+       VALUES (?, ?, ?)
+       ON CONFLICT(org_id, login) DO UPDATE SET
+         avatar_url = excluded.avatar_url`
+    )
+    .bind(orgId, member.login, member.avatar_url ?? null)
+    .run();
+}
+
+export async function removeMember(db, orgId, login) {
+  await db
+    .prepare("DELETE FROM members WHERE org_id = ? AND login = ?")
+    .bind(orgId, login)
+    .run();
+}
+
+// ---------- Full sync orchestrator (kept for backwards compat, now uses syncInit + syncRepo) ----------
+
+export async function runFullSync(db, token, orgId, orgLogin) {
+  const repoNames = await syncInit(db, token, orgId, orgLogin);
 
   for (const repo of repoNames) {
-    const prSync = await getSyncState(db, orgId, `prs:${repo}`);
-    await syncPRs(db, token, orgId, orgLogin, repo, prSync?.lastSynced);
-
-    const issueSync = await getSyncState(db, orgId, `issues:${repo}`);
-    await syncIssues(db, token, orgId, orgLogin, repo, issueSync?.lastSynced);
+    await syncRepo(db, token, orgId, orgLogin, repo);
   }
 
   const prCount = await db
@@ -297,7 +422,6 @@ export async function runFullSync(db, token, orgId, orgLogin) {
     .bind(orgId)
     .first();
 
-  await syncMembers(db, token, orgId, orgLogin);
   const memberCount = await db
     .prepare("SELECT COUNT(*) as count FROM members WHERE org_id = ?")
     .bind(orgId)

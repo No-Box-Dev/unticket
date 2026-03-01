@@ -103,6 +103,47 @@ export function SettingsTab() {
         </div>
       </div>
 
+      {/* Webhooks */}
+      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-stone-900">Webhooks</h2>
+        <p className="text-xs text-stone-400">
+          Set up a GitHub webhook for real-time updates. Go to your org's webhook
+          settings and add a new webhook with these values:
+        </p>
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs font-medium text-stone-500">Payload URL</label>
+            <div className="mt-0.5 flex items-center gap-2">
+              <code className="text-xs bg-stone-100 px-2 py-1 rounded text-stone-700 flex-1 select-all">
+                {`${window.location.origin}/api/webhook`}
+              </code>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-stone-500">Content type</label>
+            <div className="mt-0.5">
+              <code className="text-xs bg-stone-100 px-2 py-1 rounded text-stone-700 select-all">
+                application/json
+              </code>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-stone-500">Events</label>
+            <p className="text-xs text-stone-400 mt-0.5">
+              Select "Let me select individual events" → check Issues, Pull requests, and Members.
+            </p>
+          </div>
+        </div>
+        <a
+          href={`https://github.com/organizations/${selectedOrg}/settings/hooks/new`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block text-xs text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Open {selectedOrg} webhook settings →
+        </a>
+      </div>
+
       {/* About */}
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
         <h2 className="text-sm font-semibold text-stone-900">About GitPulse</h2>

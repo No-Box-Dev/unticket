@@ -36,8 +36,35 @@ export async function fetchOrgs() {
 
 // ---------- Sync ----------
 
+interface SyncResponse {
+  done: boolean;
+  cursor?: string;
+  repos?: number;
+  repoList?: string[];
+  synced?: string;
+  lastRepo?: string;
+}
+
 export async function triggerSync() {
-  return apiPost<{ ok: boolean; synced: { repos: number; prs: number; issues: number; members: number } }>("/api/sync");
+  // Phase 1: init — get repo list
+  const init = await apiPost<SyncResponse>("/api/sync");
+
+  if (init.done) {
+    return { ok: true, synced: { repos: 0, prs: 0, issues: 0, members: 0 } };
+  }
+
+  // Phase 2: sync one repo at a time via cursor
+  let cursor = init.cursor;
+  const maxIterations = (init.repos ?? 0) + 5;
+  let iterations = 0;
+  while (cursor && iterations < maxIterations) {
+    const res = await apiPost<SyncResponse>(`/api/sync?cursor=${encodeURIComponent(cursor)}`);
+    if (res.done) break;
+    cursor = res.cursor;
+    iterations++;
+  }
+
+  return { ok: true, synced: { repos: init.repos ?? 0, prs: 0, issues: 0, members: 0 } };
 }
 
 export async function fetchSyncStatus() {
@@ -261,4 +288,3 @@ export interface CommitResult {
 export async function fetchRepoActivity(): Promise<CommitResult[]> {
   return [];
 }
-

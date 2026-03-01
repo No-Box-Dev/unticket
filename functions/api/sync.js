@@ -1,14 +1,56 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
-import { runFullSync } from "../lib/github-sync";
-import { getSyncState } from "../lib/db";
+import { syncInit, syncRepo } from "../lib/github-sync";
 
-// POST /api/sync — trigger full GitHub -> D1 sync
+// POST /api/sync — cursor-based sync (one repo per call)
+// No cursor → run syncInit, return first repo as cursor
+// cursor=repoName → sync that repo, return next repo as cursor
+// No more repos → { done: true }
 export async function onRequestPost(context) {
   const { orgId, orgLogin, token } = getCtx(context);
+  const url = new URL(context.request.url);
+  const cursor = url.searchParams.get("cursor");
+  const force = url.searchParams.get("force") === "true";
 
   try {
-    const result = await runFullSync(context.env.DB, token, orgId, orgLogin);
-    return jsonResponse({ ok: true, synced: result });
+    if (!cursor) {
+      // Phase 1: init (repos list, members, config migration)
+      const repoNames = await syncInit(context.env.DB, token, orgId, orgLogin);
+
+      if (repoNames.length === 0) {
+        return jsonResponse({ done: true, repos: 0 });
+      }
+
+      return jsonResponse({
+        done: false,
+        cursor: repoNames[0],
+        repos: repoNames.length,
+        repoList: repoNames,
+      });
+    }
+
+    // Phase 2: sync one repo
+    await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force);
+
+    // Find next repo
+    const repoRows = await context.env.DB
+      .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
+      .bind(orgId)
+      .all();
+    const repoNames = repoRows.results.map((r) => r.name);
+    const currentIdx = repoNames.indexOf(cursor);
+    const nextRepo = currentIdx >= 0 && currentIdx < repoNames.length - 1
+      ? repoNames[currentIdx + 1]
+      : null;
+
+    if (!nextRepo) {
+      return jsonResponse({ done: true, lastRepo: cursor });
+    }
+
+    return jsonResponse({
+      done: false,
+      cursor: nextRepo,
+      synced: cursor,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
     return errorResponse(message, 500);
@@ -29,14 +71,19 @@ export async function onRequestGet(context) {
     syncMap[row.resource] = { lastSynced: row.last_synced, etag: row.etag };
   }
 
-  // Check if any sync has happened
-  const reposSync = await getSyncState(context.env.DB, orgId, "repos");
-  const isStale = !reposSync ||
-    (Date.now() - new Date(reposSync.lastSynced).getTime() > 5 * 60 * 1000);
+  // Check staleness: use MIN(last_synced) across all resources
+  const oldest = await context.env.DB
+    .prepare("SELECT MIN(last_synced) as oldest FROM sync_state WHERE org_id = ?")
+    .bind(orgId)
+    .first();
+
+  const oldestTime = oldest?.oldest ? new Date(oldest.oldest).getTime() : 0;
+  const isStale = !oldest?.oldest ||
+    (Date.now() - oldestTime > 5 * 60 * 1000);
 
   return jsonResponse({
     isStale,
-    lastSync: reposSync?.lastSynced ?? null,
+    lastSync: oldest?.oldest ?? null,
     resources: syncMap,
   });
 }
