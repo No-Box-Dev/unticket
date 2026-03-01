@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from "react";
-import { usePaginatedIssues, useIssueLabels, useRepos } from "@/hooks/useGitHub";
+import { usePaginatedIssues, useIssueLabels, useRepos, useOrgMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { AssignDropdown } from "@/components/sprint/AssignDropdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 
@@ -46,6 +47,10 @@ export function IssuesTab(_props: IssuesTabProps) {
   const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
+  const { data: members } = useOrgMembers();
+  const updateAssignees = useUpdateIssueAssignees();
+
+  const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
@@ -383,7 +388,7 @@ export function IssuesTab(_props: IssuesTabProps) {
             ) : (
               <>
                 {(openData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed={false} teams={teams} />
+                  <IssueRow key={issue.id} issue={issue} closed={false} teams={teams} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
                 ))}
 
                 {/* Open pagination */}
@@ -412,7 +417,7 @@ export function IssuesTab(_props: IssuesTabProps) {
                 )}
 
                 {(closedData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed teams={teams} />
+                  <IssueRow key={issue.id} issue={issue} closed teams={teams} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
                 ))}
 
                 {/* Closed pagination */}
@@ -471,7 +476,7 @@ function PaginationControls({
   );
 }
 
-function IssueRow({ issue, closed, teams }: { issue: any; closed: boolean; teams: { name: string; color: string; repos: string[] }[] }) {
+function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; closed: boolean; teams: { name: string; color: string; repos: string[] }[]; allPeople: string[]; onAssign: (assignees: string[]) => void }) {
   const age = daysAgo(issue.created_at);
   const team = teams.find((t) => (t.repos ?? []).includes(issue.repo));
 
@@ -520,21 +525,11 @@ function IssueRow({ issue, closed, teams }: { issue: any; closed: boolean; teams
         </div>
       </td>
       <td className="px-4 py-2.5">
-        <div className="flex -space-x-1">
-          {(issue.assignees ?? []).length === 0 ? (
-            <span className="text-xs text-stone-300">none</span>
-          ) : (
-            (issue.assignees ?? []).map((a: any) => (
-              <img
-                key={a.login}
-                src={a.avatar_url}
-                alt={a.login}
-                title={a.login}
-                className="w-5 h-5 rounded-full border border-white"
-              />
-            ))
-          )}
-        </div>
+        <AssignDropdown
+          owners={(issue.assignees ?? []).map((a: any) => a.login)}
+          allPeople={allPeople}
+          onChange={onAssign}
+        />
       </td>
       <td
         className={cn(

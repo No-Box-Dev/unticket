@@ -15,6 +15,7 @@ import {
   triggerSync,
   fetchPaginatedIssues,
   fetchIssueLabels,
+  updateIssueAssignees,
 } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
@@ -136,6 +137,35 @@ export function useIssueLabels() {
     queryKey: ["issues", selectedOrg, "labels"],
     queryFn: fetchIssueLabels,
     enabled: !!selectedOrg,
+  });
+}
+
+// ---------- Issue assignee mutation ----------
+
+export function useUpdateIssueAssignees() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ repo, issueNumber, assignees }: { repo: string; issueNumber: number; assignees: string[] }) =>
+      updateIssueAssignees(repo, issueNumber, assignees),
+    onMutate: async ({ repo, issueNumber, assignees }) => {
+      // Optimistically update all issue queries
+      await qc.cancelQueries({ queryKey: ["issues", selectedOrg] });
+      qc.setQueriesData<any>({ queryKey: ["issues", selectedOrg] }, (old: any) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((issue: any) =>
+            issue.repo === repo && issue.number === issueNumber
+              ? { ...issue, assignees: assignees.map((login) => ({ login, avatar_url: issue.assignees?.find((a: any) => a.login === login)?.avatar_url ?? "" })) }
+              : issue,
+          ),
+        };
+      });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["issues", selectedOrg] });
+    },
   });
 }
 

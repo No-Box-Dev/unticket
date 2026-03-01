@@ -53,6 +53,7 @@ Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
 - `functions/api/sync.js` — Cursor-based GitHub-to-D1 sync: GET checks staleness (MIN across all resources), POST accepts `?cursor=repoName&force=true` for one-repo-at-a-time sync
 - `functions/api/webhook.js` — GitHub webhook receiver (HMAC-SHA256 verified, handles `issues`, `pull_request`, `member` events)
+- `functions/api/assign.js` — POST: update issue assignees on GitHub + D1 (`{ repo, issue_number, assignees }`)
 - `functions/api/issues.js`, `functions/api/prs.js`, `functions/api/repos.js`, `functions/api/members.js` — cached data endpoints
 - `functions/api/auth/callback.js` — OAuth callback
 - `functions/_middleware.js`, `functions/api/_middleware.js` — auth middleware (webhook route bypasses auth)
@@ -92,7 +93,7 @@ Sprint config + feature cards. Features have owners, effort, priority, status. D
 Future features not yet assigned to a sprint.
 
 #### Issues (`issues` tab)
-Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo (searchable), label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`).
+Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo (searchable), label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
 #### Todos (`todos` tab)
 Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature, a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
