@@ -5,6 +5,7 @@ import { useRepos } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { Plus, X, Trash2, GitBranch, ExternalLink, FileText, Pencil, Save, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Todo, TodoStatus, Feature, FeatureStatus, RepoInfo } from "@/lib/types";
 
 const STATUS_DOT: Record<FeatureStatus, string> = {
@@ -204,16 +205,16 @@ export function TodoTab() {
               <option key={f.id} value={f.id}>{f.title}</option>
             ))}
           </select>
-          <select
+          <SearchableSelect
             value={selectedRepo ?? ""}
-            onChange={(e) => setSelectedRepo(e.target.value || null)}
-            className="px-3 py-2.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-600 focus:outline-none focus:border-brand cursor-pointer"
-          >
-            <option value="">No repo</option>
-            {(repos ?? []).map((r) => (
-              <option key={r.name} value={r.name}>{r.name}</option>
-            ))}
-          </select>
+            onChange={(v) => setSelectedRepo(v || null)}
+            options={[
+              { value: "", label: "No repo" },
+              ...(repos ?? []).map((r) => ({ value: r.name, label: r.name })),
+            ]}
+            placeholder="No repo"
+            className="py-2.5"
+          />
           <button
             onClick={addTodo}
             disabled={!input.trim()}
@@ -505,16 +506,15 @@ function TodoDetailModal({
             <div>
               <span className="text-xs text-stone-500 block mb-1">Repo</span>
               <div className="flex items-center gap-1.5">
-                <select
+                <SearchableSelect
                   value={todo.repo ?? ""}
-                  onChange={(e) => onUpdate({ repo: e.target.value || undefined })}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-brand cursor-pointer"
-                >
-                  <option value="">None</option>
-                  {repos.map((r) => (
-                    <option key={r.name} value={r.name}>{r.name}</option>
-                  ))}
-                </select>
+                  onChange={(v) => onUpdate({ repo: v || undefined })}
+                  options={[
+                    { value: "", label: "None" },
+                    ...repos.map((r) => ({ value: r.name, label: r.name })),
+                  ]}
+                  placeholder="None"
+                />
                 {repoUrl && (
                   <a
                     href={repoUrl}

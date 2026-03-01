@@ -3,6 +3,7 @@ import { usePaginatedIssues, useIssueLabels, useRepos } from "@/hooks/useGitHub"
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useQueryClient } from "@tanstack/react-query";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 
@@ -285,20 +286,19 @@ export function IssuesTab(_props: IssuesTabProps) {
           </select>
         )}
 
-        <select
+        <SearchableSelect
           value={repoFilter}
-          onChange={(e) => {
-            setRepoFilter(e.target.value);
+          onChange={(v) => {
+            setRepoFilter(v);
             setTeamFilter("all");
             resetPages();
           }}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
-        >
-          <option value="all">All Repos</option>
-          {repoList.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
+          options={[
+            { value: "all", label: "All Repos" },
+            ...repoList.map((r) => ({ value: r, label: r })),
+          ]}
+          placeholder="All Repos"
+        />
 
         <select
           value={labelFilter}
