@@ -57,7 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
-        .catch(() => localStorage.removeItem("gp_token"))
+        .catch(() => {
+          localStorage.removeItem("gp_token");
+          resetOctokit();
+        })
         .finally(() => setIsLoading(false));
       return;
     }
@@ -80,9 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.getItem("n1_github_token");
     if (token) {
       localStorage.setItem("gp_token", token);
+      resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
-        .catch(() => localStorage.removeItem("gp_token"))
+        .catch(() => {
+          localStorage.removeItem("gp_token");
+          resetOctokit();
+        })
         .finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
@@ -97,6 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithOAuth = () => {
+    // Clear stale token/instance before redirecting so we start fresh
+    localStorage.removeItem("gp_token");
+    resetOctokit();
     window.location.href = getOAuthLoginUrl();
   };
 

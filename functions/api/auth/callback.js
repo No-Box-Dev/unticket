@@ -46,7 +46,7 @@ export async function onRequestGet(context) {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${origin}/?token=${data.access_token}`,
+      Location: `${origin}/?token=${data.access_token}&t=${Date.now()}`,
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
       "CDN-Cache-Control": "no-store",
       "Cloudflare-CDN-Cache-Control": "no-store",
