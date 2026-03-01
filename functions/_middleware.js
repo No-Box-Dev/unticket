@@ -28,8 +28,8 @@ async function validateGitHubToken(token) {
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
-  // Skip auth for OAuth callback
-  if (url.pathname.startsWith("/api/auth/")) {
+  // Skip auth for OAuth callback and webhook
+  if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/webhook") {
     return context.next();
   }
 

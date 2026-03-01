@@ -51,14 +51,23 @@ Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
-- `functions/api/sync.js` — GitHub-to-D1 sync: GET checks staleness, POST triggers full sync
+- `functions/api/sync.js` — Cursor-based GitHub-to-D1 sync: GET checks staleness (MIN across all resources), POST accepts `?cursor=repoName&force=true` for one-repo-at-a-time sync
+- `functions/api/webhook.js` — GitHub webhook receiver (HMAC-SHA256 verified, handles `issues`, `pull_request`, `member` events)
 - `functions/api/issues.js`, `functions/api/prs.js`, `functions/api/repos.js`, `functions/api/members.js` — cached data endpoints
 - `functions/api/auth/callback.js` — OAuth callback
-- `functions/_middleware.js`, `functions/api/_middleware.js` — auth middleware
+- `functions/_middleware.js`, `functions/api/_middleware.js` — auth middleware (webhook route bypasses auth)
 - `functions/lib/github-sync.js`, `functions/lib/db.js`, `functions/lib/crypto.js` — server-side helpers
 
 ### Sync System
-`DashboardPage` auto-triggers a GitHub-to-D1 sync when data is stale. Status checked via `useSyncStatus()`, triggered via `useTriggerSync()` (both in `src/hooks/useGitHub.ts`).
+Batched cursor-based sync: `triggerSync()` (in `src/lib/github.ts`) calls `POST /api/sync` in a loop — first call runs `syncInit` (config migration, repos, members), subsequent calls sync one repo at a time via cursor until `done: true`. This prevents Cloudflare Function timeouts with many repos. Staleness checked via `useSyncStatus()`, triggered via `useTriggerSync()` (both in `src/hooks/useGitHub.ts`).
+
+Key server functions in `functions/lib/github-sync.js`:
+- `syncInit(db, token, orgId, orgLogin)` — migrate config, sync repos + members, return repo names
+- `syncRepo(db, token, orgId, orgLogin, repo, force)` — sync PRs + issues for ONE repo
+- `upsertIssue/upsertPR/upsertMember/removeMember` — single-entity upserts used by webhook handler
+
+### Webhooks
+Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
 
 ### GitHub Data Hooks (`src/hooks/useGitHub.ts`)
 TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`.
@@ -102,4 +111,4 @@ Recent activity feed across repos.
 ### Other Features
 
 #### Settings (header button, not a tab)
-Manages teams/repos and people config. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state.
+Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state.
