@@ -48,7 +48,12 @@ export async function onRequestPost(context) {
   }
 
   const event = context.request.headers.get("X-GitHub-Event");
-  const payload = JSON.parse(body);
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return errorResponse("Invalid JSON payload", 400);
+  }
 
   // Ping event (sent when webhook is first created)
   if (event === "ping") {

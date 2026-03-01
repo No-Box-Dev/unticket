@@ -115,7 +115,7 @@ export function SettingsTab() {
             <label className="text-xs font-medium text-stone-500">Payload URL</label>
             <div className="mt-0.5 flex items-center gap-2">
               <code className="text-xs bg-stone-100 px-2 py-1 rounded text-stone-700 flex-1 select-all">
-                https://gitpulse-rm8.pages.dev/api/webhook
+                {`${window.location.origin}/api/webhook`}
               </code>
             </div>
           </div>
