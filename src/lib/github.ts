@@ -319,6 +319,14 @@ export async function fetchIssueLabels(): Promise<{ name: string; color: string 
   return apiGet<{ name: string; color: string }[]>("/api/issues?meta=labels");
 }
 
+export async function updateIssueAssignees(
+  repo: string,
+  issueNumber: number,
+  assignees: string[],
+): Promise<{ assignees: { login: string; avatar_url: string }[] }> {
+  return apiPost("/api/assign", { repo, issue_number: issueNumber, assignees });
+}
+
 // ---------- Other ----------
 
 export async function fetchMilestones(): Promise<{ id: number; title: string; due_on: string | null; state: string; repo: string }[]> {
