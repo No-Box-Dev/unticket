@@ -131,16 +131,27 @@ export function IssuesTab(_props: IssuesTabProps) {
     setSyncModalOpen(true);
     setSyncProgress(null);
     setSyncedRepos([]);
+    let lastSyncingRepo: string | null = null;
 
     await triggerSyncWithProgress((status) => {
       setSyncProgress(status);
       if (status.phase === "syncing" && status.repo) {
-        setSyncedRepos((prev) =>
-          prev.includes(status.repo!) ? prev : [...prev, status.repo!],
-        );
+        if (lastSyncingRepo) {
+          setSyncedRepos((prev) =>
+            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
+          );
+        }
+        lastSyncingRepo = status.repo;
       }
       if (status.phase === "done") {
-        qc.invalidateQueries();
+        if (lastSyncingRepo) {
+          setSyncedRepos((prev) =>
+            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
+          );
+        }
+        qc.invalidateQueries({ queryKey: ["issues"] });
+        qc.invalidateQueries({ queryKey: ["repos"] });
+        qc.invalidateQueries({ queryKey: ["labels"] });
       }
     });
   }, [qc]);
@@ -305,7 +316,11 @@ export function IssuesTab(_props: IssuesTabProps) {
 
         <button
           onClick={startSync}
-          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-brand cursor-pointer"
+          disabled={syncModalOpen}
+          className={cn(
+            "flex items-center gap-1.5 text-xs text-stone-500 hover:text-brand cursor-pointer",
+            syncModalOpen && "opacity-50 cursor-not-allowed",
+          )}
         >
           <RefreshCw className={cn("w-3.5 h-3.5", (openFetching || closedFetching) && "animate-spin")} />
           Sync from GitHub
