@@ -60,7 +60,7 @@ Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1
 - `functions/lib/github-sync.js`, `functions/lib/db.js`, `functions/lib/crypto.js` — server-side helpers
 
 ### Sync System
-Batched cursor-based sync: `triggerSync()` (in `src/lib/github.ts`) calls `POST /api/sync` in a loop — first call runs `syncInit` (config migration, repos, members), subsequent calls sync one repo at a time via cursor until `done: true`. This prevents Cloudflare Function timeouts with many repos. `triggerSyncWithProgress()` wraps this with a callback for UI progress updates (used by Issues tab sync button). Staleness checked via `useSyncStatus()`, triggered via `useTriggerSync()` (both in `src/hooks/useGitHub.ts`).
+Batched cursor-based sync: `triggerSync()` (in `src/lib/github.ts`) calls `POST /api/sync` in a loop — first call runs `syncInit` (config migration, repos, members), subsequent calls sync one repo at a time via cursor until `done: true`. This prevents Cloudflare Function timeouts with many repos. `triggerSyncWithProgress()` wraps this with a callback for UI progress updates (used by Issues and PRs tab sync buttons). Staleness checked via `useSyncStatus()`, triggered via `useTriggerSync()` (both in `src/hooks/useGitHub.ts`).
 
 Key server functions in `functions/lib/github-sync.js`:
 - `syncInit(db, token, orgId, orgLogin)` — migrate config, sync repos + members, return repo names
@@ -71,7 +71,7 @@ Key server functions in `functions/lib/github-sync.js`:
 Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
 
 ### GitHub Data Hooks (`src/hooks/useGitHub.ts`)
-TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`.
+TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`, `useUpdateIssueAssignees`.
 
 ### Shared UI Components
 - `src/components/ui/SearchableSelect.tsx` — Reusable portal-based searchable single-select dropdown. Props: `value`, `onChange`, `options: {value, label}[]`, `placeholder`, `className`. Includes ARIA attributes, keyboard navigation (Escape/Arrow/Enter), auto-flip positioning, scroll/resize repositioning. Used for repo dropdowns in Issues, PRs, and Todos tabs.
@@ -95,6 +95,9 @@ Future features not yet assigned to a sprint.
 #### Issues (`issues` tab)
 Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo (searchable), label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
+#### PRs (`prs` tab)
+Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
+
 #### Todos (`todos` tab)
 Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature, a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
 
@@ -105,9 +108,6 @@ Aggregated metrics per team — PRs, issues, activity across repos.
 
 #### Individual Dashboard (`individual` tab)
 Per-person activity dashboard with date range selector (1m/10w/6m/1y). Shows 3 bar chart cards: PRs Created (all PRs, not just merged), Issues Closed, Issues Created. Each card shows weekly bar chart, total count, and week-over-week change.
-
-#### Open PRs (`prs` tab)
-Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sortable columns.
 
 #### Activity (`activity` tab)
 Recent activity feed across repos.
