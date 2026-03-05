@@ -47,6 +47,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const authMode = getAuthMode();
 
+  // Listen for force-logout events (fired by api.ts on 401)
+  useEffect(() => {
+    const handler = () => {
+      resetOctokit();
+      localStorage.removeItem("gp_org");
+      setUser(null);
+      setSelectedOrg(null);
+    };
+    window.addEventListener("gp:force-logout", handler);
+    return () => window.removeEventListener("gp:force-logout", handler);
+  }, []);
+
   useEffect(() => {
     // Check for OAuth callback token in URL params
     const params = new URLSearchParams(window.location.search);
