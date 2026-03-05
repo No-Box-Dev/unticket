@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handler = () => {
       resetOctokit();
+      localStorage.removeItem("gp_org");
       setUser(null);
       setSelectedOrg(null);
     };

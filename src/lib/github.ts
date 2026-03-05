@@ -43,6 +43,7 @@ function wrapOctokitError(err: unknown): never {
     const status = (err as any).status as number | undefined;
     if (status === 401) {
       localStorage.removeItem("gp_token");
+      localStorage.removeItem("n1_github_token");
       window.dispatchEvent(new CustomEvent("gp:force-logout"));
       throw new ApiError("Token expired or revoked", 401);
     }

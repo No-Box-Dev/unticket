@@ -8,7 +8,7 @@ const tokenCache = new Map();
  *   { error: "invalid" }          — bad / revoked token
  */
 async function validateGitHubToken(token) {
-  const cacheKey = token.slice(-8); // use last 8 chars as key
+  const cacheKey = token;
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return { login: cached.login };

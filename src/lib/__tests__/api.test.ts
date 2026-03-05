@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiFetch, apiGet, apiPut, apiPost } from "../api";
+import { apiFetch, apiGet, apiPut, apiPost, ApiError, shouldNotRetry } from "../api";
 
 let storage: Record<string, string> = {};
 
@@ -136,5 +136,71 @@ describe("apiPost", () => {
       method: "POST",
       body: undefined,
     }));
+  });
+});
+
+describe("401 force-logout", () => {
+  it("clears token and dispatches gp:force-logout on 401", async () => {
+    storage.gp_token = "stale-tok";
+    mockFetch(401, { error: "Invalid token" });
+
+    await expect(apiGet("/api/data")).rejects.toThrow("Invalid token");
+    expect(storage.gp_token).toBeUndefined();
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "gp:force-logout" }),
+    );
+  });
+
+  it("throws ApiError with status 401", async () => {
+    mockFetch(401, { error: "Invalid token" });
+    try {
+      await apiGet("/api/data");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(401);
+    }
+  });
+});
+
+describe("429 rate limiting", () => {
+  it("throws ApiError with status 429", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: "Too Many Requests",
+      json: () => Promise.resolve({ error: "rate limited" }),
+      headers: new Headers({ "retry-after": "30" }),
+    }));
+
+    await expect(apiGet("/api/data")).rejects.toThrow("Try again in 30s");
+    try {
+      await apiGet("/api/data");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(429);
+    }
+  });
+});
+
+describe("shouldNotRetry", () => {
+  it("returns true for 401 ApiError", () => {
+    expect(shouldNotRetry(new ApiError("unauthorized", 401))).toBe(true);
+  });
+
+  it("returns true for 429 ApiError", () => {
+    expect(shouldNotRetry(new ApiError("rate limited", 429))).toBe(true);
+  });
+
+  it("returns true for 403 ApiError", () => {
+    expect(shouldNotRetry(new ApiError("forbidden", 403))).toBe(true);
+  });
+
+  it("returns true for rate limit Error messages", () => {
+    expect(shouldNotRetry(new Error("GitHub API rate limit exceeded"))).toBe(true);
+  });
+
+  it("returns false for generic errors", () => {
+    expect(shouldNotRetry(new Error("network error"))).toBe(false);
+    expect(shouldNotRetry(new ApiError("not found", 404))).toBe(false);
   });
 });
