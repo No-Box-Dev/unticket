@@ -1,10 +1,10 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useSaveFeatures, useCreateConfigRepo } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "priority" | "effort" | "title";
@@ -36,11 +36,17 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
-  const saveFeatures = useSaveFeatures();
+  const createFeatureMut = useCreateFeature();
+  const updateFeatureMut = useUpdateFeature();
+  const deleteFeatureMut = useDeleteFeature();
   const createRepo = useCreateConfigRepo();
+  const { data: legacyFeatures } = useLegacyFeatures();
+  const migrateMut = useMigrateFeatures();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
+  const [migrateDismissed, setMigrateDismissed] = useState(false);
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -78,23 +84,22 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, feature: Feature) => {
-    e.dataTransfer.setData("text/plain", feature.id);
+    e.dataTransfer.setData("text/plain", String(feature.id));
     e.dataTransfer.effectAllowed = "move";
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent, targetStatus: FeatureStatus) => {
     e.preventDefault();
     setDragOverCol(null);
-    const featureId = e.dataTransfer.getData("text/plain");
-    const all = features ?? [];
-    const feature = all.find((f) => f.id === featureId);
+    const featureId = parseInt(e.dataTransfer.getData("text/plain"));
+    const feature = (features ?? []).find((f) => f.id === featureId);
     if (!feature || feature.status === targetStatus) return;
-    const next = all.map((f) => (f.id === featureId ? { ...f, status: targetStatus } : f));
-    saveFeatures.mutate(next);
+    const updated = { ...feature, status: targetStatus };
+    updateFeatureMut.mutate(updated);
     if (detailFeature?.id === featureId) {
-      setDetailFeature({ ...feature, status: targetStatus });
+      setDetailFeature(updated);
     }
-  }, [features, saveFeatures, detailFeature]);
+  }, [features, updateFeatureMut, detailFeature]);
 
   const handleDragOver = useCallback((e: React.DragEvent, status: FeatureStatus) => {
     e.preventDefault();
@@ -107,30 +112,23 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   }, []);
 
   const updateFeature = (updated: Feature) => {
-    const all = features ?? [];
-    const next = all.map((f) => (f.id === updated.id ? updated : f));
-    saveFeatures.mutate(next);
+    updateFeatureMut.mutate(updated);
     if (detailFeature?.id === updated.id) {
       setDetailFeature(updated);
     }
   };
 
-  const deleteFeature = (id: string) => {
-    const all = features ?? [];
-    saveFeatures.mutate(all.filter((f) => f.id !== id));
+  const deleteFeature = (id: number) => {
+    deleteFeatureMut.mutate(id);
   };
 
   const addFeature = (title: string) => {
-    const all = features ?? [];
-    const newFeature: Feature = {
-      id: `feat-${Date.now()}`,
+    createFeatureMut.mutate({
       title,
-      owners: [],
       status: "plan",
       sprint: sprint?.number ?? null,
       effort: "medium",
-    };
-    saveFeatures.mutate([...all, newFeature]);
+    });
   };
 
   if (sprintLoading) {
@@ -167,8 +165,52 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
     );
   }
 
+  const showMigrationBanner = !migrateDismissed
+    && !migrateMut.isSuccess
+    && (legacyFeatures?.length ?? 0) > 0;
+
   return (
-    <div className="flex gap-4 pb-8">
+    <div className="space-y-4 pb-8">
+      {/* Migration banner */}
+      {showMigrationBanner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Upload size={16} className="text-amber-600 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-amber-800">
+              {migrateProgress
+                ? `Migrating features... (${migrateProgress.done}/${migrateProgress.total})`
+                : `${legacyFeatures.length} feature${legacyFeatures.length === 1 ? "" : "s"} found in D1. Migrate to GitHub Issues?`}
+            </p>
+          </div>
+          {!migrateMut.isPending && (
+            <button
+              onClick={() => {
+                migrateMut.mutate({
+                  legacy: legacyFeatures,
+                  onProgress: (done, total) => setMigrateProgress({ done, total }),
+                });
+              }}
+              className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 cursor-pointer flex items-center gap-1.5"
+            >
+              <Upload size={12} />
+              Migrate
+            </button>
+          )}
+          {migrateMut.isPending && (
+            <Loader2 size={16} className="text-amber-600 animate-spin" />
+          )}
+          {!migrateMut.isPending && (
+            <button
+              onClick={() => setMigrateDismissed(true)}
+              className="text-amber-400 hover:text-amber-600 text-xs cursor-pointer"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
+
+    <div className="flex gap-4">
       {/* Left sidebar: Sprint info + Add Feature */}
       <div className="hidden lg:flex flex-col gap-4 w-48 shrink-0 pt-1">
         <div className="space-y-2">
@@ -279,6 +321,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           onUpdate={updateFeature}
         />
       )}
+    </div>
     </div>
   );
 }

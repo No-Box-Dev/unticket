@@ -9,7 +9,7 @@ interface FeatureCardProps {
   feature: Feature;
   allPeople: string[];
   onUpdate: (updated: Feature) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
   mode: "sprint" | "backlog";
   currentSprint?: number;

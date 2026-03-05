@@ -1,6 +1,6 @@
 import { apiGet, apiPut } from "./api";
-import { fetchPlanFile, planFilePath, savePlanFile, fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "./gitpulse-repo";
-import type { SprintConfig, Feature, Person, OrgSettings, Todo } from "./types";
+import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "./gitpulse-repo";
+import type { SprintConfig, Person, OrgSettings, Todo } from "./types";
 
 // Sprint
 export async function fetchSprint(): Promise<SprintConfig | null> {
@@ -9,22 +9,6 @@ export async function fetchSprint(): Promise<SprintConfig | null> {
 
 export async function saveSprint(sprint: SprintConfig) {
   await apiPut("/api/config/sprint", sprint);
-}
-
-// Features
-export async function fetchFeatures(): Promise<Feature[]> {
-  const data = await apiGet<Feature[]>("/api/config/features");
-  // Migrate legacy statuses: active → plan, done → production
-  return (data ?? []).map((f) => ({
-    ...f,
-    status: f.status === ("active" as string) ? "plan"
-      : f.status === ("done" as string) ? "production"
-      : f.status,
-  }));
-}
-
-export async function saveFeatures(features: Feature[]) {
-  await apiPut("/api/config/features", features);
 }
 
 // People
@@ -85,7 +69,6 @@ export async function createConfigRepo(): Promise<void> {
     endDate: end.toISOString().slice(0, 10),
     focus: "Set up your first sprint",
   });
-  await apiPut("/api/config/features", []);
   await apiPut("/api/config/people", []);
   await apiPut("/api/config/settings", {
     teams: [{ name: "Team", color: "#1B6971", repos: [] }],
@@ -94,4 +77,4 @@ export async function createConfigRepo(): Promise<void> {
 }
 
 // Re-export plan helpers
-export { fetchPlanFile, planFilePath, savePlanFile, fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile };
+export { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile };
