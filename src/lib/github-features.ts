@@ -1,4 +1,5 @@
 import { getOctokit } from "./github";
+import { apiGet } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority } from "./types";
 
 const REPO = "gitpulse";
@@ -73,7 +74,8 @@ const milestoneCache = new Map<string, number>();
 
 async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
   const title = `Sprint ${sprintNumber}`;
-  if (milestoneCache.has(title)) return milestoneCache.get(title)!;
+  const cacheKey = `${org}/${REPO}:${title}`;
+  if (milestoneCache.has(cacheKey)) return milestoneCache.get(cacheKey)!;
 
   const ok = getOctokit();
   const { data: milestones } = await ok.rest.issues.listMilestones({
@@ -85,7 +87,7 @@ async function findOrCreateMilestone(org: string, sprintNumber: number): Promise
 
   const existing = milestones.find((m) => m.title === title);
   if (existing) {
-    milestoneCache.set(title, existing.number);
+    milestoneCache.set(cacheKey, existing.number);
     return existing.number;
   }
 
@@ -94,16 +96,16 @@ async function findOrCreateMilestone(org: string, sprintNumber: number): Promise
     repo: REPO,
     title,
   });
-  milestoneCache.set(title, created.number);
+  milestoneCache.set(cacheKey, created.number);
   return created.number;
 }
 
 // ---------- Label setup ----------
 
-let labelsEnsured = false;
+const labelsEnsuredByOrg = new Set<string>();
 
 export async function ensureFeatureLabels(org: string): Promise<void> {
-  if (labelsEnsured) return;
+  if (labelsEnsuredByOrg.has(org)) return;
   const ok = getOctokit();
 
   const { data: existing } = await ok.rest.issues.listLabelsForRepo({
@@ -117,12 +119,12 @@ export async function ensureFeatureLabels(org: string): Promise<void> {
     if (!existingNames.has(label.name)) {
       try {
         await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
-      } catch {
-        // 422 = already exists (race condition), ignore
+      } catch (err: any) {
+        if (err?.status !== 422) throw err;
       }
     }
   }
-  labelsEnsured = true;
+  labelsEnsuredByOrg.add(org);
 }
 
 // ---------- CRUD ----------
@@ -212,6 +214,11 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
 
 // ---------- Migration ----------
 
+export async function fetchLegacyFeatures(): Promise<LegacyFeature[]> {
+  const data = await apiGet<LegacyFeature[] | null>("/api/config/features");
+  return data ?? [];
+}
+
 export interface LegacyFeature {
   id: string;
   title: string;
@@ -221,6 +228,7 @@ export interface LegacyFeature {
   sprint: number | null;
   effort: string;
   priority?: string;
+  plan?: string;
 }
 
 export async function migrateFeatures(
@@ -244,7 +252,7 @@ export async function migrateFeatures(
 
     await createFeature(org, f.title, {
       status, sprint: f.sprint, effort, team: f.team,
-      priority, owners: f.owners,
+      priority, owners: f.owners, plan: f.plan,
     });
     created++;
     onProgress?.(created, legacy.length);

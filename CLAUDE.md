@@ -94,7 +94,7 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 ### Active Tabs (visible in tab bar)
 
 #### Sprint Board (`sprint` tab)
-Sprint config + feature cards backed by GitHub Issues (label: `feature`). Features have owners, effort, priority, status (encoded as labels), and implementation plans (issue body with markdown + `## Tasks` subtask checkboxes). Drag-and-drop between status columns (Plan/Demo/Production). Detail modal renders plan as markdown, shows interactive task list with checkboxes and per-task assignees.
+Sprint config + feature cards backed by GitHub Issues (label: `feature`). Features have owners, effort, priority, status (encoded as labels), and implementation plans (issue body with Markdown + `## Tasks` subtask checkboxes). Drag-and-drop between status columns (Plan/Demo/Production). Detail modal renders plan as Markdown, shows interactive task list with checkboxes and per-task assignees.
 
 #### Backlog (`backlog` tab)
 Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.

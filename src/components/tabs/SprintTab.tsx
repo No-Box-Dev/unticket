@@ -165,9 +165,9 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
     );
   }
 
-  const showMigrationBanner = !migrateDismissed && !migrateMut.isSuccess
-    && legacyFeatures && legacyFeatures.length > 0
-    && features && features.length === 0;
+  const showMigrationBanner = !migrateDismissed
+    && !migrateMut.isSuccess
+    && (legacyFeatures?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4 pb-8">

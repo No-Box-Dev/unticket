@@ -295,6 +295,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               {tasks.map((task, i) => (
                 <div key={i} className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50">
                   <button
+                    type="button"
+                    aria-label={task.done ? "Mark task as not done" : "Mark task as done"}
                     onClick={() => toggleTask(i)}
                     className="text-stone-400 hover:text-brand cursor-pointer shrink-0"
                   >
@@ -313,6 +315,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                     onChange={(a) => setTaskAssignee(i, a)}
                   />
                   <button
+                    type="button"
+                    aria-label={`Delete task: ${task.text}`}
                     onClick={() => deleteTask(i)}
                     className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
                   >
@@ -333,6 +337,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 className="flex-1 px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
               />
               <button
+                type="button"
+                aria-label="Add task"
                 onClick={addTask}
                 disabled={!newTaskText.trim()}
                 className="px-2.5 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1"

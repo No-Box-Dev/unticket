@@ -12,16 +12,16 @@ import {
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
-import { apiGet } from "@/lib/api";
 import {
   fetchFeatures as ghFetchFeatures,
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
   migrateFeatures as ghMigrateFeatures,
+  fetchLegacyFeatures,
 } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Person, OrgSettings, Todo } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -225,10 +225,7 @@ export function useLegacyFeatures() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["legacyFeatures", selectedOrg],
-    queryFn: async () => {
-      const data = await apiGet<LegacyFeature[] | null>("/api/config/features");
-      return data ?? [];
-    },
+    queryFn: fetchLegacyFeatures,
     enabled: !!selectedOrg,
     staleTime: Infinity,
   });
