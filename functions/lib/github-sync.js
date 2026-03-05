@@ -21,10 +21,17 @@ async function fetchAllPages(token, url, params = {}) {
     });
 
     if (!res.ok) {
-      if (res.status === 403) {
+      if (res.status === 401) {
+        throw new Error("GitHub token expired or revoked");
+      }
+      if (res.status === 403 || res.status === 429) {
         const remaining = res.headers.get("X-RateLimit-Remaining");
-        if (remaining === "0") {
-          throw new Error("GitHub API rate limit exceeded");
+        if (remaining === "0" || res.status === 429) {
+          const resetEpoch = res.headers.get("X-RateLimit-Reset");
+          const resetInfo = resetEpoch
+            ? ` Resets at ${new Date(Number(resetEpoch) * 1000).toISOString()}`
+            : "";
+          throw new Error(`GitHub API rate limit exceeded.${resetInfo}`);
         }
         // Other 403 (permissions etc.) — skip gracefully
         break;

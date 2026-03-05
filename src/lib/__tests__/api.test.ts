@@ -11,6 +11,9 @@ beforeEach(() => {
     setItem: (key: string, val: string) => { storage[key] = val; },
     removeItem: (key: string) => { delete storage[key]; },
   });
+
+  // Stub window.dispatchEvent so force-logout doesn't break tests
+  vi.stubGlobal("dispatchEvent", vi.fn());
 });
 
 afterEach(() => {
@@ -24,6 +27,7 @@ function mockFetch(status: number, body: unknown) {
     status,
     statusText: status === 200 ? "OK" : "Server Error",
     json: () => Promise.resolve(body),
+    headers: new Headers(),
   });
   vi.stubGlobal("fetch", fn);
   return fn;
@@ -90,6 +94,7 @@ describe("apiGet", () => {
       status: 500,
       statusText: "Internal Server Error",
       json: () => Promise.reject(new Error("parse fail")),
+      headers: new Headers(),
     }));
     await expect(apiGet("/api/data")).rejects.toThrow("Internal Server Error");
   });

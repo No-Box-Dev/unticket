@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost, ApiError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -11,7 +11,20 @@ export function getOctokit(): Octokit {
     if (!token) throw new Error("Not authenticated");
     octokitInstance = new Octokit({
       auth: token,
-      throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
+      throttle: {
+        onRateLimit: (retryAfter: number, options: any, _octokit: any, retryCount: number) => {
+          console.warn(
+            `[GitPulse] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
+          );
+          return retryCount < 1;
+        },
+        onSecondaryRateLimit: (retryAfter: number, options: any) => {
+          console.warn(
+            `[GitPulse] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
+          );
+          return false;
+        },
+      },
       retry: { doNotRetry: [400, 401, 403, 404, 422, 451] },
     });
   }
@@ -22,16 +35,45 @@ export function resetOctokit() {
   octokitInstance = null;
 }
 
+/** Wraps Octokit errors into ApiError so the retry logic can identify them. */
+function wrapOctokitError(err: unknown): never {
+  if (err instanceof ApiError) throw err;
+  if (err instanceof Error) {
+    // Octokit includes status in the error object
+    const status = (err as any).status as number | undefined;
+    if (status === 401) {
+      localStorage.removeItem("gp_token");
+      window.dispatchEvent(new CustomEvent("gp:force-logout"));
+      throw new ApiError("Token expired or revoked", 401);
+    }
+    if (status === 403 || status === 429) {
+      throw new ApiError(err.message || "Rate limit exceeded", status);
+    }
+    if (status) {
+      throw new ApiError(err.message, status);
+    }
+  }
+  throw err;
+}
+
 export async function fetchUser() {
-  const ok = getOctokit();
-  const { data } = await ok.rest.users.getAuthenticated();
-  return data;
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.users.getAuthenticated();
+    return data;
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
 }
 
 export async function fetchOrgs() {
-  const ok = getOctokit();
-  const { data } = await ok.rest.orgs.listForAuthenticatedUser();
-  return data;
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.orgs.listForAuthenticatedUser();
+    return data;
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
 }
 
 // ---------- Sync ----------

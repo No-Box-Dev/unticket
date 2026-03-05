@@ -1,11 +1,17 @@
 // Cache validated tokens for 5 min to avoid hammering GitHub /user
 const tokenCache = new Map();
 
+/**
+ * Validates a GitHub token. Returns:
+ *   { login: string }             — valid token
+ *   { error: "rate_limited", ... } — GitHub rate-limited the validation call
+ *   { error: "invalid" }          — bad / revoked token
+ */
 async function validateGitHubToken(token) {
   const cacheKey = token.slice(-8); // use last 8 chars as key
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.login;
+    return { login: cached.login };
   }
 
   const res = await fetch("https://api.github.com/user", {
@@ -15,14 +21,22 @@ async function validateGitHubToken(token) {
     },
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // Distinguish rate limiting from a genuinely invalid token
+    const remaining = res.headers.get("X-RateLimit-Remaining");
+    if (res.status === 403 && remaining === "0" || res.status === 429) {
+      const resetEpoch = res.headers.get("X-RateLimit-Reset");
+      return { error: "rate_limited", resetEpoch };
+    }
+    return { error: "invalid" };
+  }
 
   const user = await res.json();
   tokenCache.set(cacheKey, {
     login: user.login,
     expiresAt: Date.now() + 5 * 60 * 1000,
   });
-  return user.login;
+  return { login: user.login };
 }
 
 export async function onRequest(context) {
@@ -47,13 +61,32 @@ export async function onRequest(context) {
   }
 
   const token = authHeader.slice(7);
-  const userLogin = await validateGitHubToken(token);
-  if (!userLogin) {
+  const validation = await validateGitHubToken(token);
+
+  if (validation.error === "rate_limited") {
+    const resetInfo = validation.resetEpoch
+      ? ` Resets at ${new Date(Number(validation.resetEpoch) * 1000).toISOString()}`
+      : "";
+    return new Response(
+      JSON.stringify({ error: `GitHub API rate limit exceeded.${resetInfo}` }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          ...(validation.resetEpoch ? { "Retry-After": String(Math.max(0, Number(validation.resetEpoch) - Math.floor(Date.now() / 1000))) } : {}),
+        },
+      },
+    );
+  }
+
+  if (validation.error === "invalid") {
     return new Response(JSON.stringify({ error: "Invalid token" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const userLogin = validation.login;
 
   // Resolve org from header or query param
   const orgLogin =
