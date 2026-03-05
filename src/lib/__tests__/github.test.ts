@@ -154,7 +154,7 @@ describe("fetchMergedPRs", () => {
 
 describe("fetchOpenIssues", () => {
   it("transforms milestone_title → milestone object", async () => {
-    mockApiGet.mockResolvedValue([
+    mockApiGet.mockResolvedValue({ data: [
       {
         id: 1, repo: "r", number: 5, title: "Issue", state: "open",
         author: "alice", author_avatar: "https://img/alice",
@@ -163,14 +163,14 @@ describe("fetchOpenIssues", () => {
         assignees: [], labels: [],
         milestone_title: "v1.0",
       },
-    ]);
+    ], totalCount: 1 });
 
     const issues = await fetchOpenIssues();
     expect(issues[0].milestone).toEqual({ title: "v1.0" });
   });
 
   it("maps assignees with fallback avatar", async () => {
-    mockApiGet.mockResolvedValue([
+    mockApiGet.mockResolvedValue({ data: [
       {
         id: 2, repo: "r", number: 6, title: "Issue2", state: "open",
         author: "bob", author_avatar: "",
@@ -179,7 +179,7 @@ describe("fetchOpenIssues", () => {
         assignees: [{ login: "charlie" }],
         labels: [], milestone_title: null,
       },
-    ]);
+    ], totalCount: 1 });
 
     const issues = await fetchOpenIssues();
     expect(issues[0].assignees).toEqual([{ login: "charlie", avatar_url: "" }]);
@@ -190,7 +190,7 @@ describe("fetchOpenIssues", () => {
 
 describe("fetchClosedIssues", () => {
   it("passes closed_since param", async () => {
-    mockApiGet.mockResolvedValue([]);
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0 });
     await fetchClosedIssues("2026-01-10");
     expect(mockApiGet).toHaveBeenCalledWith(
       expect.stringContaining("closed_since=2026-01-10"),

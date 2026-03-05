@@ -6,13 +6,13 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/gitpulse-repo", () => ({
-  fetchPlanFile: vi.fn(),
-  planFilePath: vi.fn(),
+  fetchTodoPlanFile: vi.fn(),
+  todoPlanFilePath: vi.fn(),
+  saveTodoPlanFile: vi.fn(),
 }));
 
 import { apiGet, apiPut } from "@/lib/api";
 import {
-  fetchFeatures,
   fetchPeople,
   fetchSettings,
   fetchTodos,
@@ -24,38 +24,6 @@ const mockApiPut = vi.mocked(apiPut);
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe("fetchFeatures", () => {
-  it("migrates 'active' → 'plan'", async () => {
-    mockApiGet.mockResolvedValue([
-      { id: "f1", title: "A", status: "active", owners: [], sprint: 1, effort: "low" },
-    ]);
-    const result = await fetchFeatures();
-    expect(result[0].status).toBe("plan");
-  });
-
-  it("migrates 'done' → 'production'", async () => {
-    mockApiGet.mockResolvedValue([
-      { id: "f2", title: "B", status: "done", owners: [], sprint: 1, effort: "low" },
-    ]);
-    const result = await fetchFeatures();
-    expect(result[0].status).toBe("production");
-  });
-
-  it("leaves valid statuses unchanged", async () => {
-    mockApiGet.mockResolvedValue([
-      { id: "f3", title: "C", status: "demo", owners: [], sprint: 1, effort: "low" },
-    ]);
-    const result = await fetchFeatures();
-    expect(result[0].status).toBe("demo");
-  });
-
-  it("returns [] when API returns null", async () => {
-    mockApiGet.mockResolvedValue(null);
-    const result = await fetchFeatures();
-    expect(result).toEqual([]);
-  });
 });
 
 describe("fetchPeople", () => {
@@ -129,7 +97,7 @@ describe("createConfigRepo", () => {
     vi.useRealTimers();
   });
 
-  it("seeds all 5 config keys via apiPut", async () => {
+  it("seeds 4 config keys via apiPut (features moved to GitHub Issues)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-18T12:00:00Z"));
 
@@ -138,11 +106,11 @@ describe("createConfigRepo", () => {
 
     const paths = mockApiPut.mock.calls.map((c) => c[0]);
     expect(paths).toContain("/api/config/sprint");
-    expect(paths).toContain("/api/config/features");
     expect(paths).toContain("/api/config/people");
     expect(paths).toContain("/api/config/settings");
     expect(paths).toContain("/api/config/todos");
-    expect(mockApiPut).toHaveBeenCalledTimes(5);
+    expect(paths).not.toContain("/api/config/features");
+    expect(mockApiPut).toHaveBeenCalledTimes(4);
 
     vi.useRealTimers();
   });
