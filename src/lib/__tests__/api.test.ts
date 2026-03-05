@@ -153,12 +153,10 @@ describe("401 force-logout", () => {
 
   it("throws ApiError with status 401", async () => {
     mockFetch(401, { error: "Invalid token" });
-    try {
-      await apiGet("/api/data");
-    } catch (err) {
-      expect(err).toBeInstanceOf(ApiError);
-      expect((err as ApiError).status).toBe(401);
-    }
+    await expect(apiGet("/api/data")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 401,
+    });
   });
 });
 
@@ -172,13 +170,11 @@ describe("429 rate limiting", () => {
       headers: new Headers({ "retry-after": "30" }),
     }));
 
-    await expect(apiGet("/api/data")).rejects.toThrow("Try again in 30s");
-    try {
-      await apiGet("/api/data");
-    } catch (err) {
-      expect(err).toBeInstanceOf(ApiError);
-      expect((err as ApiError).status).toBe(429);
-    }
+    await expect(apiGet("/api/data")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 429,
+      message: expect.stringContaining("Try again in 30s"),
+    });
   });
 });
 

@@ -22,11 +22,16 @@ async function validateGitHubToken(token) {
   });
 
   if (!res.ok) {
-    // Distinguish rate limiting from a genuinely invalid token
+    // Distinguish rate limiting from a genuinely invalid token.
+    // Secondary rate limits return 403 with Retry-After but non-zero remaining.
     const remaining = res.headers.get("X-RateLimit-Remaining");
-    if (res.status === 403 && remaining === "0" || res.status === 429) {
+    const retryAfter = res.headers.get("Retry-After");
+    const isRateLimited =
+      res.status === 429 ||
+      (res.status === 403 && (remaining === "0" || retryAfter !== null));
+    if (isRateLimited) {
       const resetEpoch = res.headers.get("X-RateLimit-Reset");
-      return { error: "rate_limited", resetEpoch };
+      return { error: "rate_limited", resetEpoch, retryAfter };
     }
     return { error: "invalid" };
   }
