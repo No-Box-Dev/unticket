@@ -59,7 +59,7 @@ export function TodoTab() {
 
   const featureMap = useMemo(() => {
     const map = new Map<string, Feature>();
-    for (const f of features ?? []) map.set(f.id, f);
+    for (const f of features ?? []) map.set(String(f.id), f);
     return map;
   }, [features]);
 
@@ -99,7 +99,7 @@ export function TodoTab() {
       owner: user.login,
       status: "backlog",
       createdAt: new Date().toISOString(),
-      featureId: feature.id,
+      featureId: String(feature.id),
     };
     updateAll([...myTodos, todo]);
   }
@@ -202,7 +202,7 @@ export function TodoTab() {
           >
             <option value="">No feature</option>
             {myFeatures.map((f) => (
-              <option key={f.id} value={f.id}>{f.title}</option>
+              <option key={f.id} value={String(f.id)}>{f.title}</option>
             ))}
           </select>
           <SearchableSelect
@@ -499,7 +499,7 @@ function TodoDetailModal({
               >
                 <option value="">None</option>
                 {allFeatures.map((f) => (
-                  <option key={f.id} value={f.id}>{f.title}</option>
+                  <option key={f.id} value={String(f.id)}>{f.title}</option>
                 ))}
               </select>
             </div>

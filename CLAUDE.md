@@ -33,20 +33,27 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 3. Add entry in `src/components/TabBar.tsx`
 4. Render in `src/pages/DashboardPage.tsx`
 
-### Config System (Hybrid: D1 + .gitpulse)
-Org config (sprint, features, people, settings, todos) stored in **Cloudflare D1** via `functions/api/config/[key].js`. Implementation plans stored in **`{org}/.gitpulse`** GitHub repo as markdown files.
+### Config System (Hybrid: D1 + GitHub Issues + .gitpulse)
 
-**D1 config (fast, no rate limits):**
+**Features as GitHub Issues (on `No-Box-Dev/gitpulse` repo):**
+- `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
+- Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
+- Label scheme: `feature` (marker), `status:{plan,demo,production,future}`, `effort:{low,medium,high}`, `priority:{low,medium,high}`, `team:{name}`
+- Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
+- Owners: Issue assignees
+- Plan: Issue body (markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
+- Feature ID: Issue number (integer)
+- CLI: `gh issue list --repo No-Box-Dev/gitpulse --label feature`
+
+**D1 config (sprint, people, settings, todos):**
 - API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
 - API helpers: `src/lib/config-repo.ts` — `fetch<X>()` / `save<X>()` using `apiGet`/`apiPut`
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
-**`.gitpulse` repo (plans only, readable by Claude Code via `gh api`):**
-- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchPlanFile()`, `planFilePath()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`
-- Feature plans: `plans/PLAN-{featureId}.md` (e.g. `PLAN-feat-1739482930123.md`)
+**`.gitpulse` repo (todo plans only):**
+- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
 - Todo plans: `plans/TODO-{todoId}.md` (e.g. `TODO-a1b2c3d4-uuid.md`)
-- Repo structure: `CLAUDE.md`, `plans/PLAN-*.md`, `plans/TODO-*.md`
 - CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
 
 ### API Routes (Cloudflare Pages Functions)
@@ -87,10 +94,10 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 ### Active Tabs (visible in tab bar)
 
 #### Sprint Board (`sprint` tab)
-Sprint config + feature cards. Features have owners, effort, priority, status. Drag-and-drop between sprints.
+Sprint config + feature cards backed by GitHub Issues (label: `feature`). Features have owners, effort, priority, status (encoded as labels), and implementation plans (issue body with markdown + `## Tasks` subtask checkboxes). Drag-and-drop between status columns (Plan/Demo/Production). Detail modal renders plan as markdown, shows interactive task list with checkboxes and per-task assignees.
 
 #### Backlog (`backlog` tab)
-Future features not yet assigned to a sprint.
+Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
 
 #### Issues (`issues` tab)
 Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo (searchable), label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
@@ -99,7 +106,7 @@ Server-side paginated view of open + closed issues (closed since sprint start). 
 Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 #### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature, a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
+Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature (GitHub Issue number stored as string in `featureId`), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
 
 ### Disabled Tabs (commented out in TabBar.tsx, components exist)
 

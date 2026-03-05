@@ -3,8 +3,6 @@ import { useAuth } from "@/lib/auth";
 import {
   fetchSprint,
   saveSprint,
-  fetchFeatures,
-  saveFeatures,
   fetchPeople,
   savePeople,
   fetchSettings,
@@ -14,7 +12,16 @@ import {
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
-import type { SprintConfig, Feature, Person, OrgSettings, Todo } from "@/lib/types";
+import { apiGet } from "@/lib/api";
+import {
+  fetchFeatures as ghFetchFeatures,
+  createFeature as ghCreateFeature,
+  updateFeature as ghUpdateFeature,
+  deleteFeature as ghDeleteFeature,
+  migrateFeatures as ghMigrateFeatures,
+} from "@/lib/github-features";
+import type { LegacyFeature } from "@/lib/github-features";
+import type { SprintConfig, Feature, FeatureStatus, Effort, Person, OrgSettings, Todo } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -39,7 +46,7 @@ export function useFeatures() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["features", selectedOrg],
-    queryFn: fetchFeatures,
+    queryFn: () => ghFetchFeatures(selectedOrg!),
     enabled: !!selectedOrg,
   });
 }
@@ -62,15 +69,51 @@ export function useSettings() {
   });
 }
 
-export function useSaveFeatures() {
+export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (features: Feature[]) => saveFeatures(features),
-    onMutate: async (features) => {
+    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort: Effort; team?: string; priority?: Priority; owners?: string[]; plan?: string }) =>
+      ghCreateFeature(selectedOrg!, args.title, args),
+    onSuccess: (newFeature) => {
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old ? [...old, newFeature] : [newFeature],
+      );
+    },
+  });
+}
+
+export function useUpdateFeature() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (updated: Feature) => ghUpdateFeature(selectedOrg!, updated),
+    onMutate: async (updated) => {
       await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
       const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
-      qc.setQueryData(["features", selectedOrg], features);
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old?.map((f) => (f.id === updated.id ? updated : f)) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
+  });
+}
+
+export function useDeleteFeature() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => ghDeleteFeature(selectedOrg!, id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
+      const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old?.filter((f) => f.id !== id) ?? [],
+      );
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -172,6 +215,33 @@ export function useCreateConfigRepo() {
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
+    },
+  });
+}
+
+// ---------- Migration ----------
+
+export function useLegacyFeatures() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["legacyFeatures", selectedOrg],
+    queryFn: async () => {
+      const data = await apiGet<LegacyFeature[] | null>("/api/config/features");
+      return data ?? [];
+    },
+    enabled: !!selectedOrg,
+    staleTime: Infinity,
+  });
+}
+
+export function useMigrateFeatures() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { legacy: LegacyFeature[]; onProgress?: (done: number, total: number) => void }) =>
+      ghMigrateFeatures(selectedOrg!, args.legacy, args.onProgress),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
     },
   });
 }

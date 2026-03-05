@@ -25,7 +25,7 @@ describe("SprintIssuesTable", () => {
 
   it("shows empty state when no issues", () => {
     render(<SprintIssuesTable openIssues={[]} closedIssues={[]} isLoading={false} />);
-    expect(screen.getByText("No issues found")).toBeInTheDocument();
+    expect(screen.getByText("No open issues found")).toBeInTheDocument();
   });
 
   it("renders open issue row", () => {
@@ -37,17 +37,17 @@ describe("SprintIssuesTable", () => {
     expect(screen.getByText("alice")).toBeInTheDocument();
   });
 
-  it("shows open count in header", () => {
+  it("shows open count in toggle button", () => {
     const issues = [makeIssue(), makeIssue({ id: 2, number: 43 })];
     render(<SprintIssuesTable openIssues={issues} closedIssues={[]} isLoading={false} />);
-    expect(screen.getByText("2 open")).toBeInTheDocument();
+    expect(screen.getByText("Open (2)")).toBeInTheDocument();
   });
 
-  it("renders closed section separator", () => {
+  it("shows closed count in toggle button", () => {
     const open = [makeIssue()];
     const closed = [makeIssue({ id: 2, number: 43, state: "closed", closed_at: "2026-02-10T00:00:00Z" })];
     render(<SprintIssuesTable openIssues={open} closedIssues={closed} isLoading={false} />);
-    expect(screen.getByText("Closed this sprint")).toBeInTheDocument();
+    expect(screen.getByText("Closed (1)")).toBeInTheDocument();
   });
 
   it("shows dash for unassigned issues", () => {
@@ -57,7 +57,6 @@ describe("SprintIssuesTable", () => {
   });
 
   it("shows age in days", () => {
-    // Created 14 days ago from a fixed date
     const issue = makeIssue({ created_at: new Date(Date.now() - 14 * 86400000).toISOString() });
     render(<SprintIssuesTable openIssues={[issue]} closedIssues={[]} isLoading={false} />);
     expect(screen.getByText("14d")).toBeInTheDocument();

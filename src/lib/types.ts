@@ -84,7 +84,7 @@ export interface SprintConfig {
 }
 
 export interface Feature {
-  id: string;
+  id: number;
   title: string;
   team?: string;
   owners: string[];
@@ -92,6 +92,8 @@ export interface Feature {
   sprint: number | null;
   effort: Effort;
   priority?: Priority;
+  plan?: string;
+  url?: string;
 }
 
 export interface Person {

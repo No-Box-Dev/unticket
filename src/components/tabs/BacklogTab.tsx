@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSprint, useFeatures, usePeople, useSaveFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
@@ -31,7 +31,9 @@ export function BacklogTab() {
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
-  const saveFeatures = useSaveFeatures();
+  const createFeatureMut = useCreateFeature();
+  const updateFeatureMut = useUpdateFeature();
+  const deleteFeatureMut = useDeleteFeature();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
 
@@ -51,30 +53,23 @@ export function BacklogTab() {
   );
 
   const updateFeature = (updated: Feature) => {
-    const all = features ?? [];
-    const next = all.map((f) => (f.id === updated.id ? updated : f));
-    saveFeatures.mutate(next);
+    updateFeatureMut.mutate(updated);
     if (detailFeature?.id === updated.id) {
       setDetailFeature(updated);
     }
   };
 
-  const deleteFeature = (id: string) => {
-    const all = features ?? [];
-    saveFeatures.mutate(all.filter((f) => f.id !== id));
+  const deleteFeature = (id: number) => {
+    deleteFeatureMut.mutate(id);
   };
 
   const addFeature = (title: string) => {
-    const all = features ?? [];
-    const newFeature: Feature = {
-      id: `feat-${Date.now()}`,
+    createFeatureMut.mutate({
       title,
-      owners: [],
       status: "future",
       sprint: null,
       effort: "medium",
-    };
-    saveFeatures.mutate([...all, newFeature]);
+    });
   };
 
   return (
