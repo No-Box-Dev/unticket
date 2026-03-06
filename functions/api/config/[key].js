@@ -1,6 +1,6 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 
-const VALID_KEYS = ["sprint", "features", "people", "settings", "todos"];
+const VALID_KEYS = ["sprint", "features", "people", "settings", "todos", "agentRules"];
 
 const DEFAULTS = {
   sprint: null,
@@ -8,6 +8,7 @@ const DEFAULTS = {
   people: [],
   settings: null,
   todos: [],
+  agentRules: [],
 };
 
 // GET /api/config/:key
