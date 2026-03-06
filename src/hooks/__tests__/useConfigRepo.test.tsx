@@ -41,6 +41,7 @@ const authValue = {
   selectedOrg: "my-org",
   user: { login: "alice", avatar_url: "", name: null },
   isLoading: false,
+  authError: null,
   authMode: "oauth" as const,
   loginWithToken: vi.fn(),
   loginWithOAuth: vi.fn(),
