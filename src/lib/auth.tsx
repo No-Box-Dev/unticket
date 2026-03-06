@@ -17,6 +17,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  authError: string | null;
   authMode: "oauth" | "pat";
   loginWithToken: (token: string) => Promise<void>;
   loginWithOAuth: () => void;
@@ -26,6 +27,15 @@ interface AuthContextType {
 }
 
 const AUTH_TIMEOUT_MS = 10_000;
+
+function isRateLimitError(err: unknown): boolean {
+  if (err instanceof Error) {
+    const status = (err as any).status as number | undefined;
+    if (status === 403 || status === 429) return true;
+    if (err.message.toLowerCase().includes("rate limit")) return true;
+  }
+  return false;
+}
 
 /** Race fetchUser against a timeout so the app never hangs on a bad token. */
 function fetchUserWithTimeout(): Promise<User> {
@@ -42,6 +52,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<string | null>(
     localStorage.getItem("gp_org"),
   );
@@ -69,9 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
-        .catch(() => {
-          localStorage.removeItem("gp_token");
-          resetOctokit();
+        .catch((err) => {
+          if (isRateLimitError(err)) {
+            setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
+          } else {
+            localStorage.removeItem("gp_token");
+            resetOctokit();
+          }
         })
         .finally(() => setIsLoading(false));
       return;
@@ -98,9 +113,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
-        .catch(() => {
-          localStorage.removeItem("gp_token");
-          resetOctokit();
+        .catch((err) => {
+          if (isRateLimitError(err)) {
+            setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
+          } else {
+            localStorage.removeItem("gp_token");
+            resetOctokit();
+          }
         })
         .finally(() => setIsLoading(false));
     } else {
@@ -142,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
+        authError,
         authMode,
         loginWithToken,
         loginWithOAuth,

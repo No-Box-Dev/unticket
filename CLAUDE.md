@@ -122,4 +122,4 @@ Recent activity feed across repos.
 ### Other Features
 
 #### Settings (header button, not a tab)
-Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state.
+Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle.

@@ -6,7 +6,7 @@ import { OrgPickerPage } from "@/pages/OrgPickerPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 
 export function App() {
-  const { user, isLoading, selectedOrg, setSelectedOrg } = useAuth();
+  const { user, isLoading, authError, selectedOrg, setSelectedOrg } = useAuth();
   const { data: orgs, isLoading: orgsLoading } = useOrgs();
 
   // Validate stored org is an actual org (not personal account)
@@ -27,6 +27,22 @@ export function App() {
       setSelectedOrg(orgLogins[0]);
     }
   }, [user, orgs, selectedOrg, setSelectedOrg]);
+
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center space-y-3 max-w-sm mx-auto px-4">
+          <div className="text-amber-600 text-sm font-medium">{authError}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || (user && orgsLoading)) {
     return (
