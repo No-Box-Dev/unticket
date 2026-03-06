@@ -1,5 +1,5 @@
 import { getOctokit } from "./github";
-import { apiGet } from "./api";
+import { apiGet, apiPut } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority } from "./types";
 
 const REPO = ".gitpulse";
@@ -257,6 +257,9 @@ export async function migrateFeatures(
     created++;
     onProgress?.(created, legacy.length);
   }
+
+  // Clear legacy D1 features so migration banner doesn't reappear
+  await apiPut("/api/config/features", []);
 
   return created;
 }

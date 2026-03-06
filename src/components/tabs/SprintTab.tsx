@@ -167,7 +167,8 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
 
   const showMigrationBanner = !migrateDismissed
     && !migrateMut.isSuccess
-    && (legacyFeatures?.length ?? 0) > 0;
+    && (legacyFeatures?.length ?? 0) > 0
+    && (features?.length ?? 0) === 0;
 
   return (
     <div className="space-y-4 pb-8">
