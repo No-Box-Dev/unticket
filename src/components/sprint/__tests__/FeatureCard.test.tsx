@@ -5,7 +5,7 @@ import { FeatureCard } from "../FeatureCard";
 import type { Feature } from "@/lib/types";
 
 const baseFeature: Feature = {
-  id: "feat-1",
+  id: 1,
   title: "Test Feature",
   team: "Engineering",
   owners: [],
@@ -53,7 +53,7 @@ describe("FeatureCard", () => {
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} />);
     await userEvent.click(screen.getByText("Delete"));
-    expect(onDelete).toHaveBeenCalledWith("feat-1");
+    expect(onDelete).toHaveBeenCalledWith(1);
   });
 
   it("shows Backlog button in sprint mode", () => {
