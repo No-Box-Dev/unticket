@@ -50,6 +50,16 @@ export async function saveTodos(todos: Todo[]) {
   await apiPut("/api/config/todos", todos);
 }
 
+// Agent Rules
+export async function fetchAgentRules(): Promise<string[]> {
+  const data = await apiGet<string[]>("/api/config/agentRules");
+  return data ?? [];
+}
+
+export async function saveAgentRules(rules: string[]) {
+  await apiPut("/api/config/agentRules", rules);
+}
+
 // Config repo management — D1 is always available
 export async function ensureConfigRepo(): Promise<boolean> {
   return true;
