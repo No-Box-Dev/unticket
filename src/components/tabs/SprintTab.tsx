@@ -179,14 +179,14 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
             <p className="text-sm text-amber-800">
               {migrateProgress
                 ? `Migrating features... (${migrateProgress.done}/${migrateProgress.total})`
-                : `${legacyFeatures.length} feature${legacyFeatures.length === 1 ? "" : "s"} found in D1. Migrate to GitHub Issues?`}
+                : `${legacyFeatures!.length} feature${legacyFeatures!.length === 1 ? "" : "s"} found in D1. Migrate to GitHub Issues?`}
             </p>
           </div>
           {!migrateMut.isPending && (
             <button
               onClick={() => {
                 migrateMut.mutate({
-                  legacy: legacyFeatures,
+                  legacy: legacyFeatures!,
                   onProgress: (done, total) => setMigrateProgress({ done, total }),
                 });
               }}
