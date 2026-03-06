@@ -2,7 +2,7 @@ import { getOctokit } from "./github";
 import { apiGet } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority } from "./types";
 
-const REPO = "gitpulse";
+const REPO = ".gitpulse";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 const EFFORT_PREFIX = "effort:";
