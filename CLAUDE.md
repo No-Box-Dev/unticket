@@ -35,15 +35,15 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 
 ### Config System (Hybrid: D1 + GitHub Issues + .gitpulse)
 
-**Features as GitHub Issues (on `No-Box-Dev/gitpulse` repo):**
+**Features as GitHub Issues (on `{org}/.gitpulse` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
 - Label scheme: `feature` (marker), `status:{plan,demo,production,future}`, `effort:{low,medium,high}`, `priority:{low,medium,high}`, `team:{name}`
 - Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
 - Owners: Issue assignees
-- Plan: Issue body (markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
+- Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
 - Feature ID: Issue number (integer)
-- CLI: `gh issue list --repo No-Box-Dev/gitpulse --label feature`
+- CLI: `gh issue list --repo {org}/.gitpulse --label feature`
 
 **D1 config (sprint, people, settings, todos):**
 - API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
@@ -51,7 +51,7 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
-**`.gitpulse` repo (todo plans only):**
+**`.gitpulse` repo (features as issues + todo plans):**
 - `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
 - Todo plans: `plans/TODO-{todoId}.md` (e.g. `TODO-a1b2c3d4-uuid.md`)
 - CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
