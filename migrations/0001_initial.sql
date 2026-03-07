@@ -1,12 +1,12 @@
 -- Organizations
-CREATE TABLE orgs (
+CREATE TABLE IF NOT EXISTS orgs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   github_login TEXT UNIQUE NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
 -- User sessions (for server-side GitHub calls)
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   github_login TEXT NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE sessions (
 );
 
 -- Cached repos
-CREATE TABLE repos (
+CREATE TABLE IF NOT EXISTS repos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   name TEXT NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE repos (
 );
 
 -- Pull requests (cached)
-CREATE TABLE pull_requests (
+CREATE TABLE IF NOT EXISTS pull_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   repo TEXT NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE pull_requests (
 );
 
 -- Issues (cached)
-CREATE TABLE issues (
+CREATE TABLE IF NOT EXISTS issues (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   repo TEXT NOT NULL,
@@ -68,7 +68,7 @@ CREATE TABLE issues (
 );
 
 -- Sync tracking
-CREATE TABLE sync_state (
+CREATE TABLE IF NOT EXISTS sync_state (
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   resource TEXT NOT NULL,
   last_synced TEXT NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE sync_state (
 );
 
 -- Config (flexible JSON storage)
-CREATE TABLE config (
+CREATE TABLE IF NOT EXISTS config (
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   key TEXT NOT NULL,
   data TEXT NOT NULL,
@@ -86,7 +86,7 @@ CREATE TABLE config (
 );
 
 -- Members (cached)
-CREATE TABLE members (
+CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   login TEXT NOT NULL,
