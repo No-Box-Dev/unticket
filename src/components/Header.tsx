@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin } from "@/hooks/useGitHub";
-import { LogOut, ArrowLeftRight, Settings, Shield } from "lucide-react";
+import { LogOut, ArrowLeftRight, Shield } from "lucide-react";
 
 interface HeaderProps {
   onOpenSettings: () => void;
