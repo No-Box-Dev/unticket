@@ -160,10 +160,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 href={draft.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="View issue on GitHub"
                 className="shrink-0 text-stone-400 hover:text-brand flex items-center gap-1 text-xs"
                 title="View issue on GitHub"
               >
-                <ExternalLink size={14} />
+                <ExternalLink size={14} aria-hidden="true" />
               </a>
             )}
           </div>
