@@ -21,6 +21,8 @@ interface InsightsTabProps {
 type View = "team" | "individual";
 
 const RANGE_OPTIONS = [
+  { label: "1w", weeks: 1 },
+  { label: "2w", weeks: 2 },
   { label: "1m", weeks: 4 },
   { label: "10w", weeks: 10 },
   { label: "6m", weeks: 26 },
