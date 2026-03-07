@@ -182,6 +182,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
           <div className="flex items-center bg-stone-100 rounded-full p-0.5">
             <button
               onClick={() => setView("team")}
+              aria-pressed={view === "team"}
               className={cn(
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 view === "team" ? "bg-white text-stone-800 shadow-sm" : "text-stone-500",
@@ -191,6 +192,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
             </button>
             <button
               onClick={() => setView("individual")}
+              aria-pressed={view === "individual"}
               className={cn(
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 view === "individual" ? "bg-white text-stone-800 shadow-sm" : "text-stone-500",
