@@ -44,11 +44,11 @@ export function DashboardPage() {
     [repos],
   );
 
-  // Auto-sync from GitHub when data is stale
+  // Auto-sync from GitHub when data is stale (skip if last attempt failed)
   const { data: syncStatus } = useSyncStatus();
-  const { mutate: sync, isPending: isSyncing } = useTriggerSync();
+  const { mutate: sync, isPending: isSyncing, isError: syncFailed } = useTriggerSync();
   useEffect(() => {
-    if (syncStatus?.isStale && !isSyncing) {
+    if (syncStatus?.isStale && !isSyncing && !syncFailed) {
       sync();
     }
   }, [syncStatus?.isStale, isSyncing, sync]);
