@@ -232,6 +232,56 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   await setSyncState(db, orgId, "members");
 }
 
+// ---------- Sync Features (.gitpulse repo issues) ----------
+
+export async function syncFeatures(db, token, orgId, orgLogin) {
+  const issues = await fetchAllPages(
+    token,
+    `https://api.github.com/repos/${orgLogin}/.gitpulse/issues`,
+    { labels: "feature", state: "all", sort: "updated", direction: "desc" }
+  );
+
+  // Filter out PRs (the issues endpoint can include them)
+  const features = issues.filter((i) => !i.pull_request);
+
+  const stmt = db.prepare(
+    `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(org_id, number) DO UPDATE SET
+       title = excluded.title,
+       state = excluded.state,
+       body = excluded.body,
+       assignees_json = excluded.assignees_json,
+       labels_json = excluded.labels_json,
+       milestone_title = excluded.milestone_title,
+       html_url = excluded.html_url,
+       updated_at = excluded.updated_at`
+  );
+
+  for (let i = 0; i < features.length; i += 50) {
+    const batch = features.slice(i, i + 50);
+    await db.batch(
+      batch.map((f) =>
+        stmt.bind(
+          orgId,
+          f.number,
+          f.title,
+          f.state,
+          f.body ?? "",
+          JSON.stringify((f.assignees ?? []).map((a) => ({ login: a.login }))),
+          JSON.stringify((f.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
+          f.milestone?.title ?? null,
+          f.html_url,
+          f.created_at,
+          f.updated_at
+        )
+      )
+    );
+  }
+
+  await setSyncState(db, orgId, "features");
+}
+
 // ---------- Migrate .gitpulse config ----------
 
 export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
@@ -294,6 +344,7 @@ export async function syncInit(db, token, orgId, orgLogin) {
   await migrateGitPulseConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
+  await syncFeatures(db, token, orgId, orgLogin);
 
   const repoRows = await db
     .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")

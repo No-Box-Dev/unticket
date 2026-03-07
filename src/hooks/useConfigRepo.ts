@@ -15,7 +15,7 @@ import {
   createConfigRepo,
 } from "@/lib/config-repo";
 import {
-  fetchFeatures as ghFetchFeatures,
+  fetchFeaturesFromD1,
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
@@ -56,7 +56,7 @@ export function useFeatures() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["features", selectedOrg],
-    queryFn: () => ghFetchFeatures(selectedOrg!),
+    queryFn: fetchFeaturesFromD1,
     enabled: !!selectedOrg,
   });
 }
@@ -143,6 +143,8 @@ export function useSubIssues(featureId: number) {
     queryKey: ["subIssues", selectedOrg, featureId],
     queryFn: () => fetchSubIssues(selectedOrg!, featureId),
     enabled: !!selectedOrg && featureId > 0,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 

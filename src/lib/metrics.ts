@@ -31,8 +31,43 @@ function buildWeeklyBuckets(dates: string[], weeks: number): WeeklyBucket[] {
     .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 }
 
+function getDay(date: Date): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split("T")[0];
+}
+
+function buildDailyBuckets(dates: string[], days: number): WeeklyBucket[] {
+  const now = new Date();
+  const buckets: Map<string, number> = new Map();
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    buckets.set(getDay(d), 0);
+  }
+
+  for (const dateStr of dates) {
+    const day = getDay(new Date(dateStr));
+    if (buckets.has(day)) {
+      buckets.set(day, (buckets.get(day) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(buckets.entries())
+    .map(([weekStart, value]) => ({ weekStart, value }))
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
 export function computeMetric(dates: string[], weeks = 10): MetricData {
   const history = buildWeeklyBuckets(dates, weeks);
+  const current = history.length > 0 ? history[history.length - 1].value : 0;
+  const previous = history.length > 1 ? history[history.length - 2].value : 0;
+  return { current, previous, change: current - previous, history };
+}
+
+export function computeMetricDaily(dates: string[], days: number): MetricData {
+  const history = buildDailyBuckets(dates, days);
   const current = history.length > 0 ? history[history.length - 1].value : 0;
   const previous = history.length > 1 ? history[history.length - 2].value : 0;
   return { current, previous, change: current - previous, history };
