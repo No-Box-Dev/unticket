@@ -1,6 +1,6 @@
 import { getOctokit } from "./github";
 import { apiGet, apiPut } from "./api";
-import type { Feature, FeatureStatus, Effort, Priority } from "./types";
+import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
 
 const REPO = ".gitpulse";
 const FEATURE_LABEL = "feature";
@@ -22,6 +22,38 @@ const FEATURE_LABELS = [
   { name: "priority:medium", color: "F97316", description: "Medium priority" },
   { name: "priority:high", color: "EF4444", description: "High priority" },
 ];
+
+// ---------- Metadata (hidden in issue body) ----------
+
+const METADATA_RE = /\n?<!-- gitpulse:metadata\n([\s\S]*?)\n-->\s*$/;
+
+interface FeatureMetadata {
+  statusHistory?: StatusHistoryEntry[];
+}
+
+function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
+  const match = body.match(METADATA_RE);
+  if (!match) return { content: body, metadata: {} };
+  try {
+    const metadata = JSON.parse(match[1]) as FeatureMetadata;
+    return { content: body.slice(0, match.index!), metadata };
+  } catch {
+    return { content: body, metadata: {} };
+  }
+}
+
+function serializeMetadata(content: string, metadata: FeatureMetadata): string {
+  const hasData = metadata.statusHistory && metadata.statusHistory.length > 0;
+  if (!hasData) return content;
+  return `${content}\n\n<!-- gitpulse:metadata\n${JSON.stringify(metadata)}\n-->`;
+}
+
+export function withStatusTransition(feature: Feature, newStatus: FeatureStatus): Feature {
+  if (feature.status === newStatus) return feature;
+  const history = [...(feature.statusHistory ?? [])];
+  history.push({ status: newStatus, timestamp: new Date().toISOString() });
+  return { ...feature, status: newStatus, statusHistory: history };
+}
 
 // ---------- Helpers ----------
 
@@ -54,6 +86,9 @@ function issueToFeature(issue: any): Feature {
   const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
 
+  const rawBody = issue.body ?? "";
+  const { content, metadata } = parseMetadata(rawBody);
+
   return {
     id: issue.number,
     title: issue.title,
@@ -63,8 +98,9 @@ function issueToFeature(issue: any): Feature {
     sprint,
     effort,
     priority,
-    plan: issue.body ?? undefined,
+    plan: content || undefined,
     url: issue.html_url,
+    statusHistory: metadata.statusHistory,
   };
 }
 
@@ -72,7 +108,7 @@ function issueToFeature(issue: any): Feature {
 
 const milestoneCache = new Map<string, number>();
 
-async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
+export async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
   const title = `Sprint ${sprintNumber}`;
   const cacheKey = `${org}/${REPO}:${title}`;
   if (milestoneCache.has(cacheKey)) return milestoneCache.get(cacheKey)!;
@@ -165,6 +201,11 @@ export async function createFeature(
     milestone = await findOrCreateMilestone(org, opts.sprint);
   }
 
+  const initialMetadata: FeatureMetadata = {
+    statusHistory: [{ status: opts.status, timestamp: new Date().toISOString() }],
+  };
+  const body = serializeMetadata(opts.plan ?? "", initialMetadata);
+
   const { data } = await ok.rest.issues.create({
     owner: org,
     repo: REPO,
@@ -172,7 +213,7 @@ export async function createFeature(
     labels,
     milestone,
     ...(opts.owners?.length ? { assignees: opts.owners } : {}),
-    ...(opts.plan ? { body: opts.plan } : {}),
+    body,
   });
 
   return issueToFeature(data);
@@ -188,12 +229,17 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
     milestone = null;
   }
 
+  const metadata: FeatureMetadata = {
+    statusHistory: updated.statusHistory,
+  };
+  const body = serializeMetadata(updated.plan ?? "", metadata);
+
   const { data } = await ok.rest.issues.update({
     owner: org,
     repo: REPO,
     issue_number: updated.id,
     title: updated.title,
-    body: updated.plan ?? "",
+    body,
     assignees: updated.owners,
     labels: buildLabels(updated),
     milestone,
@@ -210,6 +256,30 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     issue_number: issueNumber,
     state: "closed",
   });
+}
+
+// ---------- Milestone management ----------
+
+export async function closeMilestone(org: string, sprintNumber: number): Promise<void> {
+  const ok = getOctokit();
+  const title = `Sprint ${sprintNumber}`;
+  const cacheKey = `${org}/${REPO}:${title}`;
+  const { data: milestones } = await ok.rest.issues.listMilestones({
+    owner: org,
+    repo: REPO,
+    state: "open",
+    per_page: 100,
+  });
+  const ms = milestones.find((m) => m.title === title);
+  if (ms) {
+    await ok.rest.issues.updateMilestone({
+      owner: org,
+      repo: REPO,
+      milestone_number: ms.number,
+      state: "closed",
+    });
+    milestoneCache.delete(cacheKey);
+  }
 }
 
 // ---------- Migration ----------
