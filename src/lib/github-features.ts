@@ -2,6 +2,18 @@ import { getOctokit } from "./github";
 import { apiGet, apiPut } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
 
+// D1-backed row shape returned by /api/features
+interface D1FeatureRow {
+  number: number;
+  title: string;
+  state: string;
+  body: string;
+  assignees: { login: string }[];
+  labels: { name: string; color: string }[];
+  milestone_title: string | null;
+  html_url: string | null;
+}
+
 const REPO = ".gitpulse";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
@@ -102,6 +114,26 @@ function issueToFeature(issue: any): Feature {
     url: issue.html_url,
     statusHistory: metadata.statusHistory,
   };
+}
+
+// ---------- D1-backed fetch (no GitHub API calls) ----------
+
+function d1RowToFeature(row: D1FeatureRow): Feature {
+  // Adapt D1 row to the shape issueToFeature expects
+  return issueToFeature({
+    number: row.number,
+    title: row.title,
+    body: row.body,
+    labels: row.labels,
+    assignees: row.assignees,
+    milestone: row.milestone_title ? { title: row.milestone_title } : null,
+    html_url: row.html_url,
+  });
+}
+
+export async function fetchFeaturesFromD1(): Promise<Feature[]> {
+  const rows = await apiGet<D1FeatureRow[]>("/api/features?state=open");
+  return rows.map(d1RowToFeature);
 }
 
 // ---------- Milestone cache ----------

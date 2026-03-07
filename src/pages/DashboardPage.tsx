@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useSyncStatus, useTriggerSync, useIsAdmin } from "@/hooks/useGitHub";
+import { useRepos, useSyncStatus, useTriggerSync, useIsAdmin, useRateLimit } from "@/hooks/useGitHub";
 import { Header } from "@/components/Header";
 import { TabBar } from "@/components/TabBar";
 import { SprintTab } from "@/components/tabs/SprintTab";
@@ -31,6 +31,7 @@ export function DashboardPage() {
     return () => { window.removeEventListener("gp:error", handler); clearTimeout(timer); };
   }, []);
 
+  const { data: rateLimit } = useRateLimit();
   const { data: repos } = useRepos();
   const repoNames = useMemo(
     () => repos?.map((r) => r.name) ?? [],
@@ -66,6 +67,18 @@ export function DashboardPage() {
             {error.message}
           </span>
           <span className="text-xs text-red-400 ml-2 shrink-0">dismiss</span>
+        </div>
+      )}
+      {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-1.5 flex items-center justify-between">
+          <span className="text-xs text-amber-700">
+            <span className="font-semibold">GitHub API:</span>{" "}
+            {rateLimit.remaining}/{rateLimit.limit} requests remaining
+            {" · "}resets {new Date(rateLimit.reset * 1000).toLocaleTimeString()}
+          </span>
+          {rateLimit.remaining === 0 && (
+            <span className="text-xs text-amber-600 font-medium ml-2 shrink-0">Rate limited</span>
+          )}
         </div>
       )}
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} isAdmin={isAdmin} />

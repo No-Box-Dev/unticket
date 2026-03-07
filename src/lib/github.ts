@@ -57,6 +57,25 @@ function wrapOctokitError(err: unknown): never {
   throw err;
 }
 
+export interface RateLimitInfo {
+  limit: number;
+  remaining: number;
+  reset: number; // Unix timestamp
+  used: number;
+}
+
+export async function fetchRateLimit(): Promise<RateLimitInfo> {
+  const ok = getOctokit();
+  const { data } = await ok.rest.rateLimit.get();
+  const core = data.resources.core;
+  return {
+    limit: core.limit,
+    remaining: core.remaining,
+    reset: core.reset,
+    used: core.used,
+  };
+}
+
 export async function fetchUser() {
   try {
     const ok = getOctokit();

@@ -17,7 +17,9 @@ import {
   fetchIssueLabels,
   updateIssueAssignees,
   fetchUserOrgRole,
+  fetchRateLimit,
 } from "@/lib/github";
+import type { RateLimitInfo } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 
@@ -117,7 +119,8 @@ export function useUserOrgRole() {
     queryKey: ["userOrgRole", selectedOrg],
     queryFn: () => fetchUserOrgRole(selectedOrg!),
     enabled: !!selectedOrg,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -185,6 +188,20 @@ export function useUpdateIssueAssignees() {
   });
 }
 
+// ---------- Rate limit ----------
+
+export function useRateLimit() {
+  const { selectedOrg } = useAuth();
+  return useQuery<RateLimitInfo>({
+    queryKey: ["rateLimit", selectedOrg],
+    queryFn: fetchRateLimit,
+    enabled: !!selectedOrg,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 // ---------- Sync hooks ----------
 
 export function useSyncStatus() {
@@ -212,6 +229,7 @@ export function useTriggerSync() {
       qc.invalidateQueries({ queryKey: ["allPRs", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });
     },
   });
