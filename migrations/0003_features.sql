@@ -1,5 +1,5 @@
 -- Features (cached from .gitpulse repo issues)
-CREATE TABLE features (
+CREATE TABLE IF NOT EXISTS features (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   number INTEGER NOT NULL,
