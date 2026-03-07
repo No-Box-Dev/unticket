@@ -1,23 +1,27 @@
+import { useMemo } from "react";
 import { cn } from "@/lib/cn";
 import type { TabId } from "@/lib/types";
 
-const tabs: { id: TabId; label: string }[] = [
+const baseTabs: { id: TabId; label: string }[] = [
   { id: "sprint", label: "Sprint" },
   { id: "backlog", label: "Future Features" },
-  // { id: "team", label: "Team Dashboard" },
-  // { id: "individual", label: "Individual Dashboard" },
   { id: "prs", label: "PRs" },
   { id: "issues", label: "Issues" },
-  // { id: "activity", label: "Activity" },
   { id: "todos", label: "Todos" },
 ];
 
 interface TabBarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  isAdmin?: boolean;
 }
 
-export function TabBar({ activeTab, onTabChange }: TabBarProps) {
+export function TabBar({ activeTab, onTabChange, isAdmin }: TabBarProps) {
+  const tabs = useMemo(() => {
+    const t = [...baseTabs];
+    if (isAdmin) t.push({ id: "insights", label: "Insights" });
+    return t;
+  }, [isAdmin]);
   return (
     <div className="bg-white border-b border-stone-200 px-4 sm:px-8 flex gap-0 overflow-x-auto">
       {tabs.map(({ id, label }) => (
