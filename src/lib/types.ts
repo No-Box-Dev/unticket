@@ -53,7 +53,8 @@ export type TabId =
   | "prs"
   | "issues"
   | "activity"
-  | "todos";
+  | "todos"
+  | "insights";
 
 export type TodoStatus = "backlog" | "in_progress" | "done";
 

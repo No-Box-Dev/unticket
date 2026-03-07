@@ -1,21 +1,20 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";
+import { useRepos, useSyncStatus, useTriggerSync, useIsAdmin } from "@/hooks/useGitHub";
 import { Header } from "@/components/Header";
 import { TabBar } from "@/components/TabBar";
 import { SprintTab } from "@/components/tabs/SprintTab";
 import { BacklogTab } from "@/components/tabs/BacklogTab";
-import { TeamTab } from "@/components/tabs/TeamTab";
-import { IndividualTab } from "@/components/tabs/IndividualTab";
 import { PRsTab } from "@/components/tabs/PRsTab";
 import { IssuesTab } from "@/components/tabs/IssuesTab";
-import { ActivityTab } from "@/components/tabs/ActivityTab";
 import { TodoTab } from "@/components/tabs/TodoTab";
+import { InsightsTab } from "@/components/tabs/InsightsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import type { TabId } from "@/lib/types";
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
+  const isAdmin = useIsAdmin();
   const [activeTab, setActiveTab] = useState<TabId>("sprint");
   const [showSettings, setShowSettings] = useState(false);
 
@@ -44,7 +43,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <Header onOpenSettings={() => setShowSettings(true)} />
-      <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
+      <TabBar activeTab={activeTab} onTabChange={handleTabChange} isAdmin={isAdmin} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {showSettings ? (
           <>
@@ -60,12 +59,10 @@ export function DashboardPage() {
           <>
             {activeTab === "sprint" && <SprintTab repoNames={repoNames} />}
             {activeTab === "backlog" && <BacklogTab />}
-            {activeTab === "team" && <TeamTab repoNames={repoNames} />}
-            {activeTab === "individual" && <IndividualTab repoNames={repoNames} />}
             {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
-            {activeTab === "activity" && <ActivityTab repoNames={repoNames} />}
             {activeTab === "todos" && <TodoTab />}
+            {activeTab === "insights" && <InsightsTab repoNames={repoNames} />}
           </>
         )}
       </main>
