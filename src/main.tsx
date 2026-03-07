@@ -3,9 +3,20 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth";
-import { shouldNotRetry } from "@/lib/api";
+import { shouldNotRetry, broadcastError } from "@/lib/api";
 import { App } from "@/App";
 import "./index.css";
+
+// Global handlers for uncaught errors
+window.addEventListener("unhandledrejection", (e) => {
+  const err = e.reason;
+  const msg = err instanceof Error ? err.message : String(err);
+  broadcastError(msg);
+});
+
+window.addEventListener("error", (e) => {
+  broadcastError(e.message);
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

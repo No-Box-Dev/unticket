@@ -7,6 +7,7 @@ import {
 } from "react";
 import { fetchUser, resetOctokit } from "@/lib/github";
 import { getAuthMode, getOAuthLoginUrl } from "@/lib/oauth-proxy";
+import { broadcastError } from "@/lib/api";
 
 interface User {
   login: string;
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isRateLimitError(err)) {
             setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
           } else {
+            broadcastError(err instanceof Error ? err.message : "Authentication failed");
             localStorage.removeItem("gp_token");
             resetOctokit();
           }
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isRateLimitError(err)) {
             setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
           } else {
+            broadcastError(err instanceof Error ? err.message : "Authentication failed");
             localStorage.removeItem("gp_token");
             resetOctokit();
           }

@@ -3,7 +3,9 @@ import { useAuth } from "@/lib/auth";
 import { useTodos, useSaveTodos, useFeatures } from "@/hooks/useConfigRepo";
 import { useRepos } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
+import { broadcastError } from "@/lib/api";
 import { Plus, X, Trash2, GitBranch, ExternalLink, FileText, Pencil, Save, Loader2 } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Todo, TodoStatus, Feature, FeatureStatus, RepoInfo } from "@/lib/types";
@@ -175,8 +177,8 @@ export function TodoTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-stone-400">
-        Loading...
+      <div className="flex items-center justify-center py-20">
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -444,7 +446,7 @@ function TodoDetailModal({
     setPlanLoading(true);
     fetchTodoPlanFile(org, todo.id)
       .then((result) => { if (!cancelled) setPlan(result?.content ?? null); })
-      .catch(() => { if (!cancelled) setPlan(null); })
+      .catch((err) => { if (!cancelled) { setPlan(null); broadcastError(err instanceof Error ? err.message : "Failed to load plan"); } })
       .finally(() => { if (!cancelled) setPlanLoading(false); });
     return () => { cancelled = true; };
   }, [org, todo.id]);
@@ -579,8 +581,8 @@ function TodoDetailModal({
             </div>
 
             {planLoading && (
-              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
-                Loading plan...
+              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-8 flex justify-center">
+                <Spinner />
               </div>
             )}
 

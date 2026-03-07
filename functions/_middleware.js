@@ -22,13 +22,12 @@ async function validateGitHubToken(token) {
   });
 
   if (!res.ok) {
-    // Distinguish rate limiting from a genuinely invalid token.
-    // Secondary rate limits return 403 with Retry-After but non-zero remaining.
+    // 403 from GitHub /user is almost always rate limiting, never an invalid
+    // token (invalid tokens get 401). Treat all 403s as rate-limited to avoid
+    // accidentally force-logging the user out.
     const remaining = res.headers.get("X-RateLimit-Remaining");
     const retryAfter = res.headers.get("Retry-After");
-    const isRateLimited =
-      res.status === 429 ||
-      (res.status === 403 && (remaining === "0" || retryAfter !== null));
+    const isRateLimited = res.status === 429 || res.status === 403;
     if (isRateLimited) {
       const resetEpoch = res.headers.get("X-RateLimit-Reset");
       return { error: "rate_limited", resetEpoch, retryAfter };
