@@ -8,9 +8,10 @@ interface NewSprintModalProps {
   onConfirm: (newSprint: SprintConfig) => void;
   onClose: () => void;
   isPending: boolean;
+  failedCount?: number;
 }
 
-export function NewSprintModal({ currentSprint, features, onConfirm, onClose, isPending }: NewSprintModalProps) {
+export function NewSprintModal({ currentSprint, features, onConfirm, onClose, isPending, failedCount }: NewSprintModalProps) {
   const nextNumber = currentSprint.number + 1;
 
   // Compute default dates: start = day after current end, same duration
@@ -33,8 +34,11 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
   const productionCount = sprintFeatures.filter((f) => f.status === "production").length;
   const movingCount = sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length;
 
+  const isDateRangeValid = !startDate || !endDate || startDate <= endDate;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!isDateRangeValid) return;
     onConfirm({
       number: nextNumber,
       name,
@@ -119,6 +123,9 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
               />
             </div>
           </div>
+          {!isDateRangeValid && (
+            <p className="text-xs text-red-500">End date must be after start date.</p>
+          )}
 
           {/* Focus */}
           <div>
@@ -132,11 +139,18 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
             />
           </div>
 
+          {/* Failure warning */}
+          {failedCount != null && failedCount > 0 && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {failedCount} feature{failedCount === 1 ? "" : "s"} failed to move. You can close this modal and retry, or check the GitHub issues manually.
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2">
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || !isDateRangeValid}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {isPending ? (

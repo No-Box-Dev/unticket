@@ -108,7 +108,7 @@ function issueToFeature(issue: any): Feature {
 
 const milestoneCache = new Map<string, number>();
 
-async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
+export async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
   const title = `Sprint ${sprintNumber}`;
   const cacheKey = `${org}/${REPO}:${title}`;
   if (milestoneCache.has(cacheKey)) return milestoneCache.get(cacheKey)!;

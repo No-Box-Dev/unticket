@@ -23,6 +23,7 @@ import {
   migrateFeatures as ghMigrateFeatures,
   fetchLegacyFeatures,
   closeMilestone,
+  findOrCreateMilestone,
 } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo } from "@/lib/types";
@@ -269,13 +270,10 @@ export function useAdvanceSprint() {
       const { newSprint, oldSprintNumber, features, onProgress } = args;
       const org = selectedOrg!;
 
-      // 1. Save new sprint config
-      await saveSprint(newSprint);
+      // 1. Ensure the new milestone exists on GitHub first
+      await findOrCreateMilestone(org, newSprint.number);
 
-      // 2. Close old milestone
-      await closeMilestone(org, oldSprintNumber);
-
-      // 3. Move plan/demo features to new sprint
+      // 2. Move plan/demo features to new sprint
       const toMove = features.filter(
         (f) => f.sprint === oldSprintNumber && (f.status === "plan" || f.status === "demo"),
       );
@@ -290,6 +288,13 @@ export function useAdvanceSprint() {
         done++;
         onProgress?.(done, toMove.length);
       }
+
+      // 3. Only persist sprint config and close old milestone if all features moved
+      if (failed.length === 0) {
+        await saveSprint(newSprint);
+        await closeMilestone(org, oldSprintNumber);
+      }
+
       return { failed };
     },
     onSuccess: () => {

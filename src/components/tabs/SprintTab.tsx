@@ -50,6 +50,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [showNewSprint, setShowNewSprint] = useState(false);
+  const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
@@ -354,8 +355,10 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           currentSprint={sprint}
           features={features ?? []}
           isPending={advanceSprintMut.isPending}
-          onClose={() => setShowNewSprint(false)}
+          failedCount={advanceFailedCount}
+          onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
           onConfirm={(newSprint) => {
+            setAdvanceFailedCount(0);
             advanceSprintMut.mutate(
               {
                 newSprint,
@@ -363,7 +366,13 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
                 features: features ?? [],
               },
               {
-                onSuccess: () => setShowNewSprint(false),
+                onSuccess: (result) => {
+                  if (result.failed.length === 0) {
+                    setShowNewSprint(false);
+                  } else {
+                    setAdvanceFailedCount(result.failed.length);
+                  }
+                },
               },
             );
           }}
