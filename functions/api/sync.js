@@ -53,7 +53,9 @@ export async function onRequestPost(context) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
-    return errorResponse(message, 500);
+    const stack = e instanceof Error ? e.stack : undefined;
+    console.error("[sync] error:", message, stack);
+    return errorResponse(`${message}${cursor ? ` (repo: ${cursor})` : ""}`, 500);
   }
 }
 
