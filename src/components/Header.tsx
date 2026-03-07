@@ -35,6 +35,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
           >
             <span className="text-sm text-stone-700">
               {user.name ?? user.login}
+              {isAdmin && <span className="ml-1 text-xs text-brand/70">(admin)</span>}
             </span>
           </button>
         )}
