@@ -1,4 +1,5 @@
 import { GitPullRequest, CircleDot, FolderGit2, Clock } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { StatCard } from "@/components/StatCard";
 
 function daysAgo(date: string): number {
@@ -55,7 +56,7 @@ export function OverviewTab({ repos, prs, issues, prsLoading, issuesLoading }: O
         </div>
         <div className="divide-y divide-stone-100">
           {prsLoading ? (
-            <div className="px-4 py-8 text-center text-stone-400 text-sm">Loading...</div>
+            <div className="px-4 py-8 flex justify-center"><Spinner /></div>
           ) : prs.length === 0 ? (
             <div className="px-4 py-8 text-center text-stone-400 text-sm">No open PRs</div>
           ) : (
@@ -96,7 +97,7 @@ export function OverviewTab({ repos, prs, issues, prsLoading, issuesLoading }: O
         </div>
         <div className="divide-y divide-stone-100">
           {issuesLoading ? (
-            <div className="px-4 py-8 text-center text-stone-400 text-sm">Loading...</div>
+            <div className="px-4 py-8 flex justify-center"><Spinner /></div>
           ) : issues.length === 0 ? (
             <div className="px-4 py-8 text-center text-stone-400 text-sm">No open issues</div>
           ) : (

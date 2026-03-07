@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useQueryClient } from "@tanstack/react-query";
@@ -367,8 +368,8 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <tbody className="divide-y divide-stone-50">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-stone-400">
-                  Loading pull requests...
+                <td colSpan={7} className="px-4 py-8 text-center">
+                  <Spinner className="mx-auto" />
                 </td>
               </tr>
             ) : sorted.length === 0 ? (

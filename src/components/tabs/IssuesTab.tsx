@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useOrgMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { AssignDropdown } from "@/components/sprint/AssignDropdown";
@@ -375,8 +376,8 @@ export function IssuesTab(_props: IssuesTabProps) {
           <tbody className="divide-y divide-stone-50">
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-stone-400">
-                  Loading issues...
+                <td colSpan={9} className="px-4 py-8 text-center">
+                  <Spinner className="mx-auto" />
                 </td>
               </tr>
             ) : openTotal === 0 && closedTotal === 0 ? (

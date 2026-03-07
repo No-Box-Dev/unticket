@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import { apiGet, apiPost, ApiError } from "./api";
+import { apiGet, apiPost, ApiError, broadcastError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -53,8 +53,9 @@ function wrapOctokitError(err: unknown): never {
     if (status) {
       throw new ApiError(err.message, status);
     }
+    throw new ApiError(err.message, 0);
   }
-  throw err;
+  throw new ApiError(String(err), 0);
 }
 
 export interface RateLimitInfo {
@@ -180,11 +181,16 @@ export async function triggerSyncWithProgress(
 
     onProgress({ phase: "done", synced, total });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Sync failed";
+    // ApiError already broadcasts; for other errors, broadcast manually
+    if (!(err instanceof ApiError)) {
+      broadcastError(msg);
+    }
     onProgress({
       phase: "error",
       synced: 0,
       total: 0,
-      error: err instanceof Error ? err.message : "Sync failed",
+      error: msg,
     });
   }
 }
