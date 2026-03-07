@@ -12,30 +12,23 @@ import { InsightsTab } from "@/components/tabs/InsightsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import type { TabId } from "@/lib/types";
 
-interface ErrorToast {
-  id: number;
-  message: string;
-  status?: number;
-}
-
-let errorId = 0;
-
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
   const isAdmin = useIsAdmin();
   const [activeTab, setActiveTab] = useState<TabId>("sprint");
   const [showSettings, setShowSettings] = useState(false);
-  const [errors, setErrors] = useState<ErrorToast[]>([]);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
     const handler = (e: Event) => {
       const { message, status } = (e as CustomEvent).detail;
-      const id = ++errorId;
-      setErrors((prev) => [...prev.slice(-4), { id, message, status }]);
-      setTimeout(() => setErrors((prev) => prev.filter((err) => err.id !== id)), 8000);
+      setError({ message, status });
+      clearTimeout(timer);
+      timer = setTimeout(() => setError(null), 10000);
     };
     window.addEventListener("gp:error", handler);
-    return () => window.removeEventListener("gp:error", handler);
+    return () => { window.removeEventListener("gp:error", handler); clearTimeout(timer); };
   }, []);
 
   const { data: repos } = useRepos();
@@ -62,21 +55,19 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-stone-50">
-      {errors.length > 0 && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex flex-col items-center gap-1 pt-2 pointer-events-none">
-          {errors.map((err) => (
-            <div
-              key={err.id}
-              className="pointer-events-auto px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-mono shadow-lg max-w-2xl truncate cursor-pointer"
-              onClick={() => setErrors((prev) => prev.filter((e) => e.id !== err.id))}
-            >
-              {err.status && <span className="font-bold mr-2">{err.status}</span>}
-              {err.message}
-            </div>
-          ))}
+      <Header onOpenSettings={() => setShowSettings(true)} />
+      {error && (
+        <div
+          className="bg-red-50 border-b border-red-200 px-4 sm:px-8 py-1.5 flex items-center justify-between cursor-pointer"
+          onClick={() => setError(null)}
+        >
+          <span className="text-xs text-red-600 font-mono truncate">
+            {error.status && <span className="font-semibold mr-1.5">{error.status}</span>}
+            {error.message}
+          </span>
+          <span className="text-xs text-red-400 ml-2 shrink-0">dismiss</span>
         </div>
       )}
-      <Header onOpenSettings={() => setShowSettings(true)} />
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} isAdmin={isAdmin} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {showSettings ? (
