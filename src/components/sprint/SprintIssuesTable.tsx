@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { Spinner } from "@/components/Spinner";
 
 function daysAgo(date: string): number {
   return Math.floor(
@@ -75,8 +76,8 @@ export function SprintIssuesTable({ openIssues, closedIssues, isLoading, limit, 
       <div className="max-h-[400px] overflow-y-auto">
         <div className="min-w-0">
           {isLoading ? (
-            <div className="px-3 py-6 text-center text-stone-400 text-sm">
-              Loading issues...
+            <div className="px-3 py-6 flex justify-center">
+              <Spinner />
             </div>
           ) : activeIssues.length === 0 ? (
             <div className="px-3 py-6 text-center text-stone-400 text-sm">

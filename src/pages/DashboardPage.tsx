@@ -17,20 +17,6 @@ export function DashboardPage() {
   const isAdmin = useIsAdmin();
   const [activeTab, setActiveTab] = useState<TabId>("sprint");
   const [showSettings, setShowSettings] = useState(false);
-  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const handler = (e: Event) => {
-      const { message, status } = (e as CustomEvent).detail;
-      setError({ message, status });
-      clearTimeout(timer);
-      timer = setTimeout(() => setError(null), 10000);
-    };
-    window.addEventListener("gp:error", handler);
-    return () => { window.removeEventListener("gp:error", handler); clearTimeout(timer); };
-  }, []);
-
   const { data: rateLimit } = useRateLimit();
   const { data: repos } = useRepos();
   const repoNames = useMemo(
@@ -57,18 +43,6 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <Header onOpenSettings={() => setShowSettings(true)} />
-      {error && (
-        <div
-          className="bg-red-50 border-b border-red-200 px-4 sm:px-8 py-1.5 flex items-center justify-between cursor-pointer"
-          onClick={() => setError(null)}
-        >
-          <span className="text-xs text-red-600 font-mono truncate">
-            {error.status && <span className="font-semibold mr-1.5">{error.status}</span>}
-            {error.message}
-          </span>
-          <span className="text-xs text-red-400 ml-2 shrink-0">dismiss</span>
-        </div>
-      )}
       {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-1.5 flex items-center justify-between">
           <span className="text-xs text-amber-700">

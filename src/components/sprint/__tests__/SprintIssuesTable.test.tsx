@@ -19,8 +19,8 @@ const makeIssue = (overrides: Partial<any> = {}) => ({
 
 describe("SprintIssuesTable", () => {
   it("shows loading state", () => {
-    render(<SprintIssuesTable openIssues={[]} closedIssues={[]} isLoading={true} />);
-    expect(screen.getByText("Loading issues...")).toBeInTheDocument();
+    const { container } = render(<SprintIssuesTable openIssues={[]} closedIssues={[]} isLoading={true} />);
+    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
   it("shows empty state when no issues", () => {
