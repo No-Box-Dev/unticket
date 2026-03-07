@@ -263,6 +263,7 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
 export async function closeMilestone(org: string, sprintNumber: number): Promise<void> {
   const ok = getOctokit();
   const title = `Sprint ${sprintNumber}`;
+  const cacheKey = `${org}/${REPO}:${title}`;
   const { data: milestones } = await ok.rest.issues.listMilestones({
     owner: org,
     repo: REPO,
@@ -277,6 +278,7 @@ export async function closeMilestone(org: string, sprintNumber: number): Promise
       milestone_number: ms.number,
       state: "closed",
     });
+    milestoneCache.delete(cacheKey);
   }
 }
 

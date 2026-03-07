@@ -34,7 +34,7 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
   const productionCount = sprintFeatures.filter((f) => f.status === "production").length;
   const movingCount = sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length;
 
-  const isDateRangeValid = !startDate || !endDate || startDate <= endDate;
+  const isDateRangeValid = !!startDate && !!endDate && startDate <= endDate;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -123,8 +123,12 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
               />
             </div>
           </div>
-          {!isDateRangeValid && (
-            <p className="text-xs text-red-500">End date must be after start date.</p>
+          {!isDateRangeValid && (startDate || endDate) && (
+            <p className="text-xs text-red-500">
+              {!startDate || !endDate
+                ? "Both start and end dates are required."
+                : "End date must be after start date."}
+            </p>
           )}
 
           {/* Focus */}
@@ -181,5 +185,8 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
