@@ -16,6 +16,7 @@ import {
   fetchPaginatedIssues,
   fetchIssueLabels,
   updateIssueAssignees,
+  fetchUserOrgRole,
 } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
@@ -108,6 +109,21 @@ export function useAllIssues(repos: string[], since?: string) {
     queryFn: () => fetchAllIssues(since),
     enabled: !!selectedOrg && repos.length > 0,
   });
+}
+
+export function useUserOrgRole() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["userOrgRole", selectedOrg],
+    queryFn: () => fetchUserOrgRole(selectedOrg!),
+    enabled: !!selectedOrg,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useIsAdmin(): boolean {
+  const { data: role } = useUserOrgRole();
+  return role === "admin";
 }
 
 export function useOrgMembers() {

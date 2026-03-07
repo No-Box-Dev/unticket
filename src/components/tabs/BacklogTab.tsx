@@ -3,6 +3,7 @@ import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, 
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
+import { useIsAdmin } from "@/hooks/useGitHub";
 import type { Feature } from "@/lib/types";
 import { Archive, ArrowUpDown } from "lucide-react";
 
@@ -34,6 +35,7 @@ export function BacklogTab() {
   const createFeatureMut = useCreateFeature();
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
+  const isAdmin = useIsAdmin();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
 
@@ -112,6 +114,7 @@ export function BacklogTab() {
               onDelete={deleteFeature}
               onOpenDetail={setDetailFeature}
               mode="backlog"
+              isAdmin={isAdmin}
               currentSprint={sprint?.number}
             />
           ))}

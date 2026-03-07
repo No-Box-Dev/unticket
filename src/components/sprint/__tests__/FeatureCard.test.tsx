@@ -49,11 +49,16 @@ describe("FeatureCard", () => {
     expect(onOpenDetail).toHaveBeenCalledWith(baseFeature);
   });
 
-  it("Delete button calls onDelete", async () => {
+  it("Delete button calls onDelete when admin", async () => {
     const onDelete = vi.fn();
-    render(<FeatureCard {...defaultProps} onDelete={onDelete} />);
+    render(<FeatureCard {...defaultProps} onDelete={onDelete} isAdmin />);
     await userEvent.click(screen.getByText("Delete"));
     expect(onDelete).toHaveBeenCalledWith(1);
+  });
+
+  it("hides Delete button for non-admins", () => {
+    render(<FeatureCard {...defaultProps} />);
+    expect(screen.queryByText("Delete")).not.toBeInTheDocument();
   });
 
   it("shows Backlog button in sprint mode", () => {
