@@ -11,7 +11,7 @@ function buildPreamble(org: string): string {
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/.gitpulse\`](https://github.com/${org}/.gitpulse) (not this repo)
 - Each feature issue has labels for status (\`status:plan\`, \`status:demo\`, \`status:production\`), effort, and priority
 - Owners are the issue's assignees. Sprints are GitHub Milestones named "Sprint N"
-- Feature plans and subtasks live in the issue body as Markdown with a \`## Tasks\` section (\`- [ ] task @assignee\`)
+- Feature plans live in the issue body as Markdown. Tasks are GitHub sub-issues linked to the parent feature issue
 - List features: \`gh issue list --repo ${org}/.gitpulse --label feature\`
 - View a feature: \`gh issue view <number> --repo ${org}/.gitpulse\`
 

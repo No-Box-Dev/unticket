@@ -258,6 +258,100 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
   });
 }
 
+// ---------- Sub-issues ----------
+
+export interface SubIssue {
+  id: number; // global issue ID (needed for sub-issue API)
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  assignees: string[];
+  html_url: string;
+}
+
+function toSubIssue(issue: any): SubIssue {
+  return {
+    id: issue.id,
+    number: issue.number,
+    title: issue.title,
+    state: issue.state as "open" | "closed",
+    assignees: (issue.assignees ?? []).map((a: any) => a.login),
+    html_url: issue.html_url,
+  };
+}
+
+export async function fetchSubIssues(org: string, issueNumber: number): Promise<SubIssue[]> {
+  const ok = getOctokit();
+  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: issueNumber,
+    per_page: 100,
+  });
+  return (data as any[]).map(toSubIssue);
+}
+
+export async function createSubIssue(
+  org: string,
+  parentIssueNumber: number,
+  title: string,
+  assignees?: string[],
+): Promise<SubIssue> {
+  const ok = getOctokit();
+  // 1. Create a new issue
+  const { data: issue } = await ok.rest.issues.create({
+    owner: org,
+    repo: REPO,
+    title,
+    ...(assignees?.length ? { assignees } : {}),
+  });
+  // 2. Link it as sub-issue (needs global ID, not issue number)
+  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: parentIssueNumber,
+    sub_issue_id: issue.id,
+  });
+  return toSubIssue(issue);
+}
+
+export async function toggleSubIssue(org: string, subIssue: SubIssue): Promise<SubIssue> {
+  const ok = getOctokit();
+  const newState = subIssue.state === "open" ? "closed" : "open";
+  const { data } = await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: subIssue.number,
+    state: newState,
+  });
+  return toSubIssue(data);
+}
+
+export async function updateSubIssueAssignees(
+  org: string,
+  subIssueNumber: number,
+  assignees: string[],
+): Promise<SubIssue> {
+  const ok = getOctokit();
+  const { data } = await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: subIssueNumber,
+    assignees,
+  });
+  return toSubIssue(data);
+}
+
+export async function deleteSubIssue(org: string, subIssueNumber: number): Promise<void> {
+  const ok = getOctokit();
+  await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: subIssueNumber,
+    state: "closed",
+  });
+}
+
 // ---------- Milestone management ----------
 
 export async function closeMilestone(org: string, sprintNumber: number): Promise<void> {
