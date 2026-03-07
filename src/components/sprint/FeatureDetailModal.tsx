@@ -4,7 +4,7 @@ import Markdown from "react-markdown";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
-import type { Feature, Effort, Priority, StatusHistoryEntry } from "@/lib/types";
+import type { Feature, Effort, Priority } from "@/lib/types";
 
 // ---------- Task parsing ----------
 
@@ -149,12 +149,26 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-          <input
-            value={draft.title}
-            onChange={(e) => update({ title: e.target.value }, true)}
-            className="text-lg font-semibold text-stone-800 bg-transparent border-none outline-none focus:ring-0 w-full"
-          />
-          <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <input
+              value={draft.title}
+              onChange={(e) => update({ title: e.target.value }, true)}
+              className="text-lg font-semibold text-stone-800 bg-transparent border-none outline-none focus:ring-0 w-full"
+            />
+            {draft.url && (
+              <a
+                href={draft.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View issue on GitHub"
+                className="shrink-0 text-stone-400 hover:text-brand flex items-center gap-1 text-xs"
+                title="View issue on GitHub"
+              >
+                <ExternalLink size={14} aria-hidden="true" />
+              </a>
+            )}
+          </div>
+          <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer ml-2">
             <X className="w-5 h-5" />
           </button>
         </div>
