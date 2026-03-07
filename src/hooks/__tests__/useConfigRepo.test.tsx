@@ -26,6 +26,10 @@ vi.mock("@/lib/auth", () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock("@/hooks/useGitHub", () => ({
+  useIsAdmin: vi.fn(() => true),
+}));
+
 import { createConfigRepo as createConfigRepoFn } from "@/lib/config-repo";
 import { updateFeature as ghUpdateFeature, deleteFeature as ghDeleteFeature } from "@/lib/github-features";
 import { useAuth } from "@/lib/auth";

@@ -82,7 +82,8 @@ export async function fetchUserOrgRole(org: string): Promise<"admin" | "member">
     const ok = getOctokit();
     const { data } = await ok.rest.orgs.getMembershipForAuthenticatedUser({ org });
     return data.role === "admin" ? "admin" : "member";
-  } catch {
+  } catch (err) {
+    console.warn("[GitPulse] Failed to fetch org role, defaulting to member:", err);
     return "member";
   }
 }
