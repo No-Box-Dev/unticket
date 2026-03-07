@@ -108,16 +108,16 @@ Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sor
 #### Todos (`todos` tab)
 Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature (GitHub Issue number stored as string in `featureId`), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
 
-### Disabled Tabs (commented out in TabBar.tsx, components exist)
+#### Insights (`insights` tab) — admin only
+Admin-only tab (visible when `useIsAdmin()` returns true) with two views: **Team** (aggregate metrics across the org, filterable by team) and **Individual** (per-person metrics with a person selector). Four metric cards each with weekly bar chart, total count, and week-over-week trend: PRs Merged, Issues Created, Issues Solved, Features Implemented (status = production, bar chart from `statusHistory` timestamps). Replaces the old Team Dashboard and Individual Dashboard tabs. Date range selector: 1m/10w/6m/1y.
 
-#### Team Dashboard (`team` tab)
-Aggregated metrics per team — PRs, issues, activity across repos.
-
-#### Individual Dashboard (`individual` tab)
-Per-person activity dashboard with date range selector (1m/10w/6m/1y). Shows 3 bar chart cards: PRs Created (all PRs, not just merged), Issues Closed, Issues Created. Each card shows weekly bar chart, total count, and week-over-week change.
+### Disabled Tabs (components exist but not wired in TabBar/DashboardPage)
 
 #### Activity (`activity` tab)
 Recent activity feed across repos.
+
+#### Team Dashboard (`team` tab) — replaced by Insights
+#### Individual Dashboard (`individual` tab) — replaced by Insights
 
 ### Other Features
 
