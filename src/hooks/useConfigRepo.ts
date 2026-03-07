@@ -165,7 +165,7 @@ export function useToggleSubIssue() {
     mutationFn: (sub: SubIssue) => toggleSubIssue(selectedOrg!, sub),
     onMutate: async (sub) => {
       const key = ["subIssues", selectedOrg];
-      // Find the parent query key — we optimistically toggle in all sub-issue caches
+      await qc.cancelQueries({ queryKey: key });
       const queries = qc.getQueriesData<SubIssue[]>({ queryKey: key });
       const previous = new Map<string, SubIssue[]>();
       for (const [qKey, data] of queries) {
