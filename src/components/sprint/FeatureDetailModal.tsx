@@ -4,7 +4,7 @@ import Markdown from "react-markdown";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
-import type { Feature, Effort, Priority, StatusHistoryEntry } from "@/lib/types";
+import type { Feature, Effort, Priority } from "@/lib/types";
 
 // ---------- Task parsing ----------
 
