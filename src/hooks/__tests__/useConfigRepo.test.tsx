@@ -30,6 +30,9 @@ vi.mock("@/hooks/useGitHub", () => ({
   useIsAdmin: vi.fn(() => true),
 }));
 
+import { useIsAdmin } from "@/hooks/useGitHub";
+const mockUseIsAdmin = vi.mocked(useIsAdmin);
+
 import { createConfigRepo as createConfigRepoFn } from "@/lib/config-repo";
 import { updateFeature as ghUpdateFeature, deleteFeature as ghDeleteFeature } from "@/lib/github-features";
 import { useAuth } from "@/lib/auth";
@@ -124,6 +127,24 @@ describe("useDeleteFeature", () => {
       const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
       expect(cached).toEqual([]);
     });
+  });
+
+  it("rejects deletion for non-admins", async () => {
+    mockUseIsAdmin.mockReturnValue(false);
+
+    const { wrapper } = createQueryWrapper();
+    const { result } = renderHook(() => useDeleteFeature(), { wrapper });
+
+    await act(async () => {
+      result.current.mutate(1);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+      expect(result.current.error?.message).toBe("Only admins can delete features");
+    });
+
+    mockUseIsAdmin.mockReturnValue(true);
   });
 });
 
