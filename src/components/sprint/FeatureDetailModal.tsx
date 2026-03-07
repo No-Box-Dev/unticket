@@ -1,68 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ExternalLink, FileText, Pencil, Save, Plus, Check, Square, CheckSquare } from "lucide-react";
+import { X, ExternalLink, FileText, Pencil, Save, Plus, Check, Square, CheckSquare, Loader2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
+import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useUpdateSubIssueAssignees, useDeleteSubIssue } from "@/hooks/useConfigRepo";
 import type { Feature, Effort, Priority } from "@/lib/types";
-
-// ---------- Task parsing ----------
-
-interface Task {
-  text: string;
-  done: boolean;
-  assignee?: string;
-}
-
-const TASK_RE = /^- \[([ xX])\] (.+)$/;
-const ASSIGNEE_RE = /@(\S+)$/;
-
-function parseTasks(body: string): { plan: string; tasks: Task[] } {
-  const lines = body.split("\n");
-  const tasksIdx = lines.findIndex((l) => /^##\s+Tasks?\s*$/i.test(l));
-
-  if (tasksIdx === -1) {
-    return { plan: body, tasks: [] };
-  }
-
-  const planLines = lines.slice(0, tasksIdx).join("\n").trimEnd();
-  const tasks: Task[] = [];
-
-  for (let i = tasksIdx + 1; i < lines.length; i++) {
-    const match = lines[i].match(TASK_RE);
-    if (!match) {
-      if (lines[i].trim() === "") continue;
-      // Non-task line after tasks section — stop parsing tasks
-      if (lines[i].startsWith("#")) break;
-      continue;
-    }
-    const done = match[1] !== " ";
-    let text = match[2].trim();
-    let assignee: string | undefined;
-    const assigneeMatch = text.match(ASSIGNEE_RE);
-    if (assigneeMatch) {
-      assignee = assigneeMatch[1];
-      text = text.slice(0, -assigneeMatch[0].length).trim();
-    }
-    tasks.push({ text, done, assignee });
-  }
-
-  return { plan: planLines, tasks };
-}
-
-function serializeBody(plan: string, tasks: Task[]): string {
-  const parts = [plan.trimEnd()];
-  if (tasks.length > 0) {
-    parts.push("");
-    parts.push("## Tasks");
-    for (const t of tasks) {
-      const check = t.done ? "x" : " ";
-      const assignee = t.assignee ? ` @${t.assignee}` : "";
-      parts.push(`- [${check}] ${t.text}${assignee}`);
-    }
-  }
-  return parts.join("\n");
-}
+import type { SubIssue } from "@/lib/github-features";
 
 // ---------- Component ----------
 
@@ -78,6 +22,13 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [newTaskText, setNewTaskText] = useState("");
+
+  // Sub-issues
+  const { data: subIssues, isLoading: subIssuesLoading } = useSubIssues(feature.id);
+  const createSubIssueMut = useCreateSubIssue();
+  const toggleSubIssueMut = useToggleSubIssue();
+  const updateAssigneesMut = useUpdateSubIssueAssignees();
+  const deleteSubIssueMut = useDeleteSubIssue();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -111,36 +62,18 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     onClose();
   }
 
-  const body = draft.plan ?? "";
-  const { plan, tasks } = parseTasks(body);
-
-  function updateTasks(newTasks: Task[]) {
-    update({ plan: serializeBody(plan, newTasks) });
-  }
-
-  function toggleTask(index: number) {
-    const next = tasks.map((t, i) => (i === index ? { ...t, done: !t.done } : t));
-    updateTasks(next);
-  }
-
-  function setTaskAssignee(index: number, assignee: string | undefined) {
-    const next = tasks.map((t, i) => (i === index ? { ...t, assignee } : t));
-    updateTasks(next);
-  }
-
-  function deleteTask(index: number) {
-    updateTasks(tasks.filter((_, i) => i !== index));
-  }
+  // Plan is now just the issue body (no more inline ## Tasks parsing)
+  const plan = draft.plan ?? "";
 
   function addTask() {
     const text = newTaskText.trim();
     if (!text) return;
-    const newTasks = [...tasks, { text, done: false }];
-    update({ plan: serializeBody(plan, newTasks) });
+    createSubIssueMut.mutate({ parentIssueNumber: feature.id, title: text });
     setNewTaskText("");
   }
 
-  const doneCount = tasks.filter((t) => t.done).length;
+  const tasks = subIssues ?? [];
+  const doneCount = tasks.filter((t) => t.state === "closed").length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
@@ -262,7 +195,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      update({ plan: serializeBody(editContent, tasks) });
+                      update({ plan: editContent });
                       setEditMode(false);
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
@@ -281,7 +214,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
           </div>
 
-          {/* Tasks */}
+          {/* Tasks (Sub-issues) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-stone-500">
@@ -292,6 +225,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   </span>
                 )}
               </span>
+              {subIssuesLoading && <Loader2 size={12} className="animate-spin text-stone-400" />}
             </div>
 
             {/* Progress bar */}
@@ -306,37 +240,15 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
 
             {/* Task list */}
             <div className="space-y-1">
-              {tasks.map((task, i) => (
-                <div key={i} className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50">
-                  <button
-                    type="button"
-                    aria-label={task.done ? "Mark task as not done" : "Mark task as done"}
-                    onClick={() => toggleTask(i)}
-                    className="text-stone-400 hover:text-brand cursor-pointer shrink-0"
-                  >
-                    {task.done ? (
-                      <CheckSquare size={16} className="text-brand" />
-                    ) : (
-                      <Square size={16} />
-                    )}
-                  </button>
-                  <span className={`text-sm flex-1 ${task.done ? "line-through text-stone-400" : "text-stone-700"}`}>
-                    {task.text}
-                  </span>
-                  <TaskAssignee
-                    assignee={task.assignee}
-                    allPeople={allPeople}
-                    onChange={(a) => setTaskAssignee(i, a)}
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Delete task: ${task.text}`}
-                    onClick={() => deleteTask(i)}
-                    className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+              {tasks.map((task) => (
+                <SubIssueRow
+                  key={task.id}
+                  task={task}
+                  allPeople={allPeople}
+                  onToggle={() => toggleSubIssueMut.mutate(task)}
+                  onAssign={(assignees) => updateAssigneesMut.mutate({ subIssueNumber: task.number, assignees })}
+                  onDelete={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number })}
+                />
               ))}
             </div>
 
@@ -354,10 +266,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 type="button"
                 aria-label="Add task"
                 onClick={addTask}
-                disabled={!newTaskText.trim()}
+                disabled={!newTaskText.trim() || createSubIssueMut.isPending}
                 className="px-2.5 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1"
               >
-                <Plus size={14} />
+                {createSubIssueMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               </button>
             </div>
           </div>
@@ -421,6 +333,57 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   );
 }
 
+// ---------- Sub-issue Row ----------
+
+function SubIssueRow({
+  task,
+  allPeople,
+  onToggle,
+  onAssign,
+  onDelete,
+}: {
+  task: SubIssue;
+  allPeople: string[];
+  onToggle: () => void;
+  onAssign: (assignees: string[]) => void;
+  onDelete: () => void;
+}) {
+  const isDone = task.state === "closed";
+
+  return (
+    <div className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50">
+      <button
+        type="button"
+        aria-label={isDone ? "Reopen task" : "Complete task"}
+        onClick={onToggle}
+        className="text-stone-400 hover:text-brand cursor-pointer shrink-0"
+      >
+        {isDone ? (
+          <CheckSquare size={16} className="text-brand" />
+        ) : (
+          <Square size={16} />
+        )}
+      </button>
+      <span className={`text-sm flex-1 ${isDone ? "line-through text-stone-400" : "text-stone-700"}`}>
+        {task.title}
+      </span>
+      <TaskAssignee
+        assignees={task.assignees}
+        allPeople={allPeople}
+        onChange={onAssign}
+      />
+      <button
+        type="button"
+        aria-label={`Delete task: ${task.title}`}
+        onClick={onDelete}
+        className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 // ---------- Time Ago ----------
 
 function formatTimeAgo(date: Date): string {
@@ -440,16 +403,17 @@ function formatTimeAgo(date: Date): string {
 // ---------- Task Assignee Picker ----------
 
 function TaskAssignee({
-  assignee,
+  assignees,
   allPeople,
   onChange,
 }: {
-  assignee?: string;
+  assignees: string[];
   allPeople: string[];
-  onChange: (assignee: string | undefined) => void;
+  onChange: (assignees: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const assignee = assignees[0];
 
   useEffect(() => {
     if (!open) return;
@@ -475,7 +439,7 @@ function TaskAssignee({
       {open && (
         <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg z-10 w-40 max-h-48 overflow-y-auto">
           <button
-            onClick={() => { onChange(undefined); setOpen(false); }}
+            onClick={() => { onChange([]); setOpen(false); }}
             className="w-full text-left px-3 py-1.5 text-xs text-stone-400 hover:bg-stone-50 cursor-pointer"
           >
             Unassign
@@ -483,7 +447,7 @@ function TaskAssignee({
           {allPeople.map((p) => (
             <button
               key={p}
-              onClick={() => { onChange(p); setOpen(false); }}
+              onClick={() => { onChange([p]); setOpen(false); }}
               className={`w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer flex items-center gap-1.5 ${
                 p === assignee ? "text-brand font-medium" : "text-stone-700"
               }`}
