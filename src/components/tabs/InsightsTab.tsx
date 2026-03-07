@@ -13,6 +13,7 @@ import { computeMetric, computeMetricDaily, extractMergedDates, extractClosedDat
 import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { TrendingUp, TrendingDown, Minus, BarChart3, X, ExternalLink } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 
 interface InsightsTabProps {
   repoNames: string[];
@@ -416,8 +417,8 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
 
       {/* Metric cards */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-stone-400">
-          Loading metrics...
+        <div className="flex items-center justify-center py-12">
+          <Spinner size="lg" />
         </div>
       ) : metrics ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

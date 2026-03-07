@@ -8,6 +8,7 @@ import { useIsAdmin } from "@/hooks/useGitHub";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus } from "@/lib/types";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "priority" | "effort" | "title";
@@ -140,8 +141,8 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
 
   if (sprintLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-stone-400">
-        Loading sprint...
+      <div className="flex items-center justify-center py-12">
+        <Spinner size="lg" />
       </div>
     );
   }

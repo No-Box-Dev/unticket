@@ -7,6 +7,7 @@ import { computeMetric, extractClosedDates, extractCreatedDates } from "@/lib/me
 import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 
 interface IndividualTabProps {
   repoNames: string[];
@@ -178,8 +179,8 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-stone-400">
-          Loading metrics...
+        <div className="flex items-center justify-center py-12">
+          <Spinner size="lg" />
         </div>
       ) : (
         <>

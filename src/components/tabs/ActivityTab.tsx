@@ -1,5 +1,6 @@
 import { useActivity } from "@/hooks/useGitHub";
 import { GitCommit } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 
 interface ActivityTabProps {
   repoNames: string[];
@@ -21,7 +22,7 @@ export function ActivityTab({ repoNames }: ActivityTabProps) {
   return (
     <div className="space-y-6">
       {isLoading ? (
-        <div className="text-center text-stone-400 py-8">Loading activity...</div>
+        <div className="flex justify-center py-8"><Spinner /></div>
       ) : (commits ?? []).length === 0 ? (
         <div className="text-center text-stone-400 py-8">No activity in the last 14 days</div>
       ) : (

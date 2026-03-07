@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
 import { Activity, Building2 } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 
 export function OrgPickerPage() {
   const { setSelectedOrg, logout } = useAuth();
@@ -29,7 +30,7 @@ export function OrgPickerPage() {
 
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-2">
           {isLoading ? (
-            <p className="text-center text-stone-400 py-4">Loading orgs...</p>
+            <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
             <>
               {orgs?.map((org) => (
