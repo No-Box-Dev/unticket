@@ -23,7 +23,13 @@ import {
   fetchLegacyFeatures,
   closeMilestone,
   findOrCreateMilestone,
+  fetchSubIssues,
+  createSubIssue,
+  toggleSubIssue,
+  updateSubIssueAssignees,
+  deleteSubIssue,
 } from "@/lib/github-features";
+import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo } from "@/lib/types";
 
@@ -126,6 +132,98 @@ export function useDeleteFeature() {
       if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
+  });
+}
+
+// ---------- Sub-issues ----------
+
+export function useSubIssues(featureId: number) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["subIssues", selectedOrg, featureId],
+    queryFn: () => fetchSubIssues(selectedOrg!, featureId),
+    enabled: !!selectedOrg && featureId > 0,
+  });
+}
+
+export function useCreateSubIssue() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { parentIssueNumber: number; title: string; assignees?: string[] }) =>
+      createSubIssue(selectedOrg!, args.parentIssueNumber, args.title, args.assignees),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg, vars.parentIssueNumber] });
+    },
+  });
+}
+
+export function useToggleSubIssue() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sub: SubIssue) => toggleSubIssue(selectedOrg!, sub),
+    onMutate: async (sub) => {
+      const key = ["subIssues", selectedOrg];
+      await qc.cancelQueries({ queryKey: key });
+      const queries = qc.getQueriesData<SubIssue[]>({ queryKey: key });
+      const previous = new Map<string, SubIssue[]>();
+      for (const [qKey, data] of queries) {
+        if (data?.some((s) => s.id === sub.id)) {
+          previous.set(JSON.stringify(qKey), data);
+          qc.setQueryData<SubIssue[]>(qKey, (old) =>
+            old?.map((s) => s.id === sub.id ? { ...s, state: s.state === "open" ? "closed" : "open" } : s) ?? [],
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          qc.setQueryData(JSON.parse(key), data);
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg] });
+    },
+  });
+}
+
+export function useUpdateSubIssueAssignees() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { subIssueNumber: number; assignees: string[] }) =>
+      updateSubIssueAssignees(selectedOrg!, args.subIssueNumber, args.assignees),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg] });
+    },
+  });
+}
+
+export function useDeleteSubIssue() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { parentIssueNumber: number; subIssueNumber: number }) =>
+      deleteSubIssue(selectedOrg!, args.subIssueNumber),
+    onMutate: async (args) => {
+      const key = ["subIssues", selectedOrg, args.parentIssueNumber];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<SubIssue[]>(key);
+      qc.setQueryData<SubIssue[]>(key, (old) =>
+        old?.filter((s) => s.number !== args.subIssueNumber) ?? [],
+      );
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+    onSettled: (_data, _err, args) => {
+      qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg, args.parentIssueNumber] });
+    },
   });
 }
 
