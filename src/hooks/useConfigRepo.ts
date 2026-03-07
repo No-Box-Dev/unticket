@@ -22,6 +22,7 @@ import {
   deleteFeature as ghDeleteFeature,
   migrateFeatures as ghMigrateFeatures,
   fetchLegacyFeatures,
+  closeMilestone,
 } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo } from "@/lib/types";
@@ -249,6 +250,51 @@ export function useCreateConfigRepo() {
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
+    },
+  });
+}
+
+// ---------- Sprint Advancement ----------
+
+export function useAdvanceSprint() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      newSprint: SprintConfig;
+      oldSprintNumber: number;
+      features: Feature[];
+      onProgress?: (done: number, total: number) => void;
+    }) => {
+      const { newSprint, oldSprintNumber, features, onProgress } = args;
+      const org = selectedOrg!;
+
+      // 1. Save new sprint config
+      await saveSprint(newSprint);
+
+      // 2. Close old milestone
+      await closeMilestone(org, oldSprintNumber);
+
+      // 3. Move plan/demo features to new sprint
+      const toMove = features.filter(
+        (f) => f.sprint === oldSprintNumber && (f.status === "plan" || f.status === "demo"),
+      );
+      const failed: number[] = [];
+      let done = 0;
+      for (const f of toMove) {
+        try {
+          await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
+        } catch {
+          failed.push(f.id);
+        }
+        done++;
+        onProgress?.(done, toMove.length);
+      }
+      return { failed };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
     },
   });
 }
