@@ -2,6 +2,7 @@ import { cn } from "@/lib/cn";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
+import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, Effort, Priority } from "@/lib/types";
 import { GripVertical } from "lucide-react";
 
@@ -82,7 +83,7 @@ export function FeatureCard({
         <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
           {mode === "sprint" && (
             <button
-              onClick={() => onUpdate({ ...feature, status: "future", sprint: null })}
+              onClick={() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null })}
               className="text-[11px] text-stone-400 hover:text-stone-600 cursor-pointer"
             >
               Backlog
@@ -90,7 +91,7 @@ export function FeatureCard({
           )}
           {mode === "backlog" && currentSprint && (
             <button
-              onClick={() => onUpdate({ ...feature, sprint: currentSprint, status: "plan" })}
+              onClick={() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint })}
               className="text-[11px] text-stone-400 hover:text-brand cursor-pointer"
             >
               Sprint

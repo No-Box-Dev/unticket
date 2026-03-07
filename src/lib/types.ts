@@ -83,6 +83,11 @@ export interface SprintConfig {
   focus: string;
 }
 
+export interface StatusHistoryEntry {
+  status: FeatureStatus;
+  timestamp: string; // ISO 8601
+}
+
 export interface Feature {
   id: number;
   title: string;
@@ -94,6 +99,7 @@ export interface Feature {
   priority?: Priority;
   plan?: string;
   url?: string;
+  statusHistory?: StatusHistoryEntry[];
 }
 
 export interface Person {

@@ -4,7 +4,7 @@ import Markdown from "react-markdown";
 import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
-import type { Feature, Effort, Priority } from "@/lib/types";
+import type { Feature, Effort, Priority, StatusHistoryEntry } from "@/lib/types";
 
 // ---------- Task parsing ----------
 
@@ -348,6 +348,44 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             </div>
           </div>
 
+          {/* Status History Timeline */}
+          {draft.statusHistory && draft.statusHistory.length > 0 && (
+            <div>
+              <span className="text-xs text-stone-500 block mb-2">History</span>
+              <div className="relative pl-4 space-y-2">
+                <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200" />
+                {draft.statusHistory.map((entry, i) => {
+                  const dotColor =
+                    entry.status === "production"
+                      ? "bg-green-500"
+                      : entry.status === "demo"
+                        ? "bg-amber-500"
+                        : entry.status === "plan"
+                          ? "bg-brand"
+                          : "bg-stone-400";
+                  const label =
+                    entry.status === "production" ? "Production"
+                    : entry.status === "demo" ? "Demo"
+                    : entry.status === "plan" ? "Plan"
+                    : "Future";
+                  const date = new Date(entry.timestamp);
+                  const ago = formatTimeAgo(date);
+                  return (
+                    <div key={i} className="relative flex items-center gap-2">
+                      <div className={`absolute -left-4 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white`} />
+                      <span className="text-xs font-medium text-stone-700">{label}</span>
+                      <span className="text-[10px] text-stone-400">
+                        {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                        {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                      <span className="text-[10px] text-stone-300">{ago}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Status footer */}
           <div className="flex items-center gap-2 text-[10px] text-stone-400 pt-1">
             <span
@@ -367,6 +405,22 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
       </div>
     </div>
   );
+}
+
+// ---------- Time Ago ----------
+
+function formatTimeAgo(date: Date): string {
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 // ---------- Task Assignee Picker ----------

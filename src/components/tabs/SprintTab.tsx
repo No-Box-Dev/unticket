@@ -1,11 +1,13 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
+import { NewSprintModal } from "@/components/sprint/NewSprintModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { useIsAdmin } from "@/hooks/useGitHub";
+import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2 } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "priority" | "effort" | "title";
@@ -44,8 +46,11 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const { data: legacyFeatures } = useLegacyFeatures();
   const migrateMut = useMigrateFeatures();
   const isAdmin = useIsAdmin();
+  const advanceSprintMut = useAdvanceSprint();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+  const [showNewSprint, setShowNewSprint] = useState(false);
+  const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
@@ -96,7 +101,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
     const featureId = parseInt(e.dataTransfer.getData("text/plain"));
     const feature = (features ?? []).find((f) => f.id === featureId);
     if (!feature || feature.status === targetStatus) return;
-    const updated = { ...feature, status: targetStatus };
+    const updated = withStatusTransition(feature, targetStatus);
     updateFeatureMut.mutate(updated);
     if (detailFeature?.id === featureId) {
       setDetailFeature(updated);
@@ -232,6 +237,13 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
         <div className="border-t border-stone-200 pt-3">
           <AddFeatureInput onAdd={addFeature} />
         </div>
+        <button
+          onClick={() => setShowNewSprint(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
+        >
+          <FastForward size={13} />
+          New Sprint
+        </button>
       </div>
 
       {/* Mobile: inline sprint header */}
@@ -245,7 +257,18 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </div>
         </div>
-        <AddFeatureInput onAdd={addFeature} />
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <AddFeatureInput onAdd={addFeature} />
+          </div>
+          <button
+            onClick={() => setShowNewSprint(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
+          >
+            <FastForward size={13} />
+            New Sprint
+          </button>
+        </div>
       </div>
 
       {/* Kanban columns: Plan | Demo | Production */}
@@ -323,6 +346,36 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           allPeople={allPeopleNames}
           onClose={() => setDetailFeature(null)}
           onUpdate={updateFeature}
+        />
+      )}
+
+      {/* New Sprint modal */}
+      {showNewSprint && (
+        <NewSprintModal
+          currentSprint={sprint}
+          features={features ?? []}
+          isPending={advanceSprintMut.isPending}
+          failedCount={advanceFailedCount}
+          onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
+          onConfirm={(newSprint) => {
+            setAdvanceFailedCount(0);
+            advanceSprintMut.mutate(
+              {
+                newSprint,
+                oldSprintNumber: sprint.number,
+                features: features ?? [],
+              },
+              {
+                onSuccess: (result) => {
+                  if (result.failed.length === 0) {
+                    setShowNewSprint(false);
+                  } else {
+                    setAdvanceFailedCount(result.failed.length);
+                  }
+                },
+              },
+            );
+          }}
         />
       )}
     </div>
