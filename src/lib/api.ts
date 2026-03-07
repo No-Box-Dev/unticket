@@ -1,3 +1,10 @@
+/** Broadcast an error so the UI can show it in a banner. */
+export function broadcastError(message: string, status?: number) {
+  window.dispatchEvent(
+    new CustomEvent("gp:error", { detail: { message, status } }),
+  );
+}
+
 /** Custom error that preserves HTTP status for downstream handling. */
 export class ApiError extends Error {
   readonly status: number;
@@ -6,6 +13,7 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    broadcastError(message, status);
   }
 
   get isUnauthorized() {
