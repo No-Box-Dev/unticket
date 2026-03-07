@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { LogOut, ArrowLeftRight, Settings } from "lucide-react";
+import { useIsAdmin } from "@/hooks/useGitHub";
+import { LogOut, ArrowLeftRight, Settings, Shield } from "lucide-react";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -8,6 +9,7 @@ interface HeaderProps {
 
 export function Header({ onOpenSettings }: HeaderProps) {
   const { user, setSelectedOrg, logout } = useAuth();
+  const isAdmin = useIsAdmin();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -37,13 +39,16 @@ export function Header({ onOpenSettings }: HeaderProps) {
           </button>
         )}
 
-        <button
-          onClick={onOpenSettings}
-          className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors cursor-pointer text-stone-500 hover:text-stone-700"
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/5 hover:bg-brand/10 transition-colors cursor-pointer text-brand text-sm font-medium"
+            title="Settings"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            Admin
+          </button>
+        )}
 
         {menuOpen && (
           <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[180px]">

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useIsAdmin } from "@/hooks/useGitHub";
 import {
   fetchSprint,
   saveSprint,
@@ -107,9 +108,13 @@ export function useUpdateFeature() {
 
 export function useDeleteFeature() {
   const { selectedOrg } = useAuth();
+  const isAdmin = useIsAdmin();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => ghDeleteFeature(selectedOrg!, id),
+    mutationFn: (id: number) => {
+      if (!isAdmin) throw new Error("Only admins can delete features");
+      return ghDeleteFeature(selectedOrg!, id);
+    },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
       const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
