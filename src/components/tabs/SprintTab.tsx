@@ -3,6 +3,7 @@ import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, 
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
+import { useIsAdmin } from "@/hooks/useGitHub";
 import type { Feature, FeatureStatus } from "@/lib/types";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -42,6 +43,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const createRepo = useCreateConfigRepo();
   const { data: legacyFeatures } = useLegacyFeatures();
   const migrateMut = useMigrateFeatures();
+  const isAdmin = useIsAdmin();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
@@ -297,6 +299,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
                   onDelete={deleteFeature}
                   onOpenDetail={setDetailFeature}
                   mode="sprint"
+                  isAdmin={isAdmin}
                   draggable
                   onDragStart={handleDragStart}
                 />

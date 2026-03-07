@@ -77,6 +77,16 @@ export async function fetchOrgs() {
   }
 }
 
+export async function fetchUserOrgRole(org: string): Promise<"admin" | "member"> {
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.orgs.getMembershipForAuthenticatedUser({ org });
+    return data.role === "admin" ? "admin" : "member";
+  } catch {
+    return "member";
+  }
+}
+
 // ---------- Sync ----------
 
 interface SyncResponse {

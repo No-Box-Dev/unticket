@@ -15,6 +15,7 @@ interface FeatureCardProps {
   currentSprint?: number;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, feature: Feature) => void;
+  isAdmin?: boolean;
 }
 
 export function FeatureCard({
@@ -27,6 +28,7 @@ export function FeatureCard({
   currentSprint,
   draggable,
   onDragStart,
+  isAdmin,
 }: FeatureCardProps) {
   const dotColor =
     feature.status === "production"
@@ -94,12 +96,14 @@ export function FeatureCard({
               Sprint
             </button>
           )}
-          <button
-            onClick={() => onDelete(feature.id)}
-            className="text-[11px] text-stone-400 hover:text-red-500 cursor-pointer"
-          >
-            Delete
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => onDelete(feature.id)}
+              className="text-[11px] text-stone-400 hover:text-red-500 cursor-pointer"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </div>
