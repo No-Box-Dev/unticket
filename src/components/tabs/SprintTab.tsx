@@ -1,13 +1,13 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
-import { useIsAdmin } from "@/hooks/useGitHub";
+import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, FeatureStatus } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward } from "lucide-react";
+import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, ChevronDown, ChevronUp } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 
@@ -36,7 +36,7 @@ interface SprintTabProps {
   repoNames: string[];
 }
 
-export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
+export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
@@ -48,6 +48,10 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const migrateMut = useMigrateFeatures();
   const isAdmin = useIsAdmin();
   const advanceSprintMut = useAdvanceSprint();
+  const { data: snapshots } = useSprintSnapshots();
+  const { data: mergedPRs } = useMergedPRs(repoNames);
+  const { data: closedIssues } = useClosedIssues(repoNames);
+  const { data: allIssues } = useAllIssues(repoNames);
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [showNewSprint, setShowNewSprint] = useState(false);
@@ -55,6 +59,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
+  const [showPastSprints, setShowPastSprints] = useState(false);
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -360,11 +365,31 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
           onConfirm={(newSprint) => {
             setAdvanceFailedCount(0);
+            // Build snapshot of the current sprint
+            const sprintFeatures = (features ?? []).filter((f) => f.sprint === sprint.number && f.status !== "future");
+            const inRange = (dateStr: string) => dateStr >= sprint.startDate && dateStr <= sprint.endDate + "T23:59:59";
+            const snapshot: Omit<SprintSnapshot, "createdAt"> = {
+              sprintNumber: sprint.number,
+              name: sprint.name,
+              startDate: sprint.startDate,
+              endDate: sprint.endDate,
+              focus: sprint.focus,
+              metrics: {
+                prsMerged: (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at)).length,
+                issuesCreated: (allIssues ?? []).filter((i: any) => inRange(i.created_at)).length,
+                issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
+                featuresCompleted: sprintFeatures.filter((f) => f.status === "production").length,
+                featuresCarriedOver: sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length,
+              },
+              features: sprintFeatures.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
+            };
             advanceSprintMut.mutate(
               {
                 newSprint,
+                oldSprint: sprint,
                 oldSprintNumber: sprint.number,
                 features: features ?? [],
+                snapshot,
               },
               {
                 onSuccess: (result) => {
@@ -379,7 +404,109 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           }}
         />
       )}
+
+      {/* Past Sprints */}
+      {snapshots && snapshots.length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowPastSprints(!showPastSprints)}
+            className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700 cursor-pointer transition-colors"
+          >
+            {showPastSprints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            Past Sprints ({snapshots.length})
+          </button>
+
+          {showPastSprints && (
+            <div className="mt-3 space-y-3">
+              {[...snapshots].sort((a, b) => b.sprintNumber - a.sprintNumber).map((snap) => (
+                <PastSprintCard key={snap.sprintNumber} snapshot={snap} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
+    </div>
+  );
+}
+
+function PastSprintCard({ snapshot }: { snapshot: SprintSnapshot }) {
+  const [expanded, setExpanded] = useState(false);
+  const { metrics, features: snapshotFeatures } = snapshot;
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-stone-800">
+            Sprint {snapshot.sprintNumber}
+            {snapshot.name && <span className="text-stone-400 font-normal ml-1">— {snapshot.name}</span>}
+          </span>
+          <span className="text-xs text-stone-400">
+            {formatDate(snapshot.startDate)} – {formatDate(snapshot.endDate)}
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 text-xs text-stone-500">
+            <span><span className="font-medium text-stone-700">{metrics.featuresCompleted}</span> shipped</span>
+            <span><span className="font-medium text-stone-700">{metrics.prsMerged}</span> PRs</span>
+            <span><span className="font-medium text-stone-700">{metrics.issuesClosed}</span> closed</span>
+          </div>
+          {expanded ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-stone-100">
+          {/* Metrics grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
+            <MetricBadge label="PRs Merged" value={metrics.prsMerged} />
+            <MetricBadge label="Issues Created" value={metrics.issuesCreated} />
+            <MetricBadge label="Issues Closed" value={metrics.issuesClosed} />
+            <MetricBadge label="Features Shipped" value={metrics.featuresCompleted} />
+            <MetricBadge label="Carried Over" value={metrics.featuresCarriedOver} />
+          </div>
+
+          {snapshot.focus && (
+            <p className="text-xs text-stone-400 mt-3">
+              <span className="font-medium text-stone-500">Focus:</span> {snapshot.focus}
+            </p>
+          )}
+
+          {/* Feature list */}
+          {snapshotFeatures.length > 0 && (
+            <div className="mt-3">
+              <h4 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-2">Features</h4>
+              <div className="space-y-1">
+                {snapshotFeatures.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <span className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      f.status === "production" ? "bg-green-500" : f.status === "demo" ? "bg-amber-500" : "bg-stone-300",
+                    )} />
+                    <span className="text-stone-700 truncate">{f.title}</span>
+                    {f.owners.length > 0 && (
+                      <span className="text-xs text-stone-400 shrink-0">{f.owners.join(", ")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetricBadge({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-stone-50 rounded-lg px-3 py-2 text-center">
+      <div className="text-lg font-semibold text-stone-800">{value}</div>
+      <div className="text-[10px] text-stone-400 uppercase tracking-wider">{label}</div>
     </div>
   );
 }

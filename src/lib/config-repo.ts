@@ -1,6 +1,6 @@
 import { apiGet, apiPut } from "./api";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "./gitpulse-repo";
-import type { SprintConfig, Person, OrgSettings, Todo } from "./types";
+import type { SprintConfig, Person, OrgSettings, Todo, SprintSnapshot } from "./types";
 
 // Sprint
 export async function fetchSprint(): Promise<SprintConfig | null> {
@@ -58,6 +58,16 @@ export async function fetchAgentRules(): Promise<string[]> {
 
 export async function saveAgentRules(rules: string[]) {
   await apiPut("/api/config/agentRules", rules);
+}
+
+// Sprint Snapshots
+export async function fetchSprintSnapshots(): Promise<SprintSnapshot[]> {
+  const data = await apiGet<SprintSnapshot[]>("/api/config/sprintSnapshots");
+  return data ?? [];
+}
+
+export async function saveSprintSnapshots(snapshots: SprintSnapshot[]) {
+  await apiPut("/api/config/sprintSnapshots", snapshots);
 }
 
 // Config repo management — D1 is always available
