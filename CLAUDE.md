@@ -1,4 +1,4 @@
-# GitPulse
+# unticket.ai
 
 ## Rules
 
@@ -6,9 +6,9 @@
 - **When you add new architecture patterns (new API routes, new shared hooks, new config keys), update the `## Architecture` section.**
 ## URLs
 
-- **Live:** https://gitpulse-rm8.pages.dev
+- **Live:** https://app.unticket.ai
 - **Repo:** https://github.com/No-Box-Dev/gitpulse
-- **OAuth Callback:** https://gitpulse-rm8.pages.dev/api/auth/callback
+- **OAuth Callback:** https://app.unticket.ai/api/auth/callback
 
 ## OAuth
 
@@ -72,10 +72,10 @@ Batched cursor-based sync: `triggerSync()` (in `src/lib/github.ts`) calls `POST 
 Key server functions in `functions/lib/github-sync.js`:
 - `syncInit(db, token, orgId, orgLogin)` — migrate config, sync repos + members, return repo names
 - `syncRepo(db, token, orgId, orgLogin, repo, force)` — sync PRs + issues for ONE repo
-- `upsertIssue/upsertPR/upsertMember/removeMember` — single-entity upserts used by webhook handler
+- `upsertIssue(db, orgId, repo, issue, closedBy?)` / `upsertPR` / `upsertMember` / `removeMember` — single-entity upserts used by webhook handler. `upsertIssue` accepts optional `closedBy` param; uses `COALESCE` to preserve existing `closed_by` when not provided
 
 ### Webhooks
-Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
+Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. On `issues.closed`, captures `sender.login` as `closed_by`. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
 
 ### GitHub Data Hooks (`src/hooks/useGitHub.ts`)
 TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`, `useUpdateIssueAssignees`.
@@ -109,7 +109,7 @@ Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sor
 Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). Stored in the shared config key `"todos"` as an array of `Todo` objects with `status: TodoStatus`. Todos can be linked to a feature (GitHub Issue number stored as string in `featureId`), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{id}.md` in `.gitpulse` repo). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors and plan view.
 
 #### Insights (`insights` tab) — admin only
-Admin-only tab (visible when `useIsAdmin()` returns true) with two views: **Team** (aggregate metrics across the org, filterable by team) and **Individual** (per-person metrics with a person selector). Four metric cards each with weekly bar chart, total count, and week-over-week trend: PRs Merged, Issues Created, Issues Solved, Features Implemented (status = production, bar chart from `statusHistory` timestamps). Replaces the old Team Dashboard and Individual Dashboard tabs. Date range selector: 1m/10w/6m/1y.
+Admin-only tab (visible when `useIsAdmin()` returns true) with two views: **Team** (aggregate metrics across the org, filterable by team) and **Individual** (per-person metrics with a person selector). Four metric cards each with weekly bar chart and total count: PRs Merged, Issues Created, Issues Solved, Features Implemented (status = production, bar chart from `statusHistory` timestamps). Issues Solved uses `closed_by` field (who actually closed the issue) rather than assignee. Replaces the old Team Dashboard and Individual Dashboard tabs. Date range selector: 1m/10w/6m/1y.
 
 ### Disabled Tabs (components exist but not wired in TabBar/DashboardPage)
 
@@ -122,4 +122,4 @@ Recent activity feed across repos.
 ### Other Features
 
 #### Settings (header button, not a tab)
-Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle.
+Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via header button, rendered in `DashboardPage.tsx` via `showSettings` state. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
