@@ -161,9 +161,37 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
 
   const issues = allItems.filter((i) => !i.pull_request);
 
+  // Fetch closed_by for closed issues via events API
+  const closedByMap = new Map();
+  const closedIssues = issues.filter((i) => i.state === "closed");
+  for (const issue of closedIssues) {
+    try {
+      const eventsRes = await fetch(
+        `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "User-Agent": "GitPulse",
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+      if (eventsRes.ok) {
+        const events = await eventsRes.json();
+        // Find the last "closed" event
+        const closedEvent = events.filter((e) => e.event === "closed").pop();
+        if (closedEvent?.actor?.login) {
+          closedByMap.set(issue.number, closedEvent.actor.login);
+        }
+      }
+    } catch {
+      // Skip if events fetch fails — closed_by will be null
+    }
+  }
+
   const stmt = db.prepare(
-    `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title, closed_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(org_id, repo, number) DO UPDATE SET
        title = excluded.title,
        state = excluded.state,
@@ -174,7 +202,8 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
        html_url = excluded.html_url,
        assignees_json = excluded.assignees_json,
        labels_json = excluded.labels_json,
-       milestone_title = excluded.milestone_title`
+       milestone_title = excluded.milestone_title,
+       closed_by = COALESCE(excluded.closed_by, issues.closed_by)`
   );
 
   for (let i = 0; i < issues.length; i += 50) {
@@ -195,7 +224,8 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
           issue.html_url,
           JSON.stringify(issue.assignees.map((a) => ({ login: a.login, avatar_url: a.avatar_url }))),
           JSON.stringify(issue.labels.map((l) => ({ name: l.name, color: l.color }))),
-          issue.milestone?.title ?? null
+          issue.milestone?.title ?? null,
+          closedByMap.get(issue.number) ?? null
         )
       )
     );
@@ -366,11 +396,11 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) 
 
 // ---------- Upsert helpers for webhook events ----------
 
-export async function upsertIssue(db, orgId, repo, issue) {
+export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
   await db
     .prepare(
-      `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO issues (org_id, repo, number, title, state, author, author_avatar, created_at, updated_at, closed_at, html_url, assignees_json, labels_json, milestone_title, closed_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(org_id, repo, number) DO UPDATE SET
          title = excluded.title,
          state = excluded.state,
@@ -381,7 +411,8 @@ export async function upsertIssue(db, orgId, repo, issue) {
          html_url = excluded.html_url,
          assignees_json = excluded.assignees_json,
          labels_json = excluded.labels_json,
-         milestone_title = excluded.milestone_title`
+         milestone_title = excluded.milestone_title,
+         closed_by = COALESCE(excluded.closed_by, issues.closed_by)`
     )
     .bind(
       orgId,
@@ -397,7 +428,8 @@ export async function upsertIssue(db, orgId, repo, issue) {
       issue.html_url,
       JSON.stringify((issue.assignees ?? []).map((a) => ({ login: a.login, avatar_url: a.avatar_url }))),
       JSON.stringify((issue.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
-      issue.milestone?.title ?? null
+      issue.milestone?.title ?? null,
+      closedBy
     )
     .run();
 }

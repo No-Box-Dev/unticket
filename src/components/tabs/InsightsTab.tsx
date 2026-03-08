@@ -12,7 +12,7 @@ import { BarChart } from "@/components/BarChart";
 import { computeMetric, computeMetricDaily, extractMergedDates, extractClosedDates, extractCreatedDates } from "@/lib/metrics";
 import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { TrendingUp, TrendingDown, Minus, BarChart3, X, ExternalLink } from "lucide-react";
+import { BarChart3, X, ExternalLink } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 
 interface InsightsTabProps {
@@ -199,7 +199,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         (i: any) => i.user?.login?.toLowerCase() === activePersonLower,
       ),
       closedIssues: (closedIssues ?? []).filter((i: any) =>
-        (i.assignees ?? []).some((a: any) => a.login?.toLowerCase() === activePersonLower),
+        i.closed_by?.toLowerCase() === activePersonLower,
       ),
       features: (features ?? []).filter(
         (f) => f.status === "production" && f.owners.some((o) => o.toLowerCase() === activePersonLower),
@@ -536,8 +536,6 @@ function InsightCard({
   const total = metric.history.length > 0
     ? metric.history.reduce((sum, b) => sum + b.value, 0)
     : metric.current;
-  const isPositive = metric.change > 0;
-  const isNeutral = metric.change === 0;
   const hasChart = metric.history.length > 0;
 
   return (
@@ -545,30 +543,10 @@ function InsightCard({
       <div className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
         {title}
       </div>
-      <div className="flex items-end justify-between mb-3">
+      <div className="mb-3">
         <span className="text-3xl font-semibold text-stone-800" style={{ color }}>
           {total}
         </span>
-        {hasChart && !isNeutral ? (
-          <span
-            className={`flex items-center gap-0.5 text-xs font-medium ${
-              isPositive ? "text-green-600" : "text-red-500"
-            }`}
-          >
-            {metric.change > 0 ? (
-              <TrendingUp className="w-3 h-3" />
-            ) : (
-              <TrendingDown className="w-3 h-3" />
-            )}
-            {metric.change > 0 ? "+" : ""}
-            {metric.change} from {daily ? "yesterday" : "last wk"}
-          </span>
-        ) : hasChart ? (
-          <span className="flex items-center gap-0.5 text-xs text-stone-400">
-            <Minus className="w-3 h-3" />
-            No change
-          </span>
-        ) : null}
       </div>
       {hasChart && (
         <BarChart

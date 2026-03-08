@@ -106,6 +106,7 @@ export async function onRequestGet(context) {
     ...row,
     assignees: JSON.parse(row.assignees_json || "[]"),
     labels: JSON.parse(row.labels_json || "[]"),
+    closed_by: row.closed_by ?? null,
   }));
 
   return jsonResponse({ data, totalCount, page, pageSize });
