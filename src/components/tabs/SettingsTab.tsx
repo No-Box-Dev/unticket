@@ -152,7 +152,7 @@ export function SettingsTab() {
 
       {/* About */}
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-stone-900">About GitPulse</h2>
+        <h2 className="text-sm font-semibold text-stone-900">About Unticket</h2>
         <p className="text-xs text-stone-400">
           AI-powered project management dashboard for GitHub organisations.
           Your token is stored locally — no data is sent to any server.

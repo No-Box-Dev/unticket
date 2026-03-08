@@ -14,13 +14,13 @@ export function getOctokit(): Octokit {
       throttle: {
         onRateLimit: (retryAfter: number, options: any, _octokit: any, retryCount: number) => {
           console.warn(
-            `[GitPulse] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
+            `[Unticket] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
           );
           return retryCount < 1;
         },
         onSecondaryRateLimit: (retryAfter: number, options: any) => {
           console.warn(
-            `[GitPulse] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
+            `[Unticket] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
           );
           return false;
         },
@@ -103,7 +103,7 @@ export async function fetchUserOrgRole(org: string): Promise<"admin" | "member">
     const { data } = await ok.rest.orgs.getMembershipForAuthenticatedUser({ org });
     return data.role === "admin" ? "admin" : "member";
   } catch (err) {
-    console.warn("[GitPulse] Failed to fetch org role, defaulting to member:", err);
+    console.warn("[Unticket] Failed to fetch org role, defaulting to member:", err);
     return "member";
   }
 }

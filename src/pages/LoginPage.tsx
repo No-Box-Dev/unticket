@@ -36,7 +36,7 @@ export function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
             <Activity className="w-8 h-8 text-brand" />
-            <h1 className="text-2xl font-bold text-stone-900">GitPulse</h1>
+            <h1 className="text-2xl font-bold text-stone-900">Unticket</h1>
           </div>
           <p className="text-stone-500">
             AI-powered project management for GitHub
@@ -80,7 +80,7 @@ export function LoginPage() {
                 <p className="text-xs text-stone-400">
                   Need a token?{" "}
                   <a
-                    href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=GitPulse"
+                    href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=Unticket"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-brand underline"
