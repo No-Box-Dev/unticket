@@ -123,6 +123,28 @@ export interface OrgSettings {
   draftRepos?: string[];
 }
 
+// Sprint snapshots
+export interface SprintSnapshot {
+  sprintNumber: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  focus: string;
+  metrics: {
+    prsMerged: number;
+    issuesCreated: number;
+    issuesClosed: number;
+    featuresCompleted: number;
+    featuresCarriedOver: number;
+  };
+  features: {
+    title: string;
+    status: FeatureStatus;
+    owners: string[];
+  }[];
+  createdAt: string;
+}
+
 // Extended issue info with repo context
 export interface IssueWithRepo extends IssueInfo {
   repo: string;
