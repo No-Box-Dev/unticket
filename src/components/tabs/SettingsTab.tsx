@@ -5,7 +5,9 @@ import { useSettings, useSaveSettings, usePeople, useSavePeople, useAgentRules, 
 import { TeamManagement } from "@/components/settings/TeamManagement";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { pushClaudeMdToRepos } from "@/lib/claude-md-sync";
-import { Loader2, Plus, X, Pencil, Check, ExternalLink } from "lucide-react";
+import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
+import { Loader2, Plus, X, Pencil, Check, ExternalLink, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
   const { user, selectedOrg, logout } = useAuth();
@@ -150,6 +152,9 @@ export function SettingsTab() {
         </a>
       </div>
 
+      {/* Full Re-sync */}
+      <FullResyncSection />
+
       {/* About */}
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
         <h2 className="text-sm font-semibold text-stone-900">About Unticket</h2>
@@ -158,6 +163,60 @@ export function SettingsTab() {
           Your token is stored locally — no data is sent to any server.
         </p>
       </div>
+    </div>
+  );
+}
+
+function FullResyncSection() {
+  const qc = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  async function handleResync() {
+    setSyncing(true);
+    setProgress(null);
+    await triggerSyncWithProgress((p) => setProgress(p), true);
+    setSyncing(false);
+    // Invalidate all data queries so UI refreshes
+    qc.invalidateQueries();
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <h2 className="text-sm font-semibold text-stone-900">Data Sync</h2>
+      <p className="text-xs text-stone-400">
+        Run a full re-sync to fetch all historical PRs and issues from GitHub.
+        This ignores the incremental sync timestamp and re-fetches everything.
+        Use this to backfill data that was missed during initial setup.
+      </p>
+      <button
+        onClick={handleResync}
+        disabled={syncing}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+      >
+        {syncing ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <RefreshCw size={14} />
+        )}
+        {syncing
+          ? progress?.phase === "init"
+            ? "Initializing..."
+            : progress?.phase === "syncing"
+              ? `Syncing ${progress.repo} (${progress.synced}/${progress.total})`
+              : progress?.phase === "done"
+                ? "Done!"
+                : "Syncing..."
+          : "Full Re-sync"}
+      </button>
+      {progress?.phase === "done" && !syncing && (
+        <p className="text-xs text-green-600">
+          Re-synced {progress.synced} repositories. Data refreshed.
+        </p>
+      )}
+      {progress?.phase === "error" && !syncing && (
+        <p className="text-xs text-red-500">{progress.error}</p>
+      )}
     </div>
   );
 }
