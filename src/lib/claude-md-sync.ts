@@ -5,7 +5,7 @@ const END_MARKER = "<!-- gitpulse:end -->";
 const FILE_PATH = "CLAUDE.md";
 
 function buildPreamble(org: string): string {
-  return `This organisation uses [GitPulse](https://gitpulse-rm8.pages.dev) for project management.
+  return `This organisation uses [Unticket](https://app.unticket.ai) for project management.
 
 ### Features & Sprints
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/.gitpulse\`](https://github.com/${org}/.gitpulse) (not this repo)
@@ -30,7 +30,7 @@ function buildPreamble(org: string): string {
 function buildSection(org: string, rules: string[]): string {
   const lines = [
     START_MARKER,
-    `## GitPulse (${org})`,
+    `## Unticket (${org})`,
     "",
     buildPreamble(org),
   ];
@@ -113,7 +113,7 @@ export async function pushClaudeMdToRepos(
         owner: org,
         repo,
         path: FILE_PATH,
-        message: "Update CLAUDE.md with GitPulse agent rules",
+        message: "Update CLAUDE.md with Unticket agent rules",
         content: btoa(unescape(encodeURIComponent(newContent))),
         ...(sha ? { sha } : {}),
       });

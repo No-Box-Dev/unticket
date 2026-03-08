@@ -21,7 +21,7 @@ export function OrgPickerPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
             <Activity className="w-8 h-8 text-brand" />
-            <h1 className="text-2xl font-bold text-stone-900">GitPulse</h1>
+            <h1 className="text-2xl font-bold text-stone-900">Unticket</h1>
           </div>
           <p className="text-stone-500">
             Choose an organisation to track
