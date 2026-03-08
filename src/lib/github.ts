@@ -151,6 +151,7 @@ export interface SyncProgress {
 
 export async function triggerSyncWithProgress(
   onProgress: (status: SyncProgress) => void,
+  force = false,
 ) {
   try {
     onProgress({ phase: "init", synced: 0, total: 0 });
@@ -167,11 +168,12 @@ export async function triggerSyncWithProgress(
     const maxIterations = total + 5;
     let iterations = 0;
     let synced = 0;
+    const forceParam = force ? "&force=true" : "";
 
     while (cursor && iterations < maxIterations) {
       onProgress({ phase: "syncing", repo: cursor, synced, total });
       const res = await apiPost<SyncResponse>(
-        `/api/sync?cursor=${encodeURIComponent(cursor)}`,
+        `/api/sync?cursor=${encodeURIComponent(cursor)}${forceParam}`,
       );
       synced++;
       if (res.done) break;
