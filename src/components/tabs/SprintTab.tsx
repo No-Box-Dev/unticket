@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -49,6 +49,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const isAdmin = useIsAdmin();
   const advanceSprintMut = useAdvanceSprint();
   const { data: snapshots } = useSprintSnapshots();
+  const saveSnapshotsMut = useSaveSprintSnapshots();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: allIssues } = useAllIssues(repoNames);
@@ -60,6 +61,12 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
   const [showPastSprints, setShowPastSprints] = useState(false);
+  const [showBackfill, setShowBackfill] = useState(false);
+  const [backfillNumber, setBackfillNumber] = useState(1);
+  const [backfillName, setBackfillName] = useState("");
+  const [backfillStart, setBackfillStart] = useState("");
+  const [backfillEnd, setBackfillEnd] = useState("");
+  const [backfillFocus, setBackfillFocus] = useState("");
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -386,7 +393,6 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             advanceSprintMut.mutate(
               {
                 newSprint,
-                oldSprint: sprint,
                 oldSprintNumber: sprint.number,
                 features: features ?? [],
                 snapshot,
@@ -406,25 +412,137 @@ export function SprintTab({ repoNames }: SprintTabProps) {
       )}
 
       {/* Past Sprints */}
-      {snapshots && snapshots.length > 0 && (
-        <div className="mt-8">
-          <button
-            onClick={() => setShowPastSprints(!showPastSprints)}
-            className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700 cursor-pointer transition-colors"
-          >
-            {showPastSprints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            Past Sprints ({snapshots.length})
-          </button>
+      <div className="mt-8">
+        <button
+          onClick={() => setShowPastSprints(!showPastSprints)}
+          className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700 cursor-pointer transition-colors"
+        >
+          {showPastSprints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          Past Sprints {snapshots && snapshots.length > 0 ? `(${snapshots.length})` : ""}
+        </button>
 
-          {showPastSprints && (
-            <div className="mt-3 space-y-3">
-              {[...snapshots].sort((a, b) => b.sprintNumber - a.sprintNumber).map((snap) => (
-                <PastSprintCard key={snap.sprintNumber} snapshot={snap} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {showPastSprints && (
+          <div className="mt-3 space-y-3">
+            {snapshots && [...snapshots].sort((a, b) => b.sprintNumber - a.sprintNumber).map((snap) => (
+              <PastSprintCard key={snap.sprintNumber} snapshot={snap} />
+            ))}
+
+            {/* Backfill button */}
+            {isAdmin && !showBackfill && (
+              <button
+                onClick={() => setShowBackfill(true)}
+                className="text-xs text-brand hover:text-brand-dark font-medium cursor-pointer"
+              >
+                + Backfill past sprint
+              </button>
+            )}
+
+            {/* Backfill form */}
+            {isAdmin && showBackfill && (
+              <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-stone-800">Backfill Sprint Snapshot</h4>
+                <p className="text-xs text-stone-400">
+                  Reconstruct a snapshot for a past sprint. Features with that sprint's milestone will be included.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={backfillNumber}
+                      onChange={(e) => setBackfillNumber(parseInt(e.target.value) || 1)}
+                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-500 block mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={backfillName}
+                      onChange={(e) => setBackfillName(e.target.value)}
+                      placeholder="Sprint name..."
+                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-500 block mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={backfillStart}
+                      onChange={(e) => setBackfillStart(e.target.value)}
+                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-500 block mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={backfillEnd}
+                      onChange={(e) => setBackfillEnd(e.target.value)}
+                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500 block mb-1">Focus</label>
+                  <input
+                    type="text"
+                    value={backfillFocus}
+                    onChange={(e) => setBackfillFocus(e.target.value)}
+                    placeholder="Sprint focus..."
+                    className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={!backfillStart || !backfillEnd || saveSnapshotsMut.isPending}
+                    onClick={() => {
+                      const inRange = (dateStr: string) => dateStr >= backfillStart && dateStr <= backfillEnd + "T23:59:59";
+                      const sprintFeatures = (features ?? []).filter((f) => f.sprint === backfillNumber);
+                      const snap: SprintSnapshot = {
+                        sprintNumber: backfillNumber,
+                        name: backfillName,
+                        startDate: backfillStart,
+                        endDate: backfillEnd,
+                        focus: backfillFocus,
+                        metrics: {
+                          prsMerged: (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at)).length,
+                          issuesCreated: (allIssues ?? []).filter((i: any) => inRange(i.created_at)).length,
+                          issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
+                          featuresCompleted: sprintFeatures.filter((f) => f.status === "production").length,
+                          featuresCarriedOver: sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length,
+                        },
+                        features: sprintFeatures.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
+                        createdAt: new Date().toISOString(),
+                      };
+                      const existing = (snapshots ?? []).filter((s) => s.sprintNumber !== backfillNumber);
+                      saveSnapshotsMut.mutate([...existing, snap], {
+                        onSuccess: () => {
+                          setShowBackfill(false);
+                          setBackfillName("");
+                          setBackfillStart("");
+                          setBackfillEnd("");
+                          setBackfillFocus("");
+                        },
+                      });
+                    }}
+                    className="px-4 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+                  >
+                    {saveSnapshotsMut.isPending ? "Saving..." : "Create Snapshot"}
+                  </button>
+                  <button
+                    onClick={() => setShowBackfill(false)}
+                    className="px-4 py-2 border border-stone-200 text-sm text-stone-600 rounded-lg hover:bg-stone-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
     </div>
   );
