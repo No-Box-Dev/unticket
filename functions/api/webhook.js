@@ -84,7 +84,8 @@ export async function onRequestPost(context) {
       const repo = payload.repository?.name;
       if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
 
-      await upsertIssue(db, orgId, repo, payload.issue);
+      const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
+      await upsertIssue(db, orgId, repo, payload.issue, closedBy);
       return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number });
     }
 

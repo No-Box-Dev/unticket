@@ -162,7 +162,7 @@ export function SprintTab({ repoNames: _repoNames }: SprintTabProps) {
           disabled={createRepo.isPending}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 cursor-pointer"
         >
-          {createRepo.isPending ? "Setting up..." : "Set Up Unticket"}
+          {createRepo.isPending ? "Setting up..." : "Set Up unticket.ai"}
         </button>
         {createRepo.isError && (
           <p className="text-sm text-red-500 mt-3">
