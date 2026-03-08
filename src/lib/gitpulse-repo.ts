@@ -19,7 +19,7 @@ export async function ensureGitPulseRepo(org: string): Promise<boolean> {
 
 const CLAUDE_MD = `# .gitpulse
 
-Plans repository for Unticket. Contains implementation plans for features and todos.
+Plans repository for unticket.ai. Contains implementation plans for features and todos.
 
 Config (sprint, features, people, settings, todos) is stored in D1 — not here.
 
@@ -38,14 +38,14 @@ CLAUDE.md     # This file
 # List all plans
 gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'
 
-# Read a specific plan (feature ID is visible in the Unticket modal hint text)
+# Read a specific plan (feature ID is visible in the unticket.ai modal hint text)
 gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md --jq '.content' | base64 -d
 \`\`\`
 
 ## Writing plans via CLI
 
 \`\`\`bash
-# Create a new plan (use the feature ID from the Unticket modal)
+# Create a new plan (use the feature ID from the unticket.ai modal)
 echo '# Plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md \\
   -X PUT -f message="Add plan" -f content=@-
 
@@ -62,7 +62,7 @@ export async function createGitPulseRepo(org: string): Promise<void> {
   await ok.rest.repos.createInOrg({
     org,
     name: REPO_NAME,
-    description: "Unticket plans",
+    description: "unticket.ai plans",
     private: true,
     auto_init: true,
   });

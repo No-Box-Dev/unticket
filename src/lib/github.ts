@@ -14,13 +14,13 @@ export function getOctokit(): Octokit {
       throttle: {
         onRateLimit: (retryAfter: number, options: any, _octokit: any, retryCount: number) => {
           console.warn(
-            `[Unticket] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
+            `[unticket.ai] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
           );
           return retryCount < 1;
         },
         onSecondaryRateLimit: (retryAfter: number, options: any) => {
           console.warn(
-            `[Unticket] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
+            `[unticket.ai] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
           );
           return false;
         },
@@ -103,7 +103,7 @@ export async function fetchUserOrgRole(org: string): Promise<"admin" | "member">
     const { data } = await ok.rest.orgs.getMembershipForAuthenticatedUser({ org });
     return data.role === "admin" ? "admin" : "member";
   } catch (err) {
-    console.warn("[Unticket] Failed to fetch org role, defaulting to member:", err);
+    console.warn("[unticket.ai] Failed to fetch org role, defaulting to member:", err);
     return "member";
   }
 }
@@ -243,6 +243,7 @@ interface ApiIssue {
   assignees: { login: string; avatar_url?: string }[];
   labels: { name: string; color: string }[];
   milestone_title: string | null;
+  closed_by: string | null;
 }
 
 interface ApiMember {
@@ -287,6 +288,7 @@ function transformIssue(issue: ApiIssue) {
     milestone: issue.milestone_title ? { title: issue.milestone_title } : null,
     html_url: issue.html_url,
     repo: issue.repo,
+    closed_by: issue.closed_by,
   };
 }
 
