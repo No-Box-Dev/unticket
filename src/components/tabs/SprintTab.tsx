@@ -7,7 +7,7 @@ import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 
@@ -60,13 +60,17 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
-  const [showPastSprints, setShowPastSprints] = useState(false);
+  const [viewingSnapshot, setViewingSnapshot] = useState<number | null>(null);
   const [showBackfill, setShowBackfill] = useState(false);
   const [backfillNumber, setBackfillNumber] = useState(1);
   const [backfillName, setBackfillName] = useState("");
   const [backfillStart, setBackfillStart] = useState("");
   const [backfillEnd, setBackfillEnd] = useState("");
   const [backfillFocus, setBackfillFocus] = useState("");
+
+  const activeSnapshot = viewingSnapshot !== null
+    ? (snapshots ?? []).find((s) => s.sprintNumber === viewingSnapshot) ?? null
+    : null;
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
@@ -231,6 +235,113 @@ export function SprintTab({ repoNames }: SprintTabProps) {
         </div>
       )}
 
+    {/* Sprint selector */}
+    {snapshots && snapshots.length > 0 && (
+      <div className="flex items-center gap-2 flex-wrap">
+        {[...(snapshots ?? [])].sort((a, b) => a.sprintNumber - b.sprintNumber).map((snap) => (
+          <button
+            key={snap.sprintNumber}
+            onClick={() => setViewingSnapshot(viewingSnapshot === snap.sprintNumber ? null : snap.sprintNumber)}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-full cursor-pointer transition-colors",
+              viewingSnapshot === snap.sprintNumber
+                ? "bg-stone-800 text-white"
+                : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+            )}
+          >
+            Sprint {snap.sprintNumber}
+          </button>
+        ))}
+        <button
+          onClick={() => setViewingSnapshot(null)}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-full cursor-pointer transition-colors",
+            viewingSnapshot === null
+              ? "bg-brand text-white"
+              : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+          )}
+        >
+          Sprint {sprint.number} <span className="text-[10px] opacity-70">(current)</span>
+        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowBackfill(!showBackfill)}
+            className="px-2 py-1.5 text-xs text-stone-400 hover:text-brand cursor-pointer"
+          >
+            +
+          </button>
+        )}
+      </div>
+    )}
+
+    {/* Backfill form */}
+    {isAdmin && showBackfill && (
+      <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
+        <h4 className="text-sm font-semibold text-stone-800">Backfill Sprint Snapshot</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
+            <input type="number" min={1} value={backfillNumber} onChange={(e) => setBackfillNumber(parseInt(e.target.value) || 1)}
+              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          </div>
+          <div>
+            <label className="text-xs text-stone-500 block mb-1">Name</label>
+            <input type="text" value={backfillName} onChange={(e) => setBackfillName(e.target.value)} placeholder="Sprint name..."
+              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          </div>
+          <div>
+            <label className="text-xs text-stone-500 block mb-1">Start Date</label>
+            <input type="date" value={backfillStart} onChange={(e) => setBackfillStart(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          </div>
+          <div>
+            <label className="text-xs text-stone-500 block mb-1">End Date</label>
+            <input type="date" value={backfillEnd} onChange={(e) => setBackfillEnd(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-stone-500 block mb-1">Focus</label>
+          <input type="text" value={backfillFocus} onChange={(e) => setBackfillFocus(e.target.value)} placeholder="Sprint focus..."
+            className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={!backfillStart || !backfillEnd || saveSnapshotsMut.isPending}
+            onClick={() => {
+              const inRange = (dateStr: string) => dateStr >= backfillStart && dateStr <= backfillEnd + "T23:59:59";
+              const bf = (features ?? []).filter((f) => f.sprint === backfillNumber);
+              const snap: SprintSnapshot = {
+                sprintNumber: backfillNumber, name: backfillName, startDate: backfillStart, endDate: backfillEnd, focus: backfillFocus,
+                metrics: {
+                  prsMerged: (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at)).length,
+                  issuesCreated: (allIssues ?? []).filter((i: any) => inRange(i.created_at)).length,
+                  issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
+                  featuresCompleted: bf.filter((f) => f.status === "production").length,
+                  featuresCarriedOver: bf.filter((f) => f.status === "plan" || f.status === "demo").length,
+                },
+                features: bf.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
+                createdAt: new Date().toISOString(),
+              };
+              const existing = (snapshots ?? []).filter((s) => s.sprintNumber !== backfillNumber);
+              saveSnapshotsMut.mutate([...existing, snap], { onSuccess: () => { setShowBackfill(false); setBackfillName(""); setBackfillStart(""); setBackfillEnd(""); setBackfillFocus(""); } });
+            }}
+            className="px-4 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+          >
+            {saveSnapshotsMut.isPending ? "Saving..." : "Create Snapshot"}
+          </button>
+          <button onClick={() => setShowBackfill(false)} className="px-4 py-2 border border-stone-200 text-sm text-stone-600 rounded-lg hover:bg-stone-50 cursor-pointer">Cancel</button>
+        </div>
+      </div>
+    )}
+
+    {/* Past sprint snapshot view */}
+    {activeSnapshot && (
+      <SnapshotView snapshot={activeSnapshot} />
+    )}
+
+    {/* Current sprint board */}
+    {!activeSnapshot && (
     <div className="flex gap-4">
       {/* Left sidebar: Sprint info + Add Feature */}
       <div className="hidden lg:flex flex-col gap-4 w-48 shrink-0 pt-1">
@@ -372,259 +483,89 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
           onConfirm={(newSprint) => {
             setAdvanceFailedCount(0);
-            // Build snapshot of the current sprint
-            const sprintFeatures = (features ?? []).filter((f) => f.sprint === sprint.number && f.status !== "future");
+            const sf = (features ?? []).filter((f) => f.sprint === sprint.number && f.status !== "future");
             const inRange = (dateStr: string) => dateStr >= sprint.startDate && dateStr <= sprint.endDate + "T23:59:59";
             const snapshot: Omit<SprintSnapshot, "createdAt"> = {
-              sprintNumber: sprint.number,
-              name: sprint.name,
-              startDate: sprint.startDate,
-              endDate: sprint.endDate,
-              focus: sprint.focus,
+              sprintNumber: sprint.number, name: sprint.name, startDate: sprint.startDate, endDate: sprint.endDate, focus: sprint.focus,
               metrics: {
                 prsMerged: (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at)).length,
                 issuesCreated: (allIssues ?? []).filter((i: any) => inRange(i.created_at)).length,
                 issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
-                featuresCompleted: sprintFeatures.filter((f) => f.status === "production").length,
-                featuresCarriedOver: sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length,
+                featuresCompleted: sf.filter((f) => f.status === "production").length,
+                featuresCarriedOver: sf.filter((f) => f.status === "plan" || f.status === "demo").length,
               },
-              features: sprintFeatures.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
+              features: sf.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
             };
             advanceSprintMut.mutate(
-              {
-                newSprint,
-                oldSprintNumber: sprint.number,
-                features: features ?? [],
-                snapshot,
-              },
-              {
-                onSuccess: (result) => {
-                  if (result.failed.length === 0) {
-                    setShowNewSprint(false);
-                  } else {
-                    setAdvanceFailedCount(result.failed.length);
-                  }
-                },
-              },
+              { newSprint, oldSprintNumber: sprint.number, features: features ?? [], snapshot },
+              { onSuccess: (result) => { if (result.failed.length === 0) setShowNewSprint(false); else setAdvanceFailedCount(result.failed.length); } },
             );
           }}
         />
       )}
-
-      {/* Past Sprints */}
-      <div className="mt-8">
-        <button
-          onClick={() => setShowPastSprints(!showPastSprints)}
-          className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700 cursor-pointer transition-colors"
-        >
-          {showPastSprints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          Past Sprints {snapshots && snapshots.length > 0 ? `(${snapshots.length})` : ""}
-        </button>
-
-        {showPastSprints && (
-          <div className="mt-3 space-y-3">
-            {snapshots && [...snapshots].sort((a, b) => b.sprintNumber - a.sprintNumber).map((snap) => (
-              <PastSprintCard key={snap.sprintNumber} snapshot={snap} />
-            ))}
-
-            {/* Backfill button */}
-            {isAdmin && !showBackfill && (
-              <button
-                onClick={() => setShowBackfill(true)}
-                className="text-xs text-brand hover:text-brand-dark font-medium cursor-pointer"
-              >
-                + Backfill past sprint
-              </button>
-            )}
-
-            {/* Backfill form */}
-            {isAdmin && showBackfill && (
-              <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-                <h4 className="text-sm font-semibold text-stone-800">Backfill Sprint Snapshot</h4>
-                <p className="text-xs text-stone-400">
-                  Reconstruct a snapshot for a past sprint. Features with that sprint's milestone will be included.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={backfillNumber}
-                      onChange={(e) => setBackfillNumber(parseInt(e.target.value) || 1)}
-                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 block mb-1">Name</label>
-                    <input
-                      type="text"
-                      value={backfillName}
-                      onChange={(e) => setBackfillName(e.target.value)}
-                      placeholder="Sprint name..."
-                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 block mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={backfillStart}
-                      onChange={(e) => setBackfillStart(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 block mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={backfillEnd}
-                      onChange={(e) => setBackfillEnd(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-stone-500 block mb-1">Focus</label>
-                  <input
-                    type="text"
-                    value={backfillFocus}
-                    onChange={(e) => setBackfillFocus(e.target.value)}
-                    placeholder="Sprint focus..."
-                    className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={!backfillStart || !backfillEnd || saveSnapshotsMut.isPending}
-                    onClick={() => {
-                      const inRange = (dateStr: string) => dateStr >= backfillStart && dateStr <= backfillEnd + "T23:59:59";
-                      const sprintFeatures = (features ?? []).filter((f) => f.sprint === backfillNumber);
-                      const snap: SprintSnapshot = {
-                        sprintNumber: backfillNumber,
-                        name: backfillName,
-                        startDate: backfillStart,
-                        endDate: backfillEnd,
-                        focus: backfillFocus,
-                        metrics: {
-                          prsMerged: (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at)).length,
-                          issuesCreated: (allIssues ?? []).filter((i: any) => inRange(i.created_at)).length,
-                          issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
-                          featuresCompleted: sprintFeatures.filter((f) => f.status === "production").length,
-                          featuresCarriedOver: sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length,
-                        },
-                        features: sprintFeatures.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
-                        createdAt: new Date().toISOString(),
-                      };
-                      const existing = (snapshots ?? []).filter((s) => s.sprintNumber !== backfillNumber);
-                      saveSnapshotsMut.mutate([...existing, snap], {
-                        onSuccess: () => {
-                          setShowBackfill(false);
-                          setBackfillName("");
-                          setBackfillStart("");
-                          setBackfillEnd("");
-                          setBackfillFocus("");
-                        },
-                      });
-                    }}
-                    className="px-4 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
-                  >
-                    {saveSnapshotsMut.isPending ? "Saving..." : "Create Snapshot"}
-                  </button>
-                  <button
-                    onClick={() => setShowBackfill(false)}
-                    className="px-4 py-2 border border-stone-200 text-sm text-stone-600 rounded-lg hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
+    </div>
+    )}
     </div>
   );
 }
 
-function PastSprintCard({ snapshot }: { snapshot: SprintSnapshot }) {
-  const [expanded, setExpanded] = useState(false);
+function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
   const { metrics, features: snapshotFeatures } = snapshot;
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-stone-800">
-            Sprint {snapshot.sprintNumber}
-            {snapshot.name && <span className="text-stone-400 font-normal ml-1">— {snapshot.name}</span>}
-          </span>
-          <span className="text-xs text-stone-400">
-            {formatDate(snapshot.startDate)} – {formatDate(snapshot.endDate)}
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 text-xs text-stone-500">
-            <span><span className="font-medium text-stone-700">{metrics.featuresCompleted}</span> shipped</span>
-            <span><span className="font-medium text-stone-700">{metrics.prsMerged}</span> PRs</span>
-            <span><span className="font-medium text-stone-700">{metrics.issuesClosed}</span> closed</span>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-semibold text-stone-800">
+          Sprint {snapshot.sprintNumber}
+          {snapshot.name && <span className="text-stone-400 font-normal ml-2">— {snapshot.name}</span>}
+        </h2>
+        <span className="text-xs text-stone-400">
+          {formatDate(snapshot.startDate)} – {formatDate(snapshot.endDate)}
+        </span>
+      </div>
+
+      {snapshot.focus && (
+        <p className="text-sm text-brand">{snapshot.focus}</p>
+      )}
+
+      {/* Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {([
+          ["PRs Merged", metrics.prsMerged],
+          ["Issues Created", metrics.issuesCreated],
+          ["Issues Closed", metrics.issuesClosed],
+          ["Features Shipped", metrics.featuresCompleted],
+          ["Carried Over", metrics.featuresCarriedOver],
+        ] as const).map(([label, value]) => (
+          <div key={label} className="bg-white rounded-xl border border-stone-200 px-4 py-3 text-center">
+            <div className="text-2xl font-semibold text-stone-800">{value}</div>
+            <div className="text-[10px] text-stone-400 uppercase tracking-wider mt-0.5">{label}</div>
           </div>
-          {expanded ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}
-        </div>
-      </button>
+        ))}
+      </div>
 
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-stone-100">
-          {/* Metrics grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
-            <MetricBadge label="PRs Merged" value={metrics.prsMerged} />
-            <MetricBadge label="Issues Created" value={metrics.issuesCreated} />
-            <MetricBadge label="Issues Closed" value={metrics.issuesClosed} />
-            <MetricBadge label="Features Shipped" value={metrics.featuresCompleted} />
-            <MetricBadge label="Carried Over" value={metrics.featuresCarriedOver} />
-          </div>
-
-          {snapshot.focus && (
-            <p className="text-xs text-stone-400 mt-3">
-              <span className="font-medium text-stone-500">Focus:</span> {snapshot.focus}
-            </p>
-          )}
-
-          {/* Feature list */}
-          {snapshotFeatures.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-2">Features</h4>
-              <div className="space-y-1">
-                {snapshotFeatures.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    <span className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      f.status === "production" ? "bg-green-500" : f.status === "demo" ? "bg-amber-500" : "bg-stone-300",
-                    )} />
-                    <span className="text-stone-700 truncate">{f.title}</span>
-                    {f.owners.length > 0 && (
-                      <span className="text-xs text-stone-400 shrink-0">{f.owners.join(", ")}</span>
-                    )}
-                  </div>
-                ))}
+      {/* Features */}
+      {snapshotFeatures.length > 0 && (
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">Features</h3>
+          <div className="space-y-2">
+            {snapshotFeatures.map((f, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <span className={cn(
+                  "w-2.5 h-2.5 rounded-full shrink-0",
+                  f.status === "production" ? "bg-green-500" : f.status === "demo" ? "bg-amber-500" : "bg-stone-300",
+                )} />
+                <span className="text-sm text-stone-700">{f.title}</span>
+                {f.owners.length > 0 && (
+                  <span className="text-xs text-stone-400 ml-auto shrink-0">{f.owners.join(", ")}</span>
+                )}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function MetricBadge({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-stone-50 rounded-lg px-3 py-2 text-center">
-      <div className="text-lg font-semibold text-stone-800">{value}</div>
-      <div className="text-[10px] text-stone-400 uppercase tracking-wider">{label}</div>
     </div>
   );
 }
