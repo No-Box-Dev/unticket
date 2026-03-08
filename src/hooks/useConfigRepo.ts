@@ -380,13 +380,12 @@ export function useAdvanceSprint() {
   return useMutation({
     mutationFn: async (args: {
       newSprint: SprintConfig;
-      oldSprint: SprintConfig;
       oldSprintNumber: number;
       features: Feature[];
       snapshot?: Omit<SprintSnapshot, "createdAt">;
       onProgress?: (done: number, total: number) => void;
     }) => {
-      const { newSprint, oldSprint, oldSprintNumber, features, snapshot, onProgress } = args;
+      const { newSprint, oldSprintNumber, features, snapshot, onProgress } = args;
       const org = selectedOrg!;
 
       // 1. Save snapshot of the old sprint before advancing
