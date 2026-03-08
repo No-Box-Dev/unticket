@@ -19,7 +19,6 @@ interface InsightsTabProps {
   repoNames: string[];
 }
 
-type View = "team" | "individual";
 type MetricKey = "prsMerged" | "issuesCreated" | "issuesSolved" | "featuresImplemented";
 
 interface SidebarState {
@@ -88,7 +87,6 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
   const { data: orgMembers } = useOrgMembers();
   const { data: features } = useFeatures();
 
-  const [view, setView] = useState<View>("team");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [weeks, setWeeks] = useState(10);
@@ -128,14 +126,10 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
     return personList.filter((p) => p.teams.includes(teamFilter));
   }, [personList, teamFilter]);
 
-  const activePerson =
-    selectedPerson ??
-    (user && filteredPersonList.some((p) => p.github.toLowerCase() === user.login.toLowerCase())
-      ? user.login
-      : null) ??
-    (filteredPersonList.length > 0 ? filteredPersonList[0].github : null);
-
+  // null means "All" (team view), a string means individual
+  const activePerson = selectedPerson;
   const activePersonLower = activePerson?.toLowerCase();
+  const isAllView = activePerson === null;
 
   // Team filtering helper
   const filterByTeam = useCallback((items: any[], repoField: string = "repo") => {
@@ -149,9 +143,9 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
     });
   }, [teamFilter, teams]);
 
-  // --- Team view: filtered raw data ---
+  // --- Team (All) view: filtered raw data ---
   const teamRawData = useMemo(() => {
-    if (view !== "team") return null;
+    if (!isAllView) return null;
     return {
       mergedPRs: filterByTeam(mergedPRs ?? [], "head"),
       allIssues: filterByTeam(allIssues ?? []),
@@ -160,7 +154,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         ? (features ?? [])
         : (features ?? []).filter((f) => f.team === teamFilter),
     };
-  }, [view, mergedPRs, allIssues, closedIssues, features, teamFilter, filterByTeam]);
+  }, [isAllView, mergedPRs, allIssues, closedIssues, features, teamFilter, filterByTeam]);
 
   const isDaily = weeks <= 2;
   const compute = (dates: string[]) =>
@@ -190,7 +184,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
 
   // --- Individual view: filtered raw data ---
   const individualRawData = useMemo(() => {
-    if (view !== "individual" || !activePersonLower) return null;
+    if (isAllView || !activePersonLower) return null;
     return {
       mergedPRs: (allPRs ?? []).filter(
         (pr: any) => pr.user?.login?.toLowerCase() === activePersonLower && pr.merged_at,
@@ -205,7 +199,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         (f) => f.status === "production" && f.owners.some((o) => o.toLowerCase() === activePersonLower),
       ),
     };
-  }, [view, activePersonLower, allPRs, allIssues, closedIssues, features]);
+  }, [isAllView, activePersonLower, allPRs, allIssues, closedIssues, features]);
 
   const individualMetrics = useMemo(() => {
     if (!individualRawData) return null;
@@ -228,8 +222,8 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
     return { prsMerged, issuesCreated, issuesSolved, featuresImplemented };
   }, [individualRawData, weeks]);
 
-  const metrics = view === "team" ? teamMetrics : individualMetrics;
-  const rawData = view === "team" ? teamRawData : individualRawData;
+  const metrics = isAllView ? teamMetrics : individualMetrics;
+  const rawData = isAllView ? teamRawData : individualRawData;
 
   // Sidebar items for selected week
   const sidebarItems = useMemo(() => {
@@ -308,28 +302,6 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         <div className="flex items-center gap-3">
           <BarChart3 className="w-5 h-5 text-stone-400" />
           <h2 className="text-lg font-semibold text-stone-800">Insights</h2>
-          <div className="flex items-center bg-stone-100 rounded-full p-0.5">
-            <button
-              onClick={() => setView("team")}
-              aria-pressed={view === "team"}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                view === "team" ? "bg-white text-stone-800 shadow-sm" : "text-stone-500",
-              )}
-            >
-              Team
-            </button>
-            <button
-              onClick={() => setView("individual")}
-              aria-pressed={view === "individual"}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                view === "individual" ? "bg-white text-stone-800 shadow-sm" : "text-stone-500",
-              )}
-            >
-              Individual
-            </button>
-          </div>
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((opt) => (
@@ -392,28 +364,34 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         </div>
       )}
 
-      {/* Person selector */}
-      {view === "individual" && (
-        <div className="flex flex-wrap gap-2">
-          {filteredPersonList.map((person) => (
-            <button
-              key={person.github}
-              onClick={() => { setSelectedPerson(person.github); setSidebar(null); }}
-              className={cn(
-                "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
-                activePerson === person.github
-                  ? "bg-brand text-white"
-                  : "bg-white border border-stone-200 text-stone-600 hover:border-brand hover:text-brand",
-              )}
-            >
-              {person.name || person.github}
-            </button>
-          ))}
-          {filteredPersonList.length === 0 && (
-            <p className="text-sm text-stone-400">No team members found.</p>
+      {/* Person selector: All + individual people */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => { setSelectedPerson(null); setSidebar(null); }}
+          className={cn(
+            "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
+            isAllView
+              ? "bg-brand text-white"
+              : "bg-white border border-stone-200 text-stone-600 hover:border-brand hover:text-brand",
           )}
-        </div>
-      )}
+        >
+          All
+        </button>
+        {filteredPersonList.map((person) => (
+          <button
+            key={person.github}
+            onClick={() => { setSelectedPerson(person.github); setSidebar(null); }}
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
+              activePerson === person.github
+                ? "bg-brand text-white"
+                : "bg-white border border-stone-200 text-stone-600 hover:border-brand hover:text-brand",
+            )}
+          >
+            {person.name || person.github}
+          </button>
+        ))}
+      </div>
 
       {/* Metric cards */}
       {isLoading ? (
