@@ -11,6 +11,8 @@ import {
   saveTodos,
   fetchAgentRules,
   saveAgentRules,
+  fetchSprintSnapshots,
+  saveSprintSnapshots,
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
@@ -31,7 +33,7 @@ import {
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, SprintSnapshot } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -337,6 +339,24 @@ export function useSaveAgentRules() {
   });
 }
 
+export function useSprintSnapshots() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["sprintSnapshots", selectedOrg],
+    queryFn: fetchSprintSnapshots,
+    enabled: !!selectedOrg,
+  });
+}
+
+export function useSaveSprintSnapshots() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (snapshots: SprintSnapshot[]) => saveSprintSnapshots(snapshots),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] }),
+  });
+}
+
 export function useCreateConfigRepo() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
@@ -360,17 +380,27 @@ export function useAdvanceSprint() {
   return useMutation({
     mutationFn: async (args: {
       newSprint: SprintConfig;
+      oldSprint: SprintConfig;
       oldSprintNumber: number;
       features: Feature[];
+      snapshot?: Omit<SprintSnapshot, "createdAt">;
       onProgress?: (done: number, total: number) => void;
     }) => {
-      const { newSprint, oldSprintNumber, features, onProgress } = args;
+      const { newSprint, oldSprint, oldSprintNumber, features, snapshot, onProgress } = args;
       const org = selectedOrg!;
 
-      // 1. Ensure the new milestone exists on GitHub first
+      // 1. Save snapshot of the old sprint before advancing
+      if (snapshot) {
+        const existing = await fetchSprintSnapshots();
+        // Replace if same sprint number already exists, otherwise append
+        const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
+        await saveSprintSnapshots([...filtered, { ...snapshot, createdAt: new Date().toISOString() }]);
+      }
+
+      // 2. Ensure the new milestone exists on GitHub first
       await findOrCreateMilestone(org, newSprint.number);
 
-      // 2. Move plan/demo features to new sprint
+      // 3. Move plan/demo features to new sprint
       const toMove = features.filter(
         (f) => f.sprint === oldSprintNumber && (f.status === "plan" || f.status === "demo"),
       );
@@ -386,7 +416,7 @@ export function useAdvanceSprint() {
         onProgress?.(done, toMove.length);
       }
 
-      // 3. Only persist sprint config and close old milestone if all features moved
+      // 4. Only persist sprint config and close old milestone if all features moved
       if (failed.length === 0) {
         await saveSprint(newSprint);
         await closeMilestone(org, oldSprintNumber);
@@ -397,6 +427,7 @@ export function useAdvanceSprint() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] });
     },
   });
 }
