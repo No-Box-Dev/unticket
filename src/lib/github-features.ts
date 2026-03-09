@@ -1,5 +1,5 @@
 import { getOctokit } from "./github";
-import { apiGet, apiPost, apiPut } from "./api";
+import { apiGet, apiPost, apiPut, apiFetch } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -120,6 +120,22 @@ function issueToFeature(issue: any): Feature {
 }
 
 // ---------- Sync features from GitHub to D1 ----------
+
+// Sync a single GitHub issue response to D1
+async function syncIssueToD1(data: any): Promise<void> {
+  await apiPut("/api/features", {
+    number: data.number,
+    title: data.title,
+    state: data.state,
+    body: data.body ?? "",
+    assignees: (data.assignees ?? []).map((a: any) => ({ login: a.login })),
+    labels: (data.labels ?? []).map((l: any) => ({ name: l.name, color: l.color })),
+    milestone_title: data.milestone?.title ?? null,
+    html_url: data.html_url,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  });
+}
 
 export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total: number }> {
   const result = await apiPost<{ ok: boolean; synced: number; total: number }>("/api/features");
@@ -259,6 +275,7 @@ export async function createFeature(
     body,
   });
 
+  await syncIssueToD1(data);
   return issueToFeature(data);
 }
 
@@ -288,6 +305,7 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
     milestone,
   });
 
+  await syncIssueToD1(data);
   return issueToFeature(data);
 }
 
@@ -299,6 +317,8 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     issue_number: issueNumber,
     state: "closed",
   });
+  // Also mark as closed in D1 so it doesn't reappear on refetch
+  await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
 }
 
 // ---------- Sub-issues ----------
