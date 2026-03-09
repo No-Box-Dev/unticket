@@ -56,10 +56,10 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
                 key={id}
                 onClick={() => onTabChange(id)}
                 className={cn(
-                  "px-3 py-1 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer rounded-lg",
+                  "px-3 py-1.5 text-sm transition-colors whitespace-nowrap cursor-pointer rounded-lg",
                   activeTab === id
-                    ? "bg-stone-100 text-stone-900"
-                    : "text-stone-400 hover:text-stone-600 hover:bg-stone-50",
+                    ? "bg-brand/10 text-brand font-medium"
+                    : "text-stone-500 hover:text-stone-700 hover:bg-stone-50",
                 )}
               >
                 {label}
