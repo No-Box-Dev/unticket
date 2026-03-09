@@ -25,7 +25,7 @@ export function TeamTag({ team, teams, onChange }: TeamTagProps) {
       <button
         onClick={() => setOpen(!open)}
         className={cn(
-          "px-2.5 py-0.5 text-[11px] font-medium rounded-full cursor-pointer transition-colors border",
+          "px-2.5 py-0.5 text-xs font-medium rounded-full cursor-pointer transition-colors border",
           team
             ? "bg-brand/10 text-brand border-brand/20"
             : "bg-stone-50 text-stone-400 border-stone-200",
@@ -34,7 +34,7 @@ export function TeamTag({ team, teams, onChange }: TeamTagProps) {
         {team || "Team"}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 left-0 bg-white rounded-lg shadow-lg border border-stone-200 py-1 min-w-[120px]">
+        <div className="absolute z-50 mt-1 left-0 bg-white rounded-lg shadow-md border border-stone-200 py-1 min-w-[120px]">
           <button
             onClick={() => { onChange(undefined); setOpen(false); }}
             className={cn(

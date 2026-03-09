@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
-import { Activity, Building2 } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { LogoMark } from "@/components/LogoMark";
 import { Spinner } from "@/components/Spinner";
 
 export function OrgPickerPage() {
@@ -19,9 +20,9 @@ export function OrgPickerPage() {
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <Activity className="w-8 h-8 text-brand" />
-            <h1 className="text-2xl font-bold text-stone-900">unticket.ai</h1>
+          <div className="inline-flex items-center gap-2.5 mb-4">
+            <LogoMark className="w-9 h-9" />
+            <h1 className="text-2xl font-bold text-stone-900 font-display">Unticket</h1>
           </div>
           <p className="text-stone-500">
             Choose an organisation to track
@@ -82,7 +83,7 @@ export function OrgPickerPage() {
           <button
             type="submit"
             disabled={!manualOrg.trim()}
-            className="px-4 py-2 text-sm font-medium text-white bg-brand rounded-lg hover:bg-brand/90 disabled:opacity-40 cursor-pointer"
+            className="px-4 py-2 text-sm font-medium text-white bg-brand rounded-lg hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
           >
             Go
           </button>

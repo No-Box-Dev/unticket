@@ -171,7 +171,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 <br />
                 <button
                   onClick={() => { setEditContent(""); setEditMode(true); }}
-                  className="mt-2 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
+                  className="mt-2 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
                 >
                   Create Plan
                 </button>
@@ -198,14 +198,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                       update({ plan: editContent });
                       setEditMode(false);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
                   >
                     <Save size={12} />
                     Save
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="px-3 py-1.5 rounded-md border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -260,14 +260,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()}
                 placeholder="Add a task..."
-                className="flex-1 px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
               />
               <button
                 type="button"
                 aria-label="Add task"
                 onClick={addTask}
                 disabled={!newTaskText.trim() || createSubIssueMut.isPending}
-                className="px-2.5 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1"
+                className="px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1"
               >
                 {createSubIssueMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               </button>
@@ -300,11 +300,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                     <div key={i} className="relative flex items-center gap-2">
                       <div className={`absolute -left-4 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white`} />
                       <span className="text-xs font-medium text-stone-700">{label}</span>
-                      <span className="text-[10px] text-stone-400">
+                      <span className="text-xs text-stone-400">
                         {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
                         {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </span>
-                      <span className="text-[10px] text-stone-300">{ago}</span>
+                      <span className="text-xs text-stone-300">{ago}</span>
                     </div>
                   );
                 })}
@@ -313,7 +313,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           )}
 
           {/* Status footer */}
-          <div className="flex items-center gap-2 text-[10px] text-stone-400 pt-1">
+          <div className="flex items-center gap-2 text-xs text-stone-400 pt-1">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
                 draft.status === "production"
@@ -437,7 +437,7 @@ function TaskAssignee({
         {assignee ? `@${assignee}` : "assign"}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg z-10 w-40 max-h-48 overflow-y-auto">
+        <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-md z-10 w-40 max-h-48 overflow-y-auto">
           <button
             onClick={() => { onChange([]); setOpen(false); }}
             className="w-full text-left px-3 py-1.5 text-xs text-stone-400 hover:bg-stone-50 cursor-pointer"

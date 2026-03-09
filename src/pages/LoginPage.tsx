@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Activity, Github, ChevronDown } from "lucide-react";
+import { Github, ChevronDown } from "lucide-react";
+import { LogoMark } from "@/components/LogoMark";
 
 export function LoginPage() {
   const { authMode, loginWithToken, loginWithOAuth } = useAuth();
@@ -34,9 +35,9 @@ export function LoginPage() {
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <Activity className="w-8 h-8 text-brand" />
-            <h1 className="text-2xl font-bold text-stone-900">unticket.ai</h1>
+          <div className="inline-flex items-center gap-2.5 mb-4">
+            <LogoMark className="w-9 h-9" />
+            <h1 className="text-2xl font-bold text-stone-900 font-display">Unticket</h1>
           </div>
           <p className="text-stone-500">
             AI-powered project management for GitHub

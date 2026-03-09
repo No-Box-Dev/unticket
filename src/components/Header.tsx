@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin } from "@/hooks/useGitHub";
 import { LogOut, ArrowLeftRight, Shield } from "lucide-react";
+import { LogoMark } from "./LogoMark";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -23,8 +24,9 @@ export function Header({ onOpenSettings }: HeaderProps) {
 
   return (
     <header className="bg-white border-b border-stone-200 px-4 sm:px-8 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-bold text-brand">unticket.ai</h1>
+      <div className="flex items-center gap-2">
+        <LogoMark className="w-6 h-6" />
+        <h1 className="text-lg font-bold text-stone-900 font-display">Unticket</h1>
       </div>
 
       <div className="flex items-center gap-1" ref={menuRef}>
@@ -52,7 +54,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
         )}
 
         {menuOpen && (
-          <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[180px]">
+          <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[180px]">
             <button
               onClick={() => { setSelectedOrg(null); setMenuOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer"

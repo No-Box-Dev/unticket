@@ -22,7 +22,7 @@ const labelColors: Record<string, { bg: string; text: string }> = {
   enhancement: { bg: "bg-blue-50", text: "text-blue-700" },
   feature: { bg: "bg-blue-50", text: "text-blue-700" },
   investigation: { bg: "bg-yellow-50", text: "text-yellow-700" },
-  documentation: { bg: "bg-purple-50", text: "text-purple-700" },
+  documentation: { bg: "bg-accent-light", text: "text-accent" },
 };
 
 function getLabelStyle(name: string, color: string) {
@@ -410,7 +410,7 @@ export function IssuesTab(_props: IssuesTabProps) {
                   <tr>
                     <td
                       colSpan={9}
-                      className="px-4 py-2 text-[10px] font-medium text-stone-400 uppercase tracking-wider bg-stone-50 border-t-2 border-stone-200"
+                      className="px-4 py-2 text-xs font-medium text-stone-400 uppercase tracking-wider bg-stone-50 border-t-2 border-stone-200"
                     >
                       Closed During Sprint
                     </td>
@@ -485,7 +485,7 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
     <tr className={cn("hover:bg-stone-50", closed && "text-stone-400")}>
       <td className="px-4 py-2.5">
         {closed ? (
-          <CircleCheck className="w-4 h-4 text-purple-500" />
+          <CircleCheck className="w-4 h-4 text-accent" />
         ) : (
           <CircleDot className="w-4 h-4 text-green-600" />
         )}
@@ -514,7 +514,7 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
               <span
                 key={l.name}
                 className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                  "text-xs px-1.5 py-0.5 rounded-full font-medium",
                   style.bg,
                   style.text,
                 )}

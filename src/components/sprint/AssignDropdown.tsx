@@ -82,7 +82,7 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               ? { bottom: window.innerHeight - pos.top }
               : { top: pos.top }),
           }}
-          className="z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[160px]"
+          className="z-50 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[160px]"
         >
           <div className="px-2 pb-1">
             <input
