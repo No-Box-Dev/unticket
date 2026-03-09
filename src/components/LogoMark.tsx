@@ -6,7 +6,7 @@ interface LogoMarkProps {
 
 export function LogoMark({ className }: LogoMarkProps) {
   return (
-    <svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" className={cn("w-8 h-8", className)}>
+    <svg viewBox="225 145 574 670" fill="none" xmlns="http://www.w3.org/2000/svg" className={cn("w-8 h-8", className)}>
       <path d="M762 308L702 344L512 232L322 344L262 308L512 162Z" fill="#FE795D"/>
       <path d="M782 346V614L723 580V380Z" fill="#9B78F4"/>
       <path d="M301 380V580L242 614V346Z" fill="#9B78F4"/>

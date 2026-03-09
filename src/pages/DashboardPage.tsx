@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useIsAdmin, useRateLimit } from "@/hooks/useGitHub";
+import { useRepos, useRateLimit } from "@/hooks/useGitHub";
 import { Header } from "@/components/Header";
-import { TabBar } from "@/components/TabBar";
 import { SprintTab } from "@/components/tabs/SprintTab";
 import { BacklogTab } from "@/components/tabs/BacklogTab";
 import { PRsTab } from "@/components/tabs/PRsTab";
@@ -15,7 +14,6 @@ import type { TabId } from "@/lib/types";
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
-  const isAdmin = useIsAdmin();
   const [activeTab, setActiveTab] = useState<TabId>("sprint");
   const [showSettings, setShowSettings] = useState(false);
   const { data: rateLimit } = useRateLimit();
@@ -35,7 +33,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <CommandPalette onNavigate={(tab) => { setActiveTab(tab); setShowSettings(false); }} />
-      <Header onOpenSettings={() => setShowSettings(true)} />
+      <Header activeTab={activeTab} onTabChange={handleTabChange} onOpenSettings={() => setShowSettings(true)} />
       {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-1.5 flex items-center justify-between">
           <span className="text-xs text-amber-700">
@@ -48,7 +46,6 @@ export function DashboardPage() {
           )}
         </div>
       )}
-      <TabBar activeTab={activeTab} onTabChange={handleTabChange} isAdmin={isAdmin} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {showSettings ? (
           <>
