@@ -220,7 +220,7 @@ export function TodoTab() {
           <button
             onClick={addTodo}
             disabled={!input.trim()}
-            className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+            className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
           >
             <Plus size={16} />
             Add
@@ -386,7 +386,7 @@ function TodoCard({
             {feature && (
               <span className="flex items-center gap-1.5">
                 <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[feature.status])} />
-                <span className="text-[11px] text-stone-400">{feature.title}</span>
+                <span className="text-xs text-stone-400">{feature.title}</span>
               </span>
             )}
             {todo.repo && (
@@ -395,7 +395,7 @@ function TodoCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 text-[11px] text-stone-400 hover:text-brand transition-colors"
+                className="flex items-center gap-1 text-xs text-stone-400 hover:text-brand transition-colors"
               >
                 <GitBranch size={10} />
                 {todo.repo}

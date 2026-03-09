@@ -25,7 +25,7 @@ export function EffortTag({ effort, onChange }: EffortTagProps) {
     <button
       onClick={next}
       className={cn(
-        "px-2.5 py-0.5 text-[11px] font-medium rounded-full cursor-pointer transition-colors border",
+        "px-2.5 py-0.5 text-xs font-medium rounded-full cursor-pointer transition-colors border",
         config.bg,
         config.text,
         config.border,

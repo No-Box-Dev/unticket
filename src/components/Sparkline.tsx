@@ -62,7 +62,7 @@ export function Sparkline({
           <text
             x={padding}
             y={height - 2}
-            className="text-[9px] fill-stone-400"
+            className="text-[10px] fill-stone-400"
           >
             {formatWeekLabel(data[0].weekStart)}
           </text>
@@ -70,7 +70,7 @@ export function Sparkline({
             x={width - padding}
             y={height - 2}
             textAnchor="end"
-            className="text-[9px] fill-stone-400"
+            className="text-[10px] fill-stone-400"
           >
             {formatWeekLabel(data[data.length - 1].weekStart)}
           </text>

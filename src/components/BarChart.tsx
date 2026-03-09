@@ -54,7 +54,7 @@ export function BarChart({ data, color, onBarClick, activeWeek, daily }: BarChar
             >
               {isHovered && bucket.value > 0 && (
                 <div
-                  className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-semibold whitespace-nowrap"
+                  className="absolute -top-5 left-1/2 -translate-x-1/2 text-xs font-semibold whitespace-nowrap"
                   style={{ color }}
                 >
                   {bucket.value}
@@ -79,7 +79,7 @@ export function BarChart({ data, color, onBarClick, activeWeek, daily }: BarChar
         {data.map((bucket, i) => (
           <div key={bucket.weekStart} className="flex-1 text-center">
             {shouldShowLabel(i, data.length) && (
-              <span className="text-[9px] text-stone-400 leading-none">
+              <span className="text-[10px] text-stone-400 leading-none">
                 {daily ? formatDay(bucket.weekStart) : formatWeek(bucket.weekStart)}
               </span>
             )}

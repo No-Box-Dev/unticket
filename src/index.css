@@ -1,10 +1,55 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik bold italic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Arbeit";
+  src: url("/fonts/Arbeit-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Arbeit";
+  src: url("/fonts/Arbeit-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Arbeit";
+  src: url("/fonts/Arbeit-LightItalic.otf") format("opentype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
 @theme {
+  --font-sans: "Arbeit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Aeonik", ui-sans-serif, system-ui, sans-serif;
+
   --color-brand: #FE795D;
   --color-brand-light: #FFF1EE;
   --color-brand-dark: #E56A50;
+  --color-accent: #9B78F4;
+  --color-accent-light: #F3EFFF;
   --color-surface: #fafaf9;
   --color-border: #e7e5e4;
   --color-muted: #78716c;

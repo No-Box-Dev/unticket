@@ -57,7 +57,7 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <FastForward size={18} className="text-brand" />
-            <h2 className="text-lg font-semibold text-stone-800">New Sprint</h2>
+            <h2 className="text-lg font-semibold text-stone-800 font-display">New Sprint</h2>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
             <X className="w-5 h-5" />
