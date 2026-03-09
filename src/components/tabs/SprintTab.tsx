@@ -5,6 +5,7 @@ import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
+import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw } from "lucide-react";
@@ -57,6 +58,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
+  const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: allIssues } = useAllIssues(repoNames);
@@ -65,6 +67,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
+  const [justMe, setJustMe] = useState(false);
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
   const [viewingSnapshot, setViewingSnapshot] = useState<number | null>(null);
@@ -86,10 +89,15 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
   // Flat sprint features (no team grouping)
   const sprintFeatures = useMemo(() => {
-    return (features ?? []).filter(
-      (f) => f.sprint === sprint?.number && f.status !== "future",
-    );
-  }, [features, sprint]);
+    const myLogin = user?.login?.toLowerCase();
+    return (features ?? []).filter((f) => {
+      if (f.sprint !== sprint?.number || f.status === "future") return false;
+      if (justMe && myLogin) {
+        return f.owners.some((o) => o.toLowerCase() === myLogin);
+      }
+      return true;
+    });
+  }, [features, sprint, justMe, user]);
 
   const planFeatures = useMemo(
     () => sprintFeatures.filter((f) => f.status === "plan"),
@@ -419,7 +427,18 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
       {/* Kanban columns: Plan | Demo | Production */}
       <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={() => setJustMe(!justMe)}
+            className={cn(
+              "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+              justMe
+                ? "bg-brand text-white"
+                : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+            )}
+          >
+            Just me
+          </button>
           <div className="flex items-center gap-1.5">
             <ArrowUpDown size={13} className="text-stone-400" />
             <select

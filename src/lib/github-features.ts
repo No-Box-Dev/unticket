@@ -1,5 +1,5 @@
 import { getOctokit } from "./github";
-import { apiGet, apiPost, apiPut } from "./api";
+import { apiGet, apiPost, apiPut, apiFetch } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -299,6 +299,8 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     issue_number: issueNumber,
     state: "closed",
   });
+  // Also mark as closed in D1 so it doesn't reappear on refetch
+  await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
 }
 
 // ---------- Sub-issues ----------

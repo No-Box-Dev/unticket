@@ -29,6 +29,21 @@ export async function onRequestGet(context) {
   return jsonResponse(data);
 }
 
+// DELETE /api/features?number=123 — mark feature as closed in D1
+export async function onRequestDelete(context) {
+  const { orgId } = getCtx(context);
+  const url = new URL(context.request.url);
+  const number = url.searchParams.get("number");
+  if (!number) return jsonResponse({ error: "number required" }, 400);
+
+  await context.env.DB
+    .prepare("UPDATE features SET state = 'closed' WHERE org_id = ? AND number = ?")
+    .bind(orgId, parseInt(number))
+    .run();
+
+  return jsonResponse({ ok: true });
+}
+
 // POST /api/features — sync features from .gitpulse repo
 export async function onRequestPost(context) {
   const { orgId, token, orgLogin } = getCtx(context);
