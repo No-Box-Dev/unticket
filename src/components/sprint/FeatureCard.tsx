@@ -33,6 +33,8 @@ export function FeatureCard({
   onDragStart,
   isAdmin,
 }: FeatureCardProps) {
+  const hasPlan = !!feature.plan?.trim();
+
   const dotColor =
     feature.status === "production"
       ? "bg-green-500"
@@ -50,6 +52,7 @@ export function FeatureCard({
         "group bg-white rounded-lg border border-stone-200 p-3 shadow-sm hover:shadow-md transition-shadow",
         draggable && "cursor-grab active:cursor-grabbing",
         feature.status === "production" && "opacity-60",
+        !hasPlan && "border-l-2 border-l-amber-300",
       )}
     >
       {/* Row 1: grip + title */}
