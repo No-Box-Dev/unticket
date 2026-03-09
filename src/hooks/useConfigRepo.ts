@@ -109,10 +109,15 @@ export function useUpdateFeature() {
       );
       return { previous };
     },
+    onSuccess: (result) => {
+      // Set cache from server response — avoids D1 replica lag overwriting optimistic update
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old?.map((f) => (f.id === result.id ? result : f)) ?? [],
+      );
+    },
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }
 
@@ -134,7 +139,6 @@ export function useDeleteFeature() {
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }
 
