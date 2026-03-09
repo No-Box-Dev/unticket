@@ -258,7 +258,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                   onProgress: (done, total) => setMigrateProgress({ done, total }),
                 });
               }}
-              className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 cursor-pointer flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 cursor-pointer flex items-center gap-1.5"
             >
               <Upload size={12} />
               Migrate
@@ -304,7 +304,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
               : "bg-stone-100 text-stone-500 hover:bg-stone-200",
           )}
         >
-          Sprint {sprint.number} <span className="text-[10px] opacity-70">(current)</span>
+          Sprint {sprint.number} <span className="text-xs opacity-70">(current)</span>
         </button>
         {isAdmin && (
           <button
@@ -325,28 +325,28 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           <div>
             <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
             <input type="number" min={1} value={backfillNumber} onChange={(e) => setBackfillNumber(parseInt(e.target.value) || 1)}
-              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
             <label className="text-xs text-stone-500 block mb-1">Name</label>
             <input type="text" value={backfillName} onChange={(e) => setBackfillName(e.target.value)} placeholder="Sprint name..."
-              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
             <label className="text-xs text-stone-500 block mb-1">Start Date</label>
             <input type="date" value={backfillStart} onChange={(e) => setBackfillStart(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
             <label className="text-xs text-stone-500 block mb-1">End Date</label>
             <input type="date" value={backfillEnd} onChange={(e) => setBackfillEnd(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
         <div>
           <label className="text-xs text-stone-500 block mb-1">Focus</label>
           <input type="text" value={backfillFocus} onChange={(e) => setBackfillFocus(e.target.value)} placeholder="Sprint focus..."
-            className="w-full px-3 py-2 rounded-md border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -538,7 +538,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="px-2 py-1 rounded-md border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-brand cursor-pointer"
+              className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-brand cursor-pointer"
             >
               <option value="default">Default order</option>
               <option value="priority">Priority</option>
@@ -673,7 +673,7 @@ function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
         ] as const).map(([label, value]) => (
           <div key={label} className="bg-white rounded-xl border border-stone-200 px-4 py-3 text-center">
             <div className="text-2xl font-semibold text-stone-800">{value}</div>
-            <div className="text-[10px] text-stone-400 uppercase tracking-wider mt-0.5">{label}</div>
+            <div className="text-xs text-stone-400 uppercase tracking-wider mt-0.5">{label}</div>
           </div>
         ))}
       </div>

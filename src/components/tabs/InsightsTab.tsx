@@ -301,7 +301,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <BarChart3 className="w-5 h-5 text-stone-400" />
-          <h2 className="text-lg font-semibold text-stone-800">Insights</h2>
+          <h2 className="text-lg font-semibold text-stone-800 font-display">Insights</h2>
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((opt) => (
@@ -439,7 +439,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       {sidebar && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setSidebar(null)} />
-          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white border-l border-stone-200 shadow-lg flex flex-col">
+          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white border-l border-stone-200 shadow-xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-stone-100">
               <div>
                 <h3 className="text-sm font-semibold text-stone-800">{sidebar.title}</h3>
@@ -460,7 +460,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                 <div className="space-y-4">
                   {groupByRepo(sidebarItems).map(([repo, items]) => (
                     <div key={repo}>
-                      <h4 className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mb-1.5">
+                      <h4 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1.5">
                         {repo || "Other"}
                       </h4>
                       <div className="space-y-1.5">
@@ -479,7 +479,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                               <ExternalLink className="w-3 h-3 text-stone-300 group-hover:text-stone-400 shrink-0 mt-0.5" />
                             </div>
                             {item.author && (
-                              <span className="text-[11px] text-stone-400 mt-1 block">{item.author}</span>
+                              <span className="text-xs text-stone-400 mt-1 block">{item.author}</span>
                             )}
                           </a>
                         ))}

@@ -142,7 +142,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
             <button
               onClick={handleAdd}
               disabled={!addValid}
-              className="text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-40 px-3 py-1 rounded-lg cursor-pointer disabled:cursor-default"
+              className="text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 px-3 py-1 rounded-lg cursor-pointer disabled:cursor-default"
             >
               Add
             </button>

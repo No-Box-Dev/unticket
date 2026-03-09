@@ -75,7 +75,7 @@ export function OverviewTab({ repos, prs, issues, prsLoading, issuesLoading }: O
                   </span>
                   <span className="text-sm text-stone-800 truncate">{pr.title}</span>
                   {pr.draft && (
-                    <span className="text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full shrink-0">
+                    <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full shrink-0">
                       draft
                     </span>
                   )}
@@ -115,7 +115,7 @@ export function OverviewTab({ repos, prs, issues, prsLoading, issuesLoading }: O
                   {(issue.labels ?? []).slice(0, 2).map((l: any) => (
                     <span
                       key={l.name}
-                      className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                      className="text-xs px-1.5 py-0.5 rounded-full shrink-0"
                       style={{
                         backgroundColor: `#${l.color}20`,
                         color: `#${l.color}`,

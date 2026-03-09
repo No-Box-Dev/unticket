@@ -68,7 +68,7 @@ export function Sidebar({ activeTab, onTabChange, onOpenSettings, collapsed, onT
           <div>
             <h1 className="text-base font-bold text-brand truncate">{selectedOrg}</h1>
             {sprint && (
-              <p className="text-[11px] text-stone-400 mt-0.5 truncate">
+              <p className="text-xs text-stone-400 mt-0.5 truncate">
                 Sprint {sprint.number}: {sprint.name}
               </p>
             )}
@@ -87,7 +87,7 @@ export function Sidebar({ activeTab, onTabChange, onOpenSettings, collapsed, onT
               "w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors cursor-pointer",
               collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
               activeTab === id
-                ? "bg-brand/10 text-brand"
+                ? "bg-accent/10 text-accent"
                 : "text-stone-500 hover:bg-stone-50 hover:text-stone-700",
             )}
           >
@@ -144,7 +144,7 @@ export function Sidebar({ activeTab, onTabChange, onOpenSettings, collapsed, onT
         {menuOpen && (
           <div
             className={cn(
-              "absolute bottom-16 bg-white border border-stone-200 rounded-lg shadow-lg py-1 min-w-[180px]",
+              "absolute bottom-16 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[180px]",
               collapsed ? "left-16 ml-1" : "left-2 right-2",
             )}
           >

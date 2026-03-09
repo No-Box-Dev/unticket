@@ -144,7 +144,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl border border-stone-200 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden">
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200">
           <Search size={16} className="text-stone-400 shrink-0" />
@@ -156,7 +156,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             placeholder="Search features, people, pages..."
             className="flex-1 text-sm text-stone-800 placeholder:text-stone-400 outline-none bg-transparent"
           />
-          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">
+          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">
             ESC
           </kbd>
         </div>
@@ -176,7 +176,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
               )}
             >
               <span className={cn(
-                "text-[10px] uppercase tracking-wider font-medium w-14 shrink-0",
+                "text-xs uppercase tracking-wider font-medium w-14 shrink-0",
                 r.type === "feature" ? "text-brand" : r.type === "person" ? "text-amber-500" : "text-stone-400",
               )}>
                 {r.type}

@@ -392,7 +392,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                     <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         {view === "merged" ? (
-                          <GitMerge className="w-4 h-4 text-purple-600" />
+                          <GitMerge className="w-4 h-4 text-accent" />
                         ) : (
                           <GitPullRequest
                             className={cn(
@@ -408,12 +408,12 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                       <div className="text-stone-800 truncate">
                         {pr.title}
                         {pr.draft && (
-                          <span className="ml-2 text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">
+                          <span className="ml-2 text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">
                             draft
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-stone-400 truncate">
+                      <div className="text-xs text-stone-400 truncate">
                         {pr.head.ref} → {pr.base.ref}
                       </div>
                     </td>

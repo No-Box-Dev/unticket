@@ -160,7 +160,7 @@ export function SearchableSelect({
               ? { bottom: window.innerHeight - pos.top }
               : { top: pos.top }),
           }}
-          className="z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1"
+          className="z-50 bg-white border border-stone-200 rounded-lg shadow-md py-1"
         >
           <div className="px-2 pb-1">
             <input
