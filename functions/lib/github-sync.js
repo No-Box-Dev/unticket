@@ -271,13 +271,8 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     { state: "all", sort: "updated", direction: "desc" }
   );
 
-  // Pick up any issue with a Sprint milestone OR the "feature" label
-  const features = issues.filter((i) => {
-    if (i.pull_request) return false;
-    const hasFeatureLabel = (i.labels ?? []).some((l) => l.name === "feature");
-    const hasSprintMilestone = /^Sprint \d+$/.test(i.milestone?.title ?? "");
-    return hasFeatureLabel || hasSprintMilestone;
-  });
+  // Every issue on the .gitpulse repo is a feature (filter out PRs only)
+  const features = issues.filter((i) => !i.pull_request);
 
   console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
@@ -443,10 +438,6 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
 }
 
 export async function upsertFeature(db, orgId, issue) {
-  const labels = (issue.labels ?? []).map((l) => l.name ?? l);
-  const hasFeatureLabel = labels.includes("feature");
-  const hasSprintMilestone = /^Sprint \d+$/.test(issue.milestone?.title ?? "");
-  if (!hasFeatureLabel && !hasSprintMilestone) return;
 
   // If the issue is closed and not a feature deletion, skip
   // (deleteFeature closes the issue)
