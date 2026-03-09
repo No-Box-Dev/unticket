@@ -1,14 +1,15 @@
 import { cn } from "@/lib/cn";
-import { EffortTag } from "./EffortTag";
+import { TeamTag } from "./TeamTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, Effort, Priority } from "@/lib/types";
-import { GripVertical } from "lucide-react";
+import type { Feature, Priority } from "@/lib/types";
+import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
   allPeople: string[];
+  allTeams: string[];
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
@@ -22,6 +23,7 @@ interface FeatureCardProps {
 export function FeatureCard({
   feature,
   allPeople,
+  allTeams,
   onUpdate,
   onDelete,
   onOpenDetail,
@@ -70,9 +72,10 @@ export function FeatureCard({
           priority={feature.priority ?? "none"}
           onChange={(priority: Priority) => onUpdate({ ...feature, priority })}
         />
-        <EffortTag
-          effort={feature.effort}
-          onChange={(effort: Effort) => onUpdate({ ...feature, effort })}
+        <TeamTag
+          team={feature.team}
+          teams={allTeams}
+          onChange={(team) => onUpdate({ ...feature, team })}
         />
         <AssignDropdown
           owners={feature.owners}
@@ -80,29 +83,32 @@ export function FeatureCard({
           onChange={(owners) => onUpdate({ ...feature, owners })}
         />
         <div className="flex-1" />
-        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {mode === "sprint" && (
             <button
               onClick={() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null })}
-              className="text-[11px] text-stone-400 hover:text-stone-600 cursor-pointer"
+              className="p-1 text-stone-400 hover:text-stone-600 cursor-pointer rounded hover:bg-stone-100"
+              title="Move to Backlog"
             >
-              Backlog
+              <Archive size={13} />
             </button>
           )}
           {mode === "backlog" && currentSprint && (
             <button
               onClick={() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint })}
-              className="text-[11px] text-stone-400 hover:text-brand cursor-pointer"
+              className="p-1 text-stone-400 hover:text-brand cursor-pointer rounded hover:bg-stone-100"
+              title="Move to Sprint"
             >
-              Sprint
+              <ArrowUpFromLine size={13} />
             </button>
           )}
           {isAdmin && (
             <button
               onClick={() => onDelete(feature.id)}
-              className="text-[11px] text-stone-400 hover:text-red-500 cursor-pointer"
+              className="p-1 text-stone-400 hover:text-red-500 cursor-pointer rounded hover:bg-red-50"
+              title="Delete"
             >
-              Delete
+              <Trash2 size={13} />
             </button>
           )}
         </div>

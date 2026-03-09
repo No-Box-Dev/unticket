@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -8,7 +8,7 @@ import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks
 import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 
@@ -58,6 +58,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
+  const { data: settings } = useSettings();
   const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
@@ -68,6 +69,8 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
   const [viewingSnapshot, setViewingSnapshot] = useState<number | null>(null);
@@ -87,6 +90,11 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     [people],
   );
 
+  const allTeamNames = useMemo(
+    () => (settings?.teams ?? []).map((t) => t.name),
+    [settings],
+  );
+
   // Build person pill list: current user first, then alphabetical from people config
   const personPills = useMemo(() => {
     const myLogin = user?.login;
@@ -103,14 +111,21 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
   // Flat sprint features (no team grouping)
   const sprintFeatures = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return (features ?? []).filter((f) => {
       if (f.sprint !== sprint?.number || f.status === "future") return false;
       if (selectedPerson) {
-        return f.owners.some((o) => o.toLowerCase() === selectedPerson.toLowerCase());
+        if (!f.owners.some((o) => o.toLowerCase() === selectedPerson.toLowerCase())) return false;
+      }
+      if (selectedTeam) {
+        if (f.team !== selectedTeam) return false;
+      }
+      if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) {
+        return false;
       }
       return true;
     });
-  }, [features, sprint, selectedPerson]);
+  }, [features, sprint, selectedPerson, selectedTeam, searchQuery]);
 
   const planFeatures = useMemo(
     () => sprintFeatures.filter((f) => f.status === "plan"),
@@ -440,33 +455,81 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
       {/* Kanban columns: Plan | Demo | Production */}
       <div className="flex-1 min-w-0 space-y-2">
-        {/* Person filter pills */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setSelectedPerson(null)}
-            className={cn(
-              "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-              selectedPerson === null
-                ? "bg-brand text-white"
-                : "bg-stone-100 text-stone-500 hover:bg-stone-200",
-            )}
-          >
-            All
-          </button>
-          {personPills.map((p) => (
+        {/* Search */}
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search features..."
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+          />
+        </div>
+
+        {/* Filter pills */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Person pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              key={p.login}
-              onClick={() => setSelectedPerson(selectedPerson === p.login ? null : p.login)}
+              onClick={() => setSelectedPerson(null)}
               className={cn(
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                selectedPerson === p.login
-                  ? "bg-stone-800 text-white"
+                selectedPerson === null
+                  ? "bg-brand text-white"
                   : "bg-stone-100 text-stone-500 hover:bg-stone-200",
               )}
             >
-              {p.name}
+              All
             </button>
-          ))}
+            {personPills.map((p) => (
+              <button
+                key={p.login}
+                onClick={() => setSelectedPerson(selectedPerson === p.login ? null : p.login)}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                  selectedPerson === p.login
+                    ? "bg-stone-800 text-white"
+                    : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                )}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Team pills */}
+          {allTeamNames.length > 0 && (
+            <>
+              <span className="w-px h-4 bg-stone-200" />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setSelectedTeam(null)}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                    selectedTeam === null
+                      ? "bg-brand/10 text-brand"
+                      : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                  )}
+                >
+                  All teams
+                </button>
+                {allTeamNames.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTeam(selectedTeam === t ? null : t)}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                      selectedTeam === t
+                        ? "bg-stone-800 text-white"
+                        : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3">
@@ -510,6 +573,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                   key={feature.id}
                   feature={feature}
                   allPeople={allPeopleNames}
+                  allTeams={allTeamNames}
                   onUpdate={updateFeature}
                   onDelete={deleteFeature}
                   onOpenDetail={setDetailFeature}
