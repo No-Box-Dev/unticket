@@ -29,9 +29,9 @@ export async function onRequestGet(context) {
   return jsonResponse(data);
 }
 
-// POST /api/features/sync — sync features from .gitpulse repo
+// POST /api/features — sync features from .gitpulse repo
 export async function onRequestPost(context) {
   const { orgId, token, orgLogin } = getCtx(context);
-  await syncFeatures(context.env.DB, token, orgId, orgLogin);
-  return jsonResponse({ ok: true });
+  const result = await syncFeatures(context.env.DB, token, orgId, orgLogin);
+  return jsonResponse({ ok: true, ...result });
 }
