@@ -67,7 +67,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
-  const [justMe, setJustMe] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
   const [viewingSnapshot, setViewingSnapshot] = useState<number | null>(null);
@@ -87,17 +87,30 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     [people],
   );
 
+  // Build person pill list: current user first, then alphabetical from people config
+  const personPills = useMemo(() => {
+    const myLogin = user?.login;
+    const names = (people ?? []).map((p) => p.name || p.github);
+    const logins = (people ?? []).map((p) => p.github);
+    const pairs = logins.map((login, i) => ({ login, name: names[i] }));
+    pairs.sort((a, b) => {
+      if (a.login === myLogin) return -1;
+      if (b.login === myLogin) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    return pairs;
+  }, [people, user]);
+
   // Flat sprint features (no team grouping)
   const sprintFeatures = useMemo(() => {
-    const myLogin = user?.login?.toLowerCase();
     return (features ?? []).filter((f) => {
       if (f.sprint !== sprint?.number || f.status === "future") return false;
-      if (justMe && myLogin) {
-        return f.owners.some((o) => o.toLowerCase() === myLogin);
+      if (selectedPerson) {
+        return f.owners.some((o) => o.toLowerCase() === selectedPerson.toLowerCase());
       }
       return true;
     });
-  }, [features, sprint, justMe, user]);
+  }, [features, sprint, selectedPerson]);
 
   const planFeatures = useMemo(
     () => sprintFeatures.filter((f) => f.status === "plan"),
@@ -427,18 +440,36 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
       {/* Kanban columns: Plan | Demo | Production */}
       <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-center justify-end gap-3">
+        {/* Person filter pills */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            onClick={() => setJustMe(!justMe)}
+            onClick={() => setSelectedPerson(null)}
             className={cn(
               "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-              justMe
+              selectedPerson === null
                 ? "bg-brand text-white"
                 : "bg-stone-100 text-stone-500 hover:bg-stone-200",
             )}
           >
-            Just me
+            All
           </button>
+          {personPills.map((p) => (
+            <button
+              key={p.login}
+              onClick={() => setSelectedPerson(selectedPerson === p.login ? null : p.login)}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
+                selectedPerson === p.login
+                  ? "bg-stone-800 text-white"
+                  : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+              )}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
           <div className="flex items-center gap-1.5">
             <ArrowUpDown size={13} className="text-stone-400" />
             <select
