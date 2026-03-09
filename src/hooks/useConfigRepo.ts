@@ -30,6 +30,7 @@ import {
   toggleSubIssue,
   updateSubIssueAssignees,
   deleteSubIssue,
+  syncFeaturesFromGitHub,
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
@@ -369,6 +370,17 @@ export function useCreateConfigRepo() {
       qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
     },
+  });
+}
+
+// ---------- Sync Features ----------
+
+export function useSyncFeatures() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: syncFeaturesFromGitHub,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }
 
