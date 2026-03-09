@@ -268,11 +268,16 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
   const issues = await fetchAllPages(
     token,
     `https://api.github.com/repos/${orgLogin}/.gitpulse/issues`,
-    { labels: "feature", state: "all", sort: "updated", direction: "desc" }
+    { state: "all", sort: "updated", direction: "desc" }
   );
 
-  // Filter out PRs (the issues endpoint can include them)
-  const features = issues.filter((i) => !i.pull_request);
+  // Pick up any issue with a Sprint milestone OR the "feature" label
+  const features = issues.filter((i) => {
+    if (i.pull_request) return false;
+    const hasFeatureLabel = (i.labels ?? []).some((l) => l.name === "feature");
+    const hasSprintMilestone = /^Sprint \d+$/.test(i.milestone?.title ?? "");
+    return hasFeatureLabel || hasSprintMilestone;
+  });
 
   const stmt = db.prepare(
     `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
@@ -436,8 +441,9 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
 
 export async function upsertFeature(db, orgId, issue) {
   const labels = (issue.labels ?? []).map((l) => l.name ?? l);
-  const isFeature = labels.includes("feature");
-  if (!isFeature) return;
+  const hasFeatureLabel = labels.includes("feature");
+  const hasSprintMilestone = /^Sprint \d+$/.test(issue.milestone?.title ?? "");
+  if (!hasFeatureLabel && !hasSprintMilestone) return;
 
   // If the issue is closed and not a feature deletion, skip
   // (deleteFeature closes the issue)
