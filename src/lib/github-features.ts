@@ -121,6 +121,22 @@ function issueToFeature(issue: any): Feature {
 
 // ---------- Sync features from GitHub to D1 ----------
 
+// Sync a single GitHub issue response to D1
+async function syncIssueToD1(data: any): Promise<void> {
+  await apiPut("/api/features", {
+    number: data.number,
+    title: data.title,
+    state: data.state,
+    body: data.body ?? "",
+    assignees: (data.assignees ?? []).map((a: any) => ({ login: a.login })),
+    labels: (data.labels ?? []).map((l: any) => ({ name: l.name, color: l.color })),
+    milestone_title: data.milestone?.title ?? null,
+    html_url: data.html_url,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  });
+}
+
 export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total: number }> {
   const result = await apiPost<{ ok: boolean; synced: number; total: number }>("/api/features");
   console.log(`[unticket.ai] Feature sync: ${result.synced} features from ${result.total} issues`);
@@ -259,6 +275,7 @@ export async function createFeature(
     body,
   });
 
+  await syncIssueToD1(data);
   return issueToFeature(data);
 }
 
@@ -288,6 +305,7 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
     milestone,
   });
 
+  await syncIssueToD1(data);
   return issueToFeature(data);
 }
 
