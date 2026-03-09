@@ -1,5 +1,5 @@
 import { jsonResponse, errorResponse } from "../lib/db";
-import { upsertIssue, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
+import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -86,6 +86,10 @@ export async function onRequestPost(context) {
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
+      // Also upsert into features table if this is a .gitpulse repo issue with "feature" label
+      if (repo === ".gitpulse") {
+        await upsertFeature(db, orgId, payload.issue);
+      }
       return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number });
     }
 

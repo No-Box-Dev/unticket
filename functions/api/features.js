@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
+import { syncFeatures } from "../lib/github-sync";
 
 // GET /api/features — return cached features from D1
 // Query params: state (default: open)
@@ -26,4 +27,11 @@ export async function onRequestGet(context) {
   }));
 
   return jsonResponse(data);
+}
+
+// POST /api/features/sync — sync features from .gitpulse repo
+export async function onRequestPost(context) {
+  const { orgId, token, orgLogin } = getCtx(context);
+  await syncFeatures(context.env.DB, token, orgId, orgLogin);
+  return jsonResponse({ ok: true });
 }
