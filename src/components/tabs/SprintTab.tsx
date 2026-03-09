@@ -13,6 +13,12 @@ import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "priority" | "effort" | "title";
 
+const COLUMN_DEFS: { status: "plan" | "demo" | "production"; label: string }[] = [
+  { status: "plan", label: "Plan" },
+  { status: "demo", label: "Demo" },
+  { status: "production", label: "Production" },
+];
+
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
 const EFFORT_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -429,26 +435,22 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {(
-          [
-            { status: "plan" as const, label: "Plan", items: sortedColumns.plan },
-            { status: "demo" as const, label: "Demo", items: sortedColumns.demo },
-            { status: "production" as const, label: "Production", items: sortedColumns.production },
-          ] as const
-        ).map(({ status, label, items }) => (
+        {COLUMN_DEFS.map((col) => {
+          const items = sortedColumns[col.status];
+          return (
           <div
-            key={status}
-            onDragOver={(e) => handleDragOver(e, status)}
+            key={col.status}
+            onDragOver={(e) => handleDragOver(e, col.status)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, status)}
+            onDrop={(e) => handleDrop(e, col.status)}
             className={cn(
               "rounded-xl border border-stone-200 bg-stone-50 transition-colors",
-              dragOverCol === status && "border-brand/50 bg-brand/5",
+              dragOverCol === col.status && "border-brand/50 bg-brand/5",
             )}
           >
             <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl">
               <span className="text-sm font-medium text-stone-700">
-                {label}{" "}
+                {col.label}{" "}
                 <span className="text-stone-400 font-normal">({items.length})</span>
               </span>
             </div>
@@ -474,7 +476,8 @@ export function SprintTab({ repoNames }: SprintTabProps) {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         </div>
       </div>
 
@@ -519,7 +522,6 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           }}
         />
       )}
-    </div>
     </div>
     )}
     </div>
