@@ -90,13 +90,16 @@ function issueToFeature(issue: any): Feature {
     .map((l: any) => (typeof l === "string" ? l : l.name))
     .filter(Boolean) as string[];
 
-  const status = (extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus) ?? "plan";
+  const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
   const effort = (extractLabel(labelNames, EFFORT_PREFIX) as Effort) ?? "medium";
   const priority = extractLabel(labelNames, PRIORITY_PREFIX) as Priority | undefined;
   const team = extractLabel(labelNames, TEAM_PREFIX);
 
   const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
+
+  // No sprint milestone → future (backlog). With sprint → use label status or default to plan.
+  const status: FeatureStatus = sprint === null ? "future" : (labelStatus ?? "plan");
 
   const rawBody = issue.body ?? "";
   const { content, metadata } = parseMetadata(rawBody);

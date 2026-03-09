@@ -64,7 +64,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
-  const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [sortBy, setSortBy] = useState<SortKey>("title");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
   const [viewingSnapshot, setViewingSnapshot] = useState<number | null>(null);
