@@ -196,8 +196,7 @@ export function useRateLimit() {
     queryKey: ["rateLimit", selectedOrg],
     queryFn: fetchRateLimit,
     enabled: !!selectedOrg,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    staleTime: 10 * 60 * 1000,
     retry: false,
   });
 }
@@ -210,7 +209,7 @@ export function useSyncStatus() {
     queryKey: ["syncStatus", selectedOrg],
     queryFn: fetchSyncStatus,
     enabled: !!selectedOrg,
-    refetchInterval: 60_000,
+    staleTime: 10 * 60 * 1000,
   });
 }
 
