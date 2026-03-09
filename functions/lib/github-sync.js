@@ -279,6 +279,8 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     return hasFeatureLabel || hasSprintMilestone;
   });
 
+  console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
+
   const stmt = db.prepare(
     `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -315,6 +317,7 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
   }
 
   await setSyncState(db, orgId, "features");
+  return { synced: features.length, total: issues.length };
 }
 
 // ---------- Migrate .gitpulse config ----------
