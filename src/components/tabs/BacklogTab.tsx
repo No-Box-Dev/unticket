@@ -37,7 +37,7 @@ export function BacklogTab() {
   const deleteFeatureMut = useDeleteFeature();
   const isAdmin = useIsAdmin();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
-  const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [sortBy, setSortBy] = useState<SortKey>("title");
 
   const allPeopleNames = useMemo(
     () => (people ?? []).map((p) => p.github),
