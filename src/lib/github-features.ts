@@ -118,8 +118,10 @@ function issueToFeature(issue: any): Feature {
 
 // ---------- Sync features from GitHub to D1 ----------
 
-export async function syncFeaturesFromGitHub(): Promise<void> {
-  await apiPost("/api/features");
+export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total: number }> {
+  const result = await apiPost<{ ok: boolean; synced: number; total: number }>("/api/features");
+  console.log(`[unticket.ai] Feature sync: ${result.synced} features from ${result.total} issues`);
+  return result;
 }
 
 // ---------- D1-backed fetch (no GitHub API calls) ----------
