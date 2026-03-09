@@ -434,6 +434,43 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
     .run();
 }
 
+export async function upsertFeature(db, orgId, issue) {
+  const labels = (issue.labels ?? []).map((l) => l.name ?? l);
+  const isFeature = labels.includes("feature");
+  if (!isFeature) return;
+
+  // If the issue is closed and not a feature deletion, skip
+  // (deleteFeature closes the issue)
+  await db
+    .prepare(
+      `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(org_id, number) DO UPDATE SET
+         title = excluded.title,
+         state = excluded.state,
+         body = excluded.body,
+         assignees_json = excluded.assignees_json,
+         labels_json = excluded.labels_json,
+         milestone_title = excluded.milestone_title,
+         html_url = excluded.html_url,
+         updated_at = excluded.updated_at`
+    )
+    .bind(
+      orgId,
+      issue.number,
+      issue.title,
+      issue.state,
+      issue.body ?? "",
+      JSON.stringify((issue.assignees ?? []).map((a) => ({ login: a.login }))),
+      JSON.stringify((issue.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
+      issue.milestone?.title ?? null,
+      issue.html_url,
+      issue.created_at,
+      issue.updated_at
+    )
+    .run();
+}
+
 export async function upsertPR(db, orgId, repo, pr) {
   await db
     .prepare(

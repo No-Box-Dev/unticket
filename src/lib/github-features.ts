@@ -1,5 +1,5 @@
 import { getOctokit } from "./github";
-import { apiGet, apiPut } from "./api";
+import { apiGet, apiPost, apiPut } from "./api";
 import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -114,6 +114,12 @@ function issueToFeature(issue: any): Feature {
     url: issue.html_url,
     statusHistory: metadata.statusHistory,
   };
+}
+
+// ---------- Sync features from GitHub to D1 ----------
+
+export async function syncFeaturesFromGitHub(): Promise<void> {
+  await apiPost("/api/features");
 }
 
 // ---------- D1-backed fetch (no GitHub API calls) ----------

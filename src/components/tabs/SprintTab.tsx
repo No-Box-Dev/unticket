@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -7,7 +7,7 @@ import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 
@@ -50,6 +50,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const advanceSprintMut = useAdvanceSprint();
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
+  const syncFeaturesMut = useSyncFeatures();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: allIssues } = useAllIssues(repoNames);
@@ -362,6 +363,14 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           <AddFeatureInput onAdd={addFeature} />
         </div>
         <button
+          onClick={() => syncFeaturesMut.mutate()}
+          disabled={syncFeaturesMut.isPending}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
+        >
+          <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
+          {syncFeaturesMut.isPending ? "Syncing..." : "Sync Features"}
+        </button>
+        <button
           onClick={() => setShowNewSprint(true)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
         >
@@ -385,6 +394,13 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           <div className="flex-1">
             <AddFeatureInput onAdd={addFeature} />
           </div>
+          <button
+            onClick={() => syncFeaturesMut.mutate()}
+            disabled={syncFeaturesMut.isPending}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
+          >
+            <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
+          </button>
           <button
             onClick={() => setShowNewSprint(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
