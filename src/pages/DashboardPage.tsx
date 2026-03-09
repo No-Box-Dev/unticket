@@ -10,6 +10,7 @@ import { IssuesTab } from "@/components/tabs/IssuesTab";
 import { TodoTab } from "@/components/tabs/TodoTab";
 import { InsightsTab } from "@/components/tabs/InsightsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
+import { CommandPalette } from "@/components/CommandPalette";
 import type { TabId } from "@/lib/types";
 
 export function DashboardPage() {
@@ -42,6 +43,7 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-stone-50">
+      <CommandPalette onNavigate={(tab) => { setActiveTab(tab); setShowSettings(false); }} />
       <Header onOpenSettings={() => setShowSettings(true)} />
       {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-1.5 flex items-center justify-between">

@@ -18,6 +18,7 @@ const baseFeature: Feature = {
 const defaultProps = {
   feature: baseFeature,
   allPeople: ["alice", "bob"],
+  allTeams: ["Engineering", "Design"],
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
@@ -32,9 +33,9 @@ describe("FeatureCard", () => {
     expect(screen.getByText(longTitle)).toBeInTheDocument();
   });
 
-  it("renders effort tag", () => {
+  it("renders team tag", () => {
     render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Medium")).toBeInTheDocument();
+    expect(screen.getByText("Engineering")).toBeInTheDocument();
   });
 
   it("renders priority tag", () => {
@@ -52,39 +53,39 @@ describe("FeatureCard", () => {
   it("Delete button calls onDelete when admin", async () => {
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} isAdmin />);
-    await userEvent.click(screen.getByText("Delete"));
+    await userEvent.click(screen.getByTitle("Delete"));
     expect(onDelete).toHaveBeenCalledWith(1);
   });
 
   it("hides Delete button for non-admins", () => {
     render(<FeatureCard {...defaultProps} />);
-    expect(screen.queryByText("Delete")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Delete")).not.toBeInTheDocument();
   });
 
-  it("shows Backlog button in sprint mode", () => {
+  it("shows Move to Backlog button in sprint mode", () => {
     render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Backlog")).toBeInTheDocument();
+    expect(screen.getByTitle("Move to Backlog")).toBeInTheDocument();
   });
 
-  it("Backlog button moves to backlog", async () => {
+  it("Move to Backlog button moves to backlog", async () => {
     const onUpdate = vi.fn();
     render(<FeatureCard {...defaultProps} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByText("Backlog"));
+    await userEvent.click(screen.getByTitle("Move to Backlog"));
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: "future", sprint: null }),
     );
   });
 
-  it("shows 'Sprint' in backlog mode", () => {
+  it("shows Move to Sprint in backlog mode", () => {
     render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} />);
-    expect(screen.getByText("Sprint")).toBeInTheDocument();
-    expect(screen.queryByText("Backlog")).not.toBeInTheDocument();
+    expect(screen.getByTitle("Move to Sprint")).toBeInTheDocument();
+    expect(screen.queryByTitle("Move to Backlog")).not.toBeInTheDocument();
   });
 
-  it("Sprint button updates sprint and status", async () => {
+  it("Move to Sprint button updates sprint and status", async () => {
     const onUpdate = vi.fn();
     render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByText("Sprint"));
+    await userEvent.click(screen.getByTitle("Move to Sprint"));
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ sprint: 2, status: "plan" }),
     );
