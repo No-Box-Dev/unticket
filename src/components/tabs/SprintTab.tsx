@@ -290,7 +290,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
         </div>
       )}
 
-    {/* Sprint selector + view toggle row */}
+    {/* Sprint selector + actions + view toggle row */}
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex items-center gap-2">
         {/* Sprint dropdown */}
@@ -314,6 +314,36 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             <svg className="w-4 h-4 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </div>
         </div>
+
+        <span className="w-px h-5 bg-stone-200 dark:bg-stone-700" />
+
+        {/* Sprint info */}
+        <div className="hidden sm:flex items-center gap-1.5 text-xs text-stone-400 dark:text-stone-500">
+          <Calendar className="w-3.5 h-3.5" />
+          {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+        </div>
+        {sprint.focus && (
+          <span className="hidden md:inline text-xs text-brand">{sprint.focus}</span>
+        )}
+
+        <span className="hidden sm:block w-px h-5 bg-stone-200 dark:bg-stone-700" />
+
+        {/* Actions */}
+        <button
+          onClick={() => syncFeaturesMut.mutate()}
+          disabled={syncFeaturesMut.isPending}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
+        >
+          <RefreshCw size={12} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
+          <span className="hidden sm:inline">{syncFeaturesMut.isPending ? "Syncing..." : "Sync"}</span>
+        </button>
+        <button
+          onClick={() => setShowNewSprint(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
+        >
+          <FastForward size={12} />
+          <span className="hidden sm:inline">New Sprint</span>
+        </button>
         {isAdmin && (
           <button
             onClick={() => setShowBackfill(!showBackfill)}
@@ -434,162 +464,66 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
     {/* Current sprint board */}
     {!activeSnapshot && sprintView === "board" && (
-    <div className="flex gap-4">
-      {/* Left sidebar: Sprint info + Add Feature */}
-      <div className="hidden lg:flex flex-col gap-4 w-48 shrink-0 pt-1">
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-stone-800 dark:text-stone-200">
-            Sprint {sprint.number}
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400">{sprint.name}</p>
-          <div className="flex items-center gap-1.5 text-xs text-stone-400 dark:text-stone-500">
-            <Calendar className="w-3.5 h-3.5" />
-            {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+    <div className="space-y-2">
+      {/* Add feature input */}
+      <AddFeatureInput onAdd={addFeature} />
+        {/* Search + filters row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search features..."
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-700 dark:text-stone-300 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            />
           </div>
-          {sprint.focus && (
-            <p className="text-xs text-brand">{sprint.focus}</p>
-          )}
-        </div>
-        <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
-          <AddFeatureInput onAdd={addFeature} />
-        </div>
-        <button
-          onClick={() => syncFeaturesMut.mutate()}
-          disabled={syncFeaturesMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
-        >
-          <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
-          {syncFeaturesMut.isPending ? "Syncing..." : "Sync Features"}
-        </button>
-        <button
-          onClick={() => setShowNewSprint(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
-        >
-          <FastForward size={13} />
-          New Sprint
-        </button>
-      </div>
 
-      {/* Mobile: inline sprint header */}
-      <div className="lg:hidden w-full space-y-3 mb-4">
-        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 border-l-4 border-l-brand px-4 py-2.5 flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-stone-800 dark:text-stone-200 whitespace-nowrap">
-            Sprint {sprint.number}: {sprint.name}
-          </h2>
-          <div className="flex items-center gap-1.5 text-xs text-stone-400 dark:text-stone-500 whitespace-nowrap">
-            <Calendar className="w-3.5 h-3.5" />
-            {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <AddFeatureInput onAdd={addFeature} />
-          </div>
-          <button
-            onClick={() => syncFeaturesMut.mutate()}
-            disabled={syncFeaturesMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
-          >
-            <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
-          </button>
-          <button
-            onClick={() => setShowNewSprint(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
-          >
-            <FastForward size={13} />
-            New Sprint
-          </button>
-        </div>
-      </div>
-
-      {/* Kanban columns: Plan | Demo | Production */}
-      <div className="flex-1 min-w-0 space-y-2">
-        {/* Search */}
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search features..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-700 dark:text-stone-300 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
-          />
-        </div>
-
-        {/* Filter pills */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Person pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setSelectedPerson(null)}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                selectedPerson === null
-                  ? "bg-brand text-white"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
-              )}
+          {/* Person dropdown */}
+          <div className="relative">
+            <select
+              value={selectedPerson ?? ""}
+              onChange={(e) => setSelectedPerson(e.target.value || null)}
+              className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30"
             >
-              All
-            </button>
-            {personPills.map((p) => (
-              <button
-                key={p.login}
-                onClick={() => setSelectedPerson(selectedPerson === p.login ? null : p.login)}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                  selectedPerson === p.login
-                    ? "bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900"
-                    : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
-                )}
-              >
-                {p.name}
-              </button>
-            ))}
+              <option value="">All people</option>
+              {personPills.map((p) => (
+                <option key={p.login} value={p.login}>{p.name}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1.5">
+              <svg className="w-3.5 h-3.5 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </div>
           </div>
 
-          {/* Team pills */}
+          {/* Team dropdown */}
           {allTeamNames.length > 0 && (
-            <>
-              <span className="w-px h-4 bg-stone-200 dark:bg-stone-700" />
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={() => setSelectedTeam(null)}
-                  className={cn(
-                    "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                    selectedTeam === null
-                      ? "bg-brand/10 text-brand"
-                      : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
-                  )}
-                >
-                  All teams
-                </button>
+            <div className="relative">
+              <select
+                value={selectedTeam ?? ""}
+                onChange={(e) => setSelectedTeam(e.target.value || null)}
+                className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30"
+              >
+                <option value="">All teams</option>
                 {allTeamNames.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setSelectedTeam(selectedTeam === t ? null : t)}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                      selectedTeam === t
-                        ? "bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900"
-                        : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
-                    )}
-                  >
-                    {t}
-                  </button>
+                  <option key={t} value={t}>{t}</option>
                 ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1.5">
+                <svg className="w-3.5 h-3.5 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
-            </>
+            </div>
           )}
-        </div>
 
-        <div className="flex items-center justify-end gap-3">
-          <div className="flex items-center gap-1.5">
+          {/* Sort dropdown */}
+          <div className="flex items-center gap-1">
             <ArrowUpDown size={13} className="text-stone-400 dark:text-stone-500" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="px-2 py-1 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-500 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
+              className="px-2 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-500 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
             >
-              <option value="default">Default order</option>
+              <option value="default">Default</option>
               <option value="priority">Priority</option>
               <option value="effort">Effort</option>
               <option value="title">Title A-Z</option>
@@ -606,7 +540,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, col.status)}
             className={cn(
-              "rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-950 transition-colors",
+              "rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50 transition-colors",
               dragOverCol === col.status && "border-brand/50 bg-brand/5",
             )}
           >
@@ -642,7 +576,6 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           );
         })}
         </div>
-      </div>
 
       {/* Detail modal */}
       {detailFeature && (
