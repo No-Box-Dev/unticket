@@ -31,10 +31,16 @@ import {
   updateSubIssueAssignees,
   deleteSubIssue,
   syncFeaturesFromGitHub,
+  fetchRoles,
+  createRole as ghCreateRole,
+  deleteRole as ghDeleteRole,
+  fetchTasksForRole,
+  createTask as ghCreateTask,
+  updateTaskPoints as ghUpdateTaskPoints,
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, SprintSnapshot } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -86,7 +92,7 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort: Effort; team?: string; priority?: Priority; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort?: Effort; team?: string; priority?: Priority; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     onSuccess: (newFeature) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
@@ -153,6 +159,9 @@ export interface SubIssueWithFeature {
   state: "open" | "closed";
   assignees: string[];
   html_url: string;
+  points?: Points;
+  roleNumber?: number;
+  roleName?: string;
 }
 
 export function useAllSprintSubIssues(featureIds: number[]) {
@@ -162,7 +171,7 @@ export function useAllSprintSubIssues(featureIds: number[]) {
     queryFn: async () => {
       if (!selectedOrg || featureIds.length === 0) return [];
       const results: SubIssueWithFeature[] = [];
-      // Fetch sub-issues for all features in parallel (batched)
+      // Batch features
       const batches = [];
       for (let i = 0; i < featureIds.length; i += 5) {
         batches.push(featureIds.slice(i, i + 5));
@@ -171,8 +180,41 @@ export function useAllSprintSubIssues(featureIds: number[]) {
         const batchResults = await Promise.all(
           batch.map(async (fid) => {
             try {
+              // Fetch direct sub-issues of the feature
               const subs = await fetchSubIssues(selectedOrg, fid);
-              return subs.map((s) => ({ ...s, featureId: fid, featureTitle: "" }));
+              const roles = await fetchRoles(selectedOrg, fid);
+              const roleNumbers = new Set(roles.map((r) => r.number));
+              const items: SubIssueWithFeature[] = [];
+
+              // Direct tasks (not roles) — legacy flat sub-issues
+              for (const s of subs) {
+                if (!roleNumbers.has(s.number)) {
+                  items.push({ ...s, featureId: fid, featureTitle: "" });
+                }
+              }
+
+              // Tasks under roles
+              if (roles.length > 0) {
+                const roleTasks = await Promise.all(
+                  roles.map(async (role) => {
+                    try {
+                      const tasks = await fetchTasksForRole(selectedOrg, role.number);
+                      return tasks.map((t) => ({
+                        ...t,
+                        featureId: fid,
+                        featureTitle: "",
+                        roleNumber: role.number,
+                        roleName: role.title,
+                      }));
+                    } catch {
+                      return [];
+                    }
+                  }),
+                );
+                items.push(...roleTasks.flat());
+              }
+
+              return items;
             } catch {
               return [];
             }
@@ -183,7 +225,7 @@ export function useAllSprintSubIssues(featureIds: number[]) {
       return results;
     },
     enabled: !!selectedOrg && featureIds.length > 0,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }
@@ -278,6 +320,198 @@ export function useDeleteSubIssue() {
     },
     onSettled: (_data, _err, args) => {
       qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg, args.parentIssueNumber] });
+    },
+  });
+}
+
+// ---------- Roles ----------
+
+export function useRoles(featureId: number) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["roles", selectedOrg, featureId],
+    queryFn: () => fetchRoles(selectedOrg!, featureId),
+    enabled: !!selectedOrg && featureId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTasksForRole(roleNumber: number) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["roleTasks", selectedOrg, roleNumber],
+    queryFn: () => fetchTasksForRole(selectedOrg!, roleNumber),
+    enabled: !!selectedOrg && roleNumber > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export interface RoleWithTasks {
+  role: PersonRole;
+  tasks: SubIssue[];
+  totalPoints: number;
+  donePoints: number;
+}
+
+export function useRolesWithTasks(featureId: number) {
+  const { selectedOrg } = useAuth();
+  return useQuery<RoleWithTasks[]>({
+    queryKey: ["rolesWithTasks", selectedOrg, featureId],
+    queryFn: async () => {
+      if (!selectedOrg) return [];
+      const roles = await fetchRoles(selectedOrg, featureId);
+      const results = await Promise.all(
+        roles.map(async (role) => {
+          try {
+            const tasks = await fetchTasksForRole(selectedOrg, role.number);
+            const totalPoints = tasks.reduce((sum, t) => sum + (t.points ?? 0), 0);
+            const donePoints = tasks
+              .filter((t) => t.state === "closed")
+              .reduce((sum, t) => sum + (t.points ?? 0), 0);
+            return { role, tasks, totalPoints, donePoints };
+          } catch {
+            return { role, tasks: [], totalPoints: 0, donePoints: 0 };
+          }
+        }),
+      );
+      return results;
+    },
+    enabled: !!selectedOrg && featureId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useCreateRole() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  let tempId = -1;
+  return useMutation({
+    mutationFn: (args: { featureId: number; title: string; assignee?: string }) =>
+      ghCreateRole(selectedOrg!, args.featureId, args.title, args.assignee),
+    onMutate: async (args) => {
+      const key = ["rolesWithTasks", selectedOrg, args.featureId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      const optimisticRole: PersonRole = {
+        id: tempId--,
+        number: tempId,
+        title: args.title,
+        assignee: args.assignee ?? null,
+        state: "open",
+        html_url: "",
+      };
+      qc.setQueryData<RoleWithTasks[]>(key, (old) => [
+        ...(old ?? []),
+        { role: optimisticRole, tasks: [], totalPoints: 0, donePoints: 0 },
+      ]);
+      return { previous, key };
+    },
+    onSuccess: (realRole, vars) => {
+      // Replace the optimistic placeholder with the real role from GitHub
+      const key = ["rolesWithTasks", selectedOrg, vars.featureId];
+      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+        (old ?? []).map((r) =>
+          r.role.id < 0 && r.role.title === vars.title
+            ? { ...r, role: realRole }
+            : r,
+        ),
+      );
+    },
+    onError: (err, _vars, context) => {
+      console.error("[unticket.ai] createRole failed:", err);
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
+export function useDeleteRole() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { featureId: number; roleNumber: number }) =>
+      ghDeleteRole(selectedOrg!, args.roleNumber),
+    onMutate: async (args) => {
+      const key = ["rolesWithTasks", selectedOrg, args.featureId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+        (old ?? []).filter((r) => r.role.number !== args.roleNumber),
+      );
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
+export function useCreateTask() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  let tempId = -1000;
+  return useMutation({
+    mutationFn: (args: { roleNumber: number; featureId: number; title: string; points?: Points; assignee?: string }) =>
+      ghCreateTask(selectedOrg!, args.roleNumber, args.title, args.points, args.assignee),
+    onMutate: async (args) => {
+      const key = ["rolesWithTasks", selectedOrg, args.featureId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      const optimisticTask: SubIssue = {
+        id: tempId--,
+        number: tempId,
+        title: args.title,
+        state: "open",
+        assignees: args.assignee ? [args.assignee] : [],
+        html_url: "",
+        points: args.points,
+        roleNumber: args.roleNumber,
+      };
+      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+        (old ?? []).map((r) => {
+          if (r.role.number !== args.roleNumber) return r;
+          const tasks = [...r.tasks, optimisticTask];
+          return {
+            ...r,
+            tasks,
+            totalPoints: r.totalPoints + (args.points ?? 0),
+          };
+        }),
+      );
+      return { previous, key };
+    },
+    onSuccess: (realTask, vars) => {
+      // Replace the optimistic placeholder with the real task
+      const key = ["rolesWithTasks", selectedOrg, vars.featureId];
+      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+        (old ?? []).map((r) => {
+          if (r.role.number !== vars.roleNumber) return r;
+          return {
+            ...r,
+            tasks: r.tasks.map((t) =>
+              t.id < 0 && t.title === vars.title ? realTask : t,
+            ),
+          };
+        }),
+      );
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
+export function useUpdateTaskPoints() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { taskNumber: number; points: Points | undefined }) =>
+      ghUpdateTaskPoints(selectedOrg!, args.taskNumber, args.points),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roleTasks", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg] });
     },
   });
 }

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useMergedPRs, useAllIssues, useClosedIssues, useOrgMembers } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, useSprintSnapshots } from "@/hooks/useConfigRepo";
-import { computeMetric, computeMetricDaily, extractMergedDates, extractClosedDates, extractCreatedDates, buildOpenIssueSnapshots, computeCumulativeMetric, EFFORT_POINTS } from "@/lib/metrics";
+import { computeMetric, computeMetricDaily, extractMergedDates, extractClosedDates, extractCreatedDates, buildOpenIssueSnapshots, computeCumulativeMetric } from "@/lib/metrics";
 import { BarChart } from "@/components/BarChart";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -17,7 +17,7 @@ const RANGE_OPTIONS = [
   { label: "All", weeks: 260 },
 ] as const;
 
-const card = "bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5";
+const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5";
 
 interface OverviewTabProps {
   repoNames: string[];
@@ -96,12 +96,13 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
   }, [allTasks]);
 
   const sprintPoints = useMemo(() => {
-    const total = sprintFeatures.reduce((sum, f) => sum + (EFFORT_POINTS[f.effort] ?? 0), 0);
-    const done = sprintFeatures
-      .filter((f) => f.status === "production")
-      .reduce((sum, f) => sum + (EFFORT_POINTS[f.effort] ?? 0), 0);
+    if (!allTasks) return { total: 0, done: 0 };
+    const total = allTasks.reduce((sum, t) => sum + (t.points ?? 0), 0);
+    const done = allTasks
+      .filter((t) => t.state === "closed")
+      .reduce((sum, t) => sum + (t.points ?? 0), 0);
     return { total, done };
-  }, [sprintFeatures]);
+  }, [allTasks]);
 
   const summaryStats = useMemo(() => ({
     repos: repoNames.length,
@@ -149,7 +150,7 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
     <div className="space-y-6">
       {/* Header + Range selector */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200 font-display">Overview</h2>
+        <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Overview</h2>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((opt) => (
             <button
@@ -159,7 +160,7 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 weeks === opt.weeks
                   ? "bg-brand text-white"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+                  : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
               )}
             >
               {opt.label}
@@ -182,28 +183,28 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className={card}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wider">Sprint Tasks</span>
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">{taskStats.closed}/{taskStats.total}</span>
+            <span className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider">Sprint Tasks</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">{taskStats.closed}/{taskStats.total}</span>
           </div>
-          <div className="h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+          <div className="h-3 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
             <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${taskPct}%` }} />
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-stone-400 dark:text-stone-500">{taskStats.open} open</span>
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{taskStats.open} open</span>
             <span className="text-xs font-medium text-blue-500">{taskPct}%</span>
           </div>
         </div>
 
         <div className={card}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wider">Sprint Points</span>
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">{sprintPoints.done}/{sprintPoints.total}</span>
+            <span className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider">Sprint Points</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">{sprintPoints.done}/{sprintPoints.total}</span>
           </div>
-          <div className="h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+          <div className="h-3 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
             <div className="h-full rounded-full bg-purple-500 transition-all duration-500" style={{ width: `${pointsPct}%` }} />
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-stone-400 dark:text-stone-500">{sprintPoints.total - sprintPoints.done} remaining</span>
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{sprintPoints.total - sprintPoints.done} remaining</span>
             <span className="text-xs font-medium text-purple-500">{pointsPct}%</span>
           </div>
         </div>
@@ -223,7 +224,7 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
       {metrics && metrics.openIssues.history.length > 0 && (
         <div className={card}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100">Open Issues Trend</h3>
+            <h3 className="font-semibold text-stone-900 dark:text-neutral-100">Open Issues Trend</h3>
             <span className="text-2xl font-bold text-amber-500 font-display">{summaryStats.openIssues}</span>
           </div>
           <BarChart data={metrics.openIssues.history} color="#f59e0b" daily={isDaily} />
@@ -233,45 +234,33 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
       {/* Features by Sprint */}
       {featuresBySprint.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200 font-display">Features Developed</h2>
+          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Features Developed</h2>
           {featuresBySprint.map((group) => {
             const done = group.features.filter((f) => f.status === "production").length;
-            const points = group.features.reduce((sum, f) => sum + (EFFORT_POINTS[f.effort] ?? 0), 0);
             const isCurrent = sprint?.number === group.sprintNumber;
             return (
               <div key={group.sprintNumber} className={card}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-stone-900 dark:text-stone-100">{group.name}</h3>
+                    <h3 className="font-semibold text-stone-900 dark:text-neutral-100">{group.name}</h3>
                     {isCurrent && (
                       <span className="text-[10px] font-semibold bg-brand/10 text-brand px-1.5 py-0.5 rounded">Current</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-stone-400 dark:text-stone-500">
+                  <div className="flex items-center gap-3 text-xs text-stone-400 dark:text-neutral-500">
                     <span>{done}/{group.features.length} shipped</span>
-                    <span>{points} pts</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   {group.features
                     .sort((a, b) => statusOrder(a.status) - statusOrder(b.status))
                     .map((f) => (
-                      <div key={f.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+                      <div key={f.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] transition-colors">
                         <StatusIcon status={f.status} />
-                        <span className="text-sm text-stone-700 dark:text-stone-300 flex-1 truncate">{f.title}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {f.owners.length > 0 && (
-                            <span className="text-xs text-stone-400 dark:text-stone-500">{f.owners.join(", ")}</span>
-                          )}
-                          <span className={cn(
-                            "text-[10px] font-medium px-1.5 py-0.5 rounded",
-                            f.effort === "high" ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
-                              : f.effort === "medium" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
-                              : "bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400",
-                          )}>
-                            {EFFORT_POINTS[f.effort] ?? 0}pt
-                          </span>
-                        </div>
+                        <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1 truncate">{f.title}</span>
+                        {f.owners.length > 0 && (
+                          <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{f.owners.join(", ")}</span>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -287,8 +276,8 @@ export function OverviewTab({ repoNames }: OverviewTabProps) {
 function MiniStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div className={card + " py-3 px-4"}>
-      <span className="text-[10px] font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider block">{label}</span>
-      <span className={cn("text-2xl font-bold font-display", color ?? "text-stone-700 dark:text-stone-200")}>{value}</span>
+      <span className="text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider block">{label}</span>
+      <span className={cn("text-2xl font-bold font-display", color ?? "text-stone-700 dark:text-neutral-200")}>{value}</span>
     </div>
   );
 }
@@ -300,7 +289,7 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "production") return <CheckCircle2 size={14} className="text-green-500 shrink-0" />;
   if (status === "demo") return <Rocket size={14} className="text-blue-500 shrink-0" />;
   if (status === "plan") return <Clock size={14} className="text-amber-500 shrink-0" />;
-  return <Circle size={14} className="text-stone-300 dark:text-stone-600 shrink-0" />;
+  return <Circle size={14} className="text-stone-300 dark:text-neutral-600 shrink-0" />;
 }
 
 function MetricCard({ title, metric, color, daily }: { title: string; metric: MetricData; color: string; daily?: boolean }) {
@@ -311,7 +300,7 @@ function MetricCard({ title, metric, color, daily }: { title: string; metric: Me
   return (
     <div className={card}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider">{title}</span>
         <span className="text-2xl font-bold font-display" style={{ color }}>{total}</span>
       </div>
       {metric.history.length > 0 && (

@@ -23,7 +23,7 @@ function getInitials(name: string): string {
   return name.split(/[\s-]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const card = "bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5";
+const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5";
 
 interface SprintMetricsProps {
   sprint: SprintConfig;
@@ -59,7 +59,9 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
     const endDate = sprint?.endDate ? new Date(sprint.endDate + "T23:59:59") : null;
     const overdue = endDate && now > endDate ? open : 0;
     const completionPct = total > 0 ? Math.round((closed / total) * 100) : 0;
-    return { total, open, closed, overdue, completionPct };
+    const totalPoints = tasks.reduce((sum, t) => sum + ((t as any).points ?? 0), 0);
+    const donePoints = tasks.filter((t) => t.state === "closed").reduce((sum, t) => sum + ((t as any).points ?? 0), 0);
+    return { total, open, closed, overdue, completionPct, totalPoints, donePoints };
   }, [tasks, sprint]);
 
   const featureStats = useMemo(() => {
@@ -118,7 +120,7 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
   return (
     <div className="space-y-4">
       {aiSummary && (
-        <div className="bg-gradient-to-r from-stone-800 to-stone-700 dark:from-stone-900 dark:to-stone-800 rounded-xl p-5 text-white">
+        <div className="bg-gradient-to-r from-stone-800 to-stone-700 dark:from-stone-900 dark:to-dark-overlay rounded-xl p-5 text-white">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">AI</div>
             <h3 className="font-semibold font-display text-sm">Sprint Summary</h3>
@@ -127,26 +129,27 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="FEATURES" value={featureStats.total} subtitle={`${featureStats.completed} complete`} color="text-stone-700 dark:text-stone-200" />
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <StatCard label="FEATURES" value={featureStats.total} subtitle={`${featureStats.completed} complete`} color="text-stone-700 dark:text-neutral-200" />
         <StatCard label="OPEN TASKS" value={taskStats.open} subtitle={`of ${taskStats.total} total`} color="text-blue-500" />
-        <StatCard label="OVERDUE" value={taskStats.overdue} subtitle={taskStats.overdue === 0 ? "on schedule" : "past sprint end"} color={taskStats.overdue > 0 ? "text-red-500" : "text-stone-300 dark:text-stone-600"} />
+        <StatCard label="OVERDUE" value={taskStats.overdue} subtitle={taskStats.overdue === 0 ? "on schedule" : "past sprint end"} color={taskStats.overdue > 0 ? "text-red-500" : "text-stone-300 dark:text-neutral-600"} />
         <StatCard label="TASKS DONE" value={taskStats.closed} subtitle={`${taskStats.completionPct}%`} color="text-green-500" />
+        <StatCard label="POINTS" value={taskStats.donePoints} subtitle={`of ${taskStats.totalPoints} total`} color="text-purple-500" />
       </div>
 
       <div className={card}>
         <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-4">Task Progress</h3>
         {taskStats.total > 0 ? (
           <>
-            <div className="flex h-5 rounded-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+            <div className="flex h-5 rounded-full overflow-hidden bg-stone-100 dark:bg-dark-overlay">
               {taskStats.closed > 0 && <div className="transition-all duration-500" style={{ width: `${(taskStats.closed / taskStats.total) * 100}%`, backgroundColor: STATUS_CONFIG.closed.color }} />}
               {taskStats.open > 0 && <div className="transition-all duration-500" style={{ width: `${(taskStats.open / taskStats.total) * 100}%`, backgroundColor: STATUS_CONFIG.open.color }} />}
             </div>
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3">
-              <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+              <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_CONFIG.closed.color }} /> Done {taskStats.closed}
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+              <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_CONFIG.open.color }} /> Open {taskStats.open}
               </div>
             </div>
@@ -160,7 +163,7 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={card}>
-          <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-6">Tasks by State</h3>
+          <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-6">Tasks by State</h3>
           {taskStats.total > 0 ? (
             <DonutChart segments={[
               { value: taskStats.open, color: STATUS_CONFIG.open.color, label: "Open" },
@@ -172,18 +175,18 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
         </div>
 
         <div className={card}>
-          <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-4">Tasks per Feature</h3>
+          <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-4">Tasks per Feature</h3>
           {tasksByFeature.length > 0 ? (
             <div className="space-y-2.5 max-h-52 overflow-y-auto">
               {tasksByFeature.map((f) => {
                 const maxCount = tasksByFeature[0].total;
                 return (
                   <div key={f.id}>
-                    <div className="flex justify-between text-xs text-stone-500 dark:text-stone-400 mb-1">
+                    <div className="flex justify-between text-xs text-stone-500 dark:text-neutral-400 mb-1">
                       <span className="truncate max-w-[180px]">{f.title}</span>
                       <span className="tabular-nums shrink-0">{f.closed}/{f.total}</span>
                     </div>
-                    <div className="h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden flex">
+                    <div className="h-3 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden flex">
                       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(f.closed / maxCount) * 100}%`, backgroundColor: STATUS_CONFIG.closed.color }} />
                       <div className="h-full transition-all duration-500" style={{ width: `${(f.open / maxCount) * 100}%`, backgroundColor: STATUS_CONFIG.open.color, opacity: 0.4 }} />
                     </div>
@@ -197,7 +200,7 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
         </div>
 
         <div className={card}>
-          <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-4">Open Tasks by Assignee</h3>
+          <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-4">Open Tasks by Assignee</h3>
           {tasksByAssignee.length > 0 ? (
             <div className="space-y-3">
               {tasksByAssignee.map(([assignee, count]) => {
@@ -209,11 +212,11 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
                 return (
                   <div key={assignee} className="flex items-center gap-2.5">
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ backgroundColor: assignee === "unassigned" ? "#A8A29E" : color }}>{initials}</div>
-                    <span className="text-sm text-stone-700 dark:text-stone-300 w-24 truncate shrink-0">{displayName}</span>
-                    <div className="flex-1 h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+                    <span className="text-sm text-stone-700 dark:text-neutral-300 w-24 truncate shrink-0">{displayName}</span>
+                    <div className="flex-1 h-3 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${widthPct}%`, backgroundColor: color }} />
                     </div>
-                    <span className="text-sm text-stone-500 dark:text-stone-400 font-medium tabular-nums w-5 text-right shrink-0">{count}</span>
+                    <span className="text-sm text-stone-500 dark:text-neutral-400 font-medium tabular-nums w-5 text-right shrink-0">{count}</span>
                   </div>
                 );
               })}
@@ -261,7 +264,7 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
       </svg>
       <div className="flex flex-wrap justify-center gap-3">
         {segments.map((seg) => (
-          <div key={seg.label} className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <div key={seg.label} className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: seg.color }} />
             {seg.label} {seg.value}
           </div>

@@ -25,7 +25,7 @@ export function TabBar({ activeTab, onTabChange, isAdmin }: TabBarProps) {
     return t;
   }, [isAdmin]);
   return (
-    <div className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-700 px-4 sm:px-8 flex gap-0 overflow-x-auto">
+    <div className="bg-white dark:bg-dark-raised border-b border-stone-200 dark:border-white/[0.06] px-4 sm:px-8 flex gap-0 overflow-x-auto">
       {tabs.map(({ id, label }) => (
         <button
           key={id}
@@ -34,7 +34,7 @@ export function TabBar({ activeTab, onTabChange, isAdmin }: TabBarProps) {
             "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer",
             activeTab === id
               ? "border-brand text-brand"
-              : "border-transparent text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600",
+              : "border-transparent text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-300 hover:border-stone-300 dark:hover:border-white/[0.1]",
           )}
         >
           {label}

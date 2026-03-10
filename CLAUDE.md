@@ -38,7 +38,7 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 **Features as GitHub Issues (on `{org}/.gitpulse` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
-- Label scheme: `feature` (marker), `status:{plan,demo,production,future}`, `effort:{low,medium,high}`, `priority:{low,medium,high}`, `team:{name}`
+- Label scheme: `feature` (marker), `status:{plan,demo,production,future}`, `priority:{low,medium,high}`, `team:{name}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
 - Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
 - Owners: Issue assignees
 - Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
@@ -94,7 +94,7 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 ### Active Tabs (visible in tab bar)
 
 #### Sprint Board (`sprint` tab)
-Sprint config + feature cards backed by GitHub Issues (label: `feature`). Features have owners, effort, priority, status (encoded as labels), and implementation plans (issue body with Markdown + `## Tasks` subtask checkboxes). Drag-and-drop between status columns (Plan/Demo/Production). Detail modal renders plan as Markdown, shows interactive task list with checkboxes and per-task assignees.
+Sprint config + feature cards backed by GitHub Issues (label: `feature`). Features have owners, priority, status (encoded as labels), and implementation plans (issue body with Markdown). Drag-and-drop between status columns (Plan/Demo/Production). Detail modal shows plan as Markdown and a **role/task hierarchy**: Features → Person Roles (sub-issues with `role` label) → Tasks (sub-issues of roles with `points:X` labels). Points roll up: Task → Role → Feature. Sprint points use numeric values (1,2,3,5,8,13) on individual tasks. Legacy flat sub-issues (without roles) are shown in an "Ungrouped Tasks" section.
 
 #### Backlog (`backlog` tab)
 Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
