@@ -79,7 +79,7 @@ export function BarChart({ data, color, onBarClick, activeWeek, daily }: BarChar
         {data.map((bucket, i) => (
           <div key={bucket.weekStart} className="flex-1 text-center">
             {shouldShowLabel(i, data.length) && (
-              <span className="text-[10px] text-stone-400 leading-none">
+              <span className="text-[10px] text-stone-400 dark:text-stone-500 leading-none">
                 {daily ? formatDay(bucket.weekStart) : formatWeek(bucket.weekStart)}
               </span>
             )}

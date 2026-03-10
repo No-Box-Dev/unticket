@@ -85,20 +85,20 @@ export function BacklogTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Archive className="w-5 h-5 text-stone-400" />
+          <Archive className="w-5 h-5 text-stone-400 dark:text-stone-500" />
           <div>
-            <h2 className="text-lg font-semibold text-stone-800 font-display">Backlog</h2>
-            <p className="text-sm text-stone-500">
+            <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200 font-display">Backlog</h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               Future features — {futureFeatures.length} total
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <ArrowUpDown size={13} className="text-stone-400" />
+          <ArrowUpDown size={13} className="text-stone-400 dark:text-stone-500" />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="px-2 py-1 rounded-md border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-brand cursor-pointer"
+            className="px-2 py-1 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-500 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="default">Default order</option>
             <option value="priority">Priority</option>
@@ -109,7 +109,7 @@ export function BacklogTab() {
       </div>
 
       {/* Flat feature list */}
-      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
         <div className="p-2 space-y-0.5">
           {sortedFeatures.map((feature) => (
             <FeatureCard
@@ -126,7 +126,7 @@ export function BacklogTab() {
             />
           ))}
           {sortedFeatures.length === 0 && (
-            <div className="px-3 py-4 text-sm text-stone-400 text-center">
+            <div className="px-3 py-4 text-sm text-stone-400 dark:text-stone-500 text-center">
               No backlog features
             </div>
           )}

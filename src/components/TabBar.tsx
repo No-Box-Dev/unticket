@@ -3,11 +3,13 @@ import { cn } from "@/lib/cn";
 import type { TabId } from "@/lib/types";
 
 const baseTabs: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "sprint", label: "Sprint" },
   { id: "backlog", label: "Future Features" },
   { id: "prs", label: "PRs" },
   { id: "issues", label: "Issues" },
   { id: "todos", label: "Todos" },
+  { id: "engineers", label: "Engineers" },
 ];
 
 interface TabBarProps {
@@ -18,12 +20,12 @@ interface TabBarProps {
 
 export function TabBar({ activeTab, onTabChange, isAdmin }: TabBarProps) {
   const tabs = useMemo(() => {
-    const t = [...baseTabs];
+    const t: { id: TabId; label: string }[] = [...baseTabs];
     if (isAdmin) t.push({ id: "insights", label: "Insights" });
     return t;
   }, [isAdmin]);
   return (
-    <div className="bg-white border-b border-stone-200 px-4 sm:px-8 flex gap-0 overflow-x-auto">
+    <div className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-700 px-4 sm:px-8 flex gap-0 overflow-x-auto">
       {tabs.map(({ id, label }) => (
         <button
           key={id}
@@ -32,7 +34,7 @@ export function TabBar({ activeTab, onTabChange, isAdmin }: TabBarProps) {
             "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer",
             activeTab === id
               ? "border-brand text-brand"
-              : "border-transparent text-stone-400 hover:text-stone-600 hover:border-stone-300",
+              : "border-transparent text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600",
           )}
         >
           {label}

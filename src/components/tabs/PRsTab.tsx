@@ -171,15 +171,15 @@ export function PRsTab({ repoNames }: PRsTabProps) {
       {/* Sync Modal */}
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <h3 className="text-sm font-semibold text-stone-800">
+          <div className="bg-white dark:bg-stone-900 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-800">
+              <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-200">
                 {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}
               </h3>
               {(syncDone || syncError) && (
                 <button
                   onClick={() => setSyncModalOpen(false)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
+                  className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -188,11 +188,11 @@ export function PRsTab({ repoNames }: PRsTabProps) {
             <div className="px-5 py-4 space-y-3">
               {syncProgress && syncProgress.total > 0 && (
                 <div>
-                  <div className="flex justify-between text-xs text-stone-500 mb-1">
+                  <div className="flex justify-between text-xs text-stone-500 dark:text-stone-400 mb-1">
                     <span>{syncDone ? "All repos synced" : `Syncing repo ${Math.min(syncedRepos.length + 1, syncProgress.total)} of ${syncProgress.total}`}</span>
                     <span>{Math.round(((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100)}%</span>
                   </div>
-                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
                     <div
                       className={cn(
                         "h-full rounded-full transition-all duration-300",
@@ -206,7 +206,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                 </div>
               )}
               {syncProgress?.phase === "init" && (
-                <div className="flex items-center gap-2 text-xs text-stone-500">
+                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Initializing sync...
                 </div>
@@ -218,7 +218,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                 </div>
               )}
               {syncProgress?.phase === "syncing" && syncProgress.repo && (
-                <div className="flex items-center gap-2 text-xs text-stone-600">
+                <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-brand" />
                   <span className="font-medium">{syncProgress.repo}</span>
                 </div>
@@ -226,7 +226,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
               {syncedRepos.length > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {syncedRepos.map((repo) => (
-                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
+                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                       <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       {repo}
                     </div>
@@ -235,7 +235,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
               )}
             </div>
             {(syncDone || syncError) && (
-              <div className="px-5 py-3 border-t border-stone-100">
+              <div className="px-5 py-3 border-t border-stone-100 dark:border-stone-800">
                 <button
                   onClick={() => setSyncModalOpen(false)}
                   className="w-full px-4 py-2 text-xs font-medium text-white bg-brand rounded-lg hover:bg-brand/90 cursor-pointer"
@@ -250,14 +250,14 @@ export function PRsTab({ repoNames }: PRsTabProps) {
 
       {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+        <div className="flex rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
           <button
             onClick={() => setView("open")}
             className={cn(
               "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
               view === "open"
                 ? "bg-brand text-white"
-                : "bg-white text-stone-600 hover:bg-stone-50",
+                : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50",
             )}
           >
             Open
@@ -265,10 +265,10 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <button
             onClick={() => setView("merged")}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors border-l border-stone-200",
+              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors border-l border-stone-200 dark:border-stone-700",
               view === "merged"
                 ? "bg-brand text-white"
-                : "bg-white text-stone-600 hover:bg-stone-50",
+                : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50",
             )}
           >
             Merged
@@ -279,7 +279,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
           >
             <option value="all">All Teams</option>
             {teams.map((t) => (
@@ -291,7 +291,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
         <select
           value={personFilter}
           onChange={(e) => setPersonFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-brand"
+          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Authors</option>
           {authors.map((a) => (
@@ -313,7 +313,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           onClick={startSync}
           disabled={syncModalOpen}
           className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500 hover:text-brand cursor-pointer",
+            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-brand cursor-pointer",
             syncModalOpen && "opacity-50 cursor-not-allowed",
           )}
         >
@@ -321,38 +321,38 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           Sync from GitHub
         </button>
 
-        <span className="text-xs text-stone-400 ml-auto">
+        <span className="text-xs text-stone-400 dark:text-stone-500 ml-auto">
           {sorted.length} of {(prs ?? []).length} PRs
         </span>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-stone-100 text-left">
+            <tr className="border-b border-stone-100 dark:border-stone-800 text-left">
               <th
                 onClick={() => toggleSort("repo")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
               >
                 PR <SortIcon col="repo" />
               </th>
               <th
                 onClick={() => toggleSort("title")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
               >
                 Title <SortIcon col="title" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Team</th>
+              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400">Team</th>
               <th
                 onClick={() => toggleSort("author")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
               >
                 Author <SortIcon col="author" />
               </th>
               <th
                 onClick={() => toggleSort("reviewers")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
               >
                 Reviewers <SortIcon col="reviewers" />
               </th>
@@ -365,7 +365,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
               <th className="px-4 py-2.5 w-8"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-50">
+          <tbody className="divide-y divide-stone-50 dark:divide-stone-800">
             {isLoading ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center">
@@ -374,7 +374,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-stone-400 dark:text-stone-500">
                   No pull requests found
                 </td>
               </tr>
@@ -387,9 +387,9 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                 return (
                   <tr
                     key={pr.id}
-                    className={cn("hover:bg-stone-50", isStale && "bg-amber-50")}
+                    className={cn("hover:bg-stone-50 dark:hover:bg-stone-800/50", isStale && "bg-amber-50 dark:bg-amber-950/50")}
                   >
-                    <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">
+                    <td className="px-4 py-2.5 text-stone-500 dark:text-stone-400 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         {view === "merged" ? (
                           <GitMerge className="w-4 h-4 text-accent" />
@@ -397,7 +397,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                           <GitPullRequest
                             className={cn(
                               "w-4 h-4",
-                              pr.draft ? "text-stone-400" : "text-green-600",
+                              pr.draft ? "text-stone-400 dark:text-stone-500" : "text-green-600",
                             )}
                           />
                         )}
@@ -405,21 +405,21 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 max-w-md">
-                      <div className="text-stone-800 truncate">
+                      <div className="text-stone-800 dark:text-stone-200 truncate">
                         {pr.title}
                         {pr.draft && (
-                          <span className="ml-2 text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">
+                          <span className="ml-2 text-xs bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-1.5 py-0.5 rounded-full">
                             draft
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-stone-400 truncate">
+                      <div className="text-xs text-stone-400 dark:text-stone-500 truncate">
                         {pr.head.ref} → {pr.base.ref}
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
                       {team ? (
-                        <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                        <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
                             style={{ backgroundColor: team.color }}
@@ -430,8 +430,8 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                         <span className="text-xs text-stone-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-stone-500">{pr.user?.login}</td>
-                    <td className="px-4 py-2.5 text-stone-500 text-xs">
+                    <td className="px-4 py-2.5 text-stone-500 dark:text-stone-400">{pr.user?.login}</td>
+                    <td className="px-4 py-2.5 text-stone-500 dark:text-stone-400 text-xs">
                       {(pr.requested_reviewers ?? []).length > 0
                         ? (pr.requested_reviewers ?? []).map((r: any) => r.login).join(", ")
                         : <span className="text-stone-300">none</span>}
@@ -439,7 +439,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
                     <td
                       className={cn(
                         "px-4 py-2.5 text-right tabular-nums",
-                        isStale ? "text-amber-600 font-medium" : "text-stone-400",
+                        isStale ? "text-amber-600 font-medium" : "text-stone-400 dark:text-stone-500",
                       )}
                     >
                       {age}d

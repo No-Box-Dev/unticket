@@ -46,6 +46,7 @@ export interface IssueInfo {
 }
 
 export type TabId =
+  | "overview"
   | "sprint"
   | "backlog"
   | "team"
@@ -54,6 +55,7 @@ export type TabId =
   | "issues"
   | "activity"
   | "todos"
+  | "engineers"
   | "insights";
 
 export type TodoStatus = "backlog" | "in_progress" | "done";
