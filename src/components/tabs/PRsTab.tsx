@@ -250,7 +250,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
 
       {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+        <div className="flex rounded-lg border border-stone-200 dark:border-stone-800 overflow-hidden">
           <button
             onClick={() => setView("open")}
             className={cn(
@@ -265,7 +265,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <button
             onClick={() => setView("merged")}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors border-l border-stone-200 dark:border-stone-700",
+              "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors border-l border-stone-200 dark:border-stone-800",
               view === "merged"
                 ? "bg-brand text-white"
                 : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50",
@@ -279,7 +279,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
           >
             <option value="all">All Teams</option>
             {teams.map((t) => (
@@ -291,7 +291,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
         <select
           value={personFilter}
           onChange={(e) => setPersonFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Authors</option>
           {authors.map((a) => (
@@ -327,7 +327,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+      <div className="bg-white dark:bg-stone-800/40 rounded-xl border border-stone-200 dark:border-stone-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800 text-left">

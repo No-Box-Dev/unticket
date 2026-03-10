@@ -79,8 +79,8 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   return (
     <div className="flex gap-4 min-h-[600px]">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-700">
+      <div className="w-64 shrink-0 bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-800">
           <h3 className="text-sm font-semibold text-stone-700 dark:text-stone-200">Engineers</h3>
         </div>
         <div className="divide-y divide-stone-100 dark:divide-stone-800 overflow-y-auto max-h-[560px]">
@@ -121,7 +121,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
       {selected && (
         <div className="flex-1 space-y-4">
           {/* Header */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5 flex items-center gap-4">
+          <div className="bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5 flex items-center gap-4">
             {memberAvatars.get(selected.person.github) ? (
               <img src={memberAvatars.get(selected.person.github)} className="w-12 h-12 rounded-full" alt="" />
             ) : (
@@ -142,7 +142,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* AI Summary */}
-          <div className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-xl p-4">
+          <div className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-800 rounded-xl p-4">
             <p className="text-sm text-stone-600 dark:text-stone-300">
               <span className="font-medium text-stone-700 dark:text-stone-200">{selected.person.name || selected.person.github}</span>
               {" has "}
@@ -167,7 +167,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Feature Pipeline */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
+          <div className="bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5">
             <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Feature Pipeline</h3>
             <div className="space-y-2">
               {(["plan", "demo", "production"] as const).map((status) => {
@@ -195,7 +195,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Current tasks (sub-issues) */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
+          <div className="bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5">
             <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Current Tasks</h3>
             {selected.myTasks.filter((t) => t.state === "open").length > 0 ? (
               <div className="space-y-2">
@@ -217,7 +217,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Current features (non-production) */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
+          <div className="bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5">
             <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Current Features</h3>
             {selected.myFeatures.filter((f) => f.status !== "production").length > 0 ? (
               <div className="space-y-2">
@@ -246,7 +246,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-4">
+    <div className="bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-4">
       <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider">{label}</span>
       <div className={`text-3xl font-bold font-display mt-1 ${color}`}>{value}</div>
     </div>

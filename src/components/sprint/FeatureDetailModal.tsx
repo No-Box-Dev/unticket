@@ -165,7 +165,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             </div>
 
             {!editMode && !plan && tasks.length === 0 && (
-              <div className="rounded-lg border border-dashed border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
+              <div className="rounded-lg border border-dashed border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50 px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300 dark:text-stone-600" />
                 No plan yet.
                 <br />
@@ -179,7 +179,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
 
             {!editMode && plan && (
-              <div className="rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone dark:prose-invert max-w-none">
+              <div className="rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone dark:prose-invert max-w-none">
                 <Markdown>{plan}</Markdown>
               </div>
             )}
@@ -205,7 +205,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -260,7 +260,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()}
                 placeholder="Add a task..."
-                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 text-sm dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
               />
               <button
                 type="button"
@@ -437,7 +437,7 @@ function TaskAssignee({
         {assignee ? `@${assignee}` : "assign"}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg shadow-md z-10 w-40 max-h-48 overflow-y-auto">
+        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg shadow-md z-10 w-40 max-h-48 overflow-y-auto">
           <button
             onClick={() => { onChange([]); setOpen(false); }}
             className="w-full text-left px-3 py-1.5 text-xs text-stone-400 dark:text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer"

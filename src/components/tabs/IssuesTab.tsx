@@ -283,7 +283,7 @@ export function IssuesTab(_props: IssuesTabProps) {
               setRepoFilter("all");
               resetPages();
             }}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
           >
             <option value="all">All Teams</option>
             {teams.map((t) => (
@@ -312,7 +312,7 @@ export function IssuesTab(_props: IssuesTabProps) {
             setLabelFilter(e.target.value);
             resetPages();
           }}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Labels</option>
           {labelList.map((l) => (
@@ -338,7 +338,7 @@ export function IssuesTab(_props: IssuesTabProps) {
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+      <div className="bg-white dark:bg-stone-800/40 rounded-xl border border-stone-200 dark:border-stone-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800 text-left">
@@ -410,7 +410,7 @@ export function IssuesTab(_props: IssuesTabProps) {
                   <tr>
                     <td
                       colSpan={9}
-                      className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wider bg-stone-50 dark:bg-stone-800/50 border-t-2 border-stone-200 dark:border-stone-700"
+                      className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wider bg-stone-50 dark:bg-stone-800/50 border-t-2 border-stone-200 dark:border-stone-800"
                     >
                       Closed During Sprint
                     </td>

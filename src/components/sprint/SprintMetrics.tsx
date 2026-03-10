@@ -23,7 +23,7 @@ function getInitials(name: string): string {
   return name.split(/[\s-]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const card = "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5";
+const card = "bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5";
 
 interface SprintMetricsProps {
   sprint: SprintConfig;

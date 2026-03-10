@@ -82,7 +82,7 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               ? { bottom: window.innerHeight - pos.top }
               : { top: pos.top }),
           }}
-          className="z-50 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg shadow-md py-1 min-w-[160px]"
+          className="z-50 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg shadow-md py-1 min-w-[160px]"
         >
           <div className="px-2 pb-1">
             <input
@@ -91,7 +91,7 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full px-2 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded bg-white dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:border-brand"
+              className="w-full px-2 py-1 text-xs border border-stone-200 dark:border-stone-800 rounded bg-white dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:border-brand"
             />
           </div>
           {filtered.map((person) => (

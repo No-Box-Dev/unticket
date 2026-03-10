@@ -17,7 +17,7 @@ const RANGE_OPTIONS = [
   { label: "All", weeks: 260 },
 ] as const;
 
-const card = "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5";
+const card = "bg-white dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 rounded-xl p-5";
 
 interface OverviewTabProps {
   repoNames: string[];

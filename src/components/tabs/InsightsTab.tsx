@@ -372,7 +372,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
             "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
             isAllView
               ? "bg-brand text-white"
-              : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
+              : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
           )}
         >
           All
@@ -385,7 +385,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
               "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
               activePerson === person.github
                 ? "bg-brand text-white"
-                : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
+                : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
             )}
           >
             {person.name || person.github}
@@ -439,7 +439,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       {sidebar && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setSidebar(null)} />
-          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 shadow-xl dark:shadow-black/30 flex flex-col">
+          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-800 shadow-xl dark:shadow-black/30 flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-stone-100 dark:border-stone-800">
               <div>
                 <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-200">{sidebar.title}</h3>
@@ -517,7 +517,7 @@ function InsightCard({
   const hasChart = metric.history.length > 0;
 
   return (
-    <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
+    <div className="bg-white dark:bg-stone-800/40 rounded-xl border border-stone-200 dark:border-stone-800 p-4">
       <div className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-2">
         {title}
       </div>
