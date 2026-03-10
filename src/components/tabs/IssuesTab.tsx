@@ -339,38 +339,38 @@ export function IssuesTab(_props: IssuesTabProps) {
 
       {/* Table */}
       <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
-              <th className="px-4 py-2.5 w-8"></th>
+              <th className="px-3 py-2 w-8"></th>
               <th
                 onClick={() => toggleSort("number")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Issue <SortIcon col="number" />
               </th>
               <th
                 onClick={() => toggleSort("title")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Title <SortIcon col="title" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400">Team</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Team</th>
               <th
                 onClick={() => toggleSort("repo")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Repo <SortIcon col="repo" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
               <th
                 onClick={() => toggleSort("created_at")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
+                className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
                 Age <SortIcon col="created_at" />
               </th>
-              <th className="px-4 py-2.5 w-8"></th>
+              <th className="px-3 py-2 w-8"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
@@ -483,16 +483,16 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
 
   return (
     <tr className={cn("hover:bg-stone-50 dark:hover:bg-white/[0.06]", closed && "text-stone-400 dark:text-neutral-500")}>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         {closed ? (
           <CircleCheck className="w-4 h-4 text-accent" />
         ) : (
           <CircleDot className="w-4 h-4 text-green-600" />
         )}
       </td>
-      <td className="px-4 py-2.5 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
-      <td className="px-4 py-2.5 max-w-md truncate">{issue.title}</td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
+      <td className="px-3 py-2 max-w-md truncate">{issue.title}</td>
+      <td className="px-3 py-2">
         {team ? (
           <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
             <span
@@ -505,8 +505,8 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
           <span className="text-xs text-stone-300">—</span>
         )}
       </td>
-      <td className="px-4 py-2.5 text-stone-500 dark:text-neutral-400 text-xs">{issue.repo || "—"}</td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 text-xs">{issue.repo || "—"}</td>
+      <td className="px-3 py-2">
         <div className="flex gap-1 flex-wrap">
           {(issue.labels ?? []).slice(0, 3).map((l: any) => {
             const style = getLabelStyle(l.name, l.color);
@@ -525,7 +525,7 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
           })}
         </div>
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <AssignDropdown
           owners={(issue.assignees ?? []).map((a: any) => a.login)}
           allPeople={allPeople}
@@ -534,13 +534,13 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
       </td>
       <td
         className={cn(
-          "px-4 py-2.5 text-right tabular-nums",
+          "px-3 py-2 text-right tabular-nums",
           age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400 dark:text-neutral-500",
         )}
       >
         {age}d
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <a
           href={issue.html_url}
           target="_blank"

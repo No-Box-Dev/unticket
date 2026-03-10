@@ -23,7 +23,7 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "prs", label: "Pull Requests", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "todos", label: "Todos", keywords: "todos tasks" },
-  { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
+  // { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
   { id: "insights", label: "Insights", keywords: "insights metrics analytics" },
 ];
 

@@ -9,7 +9,7 @@ const baseTabs: { id: TabId; label: string }[] = [
   { id: "prs", label: "PRs" },
   { id: "issues", label: "Issues" },
   { id: "todos", label: "Todos" },
-  { id: "engineers", label: "Engineers" },
+  // { id: "engineers", label: "Engineers" },
 ];
 
 interface TabBarProps {
