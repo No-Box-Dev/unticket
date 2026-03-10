@@ -28,18 +28,18 @@ export function TeamTag({ team, teams, onChange }: TeamTagProps) {
           "px-2.5 py-0.5 text-xs font-medium rounded-full cursor-pointer transition-colors border",
           team
             ? "bg-brand/10 text-brand border-brand/20"
-            : "bg-stone-50 text-stone-400 border-stone-200",
+            : "bg-stone-50 dark:bg-stone-800/50 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700",
         )}
       >
         {team || "Team"}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 left-0 bg-white rounded-lg shadow-md border border-stone-200 py-1 min-w-[120px]">
+        <div className="absolute z-50 mt-1 left-0 bg-white dark:bg-stone-900 rounded-lg shadow-md border border-stone-200 dark:border-stone-700 py-1 min-w-[120px]">
           <button
             onClick={() => { onChange(undefined); setOpen(false); }}
             className={cn(
-              "w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer",
-              !team ? "text-brand font-medium" : "text-stone-500",
+              "w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer",
+              !team ? "text-brand font-medium" : "text-stone-500 dark:text-stone-400",
             )}
           >
             None
@@ -49,8 +49,8 @@ export function TeamTag({ team, teams, onChange }: TeamTagProps) {
               key={t}
               onClick={() => { onChange(t); setOpen(false); }}
               className={cn(
-                "w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer",
-                team === t ? "text-brand font-medium" : "text-stone-600",
+                "w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer",
+                team === t ? "text-brand font-medium" : "text-stone-600 dark:text-stone-400",
               )}
             >
               {t}

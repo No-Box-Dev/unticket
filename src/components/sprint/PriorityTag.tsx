@@ -6,7 +6,7 @@ const priorityConfig: Record<Priority, { color: string; fill: boolean }> = {
   high: { color: "text-red-500", fill: true },
   medium: { color: "text-orange-400", fill: true },
   low: { color: "text-green-500", fill: true },
-  none: { color: "text-stone-300", fill: false },
+  none: { color: "text-stone-300 dark:text-stone-600", fill: false },
 };
 
 const cycle: Priority[] = ["none", "low", "medium", "high"];

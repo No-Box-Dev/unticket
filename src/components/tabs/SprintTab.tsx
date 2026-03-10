@@ -1,16 +1,19 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
+import { SprintMetrics } from "@/components/sprint/SprintMetrics";
 import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3 } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
+
+type SprintView = "board" | "metrics";
 
 type SortKey = "default" | "priority" | "effort" | "title";
 
@@ -64,6 +67,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: allIssues } = useAllIssues(repoNames);
 
+  const [sprintView, setSprintView] = useState<SprintView>("board");
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
@@ -108,6 +112,14 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     });
     return pairs;
   }, [people, user]);
+
+  // All sprint features (unfiltered, for metrics view)
+  const allSprintFeatures = useMemo(() => {
+    return (features ?? []).filter((f) => f.sprint === sprint?.number && f.status !== "future");
+  }, [features, sprint]);
+
+  const metricsFeatureIds = useMemo(() => allSprintFeatures.map((f) => f.id), [allSprintFeatures]);
+  const { data: allTasks, isLoading: tasksLoading } = useAllSprintSubIssues(metricsFeatureIds);
 
   // Flat sprint features (no team grouping)
   const sprintFeatures = useMemo(() => {
@@ -212,9 +224,9 @@ export function SprintTab({ repoNames }: SprintTabProps) {
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand/10 mb-4">
           <Rocket className="w-7 h-7 text-brand" />
         </div>
-        <h3 className="text-lg font-semibold text-stone-700 mb-1">No sprint configured yet</h3>
-        <p className="text-sm text-stone-400 mb-6 max-w-sm mx-auto">
-          Create a <code className="bg-stone-100 px-1 rounded">.gitpulse</code> config repo to start tracking sprints, features, and your team.
+        <h3 className="text-lg font-semibold text-stone-700 dark:text-stone-300 mb-1">No sprint configured yet</h3>
+        <p className="text-sm text-stone-400 dark:text-stone-500 mb-6 max-w-sm mx-auto">
+          Create a <code className="bg-stone-100 dark:bg-stone-800 px-1 rounded">.gitpulse</code> config repo to start tracking sprints, features, and your team.
         </p>
         <button
           onClick={() => createRepo.mutate()}
@@ -241,10 +253,10 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     <div className="space-y-4 pb-8">
       {/* Migration banner */}
       {showMigrationBanner && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
-          <Upload size={16} className="text-amber-600 shrink-0" />
+        <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Upload size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm text-amber-800">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
               {migrateProgress
                 ? `Migrating features... (${migrateProgress.done}/${migrateProgress.total})`
                 : `${legacyFeatures!.length} feature${legacyFeatures!.length === 1 ? "" : "s"} found in D1. Migrate to GitHub Issues?`}
@@ -265,12 +277,12 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             </button>
           )}
           {migrateMut.isPending && (
-            <Loader2 size={16} className="text-amber-600 animate-spin" />
+            <Loader2 size={16} className="text-amber-600 dark:text-amber-400 animate-spin" />
           )}
           {!migrateMut.isPending && (
             <button
               onClick={() => setMigrateDismissed(true)}
-              className="text-amber-400 hover:text-amber-600 text-xs cursor-pointer"
+              className="text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 text-xs cursor-pointer"
             >
               Dismiss
             </button>
@@ -278,75 +290,101 @@ export function SprintTab({ repoNames }: SprintTabProps) {
         </div>
       )}
 
-    {/* Sprint selector */}
-    {snapshots && snapshots.length > 0 && (
-      <div className="flex items-center gap-2 flex-wrap">
-        {[...(snapshots ?? [])].sort((a, b) => a.sprintNumber - b.sprintNumber).map((snap) => (
-          <button
-            key={snap.sprintNumber}
-            onClick={() => setViewingSnapshot(viewingSnapshot === snap.sprintNumber ? null : snap.sprintNumber)}
-            className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-full cursor-pointer transition-colors",
-              viewingSnapshot === snap.sprintNumber
-                ? "bg-stone-800 text-white"
-                : "bg-stone-100 text-stone-500 hover:bg-stone-200",
-            )}
+    {/* Sprint selector + view toggle row */}
+    <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center gap-2">
+        {/* Sprint dropdown */}
+        <div className="relative">
+          <select
+            value={viewingSnapshot ?? "current"}
+            onChange={(e) => {
+              const val = e.target.value;
+              setViewingSnapshot(val === "current" ? null : Number(val));
+            }}
+            className="appearance-none pl-3 pr-8 py-1.5 text-sm font-medium rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30"
           >
-            Sprint {snap.sprintNumber}
-          </button>
-        ))}
-        <button
-          onClick={() => setViewingSnapshot(null)}
-          className={cn(
-            "px-3 py-1.5 text-xs font-medium rounded-full cursor-pointer transition-colors",
-            viewingSnapshot === null
-              ? "bg-brand text-white"
-              : "bg-stone-100 text-stone-500 hover:bg-stone-200",
-          )}
-        >
-          Sprint {sprint.number} <span className="text-xs opacity-70">(current)</span>
-        </button>
+            <option value="current">Sprint {sprint.number} (current)</option>
+            {[...(snapshots ?? [])].sort((a, b) => b.sprintNumber - a.sprintNumber).map((snap) => (
+              <option key={snap.sprintNumber} value={snap.sprintNumber}>
+                Sprint {snap.sprintNumber}{snap.name ? ` — ${snap.name}` : ""}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+            <svg className="w-4 h-4 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </div>
         {isAdmin && (
           <button
             onClick={() => setShowBackfill(!showBackfill)}
-            className="px-2 py-1.5 text-xs text-stone-400 hover:text-brand cursor-pointer"
+            className="px-2 py-1.5 text-xs text-stone-400 dark:text-stone-500 hover:text-brand cursor-pointer"
           >
             +
           </button>
         )}
       </div>
-    )}
+
+      {/* View toggle */}
+      {!activeSnapshot && (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSprintView("board")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors",
+              sprintView === "board"
+                ? "bg-brand text-white"
+                : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+            )}
+          >
+            <LayoutGrid size={13} />
+            Features & Tasks
+          </button>
+          <button
+            onClick={() => setSprintView("metrics")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors",
+              sprintView === "metrics"
+                ? "bg-brand text-white"
+                : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+            )}
+          >
+            <BarChart3 size={13} />
+            Sprint Metrics
+          </button>
+        </div>
+      )}
+    </div>
 
     {/* Backfill form */}
     {isAdmin && showBackfill && (
-      <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-        <h4 className="text-sm font-semibold text-stone-800">Backfill Sprint Snapshot</h4>
+      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4 space-y-3">
+        <h4 className="text-sm font-semibold text-stone-800 dark:text-stone-200">Backfill Sprint Snapshot</h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
+            <label className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Sprint #</label>
             <input type="number" min={1} value={backfillNumber} onChange={(e) => setBackfillNumber(parseInt(e.target.value) || 1)}
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Name</label>
+            <label className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Name</label>
             <input type="text" value={backfillName} onChange={(e) => setBackfillName(e.target.value)} placeholder="Sprint name..."
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Start Date</label>
+            <label className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Start Date</label>
             <input type="date" value={backfillStart} onChange={(e) => setBackfillStart(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
-            <label className="text-xs text-stone-500 block mb-1">End Date</label>
+            <label className="text-xs text-stone-500 dark:text-stone-400 block mb-1">End Date</label>
             <input type="date" value={backfillEnd} onChange={(e) => setBackfillEnd(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
         <div>
-          <label className="text-xs text-stone-500 block mb-1">Focus</label>
+          <label className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Focus</label>
           <input type="text" value={backfillFocus} onChange={(e) => setBackfillFocus(e.target.value)} placeholder="Sprint focus..."
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -373,7 +411,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           >
             {saveSnapshotsMut.isPending ? "Saving..." : "Create Snapshot"}
           </button>
-          <button onClick={() => setShowBackfill(false)} className="px-4 py-2 border border-stone-200 text-sm text-stone-600 rounded-lg hover:bg-stone-50 cursor-pointer">Cancel</button>
+          <button onClick={() => setShowBackfill(false)} className="px-4 py-2 border border-stone-200 dark:border-stone-700 text-sm text-stone-600 dark:text-stone-400 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer">Cancel</button>
         </div>
       </div>
     )}
@@ -383,17 +421,28 @@ export function SprintTab({ repoNames }: SprintTabProps) {
       <SnapshotView snapshot={activeSnapshot} />
     )}
 
+    {/* Sprint metrics view */}
+    {!activeSnapshot && sprintView === "metrics" && (
+      <SprintMetrics
+        sprint={sprint}
+        sprintFeatures={allSprintFeatures}
+        people={people}
+        allTasks={allTasks}
+        tasksLoading={tasksLoading}
+      />
+    )}
+
     {/* Current sprint board */}
-    {!activeSnapshot && (
+    {!activeSnapshot && sprintView === "board" && (
     <div className="flex gap-4">
       {/* Left sidebar: Sprint info + Add Feature */}
       <div className="hidden lg:flex flex-col gap-4 w-48 shrink-0 pt-1">
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-stone-800">
+          <h2 className="text-sm font-semibold text-stone-800 dark:text-stone-200">
             Sprint {sprint.number}
           </h2>
-          <p className="text-xs text-stone-500">{sprint.name}</p>
-          <div className="flex items-center gap-1.5 text-xs text-stone-400">
+          <p className="text-xs text-stone-500 dark:text-stone-400">{sprint.name}</p>
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 dark:text-stone-500">
             <Calendar className="w-3.5 h-3.5" />
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </div>
@@ -401,20 +450,20 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             <p className="text-xs text-brand">{sprint.focus}</p>
           )}
         </div>
-        <div className="border-t border-stone-200 pt-3">
+        <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
           <AddFeatureInput onAdd={addFeature} />
         </div>
         <button
           onClick={() => syncFeaturesMut.mutate()}
           disabled={syncFeaturesMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
         >
           <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
           {syncFeaturesMut.isPending ? "Syncing..." : "Sync Features"}
         </button>
         <button
           onClick={() => setShowNewSprint(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer w-full"
         >
           <FastForward size={13} />
           New Sprint
@@ -423,11 +472,11 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
       {/* Mobile: inline sprint header */}
       <div className="lg:hidden w-full space-y-3 mb-4">
-        <div className="bg-white rounded-xl border border-stone-200 border-l-4 border-l-brand px-4 py-2.5 flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-stone-800 whitespace-nowrap">
+        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 border-l-4 border-l-brand px-4 py-2.5 flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-stone-800 dark:text-stone-200 whitespace-nowrap">
             Sprint {sprint.number}: {sprint.name}
           </h2>
-          <div className="flex items-center gap-1.5 text-xs text-stone-400 whitespace-nowrap">
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 dark:text-stone-500 whitespace-nowrap">
             <Calendar className="w-3.5 h-3.5" />
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </div>
@@ -439,13 +488,13 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           <button
             onClick={() => syncFeaturesMut.mutate()}
             disabled={syncFeaturesMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
           >
             <RefreshCw size={13} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => setShowNewSprint(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-500 dark:text-stone-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer shrink-0"
           >
             <FastForward size={13} />
             New Sprint
@@ -457,12 +506,12 @@ export function SprintTab({ repoNames }: SprintTabProps) {
       <div className="flex-1 min-w-0 space-y-2">
         {/* Search */}
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search features..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-700 dark:text-stone-300 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
 
@@ -476,7 +525,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 selectedPerson === null
                   ? "bg-brand text-white"
-                  : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                  : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
               )}
             >
               All
@@ -488,8 +537,8 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                 className={cn(
                   "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                   selectedPerson === p.login
-                    ? "bg-stone-800 text-white"
-                    : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                    ? "bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900"
+                    : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
                 )}
               >
                 {p.name}
@@ -500,7 +549,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           {/* Team pills */}
           {allTeamNames.length > 0 && (
             <>
-              <span className="w-px h-4 bg-stone-200" />
+              <span className="w-px h-4 bg-stone-200 dark:bg-stone-700" />
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => setSelectedTeam(null)}
@@ -508,7 +557,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                     "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                     selectedTeam === null
                       ? "bg-brand/10 text-brand"
-                      : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                      : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
                   )}
                 >
                   All teams
@@ -520,8 +569,8 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                     className={cn(
                       "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                       selectedTeam === t
-                        ? "bg-stone-800 text-white"
-                        : "bg-stone-100 text-stone-500 hover:bg-stone-200",
+                        ? "bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900"
+                        : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
                     )}
                   >
                     {t}
@@ -534,11 +583,11 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
         <div className="flex items-center justify-end gap-3">
           <div className="flex items-center gap-1.5">
-            <ArrowUpDown size={13} className="text-stone-400" />
+            <ArrowUpDown size={13} className="text-stone-400 dark:text-stone-500" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-brand cursor-pointer"
+              className="px-2 py-1 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-500 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
             >
               <option value="default">Default order</option>
               <option value="priority">Priority</option>
@@ -557,14 +606,14 @@ export function SprintTab({ repoNames }: SprintTabProps) {
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, col.status)}
             className={cn(
-              "rounded-xl border border-stone-200 bg-stone-50 transition-colors",
+              "rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-950 transition-colors",
               dragOverCol === col.status && "border-brand/50 bg-brand/5",
             )}
           >
-            <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl">
-              <span className="text-sm font-medium text-stone-700">
+            <div className="px-4 py-3 border-b border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 rounded-t-xl">
+              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                 {col.label}{" "}
-                <span className="text-stone-400 font-normal">({items.length})</span>
+                <span className="text-stone-400 dark:text-stone-500 font-normal">({items.length})</span>
               </span>
             </div>
             <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-220px)]">
@@ -584,7 +633,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
                 />
               ))}
               {items.length === 0 && (
-                <div className="px-3 py-8 text-sm text-stone-400 text-center">
+                <div className="px-3 py-8 text-sm text-stone-400 dark:text-stone-500 text-center">
                   Drag features here
                 </div>
               )}
@@ -649,11 +698,11 @@ function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold text-stone-800">
+        <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200">
           Sprint {snapshot.sprintNumber}
-          {snapshot.name && <span className="text-stone-400 font-normal ml-2">— {snapshot.name}</span>}
+          {snapshot.name && <span className="text-stone-400 dark:text-stone-500 font-normal ml-2">— {snapshot.name}</span>}
         </h2>
-        <span className="text-xs text-stone-400">
+        <span className="text-xs text-stone-400 dark:text-stone-500">
           {formatDate(snapshot.startDate)} – {formatDate(snapshot.endDate)}
         </span>
       </div>
@@ -671,17 +720,17 @@ function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
           ["Features Shipped", metrics.featuresCompleted],
           ["Carried Over", metrics.featuresCarriedOver],
         ] as const).map(([label, value]) => (
-          <div key={label} className="bg-white rounded-xl border border-stone-200 px-4 py-3 text-center">
-            <div className="text-2xl font-semibold text-stone-800">{value}</div>
-            <div className="text-xs text-stone-400 uppercase tracking-wider mt-0.5">{label}</div>
+          <div key={label} className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 px-4 py-3 text-center">
+            <div className="text-2xl font-semibold text-stone-800 dark:text-stone-200">{value}</div>
+            <div className="text-xs text-stone-400 dark:text-stone-500 uppercase tracking-wider mt-0.5">{label}</div>
           </div>
         ))}
       </div>
 
       {/* Features */}
       {snapshotFeatures.length > 0 && (
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">Features</h3>
+        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
+          <h3 className="text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-3">Features</h3>
           <div className="space-y-2">
             {snapshotFeatures.map((f, i) => (
               <div key={i} className="flex items-center gap-2.5">
@@ -689,9 +738,9 @@ function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
                   "w-2.5 h-2.5 rounded-full shrink-0",
                   f.status === "production" ? "bg-green-500" : f.status === "demo" ? "bg-amber-500" : "bg-stone-300",
                 )} />
-                <span className="text-sm text-stone-700">{f.title}</span>
+                <span className="text-sm text-stone-700 dark:text-stone-300">{f.title}</span>
                 {f.owners.length > 0 && (
-                  <span className="text-xs text-stone-400 ml-auto shrink-0">{f.owners.join(", ")}</span>
+                  <span className="text-xs text-stone-400 dark:text-stone-500 ml-auto shrink-0">{f.owners.join(", ")}</span>
                 )}
               </div>
             ))}

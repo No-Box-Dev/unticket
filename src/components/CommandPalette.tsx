@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
-import { useFeatures } from "@/hooks/useConfigRepo";
-import { usePeople } from "@/hooks/useConfigRepo";
+import { useFeatures, usePeople, useTodos, useSprint } from "@/hooks/useConfigRepo";
 import { cn } from "@/lib/cn";
+import { useTheme } from "@/lib/theme";
 import type { TabId } from "@/lib/types";
 
 interface CommandPaletteProps {
@@ -10,18 +10,20 @@ interface CommandPaletteProps {
 }
 
 interface SearchResult {
-  type: "feature" | "person" | "tab";
+  type: "feature" | "person" | "tab" | "todo" | "task" | "action";
   label: string;
   detail?: string;
   action: () => void;
 }
 
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
+  { id: "overview", label: "Overview", keywords: "overview dashboard summary home" },
   { id: "sprint", label: "Sprint Board", keywords: "sprint kanban board features" },
   { id: "backlog", label: "Future Features", keywords: "backlog future" },
   { id: "prs", label: "Pull Requests", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "todos", label: "Todos", keywords: "todos tasks" },
+  { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
   { id: "insights", label: "Insights", keywords: "insights metrics analytics" },
 ];
 
@@ -34,6 +36,9 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
+  const { data: todos } = useTodos();
+  const { data: sprint } = useSprint();
+  const { dark, toggle: toggleTheme } = useTheme();
 
   // CMD+K to open
   useEffect(() => {
@@ -60,40 +65,68 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const results = useMemo((): SearchResult[] => {
     const q = query.toLowerCase().trim();
     if (!q) {
-      // Show tabs when empty
-      return TAB_ITEMS.map((t) => ({
-        type: "tab" as const,
-        label: t.label,
-        action: () => { onNavigate(t.id); setOpen(false); },
-      }));
+      return [
+        ...TAB_ITEMS.map((t) => ({
+          type: "tab" as const,
+          label: t.label,
+          action: () => { onNavigate(t.id); setOpen(false); },
+        })),
+        {
+          type: "action" as const,
+          label: dark ? "Switch to Light Mode" : "Switch to Dark Mode",
+          detail: `Currently ${dark ? "dark" : "light"}`,
+          action: () => { toggleTheme(); setOpen(false); },
+        },
+      ];
     }
 
     const items: SearchResult[] = [];
 
     // Search features
     for (const f of features ?? []) {
-      if (f.title.toLowerCase().includes(q) || f.owners.some((o) => o.toLowerCase().includes(q))) {
+      if (items.length >= 25) break;
+      const searchText = `${f.title} ${f.owners.join(" ")} ${f.team ?? ""} ${f.priority ?? ""} ${f.effort}`.toLowerCase();
+      if (searchText.includes(q)) {
         items.push({
           type: "feature",
           label: f.title,
-          detail: f.sprint ? `Sprint ${f.sprint}` : "Backlog",
+          detail: [
+            f.sprint ? `Sprint ${f.sprint}` : "Backlog",
+            f.owners.length > 0 ? f.owners.join(", ") : null,
+            f.priority && f.priority !== "none" ? `${f.priority} priority` : null,
+          ].filter(Boolean).join(" · "),
           action: () => {
             onNavigate(f.status === "future" ? "backlog" : "sprint");
             setOpen(false);
           },
         });
       }
-      if (items.length >= 20) break;
     }
 
     // Search people
     for (const p of people ?? []) {
-      if (p.name.toLowerCase().includes(q) || p.github.toLowerCase().includes(q)) {
+      if (items.length >= 25) break;
+      const searchText = `${p.name} ${p.github} ${p.role} ${p.teams.join(" ")}`.toLowerCase();
+      if (searchText.includes(q)) {
         items.push({
           type: "person",
           label: p.name || p.github,
-          detail: p.role || p.teams.join(", "),
-          action: () => { onNavigate("sprint"); setOpen(false); },
+          detail: [p.role, p.teams.join(", ")].filter(Boolean).join(" · "),
+          action: () => { onNavigate("engineers"); setOpen(false); },
+        });
+      }
+    }
+
+    // Search todos
+    for (const t of todos ?? []) {
+      if (items.length >= 25) break;
+      const searchText = `${t.title} ${t.owner} ${t.repo ?? ""} ${t.status}`.toLowerCase();
+      if (searchText.includes(q)) {
+        items.push({
+          type: "todo",
+          label: t.title,
+          detail: [t.owner, t.status.replace("_", " "), t.repo].filter(Boolean).join(" · "),
+          action: () => { onNavigate("todos"); setOpen(false); },
         });
       }
     }
@@ -109,13 +142,22 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       }
     }
 
-    return items.slice(0, 20);
-  }, [query, features, people, onNavigate]);
+    // Theme toggle action
+    const themeKeywords = "theme dark light night mode toggle switch appearance";
+    if (themeKeywords.includes(q)) {
+      items.push({
+        type: "action",
+        label: dark ? "Switch to Light Mode" : "Switch to Dark Mode",
+        detail: `Currently ${dark ? "dark" : "light"}`,
+        action: () => { toggleTheme(); setOpen(false); },
+      });
+    }
+
+    return items.slice(0, 25);
+  }, [query, features, people, todos, sprint, onNavigate, dark, toggleTheme]);
 
   // Keyboard navigation
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
+  useEffect(() => { setSelectedIndex(0); }, [query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -138,31 +180,36 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
   if (!open) return null;
 
+  const typeColors: Record<string, string> = {
+    feature: "text-brand",
+    person: "text-amber-500",
+    tab: "text-stone-400 dark:text-stone-500",
+    todo: "text-purple-500",
+    task: "text-teal-500",
+    action: "text-blue-500",
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+      <div className="absolute inset-0 bg-black/40 dark:bg-black/60" onClick={() => setOpen(false)} />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden">
-        {/* Search input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200">
-          <Search size={16} className="text-stone-400 shrink-0" />
+      <div className="relative w-full max-w-lg bg-white dark:bg-stone-900 rounded-xl shadow-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200 dark:border-stone-700">
+          <Search size={16} className="text-stone-400 dark:text-stone-500 shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search features, people, pages..."
-            className="flex-1 text-sm text-stone-800 placeholder:text-stone-400 outline-none bg-transparent"
+            placeholder="Search features, people, todos, pages..."
+            className="flex-1 text-sm text-stone-800 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500 outline-none bg-transparent"
           />
-          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">
+          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 dark:text-stone-500 bg-stone-100 dark:bg-stone-800 rounded border border-stone-200 dark:border-stone-700 font-mono">
             ESC
           </kbd>
         </div>
 
-        {/* Results */}
-        <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
+        <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
           {results.length === 0 && (
             <div className="px-4 py-6 text-sm text-stone-400 text-center">No results</div>
           )}
@@ -172,18 +219,17 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
               onClick={r.action}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-2.5 text-left cursor-pointer transition-colors",
-                i === selectedIndex ? "bg-stone-100" : "hover:bg-stone-50",
+                i === selectedIndex
+                  ? "bg-stone-100 dark:bg-stone-800"
+                  : "hover:bg-stone-50 dark:hover:bg-stone-800/50",
               )}
             >
-              <span className={cn(
-                "text-xs uppercase tracking-wider font-medium w-14 shrink-0",
-                r.type === "feature" ? "text-brand" : r.type === "person" ? "text-amber-500" : "text-stone-400",
-              )}>
+              <span className={cn("text-xs uppercase tracking-wider font-medium w-14 shrink-0", typeColors[r.type] ?? "text-stone-400")}>
                 {r.type}
               </span>
               <div className="flex-1 min-w-0">
-                <span className="text-sm text-stone-800 truncate block">{r.label}</span>
-                {r.detail && <span className="text-xs text-stone-400">{r.detail}</span>}
+                <span className="text-sm text-stone-800 dark:text-stone-200 truncate block">{r.label}</span>
+                {r.detail && <span className="text-xs text-stone-400 dark:text-stone-500">{r.detail}</span>}
               </div>
             </button>
           ))}
