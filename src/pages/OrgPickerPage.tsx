@@ -17,19 +17,19 @@ export function OrgPickerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
             <LogoMark className="w-9 h-9" />
-            <h1 className="text-2xl font-bold text-stone-900 font-display">Unticket</h1>
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100 font-display">Unticket</h1>
           </div>
-          <p className="text-stone-500">
+          <p className="text-stone-500 dark:text-stone-400">
             Choose an organisation to track
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-2">
+        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4 space-y-2">
           {isLoading ? (
             <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
@@ -38,7 +38,7 @@ export function OrgPickerPage() {
                 <button
                   key={org.login}
                   onClick={() => setSelectedOrg(org.login)}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-stone-50 border border-transparent hover:border-stone-200 transition-colors text-left cursor-pointer"
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 border border-transparent hover:border-stone-200 dark:hover:border-stone-700 transition-colors text-left cursor-pointer"
                 >
                   {org.avatar_url ? (
                     <img
@@ -50,7 +50,7 @@ export function OrgPickerPage() {
                     <Building2 className="w-5 h-5 text-stone-400" />
                   )}
                   <div>
-                    <div className="text-sm font-medium text-stone-900">
+                    <div className="text-sm font-medium text-stone-900 dark:text-stone-100">
                       {org.login}
                     </div>
                     {org.description && (
@@ -78,7 +78,7 @@ export function OrgPickerPage() {
             value={manualOrg}
             onChange={(e) => setManualOrg(e.target.value)}
             placeholder="Enter org name (e.g. n1healthcare)"
-            className="flex-1 px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+            className="flex-1 px-3 py-2 text-sm border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
           />
           <button
             type="submit"
@@ -91,7 +91,7 @@ export function OrgPickerPage() {
 
         <button
           onClick={logout}
-          className="block mx-auto mt-4 text-xs text-stone-400 hover:text-stone-600 cursor-pointer"
+          className="block mx-auto mt-4 text-xs text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 cursor-pointer"
         >
           Sign out
         </button>

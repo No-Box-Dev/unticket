@@ -84,9 +84,9 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
   const addValid = newGithub.trim().length > 0 && !people.some((p) => p.github === newGithub.trim());
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+    <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-900">People ({people.length})</h2>
+        <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">People ({people.length})</h2>
         {!adding && (
           <button
             onClick={() => {
@@ -104,19 +104,19 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
       {/* Search */}
       {people.length > 8 && (
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, GitHub, or team..."
-            className="w-full text-xs border border-stone-200 rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:border-teal-600"
+            className="w-full text-xs border border-stone-200 dark:border-stone-700 rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:border-teal-600 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
       )}
 
       {/* Add Person Form */}
       {adding && (
-        <div className="border border-stone-200 rounded-lg p-3 space-y-2 bg-stone-50">
+        <div className="border border-stone-200 dark:border-stone-700 rounded-lg p-3 space-y-2 bg-stone-50 dark:bg-stone-800/50">
           <div className="flex items-center gap-2">
             <input
               autoFocus
@@ -127,7 +127,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                 if (e.key === "Escape") setAdding(false);
               }}
               placeholder="GitHub username..."
-              className="flex-1 text-sm border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600"
+              className="flex-1 text-sm border border-stone-200 dark:border-stone-700 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600 dark:bg-stone-800 dark:text-stone-100"
             />
             <input
               value={newName}
@@ -137,7 +137,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                 if (e.key === "Escape") setAdding(false);
               }}
               placeholder="Display name..."
-              className="flex-1 text-sm border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600"
+              className="flex-1 text-sm border border-stone-200 dark:border-stone-700 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600 dark:bg-stone-800 dark:text-stone-100"
             />
             <button
               onClick={handleAdd}
@@ -148,7 +148,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
             </button>
             <button
               onClick={() => setAdding(false)}
-              className="text-stone-400 hover:text-stone-600 cursor-pointer"
+              className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -163,19 +163,19 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
           const isEditing = editingIndex === realIndex;
 
           return (
-            <div key={person.github} className="border border-stone-200 rounded-lg overflow-hidden">
+            <div key={person.github} className="border border-stone-200 dark:border-stone-700 rounded-lg overflow-hidden">
               {/* Person Row */}
               <div className="flex items-center gap-3 px-3 py-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-stone-800 truncate">
+                    <span className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">
                       {person.name || person.github}
                     </span>
                     {person.name && person.name !== person.github && (
-                      <span className="text-xs text-stone-400 shrink-0">@{person.github}</span>
+                      <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">@{person.github}</span>
                     )}
                   </div>
-                  {person.role && <div className="text-xs text-stone-400">{person.role}</div>}
+                  {person.role && <div className="text-xs text-stone-400 dark:text-stone-500">{person.role}</div>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {person.teams.map((teamName) => {
@@ -183,7 +183,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                     return (
                       <span
                         key={teamName}
-                        className="inline-flex items-center gap-1 text-xs text-stone-500 bg-stone-50 px-1.5 py-0.5 rounded-full"
+                        className="inline-flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-800/50 px-1.5 py-0.5 rounded-full"
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full"
@@ -194,14 +194,14 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                     );
                   })}
                   {person.teams.length === 0 && (
-                    <span className="text-xs text-stone-300 italic">no team</span>
+                    <span className="text-xs text-stone-300 dark:text-stone-600 italic">no team</span>
                   )}
                 </div>
                 {!isEditing && confirmDelete !== realIndex && (
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => startEdit(realIndex)}
-                      className="p-1 text-stone-400 hover:text-stone-600 cursor-pointer"
+                      className="p-1 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -210,7 +210,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                         setConfirmDelete(realIndex);
                         if (editingIndex !== null) handleSaveEdit();
                       }}
-                      className="p-1 text-stone-400 hover:text-red-500 cursor-pointer"
+                      className="p-1 text-stone-400 dark:text-stone-500 hover:text-red-500 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -227,7 +227,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                     </button>
                     <button
                       onClick={() => setConfirmDelete(null)}
-                      className="text-xs text-stone-400 hover:text-stone-600 cursor-pointer"
+                      className="text-xs text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer"
                     >
                       No
                     </button>
@@ -237,7 +237,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
 
               {/* Edit Panel */}
               {isEditing && (
-                <div className="border-t border-stone-200 bg-stone-50 p-3 space-y-3">
+                <div className="border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 p-3 space-y-3">
                   <div className="flex items-center gap-2">
                     <input
                       value={editName}
@@ -247,7 +247,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                         if (e.key === "Escape") cancelEdit();
                       }}
                       placeholder="Display name..."
-                      className="flex-1 text-sm border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600"
+                      className="flex-1 text-sm border border-stone-200 dark:border-stone-700 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600 dark:bg-stone-800 dark:text-stone-100"
                     />
                     <input
                       value={editRole}
@@ -257,7 +257,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                         if (e.key === "Escape") cancelEdit();
                       }}
                       placeholder="Role..."
-                      className="flex-1 text-sm border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600"
+                      className="flex-1 text-sm border border-stone-200 dark:border-stone-700 rounded-lg px-2.5 py-1 focus:outline-none focus:border-teal-600 dark:bg-stone-800 dark:text-stone-100"
                     />
                     <button
                       onClick={handleSaveEdit}
@@ -268,7 +268,7 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="p-1 text-stone-400 hover:text-stone-600 cursor-pointer"
+                      className="p-1 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer"
                       title="Cancel"
                     >
                       <X className="w-4 h-4" />
@@ -278,8 +278,8 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                   {/* Team Assignment */}
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-stone-600">Teams</span>
-                      <span className="text-xs text-stone-400">(max 2)</span>
+                      <span className="text-xs font-medium text-stone-600 dark:text-stone-400">Teams</span>
+                      <span className="text-xs text-stone-400 dark:text-stone-500">(max 2)</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {teams.map((team) => {
@@ -294,8 +294,8 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
                               selected
                                 ? "text-white font-medium cursor-pointer"
                                 : atMax
-                                  ? "bg-stone-50 text-stone-300 cursor-default"
-                                  : "bg-stone-100 text-stone-600 hover:bg-stone-200 cursor-pointer"
+                                  ? "bg-stone-50 dark:bg-stone-800/50 text-stone-300 dark:text-stone-600 cursor-default"
+                                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700 cursor-pointer"
                             }`}
                             style={selected ? { backgroundColor: team.color } : undefined}
                           >
@@ -319,11 +319,11 @@ export function PeopleManagement({ people, savePeople, teams }: Props) {
       </div>
 
       {filtered.length === 0 && search && (
-        <p className="text-xs text-stone-400 text-center py-2">No people matching &ldquo;{search}&rdquo;</p>
+        <p className="text-xs text-stone-400 dark:text-stone-500 text-center py-2">No people matching &ldquo;{search}&rdquo;</p>
       )}
 
       {people.length === 0 && !adding && (
-        <p className="text-xs text-stone-400">No people configured. Add team members to get started.</p>
+        <p className="text-xs text-stone-400 dark:text-stone-500">No people configured. Add team members to get started.</p>
       )}
     </div>
   );

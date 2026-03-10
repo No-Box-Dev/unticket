@@ -142,6 +142,52 @@ export function useDeleteFeature() {
   });
 }
 
+// ---------- Bulk sub-issues for sprint ----------
+
+export interface SubIssueWithFeature {
+  featureId: number;
+  featureTitle: string;
+  id: number;
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  assignees: string[];
+  html_url: string;
+}
+
+export function useAllSprintSubIssues(featureIds: number[]) {
+  const { selectedOrg } = useAuth();
+  return useQuery<SubIssueWithFeature[]>({
+    queryKey: ["allSprintSubIssues", selectedOrg, featureIds],
+    queryFn: async () => {
+      if (!selectedOrg || featureIds.length === 0) return [];
+      const results: SubIssueWithFeature[] = [];
+      // Fetch sub-issues for all features in parallel (batched)
+      const batches = [];
+      for (let i = 0; i < featureIds.length; i += 5) {
+        batches.push(featureIds.slice(i, i + 5));
+      }
+      for (const batch of batches) {
+        const batchResults = await Promise.all(
+          batch.map(async (fid) => {
+            try {
+              const subs = await fetchSubIssues(selectedOrg, fid);
+              return subs.map((s) => ({ ...s, featureId: fid, featureTitle: "" }));
+            } catch {
+              return [];
+            }
+          }),
+        );
+        results.push(...batchResults.flat());
+      }
+      return results;
+    },
+    enabled: !!selectedOrg && featureIds.length > 0,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 // ---------- Sub-issues ----------
 
 export function useSubIssues(featureId: number) {

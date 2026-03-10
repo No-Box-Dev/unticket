@@ -32,23 +32,23 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
             <LogoMark className="w-9 h-9" />
-            <h1 className="text-2xl font-bold text-stone-900 font-display">Unticket</h1>
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100 font-display">Unticket</h1>
           </div>
-          <p className="text-stone-500">
+          <p className="text-stone-500 dark:text-stone-400">
             AI-powered project management for GitHub
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-stone-200 p-6 space-y-4">
+        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-6 space-y-4">
           {/* Always show the Sign in with GitHub button */}
           <button
             onClick={handleGitHubClick}
-            className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-stone-800 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-800 dark:hover:bg-stone-200 transition-colors cursor-pointer"
           >
             <Github className="w-5 h-5" />
             Sign in with GitHub
@@ -58,9 +58,9 @@ export function LoginPage() {
           {showPAT && (
             <>
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-stone-200" />
+                <div className="flex-1 h-px bg-stone-200 dark:bg-stone-700" />
                 <ChevronDown className="w-3.5 h-3.5 text-stone-300" />
-                <div className="flex-1 h-px bg-stone-200" />
+                <div className="flex-1 h-px bg-stone-200 dark:bg-stone-700" />
               </div>
 
               <form onSubmit={handlePATSubmit} className="space-y-3">
@@ -73,7 +73,7 @@ export function LoginPage() {
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder="ghp_xxxxxxxxxxxx"
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg text-sm bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
                   autoFocus
                   required
                 />
@@ -89,8 +89,8 @@ export function LoginPage() {
                     Create one here
                   </a>{" "}
                   with{" "}
-                  <code className="bg-stone-100 px-1 rounded">repo</code> and{" "}
-                  <code className="bg-stone-100 px-1 rounded">read:org</code>{" "}
+                  <code className="bg-stone-100 dark:bg-stone-800 px-1 rounded">repo</code> and{" "}
+                  <code className="bg-stone-100 dark:bg-stone-800 px-1 rounded">read:org</code>{" "}
                   scopes.
                 </p>
 
@@ -112,7 +112,7 @@ export function LoginPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-stone-400 mt-4">
+        <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-4">
           Your credentials stay in your browser. No data leaves your machine.
         </p>
       </div>

@@ -96,6 +96,70 @@ export function extractCreatedDates(items: { created_at: string }[]): string[] {
   return items.map((i) => i.created_at);
 }
 
+// ---------- Ref tab helpers ----------
+
+export const EFFORT_POINTS: Record<string, number> = { low: 1, medium: 2, high: 3 };
+
+import type { Feature, SprintConfig, StatusHistoryEntry } from "./types";
+
+/** Compute burndown data for a sprint: ideal line + actual remaining features per day. */
+export function computeBurndown(
+  features: Feature[],
+  sprint: SprintConfig,
+): { ideal: { x: number; y: number }[]; actual: { x: number; y: number }[] } {
+  const start = new Date(sprint.startDate + "T00:00:00");
+  const end = new Date(sprint.endDate + "T23:59:59");
+  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+  const total = features.length;
+
+  const ideal: { x: number; y: number }[] = [];
+  for (let d = 0; d <= totalDays; d++) {
+    ideal.push({ x: d, y: Math.round(total - (total / totalDays) * d) });
+  }
+
+  const now = new Date();
+  const daysElapsed = Math.min(totalDays, Math.max(0, Math.round((now.getTime() - start.getTime()) / 86400000)));
+
+  const actual: { x: number; y: number }[] = [];
+  for (let d = 0; d <= daysElapsed; d++) {
+    const dayDate = new Date(start.getTime() + d * 86400000);
+    const remaining = features.filter((f) => {
+      if (f.status !== "production") return true;
+      // Check statusHistory for when it became production
+      const prodEntry = f.statusHistory?.find((h: StatusHistoryEntry) => h.status === "production");
+      if (!prodEntry) return false; // is production but no history — assume done before sprint
+      return new Date(prodEntry.timestamp) > dayDate;
+    }).length;
+    actual.push({ x: d, y: remaining });
+  }
+
+  return { ideal, actual };
+}
+
+/** Compute engineer status relative to sprint progress. */
+export function computeEngineerStatus(
+  personFeatures: Feature[],
+  sprint: SprintConfig,
+): "on-track" | "at-risk" | "behind" {
+  if (personFeatures.length === 0) return "on-track";
+
+  const completed = personFeatures.filter((f) => f.status === "production").length;
+  const total = personFeatures.length;
+  const completionPct = completed / total;
+
+  const now = new Date();
+  const start = new Date(sprint.startDate + "T00:00:00");
+  const end = new Date(sprint.endDate + "T23:59:59");
+  const elapsed = Math.max(0, now.getTime() - start.getTime());
+  const duration = Math.max(1, end.getTime() - start.getTime());
+  const elapsedPct = Math.min(1, elapsed / duration);
+
+  const diff = completionPct - elapsedPct;
+  if (diff >= -0.1) return "on-track";
+  if (diff >= -0.3) return "at-risk";
+  return "behind";
+}
+
 // Build open issues weekly snapshots from created/closed dates
 export function buildOpenIssueSnapshots(
   allIssues: { created_at: string; closed_at?: string | null; state: string }[],
