@@ -151,6 +151,7 @@ export interface Team {
 export interface OrgSettings {
   teams: Team[];
   draftRepos?: string[];
+  excludedMembers?: string[];
 }
 
 // Sprint snapshots

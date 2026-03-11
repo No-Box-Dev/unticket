@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { usePeople, useSettings } from "@/hooks/useConfigRepo";
-import { useAllPRs, useClosedIssues, useAllIssues, useOrgMembers } from "@/hooks/useGitHub";
+import { useAllPRs, useClosedIssues, useAllIssues, useActiveMembers } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { BarChart } from "@/components/BarChart";
 import { computeMetric, extractClosedDates, extractCreatedDates } from "@/lib/metrics";
@@ -25,7 +25,7 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
   const { user } = useAuth();
   const { data: people } = usePeople();
   const { data: settings } = useSettings();
-  const { data: orgMembers } = useOrgMembers();
+  const { data: orgMembers } = useActiveMembers();
   const [selected, setSelected] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [weeks, setWeeks] = useState(10);
