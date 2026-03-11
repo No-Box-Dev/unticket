@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
 import { useFeatures, usePeople, useTodos, useSprint, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
-import { useOrgMembers } from "@/hooks/useGitHub";
+import { useActiveMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/lib/theme";
 import { useSidebar } from "@/lib/sidebar";
@@ -39,7 +39,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
-  const { data: orgMembers } = useOrgMembers();
+  const { data: orgMembers } = useActiveMembers();
   const { data: todos } = useTodos();
   const { data: sprint } = useSprint();
   const { dark, toggle: toggleTheme } = useTheme();
