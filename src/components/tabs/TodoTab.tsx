@@ -195,12 +195,12 @@ export function TodoTab() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addTodo()}
             placeholder="Add a todo..."
-            className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+            className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
           />
           <select
             value={selectedFeatureId ?? ""}
             onChange={(e) => setSelectedFeatureId(e.target.value || null)}
-            className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-600 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
+            className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-600 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="">No feature</option>
             {myFeatures.map((f) => (
@@ -236,22 +236,22 @@ export function TodoTab() {
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, status)}
               className={cn(
-                "rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 transition-colors min-h-[200px] flex flex-col",
+                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
                 dragOverCol === status && "border-brand/50 bg-brand/5",
               )}
             >
               {/* Column header */}
-              <div className="px-4 py-3 border-b border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 rounded-t-xl flex items-center justify-between">
-                <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center justify-between">
+                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
                   {label}{" "}
-                  <span className="text-stone-400 dark:text-stone-500 font-normal">
+                  <span className="text-stone-400 dark:text-neutral-500 font-normal">
                     ({columns[status].length})
                   </span>
                 </span>
                 {status === "done" && columns.done.length > 0 && (
                   <button
                     onClick={clearDone}
-                    className="flex items-center gap-1 text-xs text-stone-400 dark:text-stone-500 hover:text-red-500 cursor-pointer transition-colors"
+                    className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors"
                   >
                     <Trash2 size={13} />
                     Clear
@@ -275,7 +275,7 @@ export function TodoTab() {
                   />
                 ))}
                 {columns[status].length === 0 && (
-                  <div className="text-center py-8 text-stone-300 dark:text-stone-600 text-xs">
+                  <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
                     {status === "backlog" && "New todos land here"}
                     {status === "in_progress" && "Drag items here"}
                     {status === "done" && "Completed items"}
@@ -288,11 +288,11 @@ export function TodoTab() {
       </div>
 
       {/* Sidebar: My Features */}
-      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden h-fit">
-        <div className="px-4 py-3 border-b border-stone-100 dark:border-stone-800">
-          <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden h-fit">
+        <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06]">
+          <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
             My Features{" "}
-            <span className="text-stone-400 dark:text-stone-500 font-normal">({myFeatures.length})</span>
+            <span className="text-stone-400 dark:text-neutral-500 font-normal">({myFeatures.length})</span>
           </span>
         </div>
         <div className="p-2 space-y-0.5 overflow-y-auto max-h-[500px]">
@@ -300,15 +300,15 @@ export function TodoTab() {
             <button
               key={f.id}
               onClick={() => addFeatureTodo(f)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
             >
               <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_DOT[f.status])} />
-              <span className="text-sm text-stone-700 dark:text-stone-300 truncate flex-1">{f.title}</span>
+              <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{f.title}</span>
               <Plus size={14} className="text-stone-300 shrink-0" />
             </button>
           ))}
           {myFeatures.length === 0 && (
-            <div className="px-3 py-4 text-sm text-stone-400 dark:text-stone-500 text-center">
+            <div className="px-3 py-4 text-sm text-stone-400 dark:text-neutral-500 text-center">
               No features assigned
             </div>
           )}
@@ -367,8 +367,8 @@ function TodoCard({
       }}
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-stone-900 cursor-grab active:cursor-grabbing",
-        isDone ? "border-stone-100 dark:border-stone-800 opacity-50" : "border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised cursor-grab active:cursor-grabbing",
+        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06] hover:border-stone-300 dark:hover:border-white/[0.1]",
         isDropTarget && "border-t-2 border-t-brand",
       )}
     >
@@ -376,7 +376,7 @@ function TodoCard({
         <span
           className={cn(
             "text-sm block",
-            isDone && "line-through text-stone-400 dark:text-stone-500",
+            isDone && "line-through text-stone-400 dark:text-neutral-500",
           )}
         >
           {todo.title}
@@ -386,7 +386,7 @@ function TodoCard({
             {feature && (
               <span className="flex items-center gap-1.5">
                 <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[feature.status])} />
-                <span className="text-xs text-stone-400 dark:text-stone-500">{feature.title}</span>
+                <span className="text-xs text-stone-400 dark:text-neutral-500">{feature.title}</span>
               </span>
             )}
             {todo.repo && (
@@ -395,7 +395,7 @@ function TodoCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 text-xs text-stone-400 dark:text-stone-500 hover:text-brand transition-colors"
+                className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
               >
                 <GitBranch size={10} />
                 {todo.repo}
@@ -406,7 +406,7 @@ function TodoCard({
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="text-stone-300 dark:text-stone-600 hover:text-red-500 cursor-pointer transition-colors mt-0.5"
+        className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer transition-colors mt-0.5"
       >
         <X size={14} />
       </button>
@@ -473,18 +473,18 @@ function TodoDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="todo-detail-title"
-        className="bg-white dark:bg-stone-900 rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
           <input
             id="todo-detail-title"
             value={todo.title}
             onChange={(e) => onUpdate({ title: e.target.value })}
-            className="text-lg font-semibold text-stone-800 dark:text-stone-200 bg-transparent border-none outline-none focus:ring-0 w-full truncate"
+            className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full truncate"
           />
-          <button onClick={onClose} className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer">
+          <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -493,11 +493,11 @@ function TodoDetailModal({
           {/* Meta row: feature + repo selectors */}
           <div className="flex items-center gap-4 flex-wrap">
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Feature</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Feature</span>
               <select
                 value={todo.featureId ?? ""}
                 onChange={(e) => onUpdate({ featureId: e.target.value || undefined })}
-                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-700 dark:text-stone-300 focus:outline-none focus:border-brand cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
               >
                 <option value="">None</option>
                 {allFeatures.map((f) => (
@@ -506,7 +506,7 @@ function TodoDetailModal({
               </select>
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Repo</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Repo</span>
               <div className="flex items-center gap-1.5">
                 <SearchableSelect
                   value={todo.repo ?? ""}
@@ -522,7 +522,7 @@ function TodoDetailModal({
                     href={repoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-stone-400 dark:text-stone-500 hover:text-brand transition-colors"
+                    className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
                     title="Open on GitHub"
                   >
                     <ExternalLink size={13} />
@@ -531,11 +531,11 @@ function TodoDetailModal({
               </div>
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Status</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Status</span>
               <select
                 value={todo.status}
                 onChange={(e) => onUpdate({ status: e.target.value as TodoStatus })}
-                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-700 dark:text-stone-300 focus:outline-none focus:border-brand cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
               >
                 {COLUMNS.map((c) => (
                   <option key={c.status} value={c.status}>{c.label}</option>
@@ -546,7 +546,7 @@ function TodoDetailModal({
 
           {/* Linked feature info */}
           {feature && (
-            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
               <span className={cn("w-2 h-2 rounded-full", STATUS_DOT[feature.status])} />
               Feature: {feature.title}
             </div>
@@ -555,14 +555,14 @@ function TodoDetailModal({
           {/* Implementation Plan */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500 dark:text-stone-400">Implementation Plan</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400">Implementation Plan</span>
               <div className="flex items-center gap-2">
                 {planUrl && plan !== null && (
                   <a
                     href={planUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-stone-400 dark:text-stone-500 hover:text-brand flex items-center gap-1"
+                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1"
                     title="View on GitHub"
                   >
                     <ExternalLink size={12} />
@@ -571,7 +571,7 @@ function TodoDetailModal({
                 {!planLoading && !editMode && plan !== null && (
                   <button
                     onClick={() => { setEditContent(plan); setEditMode(true); setSaveError(null); }}
-                    className="text-xs text-stone-400 dark:text-stone-500 hover:text-brand flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1 cursor-pointer"
                   >
                     <Pencil size={12} />
                     Edit
@@ -581,13 +581,13 @@ function TodoDetailModal({
             </div>
 
             {planLoading && (
-              <div className="rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-8 flex justify-center">
+              <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 flex justify-center">
                 <Spinner />
               </div>
             )}
 
             {!planLoading && !editMode && plan === null && (
-              <div className="rounded-lg border border-dashed border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
+              <div className="rounded-lg border border-dashed border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 text-center text-sm text-stone-400 dark:text-neutral-500">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300" />
                 No plan found.
                 <br />
@@ -601,7 +601,7 @@ function TodoDetailModal({
             )}
 
             {!planLoading && !editMode && plan !== null && (
-              <pre className="rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
+              <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
                 {plan}
               </pre>
             )}
@@ -611,7 +611,7 @@ function TodoDetailModal({
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-900 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
+                  className="w-full rounded-lg border border-stone-300 dark:border-white/[0.1] bg-white dark:bg-dark-raised px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
                   rows={12}
                 />
                 {saveError && (
@@ -642,7 +642,7 @@ function TodoDetailModal({
                   <button
                     onClick={() => { setEditMode(false); setSaveError(null); }}
                     disabled={saving}
-                    className="px-3 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 disabled:opacity-50 cursor-pointer"
+                    className="px-3 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] text-xs text-stone-600 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-white/[0.06] disabled:opacity-50 cursor-pointer"
                   >
                     Cancel
                   </button>

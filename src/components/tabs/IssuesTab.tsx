@@ -186,15 +186,15 @@ export function IssuesTab(_props: IssuesTabProps) {
       {/* Sync Modal */}
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-stone-900 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-800">
-              <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-200">
+          <div className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
+              <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">
                 {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}
               </h3>
               {(syncDone || syncError) && (
                 <button
                   onClick={() => setSyncModalOpen(false)}
-                  className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer"
+                  className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -204,11 +204,11 @@ export function IssuesTab(_props: IssuesTabProps) {
               {/* Progress bar */}
               {syncProgress && syncProgress.total > 0 && (
                 <div>
-                  <div className="flex justify-between text-xs text-stone-500 dark:text-stone-400 mb-1">
+                  <div className="flex justify-between text-xs text-stone-500 dark:text-neutral-400 mb-1">
                     <span>{syncDone ? "All repos synced" : `Syncing repo ${Math.min(syncedRepos.length + 1, syncProgress.total)} of ${syncProgress.total}`}</span>
                     <span>{Math.round(((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100)}%</span>
                   </div>
-                  <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+                  <div className="h-2 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
                     <div
                       className={cn(
                         "h-full rounded-full transition-all duration-300",
@@ -224,7 +224,7 @@ export function IssuesTab(_props: IssuesTabProps) {
 
               {/* Init phase */}
               {syncProgress?.phase === "init" && (
-                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Initializing sync...
                 </div>
@@ -240,7 +240,7 @@ export function IssuesTab(_props: IssuesTabProps) {
 
               {/* Current repo */}
               {syncProgress?.phase === "syncing" && syncProgress.repo && (
-                <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
+                <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-neutral-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-brand" />
                   <span className="font-medium">{syncProgress.repo}</span>
                 </div>
@@ -250,7 +250,7 @@ export function IssuesTab(_props: IssuesTabProps) {
               {syncedRepos.length > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {syncedRepos.map((repo) => (
-                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
                       <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       {repo}
                     </div>
@@ -260,7 +260,7 @@ export function IssuesTab(_props: IssuesTabProps) {
             </div>
 
             {(syncDone || syncError) && (
-              <div className="px-5 py-3 border-t border-stone-100 dark:border-stone-800">
+              <div className="px-5 py-3 border-t border-stone-100 dark:border-white/[0.06]">
                 <button
                   onClick={() => setSyncModalOpen(false)}
                   className="w-full px-4 py-2 text-xs font-medium text-white bg-brand rounded-lg hover:bg-brand/90 cursor-pointer"
@@ -283,7 +283,7 @@ export function IssuesTab(_props: IssuesTabProps) {
               setRepoFilter("all");
               resetPages();
             }}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
           >
             <option value="all">All Teams</option>
             {teams.map((t) => (
@@ -312,7 +312,7 @@ export function IssuesTab(_props: IssuesTabProps) {
             setLabelFilter(e.target.value);
             resetPages();
           }}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand"
+          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
         >
           <option value="all">All Labels</option>
           {labelList.map((l) => (
@@ -324,7 +324,7 @@ export function IssuesTab(_props: IssuesTabProps) {
           onClick={startSync}
           disabled={syncModalOpen}
           className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-brand cursor-pointer",
+            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
             syncModalOpen && "opacity-50 cursor-not-allowed",
           )}
         >
@@ -332,48 +332,48 @@ export function IssuesTab(_props: IssuesTabProps) {
           Sync from GitHub
         </button>
 
-        <span className="text-xs text-stone-400 dark:text-stone-500 ml-auto">
+        <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
           {openTotal} open, {closedTotal} closed
         </span>
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-stone-100 dark:border-stone-800 text-left">
-              <th className="px-4 py-2.5 w-8"></th>
+            <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
+              <th className="px-3 py-2 w-8"></th>
               <th
                 onClick={() => toggleSort("number")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Issue <SortIcon col="number" />
               </th>
               <th
                 onClick={() => toggleSort("title")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Title <SortIcon col="title" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400">Team</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Team</th>
               <th
                 onClick={() => toggleSort("repo")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400 cursor-pointer hover:text-stone-700 dark:hover:text-stone-300"
+                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
                 Repo <SortIcon col="repo" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400">Labels</th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-stone-400">Assignees</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
+              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
               <th
                 onClick={() => toggleSort("created_at")}
-                className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
+                className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
                 Age <SortIcon col="created_at" />
               </th>
-              <th className="px-4 py-2.5 w-8"></th>
+              <th className="px-3 py-2 w-8"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-50 dark:divide-stone-800">
+          <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
             {isLoading ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center">
@@ -382,7 +382,7 @@ export function IssuesTab(_props: IssuesTabProps) {
               </tr>
             ) : openTotal === 0 && closedTotal === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-stone-400 dark:text-stone-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
                   No issues found
                 </td>
               </tr>
@@ -410,7 +410,7 @@ export function IssuesTab(_props: IssuesTabProps) {
                   <tr>
                     <td
                       colSpan={9}
-                      className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wider bg-stone-50 dark:bg-stone-800/50 border-t-2 border-stone-200 dark:border-stone-700"
+                      className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider bg-stone-50 dark:bg-white/[0.04] border-t-2 border-stone-200 dark:border-white/[0.06]"
                     >
                       Closed During Sprint
                     </td>
@@ -459,17 +459,17 @@ function PaginationControls({
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
-        className="p-1 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        className="p-1 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-      <span className={cn("text-xs text-stone-500 dark:text-stone-400 tabular-nums", isFetching && "opacity-50")}>
+      <span className={cn("text-xs text-stone-500 dark:text-neutral-400 tabular-nums", isFetching && "opacity-50")}>
         Page {page} of {totalPages}
       </span>
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages}
-        className="p-1 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        className="p-1 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -482,19 +482,19 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
   const team = teams.find((t) => (t.repos ?? []).includes(issue.repo));
 
   return (
-    <tr className={cn("hover:bg-stone-50 dark:hover:bg-stone-800/50", closed && "text-stone-400 dark:text-stone-500")}>
-      <td className="px-4 py-2.5">
+    <tr className={cn("hover:bg-stone-50 dark:hover:bg-white/[0.06]", closed && "text-stone-400 dark:text-neutral-500")}>
+      <td className="px-3 py-2">
         {closed ? (
           <CircleCheck className="w-4 h-4 text-accent" />
         ) : (
           <CircleDot className="w-4 h-4 text-green-600" />
         )}
       </td>
-      <td className="px-4 py-2.5 text-stone-500 dark:text-stone-400 whitespace-nowrap">#{issue.number}</td>
-      <td className="px-4 py-2.5 max-w-md truncate">{issue.title}</td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
+      <td className="px-3 py-2 max-w-md truncate">{issue.title}</td>
+      <td className="px-3 py-2">
         {team ? (
-          <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: team.color }}
@@ -505,8 +505,8 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
           <span className="text-xs text-stone-300">—</span>
         )}
       </td>
-      <td className="px-4 py-2.5 text-stone-500 dark:text-stone-400 text-xs">{issue.repo || "—"}</td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 text-xs">{issue.repo || "—"}</td>
+      <td className="px-3 py-2">
         <div className="flex gap-1 flex-wrap">
           {(issue.labels ?? []).slice(0, 3).map((l: any) => {
             const style = getLabelStyle(l.name, l.color);
@@ -525,7 +525,7 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
           })}
         </div>
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <AssignDropdown
           owners={(issue.assignees ?? []).map((a: any) => a.login)}
           allPeople={allPeople}
@@ -534,13 +534,13 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
       </td>
       <td
         className={cn(
-          "px-4 py-2.5 text-right tabular-nums",
-          age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400 dark:text-stone-500",
+          "px-3 py-2 text-right tabular-nums",
+          age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400 dark:text-neutral-500",
         )}
       >
         {age}d
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <a
           href={issue.html_url}
           target="_blank"

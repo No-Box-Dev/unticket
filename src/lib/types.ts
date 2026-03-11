@@ -78,6 +78,19 @@ export type Effort = "low" | "medium" | "high";
 export type Priority = "high" | "medium" | "low" | "none";
 export type FeatureStatus = "plan" | "demo" | "production" | "future";
 
+// Sprint points
+export type Points = 1 | 2 | 3 | 5 | 8 | 13;
+export const VALID_POINTS: Points[] = [1, 2, 3, 5, 8, 13];
+
+export interface PersonRole {
+  id: number;        // GitHub global issue ID
+  number: number;    // issue number
+  title: string;
+  assignee: string | null;
+  state: "open" | "closed";
+  html_url: string;
+}
+
 export interface SprintConfig {
   number: number;
   name: string;
@@ -98,7 +111,7 @@ export interface Feature {
   owners: string[];
   status: FeatureStatus;
   sprint: number | null;
-  effort: Effort;
+  effort?: Effort;
   priority?: Priority;
   plan?: string;
   url?: string;

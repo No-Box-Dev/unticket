@@ -23,7 +23,7 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "prs", label: "Pull Requests", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "todos", label: "Todos", keywords: "todos tasks" },
-  { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
+  // { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
   { id: "insights", label: "Insights", keywords: "insights metrics analytics" },
 ];
 
@@ -85,7 +85,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     // Search features
     for (const f of features ?? []) {
       if (items.length >= 25) break;
-      const searchText = `${f.title} ${f.owners.join(" ")} ${f.team ?? ""} ${f.priority ?? ""} ${f.effort}`.toLowerCase();
+      const searchText = `${f.title} ${f.owners.join(" ")} ${f.team ?? ""} ${f.priority ?? ""}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "feature",
@@ -183,7 +183,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const typeColors: Record<string, string> = {
     feature: "text-brand",
     person: "text-amber-500",
-    tab: "text-stone-400 dark:text-stone-500",
+    tab: "text-stone-400 dark:text-neutral-500",
     todo: "text-purple-500",
     task: "text-teal-500",
     action: "text-blue-500",
@@ -193,18 +193,18 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]">
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60" onClick={() => setOpen(false)} />
 
-      <div className="relative w-full max-w-lg bg-white dark:bg-stone-900 rounded-xl shadow-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200 dark:border-stone-700">
-          <Search size={16} className="text-stone-400 dark:text-stone-500 shrink-0" />
+      <div className="relative w-full max-w-lg bg-white dark:bg-dark-raised rounded-xl shadow-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
+          <Search size={16} className="text-stone-400 dark:text-neutral-500 shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search features, people, todos, pages..."
-            className="flex-1 text-sm text-stone-800 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500 outline-none bg-transparent"
+            className="flex-1 text-sm text-stone-800 dark:text-neutral-200 placeholder:text-stone-400 dark:placeholder:text-neutral-500 outline-none bg-transparent"
           />
-          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 dark:text-stone-500 bg-stone-100 dark:bg-stone-800 rounded border border-stone-200 dark:border-stone-700 font-mono">
+          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay rounded border border-stone-200 dark:border-white/[0.06] font-mono">
             ESC
           </kbd>
         </div>
@@ -220,16 +220,16 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-2.5 text-left cursor-pointer transition-colors",
                 i === selectedIndex
-                  ? "bg-stone-100 dark:bg-stone-800"
-                  : "hover:bg-stone-50 dark:hover:bg-stone-800/50",
+                  ? "bg-stone-100 dark:bg-dark-overlay"
+                  : "hover:bg-stone-50 dark:hover:bg-white/[0.06]",
               )}
             >
               <span className={cn("text-xs uppercase tracking-wider font-medium w-14 shrink-0", typeColors[r.type] ?? "text-stone-400")}>
                 {r.type}
               </span>
               <div className="flex-1 min-w-0">
-                <span className="text-sm text-stone-800 dark:text-stone-200 truncate block">{r.label}</span>
-                {r.detail && <span className="text-xs text-stone-400 dark:text-stone-500">{r.detail}</span>}
+                <span className="text-sm text-stone-800 dark:text-neutral-200 truncate block">{r.label}</span>
+                {r.detail && <span className="text-xs text-stone-400 dark:text-neutral-500">{r.detail}</span>}
               </div>
             </button>
           ))}

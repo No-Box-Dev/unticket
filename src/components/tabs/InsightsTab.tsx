@@ -300,8 +300,8 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <BarChart3 className="w-5 h-5 text-stone-400 dark:text-stone-500" />
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200 font-display">Insights</h2>
+          <BarChart3 className="w-5 h-5 text-stone-400 dark:text-neutral-500" />
+          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Insights</h2>
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((opt) => (
@@ -312,7 +312,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 weeks === opt.weeks
                   ? "bg-brand text-white"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+                  : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
               )}
             >
               {opt.label}
@@ -324,7 +324,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       {/* Team filter */}
       {teams.length > 1 && (
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wider">Team</span>
+          <span className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Team</span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
@@ -336,7 +336,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                 "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                 teamFilter === "all"
                   ? "bg-brand text-white"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+                  : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
               )}
             >
               All
@@ -354,7 +354,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                   "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
                   teamFilter === team.name
                     ? "bg-brand text-white"
-                    : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700",
+                    : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
                 )}
               >
                 {team.name}
@@ -372,7 +372,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
             "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
             isAllView
               ? "bg-brand text-white"
-              : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
+              : "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 hover:border-brand hover:text-brand",
           )}
         >
           All
@@ -385,7 +385,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
               "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
               activePerson === person.github
                 ? "bg-brand text-white"
-                : "bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-brand hover:text-brand",
+                : "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 hover:border-brand hover:text-brand",
             )}
           >
             {person.name || person.github}
@@ -439,15 +439,15 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
       {sidebar && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setSidebar(null)} />
-          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 shadow-xl dark:shadow-black/30 flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-stone-100 dark:border-stone-800">
+          <div className="fixed top-0 right-0 z-50 h-full w-80 bg-white dark:bg-dark-raised border-l border-stone-200 dark:border-white/[0.06] shadow-xl dark:shadow-black/30 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-stone-100 dark:border-white/[0.06]">
               <div>
-                <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-200">{sidebar.title}</h3>
-                <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">{formatBucketRange(sidebar.weekStart, isDaily)}</p>
+                <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{sidebar.title}</h3>
+                <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">{formatBucketRange(sidebar.weekStart, isDaily)}</p>
               </div>
               <button
                 onClick={() => setSidebar(null)}
-                className="p-1 rounded-md hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 dark:text-stone-500 cursor-pointer"
+                className="p-1 rounded-md hover:bg-stone-100 dark:hover:bg-white/[0.06] text-stone-400 dark:text-neutral-500 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -455,12 +455,12 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
 
             <div className="flex-1 overflow-y-auto p-4">
               {sidebarItems.length === 0 ? (
-                <p className="text-sm text-stone-400 dark:text-stone-500 py-8 text-center">No items this week.</p>
+                <p className="text-sm text-stone-400 dark:text-neutral-500 py-8 text-center">No items this week.</p>
               ) : (
                 <div className="space-y-4">
                   {groupByRepo(sidebarItems).map(([repo, items]) => (
                     <div key={repo}>
-                      <h4 className="text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1.5">
+                      <h4 className="text-xs font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-1.5">
                         {repo || "Other"}
                       </h4>
                       <div className="space-y-1.5">
@@ -470,16 +470,16 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block p-2.5 rounded-lg border border-stone-100 dark:border-stone-800 hover:border-stone-200 dark:hover:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors group"
+                            className="block p-2.5 rounded-lg border border-stone-100 dark:border-white/[0.06] hover:border-stone-200 dark:hover:border-white/[0.08] hover:bg-stone-50 dark:hover:bg-white/[0.06] transition-colors group"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <span className="text-sm font-medium text-stone-700 dark:text-stone-300 leading-snug line-clamp-2">
+                              <span className="text-sm font-medium text-stone-700 dark:text-neutral-300 leading-snug line-clamp-2">
                                 {item.title}
                               </span>
-                              <ExternalLink className="w-3 h-3 text-stone-300 dark:text-stone-600 group-hover:text-stone-400 dark:group-hover:text-stone-500 shrink-0 mt-0.5" />
+                              <ExternalLink className="w-3 h-3 text-stone-300 dark:text-neutral-600 group-hover:text-stone-400 dark:group-hover:text-neutral-500 shrink-0 mt-0.5" />
                             </div>
                             {item.author && (
-                              <span className="text-xs text-stone-400 dark:text-stone-500 mt-1 block">{item.author}</span>
+                              <span className="text-xs text-stone-400 dark:text-neutral-500 mt-1 block">{item.author}</span>
                             )}
                           </a>
                         ))}
@@ -517,12 +517,12 @@ function InsightCard({
   const hasChart = metric.history.length > 0;
 
   return (
-    <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
-      <div className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-2">
+    <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
+      <div className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
         {title}
       </div>
       <div className="mb-3">
-        <span className="text-3xl font-semibold text-stone-800 dark:text-stone-200" style={{ color }}>
+        <span className="text-3xl font-semibold text-stone-800 dark:text-neutral-200" style={{ color }}>
           {total}
         </span>
       </div>

@@ -54,4 +54,9 @@
   --color-surface: #fafaf9;
   --color-border: #e7e5e4;
   --color-muted: #78716c;
+
+  /* Dark mode elevation surfaces */
+  --color-dark-base: #0d1117;
+  --color-dark-raised: #181a1f;
+  --color-dark-overlay: #252830;
 }
