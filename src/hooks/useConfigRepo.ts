@@ -7,8 +7,8 @@ import {
   savePeople,
   fetchSettings,
   saveSettings,
-  fetchTodos,
-  saveTodos,
+  fetchTodos as fetchTodosD1,
+  saveTodos as saveTodosD1,
   fetchAgentRules,
   saveAgentRules,
   fetchSprintSnapshots,
@@ -16,6 +16,15 @@ import {
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
+import {
+  fetchTodosByOwner as ghFetchTodosByOwner,
+  createTodo as ghCreateTodo,
+  updateTodo as ghUpdateTodo,
+  deleteTodo as ghDeleteTodo,
+  fetchTodosClosedInRange as ghFetchTodosClosedInRange,
+  migrateTodos as ghMigrateTodos,
+} from "@/lib/github-todos";
+import type { LegacyTodoForMigration } from "@/lib/github-todos";
 import {
   fetchFeaturesFromD1,
   createFeature as ghCreateFeature,
@@ -40,7 +49,7 @@ import {
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, SprintSnapshot, Points, PersonRole } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -74,7 +83,7 @@ export function usePeople() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["people", selectedOrg],
-    queryFn: fetchPeople,
+    queryFn: () => fetchPeople(selectedOrg!),
     enabled: !!selectedOrg,
   });
 }
@@ -538,7 +547,7 @@ export function useSavePeople() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (people: Person[]) => savePeople(people),
+    mutationFn: (people: Person[]) => savePeople(selectedOrg!, people),
     onMutate: async (people) => {
       await qc.cancelQueries({ queryKey: ["people", selectedOrg] });
       const previous = qc.getQueryData<Person[]>(["people", selectedOrg]);
@@ -571,29 +580,111 @@ export function useSaveSettings() {
 }
 
 export function useTodos() {
-  const { selectedOrg } = useAuth();
+  const { selectedOrg, user } = useAuth();
   return useQuery({
-    queryKey: ["todos", selectedOrg],
-    queryFn: fetchTodos,
-    enabled: !!selectedOrg,
+    queryKey: ["todos", selectedOrg, user?.login],
+    queryFn: () => ghFetchTodosByOwner(selectedOrg!, user!.login),
+    enabled: !!selectedOrg && !!user?.login,
+    staleTime: 2 * 60 * 1000,
   });
 }
 
-export function useSaveTodos() {
+export function useCreateTodoItem() {
+  const { selectedOrg, user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { title: string; featureId?: number; repo?: string }) =>
+      ghCreateTodo(selectedOrg!, args.title, user!.login, {
+        featureId: args.featureId,
+        repo: args.repo,
+      }),
+    onSuccess: (newTodo) => {
+      qc.setQueryData<Todo[]>(["todos", selectedOrg, user?.login], (old) =>
+        old ? [...old, newTodo] : [newTodo],
+      );
+    },
+  });
+}
+
+export function useUpdateTodoItem() {
+  const { selectedOrg, user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null; repo?: string | null } }) =>
+      ghUpdateTodo(selectedOrg!, args.issueNumber, args.updates),
+    onMutate: async (args) => {
+      const key = ["todos", selectedOrg, user?.login];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<Todo[]>(key);
+      qc.setQueryData<Todo[]>(key, (old) =>
+        old?.map((t) => t.id === args.issueNumber ? { ...t, ...args.updates, status: args.updates.status ?? t.status } : t) ?? [],
+      );
+      return { previous, key };
+    },
+    onSuccess: (result) => {
+      const key = ["todos", selectedOrg, user?.login];
+      qc.setQueryData<Todo[]>(key, (old) =>
+        old?.map((t) => t.id === result.id ? result : t) ?? [],
+      );
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
+export function useDeleteTodoItem() {
+  const { selectedOrg, user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (issueNumber: number) => ghDeleteTodo(selectedOrg!, issueNumber),
+    onMutate: async (issueNumber) => {
+      const key = ["todos", selectedOrg, user?.login];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<Todo[]>(key);
+      qc.setQueryData<Todo[]>(key, (old) =>
+        old?.filter((t) => t.id !== issueNumber) ?? [],
+      );
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
+export function useTodosClosedInRange(startDate: string | undefined, endDate: string | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["todosClosedInRange", selectedOrg, startDate, endDate],
+    queryFn: () => ghFetchTodosClosedInRange(selectedOrg!, null, startDate!, endDate!),
+    enabled: !!selectedOrg && !!startDate && !!endDate,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Legacy D1 todos (for migration)
+export function useLegacyTodos() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["legacyTodos", selectedOrg],
+    queryFn: fetchTodosD1,
+    enabled: !!selectedOrg,
+    staleTime: Infinity,
+  });
+}
+
+export function useMigrateTodos() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (todos: Todo[]) => saveTodos(todos),
-    onMutate: async (todos) => {
-      await qc.cancelQueries({ queryKey: ["todos", selectedOrg] });
-      const previous = qc.getQueryData<Todo[]>(["todos", selectedOrg]);
-      qc.setQueryData(["todos", selectedOrg], todos);
-      return { previous };
+    mutationFn: (args: { legacy: LegacyTodoForMigration[]; onProgress?: (done: number, total: number) => void }) =>
+      ghMigrateTodos(selectedOrg!, args.legacy, args.onProgress),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["todos", selectedOrg] });
+      // Clear D1 todos after migration
+      saveTodosD1([]);
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(["todos", selectedOrg], context.previous);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["todos", selectedOrg] }),
   });
 }
 

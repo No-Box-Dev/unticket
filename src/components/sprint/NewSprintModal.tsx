@@ -32,7 +32,7 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
   );
 
   const productionCount = sprintFeatures.filter((f) => f.status === "production").length;
-  const movingCount = sprintFeatures.filter((f) => f.status === "plan" || f.status === "demo").length;
+  const movingCount = sprintFeatures.filter((f) => f.status !== "production").length;
 
   const isDateRangeValid = !!startDate && !!endDate && startDate <= endDate;
 

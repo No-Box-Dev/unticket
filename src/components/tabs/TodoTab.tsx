@@ -1,39 +1,43 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
-import { useTodos, useSaveTodos, useFeatures } from "@/hooks/useConfigRepo";
+import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { useRepos } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
-import { Plus, X, Trash2, GitBranch, ExternalLink, FileText, Pencil, Save, Loader2 } from "lucide-react";
+import { Plus, X, Trash2, GitBranch, ExternalLink, FileText, Pencil, Save, Loader2, Zap } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Todo, TodoStatus, Feature, FeatureStatus, RepoInfo } from "@/lib/types";
+import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 const STATUS_DOT: Record<FeatureStatus, string> = {
   plan: "bg-brand",
-  demo: "bg-amber-500",
+  in_progress: "bg-amber-500",
+  demo: "bg-purple-500",
+  tested: "bg-cyan-500",
   production: "bg-green-500",
   future: "bg-stone-300",
 };
 
-const COLUMNS: { status: TodoStatus; label: string }[] = [
-  { status: "backlog", label: "Backlog" },
-  { status: "in_progress", label: "In Progress" },
-  { status: "done", label: "Done" },
+const COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
+  { status: "backlog", label: "Backlog", color: "bg-stone-400" },
+  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+  { status: "done", label: "Done", color: "bg-green-500" },
 ];
 
-/** Migrate old todos that have `done` but no `status` */
-function migrateTodo(t: Todo): Todo {
-  if (t.status) return t;
-  return { ...t, status: t.done ? "done" : "backlog" };
+/** Map sprint task state to TodoStatus for display */
+function sprintTaskToTodoStatus(state: "open" | "closed"): TodoStatus {
+  return state === "closed" ? "done" : "in_progress";
 }
 
 export function TodoTab() {
   const { user, selectedOrg } = useAuth();
-  const { data: allTodos, isLoading } = useTodos();
+  const { data: myTodos, isLoading } = useTodos();
   const { data: features } = useFeatures();
-  const saveTodos = useSaveTodos();
+  const createTodoMut = useCreateTodoItem();
+  const updateTodoMut = useUpdateTodoItem();
+  const deleteTodoMut = useDeleteTodoItem();
   const [input, setInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -43,16 +47,34 @@ export function TodoTab() {
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
   const { data: repos } = useRepos();
 
-  const myTodos = useMemo(() => {
-    if (!allTodos || !user) return [];
-    return allTodos.filter((t) => t.owner === user.login).map(migrateTodo);
-  }, [allTodos, user]);
+  // Sprint tasks assigned to me
+  const sprintFeatureIds = useMemo(
+    () => (features ?? []).filter((f) => f.status !== "future" && f.sprint !== null).map((f) => f.id),
+    [features],
+  );
+  const { data: allSprintTasks } = useAllSprintSubIssues(sprintFeatureIds);
+  const mySprintTasks = useMemo(() => {
+    if (!allSprintTasks || !user) return [];
+    return allSprintTasks.filter((t) => t.assignees.includes(user.login));
+  }, [allSprintTasks, user]);
 
+  const todos = useMemo(() => myTodos ?? [], [myTodos]);
+
+  // Combine personal todos + sprint tasks into columns
   const columns = useMemo(() => {
-    const grouped: Record<TodoStatus, Todo[]> = { backlog: [], in_progress: [], done: [] };
-    for (const t of myTodos) grouped[t.status].push(t);
+    const grouped: Record<TodoStatus, (Todo | (SubIssueWithFeature & { _sprintTask: true }))[]> = {
+      backlog: [],
+      in_progress: [],
+      done: [],
+    };
+    for (const t of todos) grouped[t.status].push(t);
+    // Add sprint tasks
+    for (const st of mySprintTasks) {
+      const status = sprintTaskToTodoStatus(st.state);
+      grouped[status].push({ ...st, _sprintTask: true as const });
+    }
     return grouped;
-  }, [myTodos]);
+  }, [todos, mySprintTasks]);
 
   const myFeatures = useMemo(() => {
     if (!features || !user) return [];
@@ -60,34 +82,20 @@ export function TodoTab() {
   }, [features, user]);
 
   const featureMap = useMemo(() => {
-    const map = new Map<string, Feature>();
-    for (const f of features ?? []) map.set(String(f.id), f);
+    const map = new Map<number, Feature>();
+    for (const f of features ?? []) map.set(f.id, f);
     return map;
   }, [features]);
-
-  function updateAll(next: Todo[]) {
-    if (!allTodos) return;
-    const others = allTodos.filter((t) => t.owner !== user!.login);
-    saveTodos.mutate([...others, ...next]);
-  }
-
-  function updateTodo(id: string, patch: Partial<Todo>) {
-    updateAll(myTodos.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  }
 
   function addTodo() {
     const title = input.trim();
     if (!title || !user) return;
-    const todo: Todo = {
-      id: crypto.randomUUID(),
+    const featureId = selectedFeatureId ? parseInt(selectedFeatureId) : undefined;
+    createTodoMut.mutate({
       title,
-      owner: user.login,
-      status: "backlog",
-      createdAt: new Date().toISOString(),
-      ...(selectedFeatureId ? { featureId: selectedFeatureId } : {}),
-      ...(selectedRepo ? { repo: selectedRepo } : {}),
-    };
-    updateAll([...myTodos, todo]);
+      featureId: featureId && !isNaN(featureId) ? featureId : undefined,
+      repo: selectedRepo ?? undefined,
+    });
     setInput("");
     setSelectedFeatureId(null);
     setSelectedRepo(null);
@@ -95,67 +103,48 @@ export function TodoTab() {
 
   function addFeatureTodo(feature: Feature) {
     if (!user) return;
-    const todo: Todo = {
-      id: crypto.randomUUID(),
+    createTodoMut.mutate({
       title: feature.title,
-      owner: user.login,
-      status: "backlog",
-      createdAt: new Date().toISOString(),
-      featureId: String(feature.id),
-    };
-    updateAll([...myTodos, todo]);
+      featureId: feature.id,
+    });
   }
 
-  function deleteTodo(id: string) {
-    updateAll(myTodos.filter((t) => t.id !== id));
+  function handleDeleteTodo(id: number) {
+    deleteTodoMut.mutate(id);
   }
 
   function clearDone() {
-    updateAll(myTodos.filter((t) => t.status !== "done"));
+    const doneTodos = todos.filter((t) => t.status === "done");
+    for (const t of doneTodos) {
+      deleteTodoMut.mutate(t.id);
+    }
   }
 
   // --- Drag and drop ---
   const handleDragStart = useCallback((e: React.DragEvent, todo: Todo) => {
-    e.dataTransfer.setData("text/plain", todo.id);
+    e.dataTransfer.setData("text/plain", String(todo.id));
     e.dataTransfer.effectAllowed = "move";
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent, targetStatus: TodoStatus) => {
       e.preventDefault();
-      const todoId = e.dataTransfer.getData("text/plain");
-      const todo = myTodos.find((t) => t.id === todoId);
-      const targetCardId = dragOverCardIdRef.current;
+      const todoId = parseInt(e.dataTransfer.getData("text/plain"));
 
       setDragOverCol(null);
       setDragOverCardId(null);
       dragOverCardIdRef.current = null;
 
-      if (!todo) return;
+      if (isNaN(todoId)) return;
+      const todo = todos.find((t) => t.id === todoId);
+      if (!todo || todo.status === targetStatus) return;
 
-      const isSameColumn = todo.status === targetStatus;
-      const hasTargetCard = targetCardId && targetCardId !== todoId;
-
-      // Same column, no target card — nothing to do
-      if (isSameColumn && !hasTargetCard) return;
-
-      const updatedTodo = { ...todo, status: targetStatus };
-      const withoutDragged = myTodos.filter((t) => t.id !== todoId);
-
-      if (hasTargetCard) {
-        const targetCard = withoutDragged.find((t) => t.id === targetCardId);
-        if (targetCard?.status === targetStatus) {
-          const targetIndex = withoutDragged.findIndex((t) => t.id === targetCardId);
-          withoutDragged.splice(targetIndex, 0, updatedTodo);
-          updateAll(withoutDragged);
-          return;
-        }
-      }
-
-      // No valid target card — append (end of column)
-      updateAll([...withoutDragged, updatedTodo]);
+      updateTodoMut.mutate({
+        issueNumber: todo.id,
+        updates: { status: targetStatus },
+      });
     },
-    [myTodos],
+    [todos],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -219,71 +208,87 @@ export function TodoTab() {
           />
           <button
             onClick={addTodo}
-            disabled={!input.trim()}
+            disabled={!input.trim() || createTodoMut.isPending}
             className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
           >
-            <Plus size={16} />
+            {createTodoMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             Add
           </button>
         </div>
 
         {/* Kanban columns */}
         <div className="grid grid-cols-3 gap-4">
-          {COLUMNS.map(({ status, label }) => (
-            <div
-              key={status}
-              onDragOver={(e) => handleDragOver(e, status)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, status)}
-              className={cn(
-                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
-                dragOverCol === status && "border-brand/50 bg-brand/5",
-              )}
-            >
-              {/* Column header */}
-              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center justify-between">
-                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
-                  {label}{" "}
-                  <span className="text-stone-400 dark:text-neutral-500 font-normal">
-                    ({columns[status].length})
+          {COLUMNS.map(({ status, label, color }) => {
+            const items = columns[status];
+            const todoCount = items.filter((i) => !("_sprintTask" in i)).length;
+            const sprintCount = items.filter((i) => "_sprintTask" in i).length;
+            return (
+              <div
+                key={status}
+                onDragOver={(e) => handleDragOver(e, status)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, status)}
+                className={cn(
+                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
+                  dragOverCol === status && "border-brand/50 bg-brand/5",
+                )}
+              >
+                {/* Column header */}
+                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                  <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+                    {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
                   </span>
-                </span>
-                {status === "done" && columns.done.length > 0 && (
-                  <button
-                    onClick={clearDone}
-                    className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors"
-                  >
-                    <Trash2 size={13} />
-                    Clear
-                  </button>
-                )}
-              </div>
+                  {status === "done" && todoCount > 0 && (
+                    <button
+                      onClick={clearDone}
+                      className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
 
-              {/* Cards */}
-              <div className="p-2 space-y-2 flex-1 overflow-y-auto">
-                {columns[status].map((todo) => (
-                  <TodoCard
-                    key={todo.id}
-                    todo={todo}
-                    feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
-                    org={selectedOrg}
-                    onDelete={() => deleteTodo(todo.id)}
-                    onClick={() => setDetailTodo(todo)}
-                    onDragStart={handleDragStart}
-                    onCardDragOver={handleCardDragOver}
-                    isDropTarget={dragOverCardId === todo.id}
-                  />
-                ))}
-                {columns[status].length === 0 && (
-                  <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
-                    {status === "backlog" && "New todos land here"}
-                    {status === "in_progress" && "Drag items here"}
-                    {status === "done" && "Completed items"}
-                  </div>
-                )}
+                {/* Cards */}
+                <div className="p-2 space-y-2 flex-1 overflow-y-auto">
+                  {items.map((item) => {
+                    if ("_sprintTask" in item) {
+                      const st = item as SubIssueWithFeature & { _sprintTask: true };
+                      return (
+                        <SprintTaskCard
+                          key={`sprint-${st.number}`}
+                          task={st}
+                          featureTitle={st.featureTitle || featureMap.get(st.featureId)?.title}
+                        />
+                      );
+                    }
+                    const todo = item as Todo;
+                    return (
+                      <TodoCard
+                        key={todo.id}
+                        todo={todo}
+                        feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
+                        org={selectedOrg}
+                        onDelete={() => handleDeleteTodo(todo.id)}
+                        onClick={() => setDetailTodo(todo)}
+                        onDragStart={handleDragStart}
+                        onCardDragOver={handleCardDragOver}
+                        isDropTarget={dragOverCardId === String(todo.id)}
+                      />
+                    );
+                  })}
+                  {items.length === 0 && (
+                    <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                      {status === "backlog" && "New todos land here"}
+                      {status === "in_progress" && "Drag items here"}
+                      {status === "done" && "Completed items"}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -324,12 +329,60 @@ export function TodoTab() {
           repos={repos ?? []}
           org={selectedOrg}
           onUpdate={(patch) => {
-            updateTodo(detailTodo.id, patch);
-            setDetailTodo((prev) => prev ? { ...prev, ...patch } : prev);
+            updateTodoMut.mutate({
+              issueNumber: detailTodo.id,
+              updates: patch,
+            });
+            setDetailTodo((prev) => prev ? { ...prev, ...patch } as Todo : prev);
           }}
           onClose={() => setDetailTodo(null)}
         />
       )}
+    </div>
+  );
+}
+
+// --------------- SprintTaskCard ---------------
+
+function SprintTaskCard({
+  task,
+  featureTitle,
+}: {
+  task: SubIssueWithFeature;
+  featureTitle?: string;
+}) {
+  const isDone = task.state === "closed";
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand",
+        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <Zap size={12} className="text-brand shrink-0" />
+          <span className={cn("text-sm block", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
+            {task.title}
+          </span>
+          {task.points && (
+            <span className="ml-auto shrink-0 text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">
+              {task.points}pt
+            </span>
+          )}
+        </div>
+        {(featureTitle || task.roleName) && (
+          <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {featureTitle && (
+              <span className="text-xs text-stone-400 dark:text-neutral-500">{featureTitle}</span>
+            )}
+            {task.roleName && (
+              <span className="text-xs text-stone-400 dark:text-neutral-500">/ {task.roleName}</span>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -363,7 +416,7 @@ function TodoCard({
       onDragStart={(e) => onDragStart(e, todo)}
       onDragOver={(e) => {
         e.preventDefault();
-        onCardDragOver(todo.id);
+        onCardDragOver(String(todo.id));
       }}
       onClick={onClick}
       className={cn(
@@ -430,7 +483,7 @@ function TodoDetailModal({
   allFeatures: Feature[];
   repos: RepoInfo[];
   org: string | null;
-  onUpdate: (patch: Partial<Todo>) => void;
+  onUpdate: (patch: { title?: string; status?: TodoStatus; featureId?: number | null; repo?: string | null }) => void;
   onClose: () => void;
 }) {
   const [plan, setPlan] = useState<string | null>(null);
@@ -440,19 +493,22 @@ function TodoDetailModal({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Plan files use the issue number as ID
+  const planId = String(todo.id);
+
   useEffect(() => {
     let cancelled = false;
     if (!org) { setPlan(null); setPlanLoading(false); return; }
     setPlanLoading(true);
-    fetchTodoPlanFile(org, todo.id)
+    fetchTodoPlanFile(org, planId)
       .then((result) => { if (!cancelled) setPlan(result?.content ?? null); })
       .catch((err) => { if (!cancelled) { setPlan(null); broadcastError(err instanceof Error ? err.message : "Failed to load plan"); } })
       .finally(() => { if (!cancelled) setPlanLoading(false); });
     return () => { cancelled = true; };
-  }, [org, todo.id]);
+  }, [org, planId]);
 
   const planUrl = org
-    ? `https://github.com/${org}/.gitpulse/blob/main/${todoPlanFilePath(todo.id)}`
+    ? `https://github.com/${org}/.gitpulse/blob/main/${todoPlanFilePath(planId)}`
     : null;
 
   const repoUrl = org && todo.repo
@@ -484,9 +540,22 @@ function TodoDetailModal({
             onChange={(e) => onUpdate({ title: e.target.value })}
             className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full truncate"
           />
-          <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {todo.html_url && (
+              <a
+                href={todo.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
+                title="View on GitHub"
+              >
+                <ExternalLink size={16} />
+              </a>
+            )}
+            <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="px-5 py-4 space-y-5">
@@ -495,8 +564,8 @@ function TodoDetailModal({
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Feature</span>
               <select
-                value={todo.featureId ?? ""}
-                onChange={(e) => onUpdate({ featureId: e.target.value || undefined })}
+                value={todo.featureId ? String(todo.featureId) : ""}
+                onChange={(e) => onUpdate({ featureId: e.target.value ? parseInt(e.target.value) : null })}
                 className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
               >
                 <option value="">None</option>
@@ -510,7 +579,7 @@ function TodoDetailModal({
               <div className="flex items-center gap-1.5">
                 <SearchableSelect
                   value={todo.repo ?? ""}
-                  onChange={(v) => onUpdate({ repo: v || undefined })}
+                  onChange={(v) => onUpdate({ repo: v || null })}
                   options={[
                     { value: "", label: "None" },
                     ...repos.map((r) => ({ value: r.name, label: r.name })),
@@ -624,7 +693,7 @@ function TodoDetailModal({
                       setSaving(true);
                       setSaveError(null);
                       try {
-                        await saveTodoPlanFile(org, todo.id, editContent);
+                        await saveTodoPlanFile(org, planId, editContent);
                         setPlan(editContent);
                         setEditMode(false);
                       } catch (err) {

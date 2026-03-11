@@ -67,7 +67,7 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
   const featureStats = useMemo(() => {
     const total = sprintFeatures.length;
     const completed = sprintFeatures.filter((f) => f.status === "production").length;
-    const inProgress = sprintFeatures.filter((f) => f.status === "demo").length;
+    const inProgress = sprintFeatures.filter((f) => f.status === "in_progress" || f.status === "demo" || f.status === "tested").length;
     return { total, completed, inProgress };
   }, [sprintFeatures]);
 

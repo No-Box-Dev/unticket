@@ -9,7 +9,7 @@ function buildPreamble(org: string): string {
 
 ### Features & Sprints
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/.gitpulse\`](https://github.com/${org}/.gitpulse) (not this repo)
-- Each feature issue has labels for status (\`status:plan\`, \`status:demo\`, \`status:production\`), effort, and priority
+- Each feature issue has labels for status (\`status:plan\`, \`status:in_progress\`, \`status:demo\`, \`status:tested\`, \`status:production\`), effort, and priority
 - Owners are the issue's assignees. Sprints are GitHub Milestones named "Sprint N"
 - Feature plans live in the issue body as Markdown. Tasks are GitHub sub-issues linked to the parent feature issue
 - List features: \`gh issue list --repo ${org}/.gitpulse --label feature\`
@@ -22,9 +22,19 @@ function buildPreamble(org: string): string {
 
 ### Feature Lifecycle
 - When working on a feature, update its plan and check off tasks on the \`${org}/.gitpulse\` issue
-- When a feature has a working demo, update its status label to \`status:demo\` (remove \`status:plan\`, add \`status:demo\`)
-- When a feature is fully complete and in production, update to \`status:production\`
-- To update status via CLI: \`gh issue edit <number> --repo ${org}/.gitpulse --remove-label status:plan --add-label status:demo\``;
+- Feature lifecycle: Plan → In Progress → Demo → Tested → In Production
+- To advance status via CLI: \`gh issue edit <number> --repo ${org}/.gitpulse --remove-label status:plan --add-label status:in_progress\`
+
+### Todos
+- Personal todos are GitHub Issues in \`${org}/.gitpulse\` with the \`todo\` label
+- Labels: \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`, \`todo-repo:{name}\`
+- Closing a todo issue marks it as done; reopening moves it back
+- List todos: \`gh issue list --repo ${org}/.gitpulse --label todo\`
+
+### People Config
+- Team member info (name, role, teams) is stored at \`${org}/.gitpulse/config/people.json\`
+- Format: \`[{ "github": "login", "name": "Display Name", "teams": ["Team"], "role": "Role" }]\`
+- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d\``;
 }
 
 function buildSection(org: string, rules: string[]): string {
@@ -57,6 +67,80 @@ function injectSection(existing: string, section: string): string {
 
   // Append
   return existing.trimEnd() + "\n\n" + section + "\n";
+}
+
+export function buildClaudeMdPreview(org: string, rules: string[]): string {
+  return buildSection(org, rules);
+}
+
+export async function fetchClaudeMdContent(
+  org: string,
+  repo: string,
+): Promise<{ content: string; sha: string } | null> {
+  const ok = getOctokit();
+  try {
+    const { data } = await ok.rest.repos.getContent({
+      owner: org,
+      repo,
+      path: FILE_PATH,
+    });
+    if ("content" in data && data.type === "file") {
+      return {
+        content: atob(data.content.replace(/\n/g, "")),
+        sha: data.sha,
+      };
+    }
+    return null;
+  } catch (err: any) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
+export function extractManagedSection(content: string): string | null {
+  const startIdx = content.indexOf(START_MARKER);
+  const endIdx = content.indexOf(END_MARKER);
+  if (startIdx === -1 || endIdx === -1) return null;
+  return content.slice(startIdx, endIdx + END_MARKER.length);
+}
+
+interface OutdatedCheckResult {
+  outdated: string[];
+  upToDate: string[];
+  noFile: string[];
+  errors: string[];
+}
+
+export async function checkOutdatedRepos(
+  org: string,
+  repoNames: string[],
+  rules: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<OutdatedCheckResult> {
+  const expected = buildSection(org, rules);
+  const result: OutdatedCheckResult = { outdated: [], upToDate: [], noFile: [], errors: [] };
+
+  for (let i = 0; i < repoNames.length; i++) {
+    const repo = repoNames[i];
+    try {
+      const file = await fetchClaudeMdContent(org, repo);
+      if (!file) {
+        result.noFile.push(repo);
+      } else {
+        const managed = extractManagedSection(file.content);
+        if (!managed || managed.trim() !== expected.trim()) {
+          result.outdated.push(repo);
+        } else {
+          result.upToDate.push(repo);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`${repo}: ${err.message ?? "Unknown error"}`);
+    }
+    onProgress?.(i + 1, repoNames.length);
+  }
+
+  return result;
 }
 
 interface SyncResult {
