@@ -14,7 +14,6 @@ import {
   CircleDot,
   CheckSquare,
   Users,
-  BarChart3,
   Activity,
   Settings,
   PanelLeftClose,
@@ -74,7 +73,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const { data: sprint } = useSprint();
   const isAdmin = useIsAdmin();
   const { dark, toggle: toggleTheme } = useTheme();
-  const { collapsed, mobileOpen, toggleCollapsed, setMobileOpen, viewingSprint, setViewingSprint } = useSidebar();
+  const { collapsed, mobileOpen, toggleCollapsed, setMobileOpen, setViewingSprint } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

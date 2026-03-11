@@ -39,7 +39,7 @@ interface EngineerWorkload {
   features: { title: string; status: FeatureStatus }[];
 }
 
-export function WorkloadTab({ repoNames }: { repoNames: string[] }) {
+export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) {
   const { data: orgMembers, isLoading } = useOrgMembers();
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();

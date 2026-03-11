@@ -224,7 +224,7 @@ export async function updateTodo(
   let state: "open" | "closed" | undefined;
   if (updates.status === "done") {
     state = "closed";
-  } else if (updates.status && updates.status !== "done" && current.state === "closed") {
+  } else if (updates.status && current.state === "closed") {
     state = "open";
   }
 
