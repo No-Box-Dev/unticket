@@ -7,10 +7,9 @@ import { useIsAdmin } from "@/hooks/useGitHub";
 import type { Feature } from "@/lib/types";
 import { Archive, ArrowUpDown } from "lucide-react";
 
-type SortKey = "default" | "priority" | "effort" | "title";
+type SortKey = "default" | "priority" | "title";
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
-const EFFORT_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   if (key === "default") return features;
@@ -18,8 +17,6 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
     switch (key) {
       case "priority":
         return (PRIORITY_ORDER[a.priority ?? "none"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "none"] ?? 3);
-      case "effort":
-        return (EFFORT_ORDER[a.effort] ?? 1) - (EFFORT_ORDER[b.effort] ?? 1);
       case "title":
         return a.title.localeCompare(b.title);
       default:
@@ -76,7 +73,6 @@ export function BacklogTab() {
       title,
       status: "future",
       sprint: null,
-      effort: "medium",
     });
   };
 
@@ -85,31 +81,30 @@ export function BacklogTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Archive className="w-5 h-5 text-stone-400 dark:text-stone-500" />
+          <Archive className="w-5 h-5 text-stone-400 dark:text-neutral-500" />
           <div>
-            <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200 font-display">Backlog</h2>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
+            <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Backlog</h2>
+            <p className="text-sm text-stone-500 dark:text-neutral-400">
               Future features — {futureFeatures.length} total
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <ArrowUpDown size={13} className="text-stone-400 dark:text-stone-500" />
+          <ArrowUpDown size={13} className="text-stone-400 dark:text-neutral-500" />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="px-2 py-1 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-500 dark:text-stone-400 focus:outline-none focus:border-brand cursor-pointer"
+            className="px-2 py-1 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-500 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="default">Default order</option>
             <option value="priority">Priority</option>
-            <option value="effort">Effort</option>
             <option value="title">Title A-Z</option>
           </select>
         </div>
       </div>
 
       {/* Flat feature list */}
-      <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
         <div className="p-2 space-y-0.5">
           {sortedFeatures.map((feature) => (
             <FeatureCard
@@ -126,7 +121,7 @@ export function BacklogTab() {
             />
           ))}
           {sortedFeatures.length === 0 && (
-            <div className="px-3 py-4 text-sm text-stone-400 dark:text-stone-500 text-center">
+            <div className="px-3 py-4 text-sm text-stone-400 dark:text-neutral-500 text-center">
               No backlog features
             </div>
           )}

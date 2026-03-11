@@ -79,11 +79,11 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   return (
     <div className="flex gap-4 min-h-[600px]">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-700">
-          <h3 className="text-sm font-semibold text-stone-700 dark:text-stone-200">Engineers</h3>
+      <div className="w-64 shrink-0 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
+          <h3 className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Engineers</h3>
         </div>
-        <div className="divide-y divide-stone-100 dark:divide-stone-800 overflow-y-auto max-h-[560px]">
+        <div className="divide-y divide-stone-100 dark:divide-white/[0.06] overflow-y-auto max-h-[560px]">
           {engineers.map((eng) => {
             const avatar = memberAvatars.get(eng.person.github);
             const tag = STATUS_TAG[eng.status];
@@ -94,7 +94,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
                 onClick={() => setSelectedLogin(eng.person.github)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer",
-                  isSelected ? "bg-stone-100 dark:bg-stone-800" : "hover:bg-stone-50 dark:hover:bg-stone-800/50",
+                  isSelected ? "bg-stone-100 dark:bg-dark-overlay" : "hover:bg-stone-50 dark:hover:bg-white/[0.06]",
                 )}
               >
                 {avatar ? (
@@ -105,7 +105,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">{eng.person.name || eng.person.github}</div>
+                  <div className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">{eng.person.name || eng.person.github}</div>
                   <div className="text-xs text-stone-400 truncate">{eng.person.teams[0] ?? eng.person.role}</div>
                 </div>
                 <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0", tag.bg, tag.text)}>
@@ -121,7 +121,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
       {selected && (
         <div className="flex-1 space-y-4">
           {/* Header */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5 flex items-center gap-4">
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5 flex items-center gap-4">
             {memberAvatars.get(selected.person.github) ? (
               <img src={memberAvatars.get(selected.person.github)} className="w-12 h-12 rounded-full" alt="" />
             ) : (
@@ -130,7 +130,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
               </div>
             )}
             <div>
-              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">{selected.person.name || selected.person.github}</h2>
+              <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">{selected.person.name || selected.person.github}</h2>
               <p className="text-sm text-stone-400">{selected.person.role} · {selected.person.teams.join(", ")}</p>
             </div>
             <div className="ml-auto">
@@ -142,9 +142,9 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* AI Summary */}
-          <div className="bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-xl p-4">
-            <p className="text-sm text-stone-600 dark:text-stone-300">
-              <span className="font-medium text-stone-700 dark:text-stone-200">{selected.person.name || selected.person.github}</span>
+          <div className="bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] rounded-xl p-4">
+            <p className="text-sm text-stone-600 dark:text-neutral-300">
+              <span className="font-medium text-stone-700 dark:text-neutral-200">{selected.person.name || selected.person.github}</span>
               {" has "}
               <span className="font-semibold">{selected.myFeatures.length}</span>
               {" feature"}{selected.myFeatures.length !== 1 ? "s" : ""} this sprint
@@ -167,8 +167,8 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Feature Pipeline */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Feature Pipeline</h3>
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
+            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Feature Pipeline</h3>
             <div className="space-y-2">
               {(["plan", "demo", "production"] as const).map((status) => {
                 const count = selected.myFeatures.filter((f) => f.status === status).length;
@@ -178,7 +178,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
                 return (
                   <div key={status} className="flex items-center gap-3">
                     <span className="text-sm text-stone-500 w-20 shrink-0">{labels[status]}</span>
-                    <div className="flex-1 h-5 bg-stone-100 dark:bg-stone-800 rounded overflow-hidden">
+                    <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden">
                       <div
                         className="h-full rounded transition-all duration-500"
                         style={{
@@ -195,17 +195,17 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Current tasks (sub-issues) */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Current Tasks</h3>
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
+            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Current Tasks</h3>
             {selected.myTasks.filter((t) => t.state === "open").length > 0 ? (
               <div className="space-y-2">
                 {selected.myTasks
                   .filter((t) => t.state === "open")
                   .map((t) => (
-                    <div key={t.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-stone-800 last:border-0">
+                    <div key={t.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-white/[0.06] last:border-0">
                       <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm text-stone-700 dark:text-stone-300 block truncate">{t.title}</span>
+                        <span className="text-sm text-stone-700 dark:text-neutral-300 block truncate">{t.title}</span>
                         <span className="text-[10px] text-stone-400">{featureMap.get(t.featureId) ?? `Feature #${t.featureId}`}</span>
                       </div>
                     </div>
@@ -217,20 +217,20 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Current features (non-production) */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100 mb-3">Current Features</h3>
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
+            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Current Features</h3>
             {selected.myFeatures.filter((f) => f.status !== "production").length > 0 ? (
               <div className="space-y-2">
                 {selected.myFeatures
                   .filter((f) => f.status !== "production")
                   .map((f) => (
-                    <div key={f.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-stone-800 last:border-0">
+                    <div key={f.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-white/[0.06] last:border-0">
                       <div
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: f.status === "demo" ? "#F59E0B" : "#0E7C86" }}
                       />
-                      <span className="text-sm text-stone-700 dark:text-stone-300 flex-1">{f.title}</span>
-                      <span className="text-xs text-stone-400 capitalize">{f.effort}</span>
+                      <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1">{f.title}</span>
+                      <span className="text-xs text-stone-400 capitalize">{f.priority ?? "—"}</span>
                     </div>
                   ))}
               </div>
@@ -246,7 +246,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl p-4">
+    <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-4">
       <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider">{label}</span>
       <div className={`text-3xl font-bold font-display mt-1 ${color}`}>{value}</div>
     </div>

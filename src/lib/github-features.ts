@@ -1,6 +1,7 @@
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
-import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry } from "./types";
+import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry, Points, PersonRole } from "./types";
+import { VALID_POINTS } from "./types";
 
 // D1-backed row shape returned by /api/features
 interface D1FeatureRow {
@@ -20,6 +21,8 @@ const STATUS_PREFIX = "status:";
 const EFFORT_PREFIX = "effort:";
 const PRIORITY_PREFIX = "priority:";
 const TEAM_PREFIX = "team:";
+const ROLE_LABEL = "role";
+const POINTS_PREFIX = "points:";
 
 const FEATURE_LABELS = [
   { name: "feature", color: "1B6971", description: "Sprint/backlog feature" },
@@ -27,12 +30,16 @@ const FEATURE_LABELS = [
   { name: "status:demo", color: "F59E0B", description: "Feature ready for demo" },
   { name: "status:production", color: "22C55E", description: "Feature in production" },
   { name: "status:future", color: "A8A29E", description: "Backlog feature" },
-  { name: "effort:low", color: "22C55E", description: "Low effort" },
-  { name: "effort:medium", color: "EAB308", description: "Medium effort" },
-  { name: "effort:high", color: "EF4444", description: "High effort" },
   { name: "priority:low", color: "22C55E", description: "Low priority" },
   { name: "priority:medium", color: "F97316", description: "Medium priority" },
   { name: "priority:high", color: "EF4444", description: "High priority" },
+  { name: "role", color: "6366F1", description: "Person role (sub-issue grouping)" },
+  { name: "points:1", color: "22C55E", description: "1 sprint point" },
+  { name: "points:2", color: "84CC16", description: "2 sprint points" },
+  { name: "points:3", color: "EAB308", description: "3 sprint points" },
+  { name: "points:5", color: "F97316", description: "5 sprint points" },
+  { name: "points:8", color: "EF4444", description: "8 sprint points" },
+  { name: "points:13", color: "DC2626", description: "13 sprint points" },
 ];
 
 // ---------- Metadata (hidden in issue body) ----------
@@ -75,11 +82,11 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
 
 function buildLabels(f: {
   status: FeatureStatus;
-  effort: Effort;
+  effort?: Effort;
   priority?: Priority;
   team?: string;
 }): string[] {
-  const labels = [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`, `${EFFORT_PREFIX}${f.effort}`];
+  const labels = [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
   if (f.priority && f.priority !== "none") labels.push(`${PRIORITY_PREFIX}${f.priority}`);
   if (f.team) labels.push(`${TEAM_PREFIX}${f.team}`);
   return labels;
@@ -91,7 +98,7 @@ function issueToFeature(issue: any): Feature {
     .filter(Boolean) as string[];
 
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
-  const effort = (extractLabel(labelNames, EFFORT_PREFIX) as Effort) ?? "medium";
+  const effort = extractLabel(labelNames, EFFORT_PREFIX) as Effort | undefined;
   const priority = extractLabel(labelNames, PRIORITY_PREFIX) as Priority | undefined;
   const team = extractLabel(labelNames, TEAM_PREFIX);
 
@@ -245,7 +252,7 @@ export async function createFeature(
   opts: {
     status: FeatureStatus;
     sprint: number | null;
-    effort: Effort;
+    effort?: Effort;
     team?: string;
     priority?: Priority;
     owners?: string[];
@@ -330,15 +337,49 @@ export interface SubIssue {
   state: "open" | "closed";
   assignees: string[];
   html_url: string;
+  points?: Points;
+  roleNumber?: number;
+}
+
+function extractPoints(labels: string[]): Points | undefined {
+  for (const l of labels) {
+    if (l.startsWith(POINTS_PREFIX)) {
+      const n = parseInt(l.slice(POINTS_PREFIX.length));
+      if (VALID_POINTS.includes(n as Points)) return n as Points;
+    }
+  }
+  return undefined;
 }
 
 function toSubIssue(issue: any): SubIssue {
+  const labelNames = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter(Boolean) as string[];
   return {
     id: issue.id,
     number: issue.number,
     title: issue.title,
     state: issue.state as "open" | "closed",
     assignees: (issue.assignees ?? []).map((a: any) => a.login),
+    html_url: issue.html_url,
+    points: extractPoints(labelNames),
+  };
+}
+
+function isRoleIssue(issue: any): boolean {
+  const labelNames = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter(Boolean) as string[];
+  return labelNames.includes(ROLE_LABEL);
+}
+
+function toPersonRole(issue: any): PersonRole {
+  return {
+    id: issue.id,
+    number: issue.number,
+    title: issue.title,
+    assignee: issue.assignees?.[0]?.login ?? null,
+    state: issue.state as "open" | "closed",
     html_url: issue.html_url,
   };
 }
@@ -413,6 +454,113 @@ export async function deleteSubIssue(org: string, subIssueNumber: number): Promi
     issue_number: subIssueNumber,
     state: "closed",
   });
+}
+
+// ---------- Roles (Person Role sub-issues) ----------
+
+export async function fetchRoles(org: string, featureNumber: number): Promise<PersonRole[]> {
+  const ok = getOctokit();
+  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: featureNumber,
+    per_page: 100,
+  });
+  return (data as any[]).filter(isRoleIssue).map(toPersonRole);
+}
+
+export async function createRole(
+  org: string,
+  featureNumber: number,
+  title: string,
+  assignee?: string,
+): Promise<PersonRole> {
+  const ok = getOctokit();
+  const { data: issue } = await ok.rest.issues.create({
+    owner: org,
+    repo: REPO,
+    title,
+    labels: [ROLE_LABEL],
+    ...(assignee ? { assignees: [assignee] } : {}),
+  });
+  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: featureNumber,
+    sub_issue_id: issue.id,
+  });
+  return toPersonRole(issue);
+}
+
+export async function deleteRole(org: string, roleNumber: number): Promise<void> {
+  const ok = getOctokit();
+  await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: roleNumber,
+    state: "closed",
+  });
+}
+
+export async function fetchTasksForRole(org: string, roleNumber: number): Promise<SubIssue[]> {
+  const ok = getOctokit();
+  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: roleNumber,
+    per_page: 100,
+  });
+  return (data as any[]).map((issue: any) => ({
+    ...toSubIssue(issue),
+    roleNumber,
+  }));
+}
+
+export async function createTask(
+  org: string,
+  roleNumber: number,
+  title: string,
+  points?: Points,
+  assignee?: string,
+): Promise<SubIssue> {
+  const ok = getOctokit();
+  const labels: string[] = [];
+  if (points) labels.push(`${POINTS_PREFIX}${points}`);
+  const { data: issue } = await ok.rest.issues.create({
+    owner: org,
+    repo: REPO,
+    title,
+    labels,
+    ...(assignee ? { assignees: [assignee] } : {}),
+  });
+  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
+    owner: org,
+    repo: REPO,
+    issue_number: roleNumber,
+    sub_issue_id: issue.id,
+  });
+  return { ...toSubIssue(issue), roleNumber };
+}
+
+export async function updateTaskPoints(org: string, taskNumber: number, points: Points | undefined): Promise<SubIssue> {
+  const ok = getOctokit();
+  // Get current labels, remove old points labels, add new one
+  const { data: issue } = await ok.rest.issues.get({
+    owner: org,
+    repo: REPO,
+    issue_number: taskNumber,
+  });
+  const currentLabels = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter((l: string) => !l.startsWith(POINTS_PREFIX));
+  if (points) currentLabels.push(`${POINTS_PREFIX}${points}`);
+  const { data: updated } = await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: taskNumber,
+    labels: currentLabels,
+  });
+  return toSubIssue(updated);
 }
 
 // ---------- Milestone management ----------

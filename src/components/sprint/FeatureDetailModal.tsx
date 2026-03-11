@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ExternalLink, FileText, Pencil, Save, Plus, Check, Square, CheckSquare, Loader2 } from "lucide-react";
+import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2 } from "lucide-react";
 import Markdown from "react-markdown";
-import { EffortTag } from "./EffortTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
-import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useUpdateSubIssueAssignees, useDeleteSubIssue } from "@/hooks/useConfigRepo";
-import type { Feature, Effort, Priority } from "@/lib/types";
-import type { SubIssue } from "@/lib/github-features";
+import { PointsBadge } from "./PointsSelect";
+import { RoleSection } from "./RoleSection";
+import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask } from "@/hooks/useConfigRepo";
+import type { Feature, Priority } from "@/lib/types";
 
 // ---------- Component ----------
 
@@ -21,14 +21,21 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [newRoleText, setNewRoleText] = useState("");
+  const [newRoleAssignee, setNewRoleAssignee] = useState("");
   const [newTaskText, setNewTaskText] = useState("");
 
-  // Sub-issues
+  // Sub-issues (legacy flat tasks)
   const { data: subIssues, isLoading: subIssuesLoading } = useSubIssues(feature.id);
   const createSubIssueMut = useCreateSubIssue();
   const toggleSubIssueMut = useToggleSubIssue();
-  const updateAssigneesMut = useUpdateSubIssueAssignees();
   const deleteSubIssueMut = useDeleteSubIssue();
+
+  // Roles + tasks hierarchy
+  const { data: rolesWithTasks, isLoading: rolesLoading } = useRolesWithTasks(feature.id);
+  const createRoleMut = useCreateRole();
+  const deleteRoleMut = useDeleteRole();
+  const createTaskMut = useCreateTask();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -65,28 +72,53 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   // Plan is now just the issue body (no more inline ## Tasks parsing)
   const plan = draft.plan ?? "";
 
-  function addTask() {
+  // Roles data
+  const roles = rolesWithTasks ?? [];
+  const roleNumbers = new Set(roles.map((r) => r.role.number));
+
+  // Legacy flat tasks (sub-issues that are NOT roles)
+  const legacyTasks = (subIssues ?? []).filter((s) => !roleNumbers.has(s.number));
+
+  // Compute total points from all role tasks
+  const totalPoints = roles.reduce((sum, r) => sum + r.totalPoints, 0);
+  const donePoints = roles.reduce((sum, r) => sum + r.donePoints, 0);
+
+  // Task counts from roles
+  const allRoleTasks = roles.flatMap((r) => r.tasks);
+  const totalTaskCount = allRoleTasks.length + legacyTasks.length;
+  const doneTaskCount = allRoleTasks.filter((t) => t.state === "closed").length
+    + legacyTasks.filter((t) => t.state === "closed").length;
+
+  function addRole() {
+    const text = newRoleText.trim();
+    if (!text) return;
+    createRoleMut.mutate(
+      { featureId: feature.id, title: text, assignee: newRoleAssignee || undefined },
+      { onError: (err) => console.error("[unticket.ai] createRole failed:", err) },
+    );
+    setNewRoleText("");
+    setNewRoleAssignee("");
+  }
+
+  function addLegacyTask() {
     const text = newTaskText.trim();
     if (!text) return;
     createSubIssueMut.mutate({ parentIssueNumber: feature.id, title: text });
     setNewTaskText("");
   }
 
-  const tasks = subIssues ?? [];
-  const doneCount = tasks.filter((t) => t.state === "closed").length;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
       <div
-        className="bg-white dark:bg-stone-900 rounded-xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <input
               value={draft.title}
               onChange={(e) => update({ title: e.target.value }, true)}
-              className="text-lg font-semibold text-stone-800 dark:text-stone-200 bg-transparent border-none outline-none focus:ring-0 w-full"
+              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full"
             />
             {draft.url && (
               <a
@@ -94,14 +126,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="View issue on GitHub"
-                className="shrink-0 text-stone-400 dark:text-stone-500 hover:text-brand flex items-center gap-1 text-xs"
+                className="shrink-0 text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1 text-xs"
                 title="View issue on GitHub"
               >
                 <ExternalLink size={14} aria-hidden="true" />
               </a>
             )}
           </div>
-          <button onClick={handleClose} className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 cursor-pointer ml-2">
+          <button onClick={handleClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer ml-2">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -109,25 +141,22 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* Meta row */}
           <div className="flex items-center gap-4">
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Sprint</span>
-              <span className="text-sm text-stone-700 dark:text-stone-300">{draft.sprint ?? "Backlog"}</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint</span>
+              <span className="text-sm text-stone-700 dark:text-neutral-300">{draft.sprint ?? "Backlog"}</span>
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Priority</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Priority</span>
               <PriorityTag
                 priority={draft.priority ?? "none"}
                 onChange={(priority: Priority) => update({ priority })}
               />
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Effort</span>
-              <EffortTag
-                effort={draft.effort}
-                onChange={(effort: Effort) => update({ effort })}
-              />
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Points</span>
+              <PointsBadge points={donePoints} total={totalPoints} size="md" />
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-1">Owners</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Owners</span>
               <AssignDropdown
                 owners={draft.owners}
                 allPeople={allPeople}
@@ -139,14 +168,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* Implementation Plan */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500 dark:text-stone-400">Plan</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400">Plan</span>
               <div className="flex items-center gap-2">
                 {draft.url && (
                   <a
                     href={draft.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-stone-400 dark:text-stone-500 hover:text-brand flex items-center gap-1"
+                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1"
                     title="View on GitHub"
                   >
                     <ExternalLink size={12} />
@@ -155,7 +184,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 {!editMode && (
                   <button
                     onClick={() => { setEditContent(plan); setEditMode(true); }}
-                    className="text-xs text-stone-400 dark:text-stone-500 hover:text-brand flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1 cursor-pointer"
                   >
                     <Pencil size={12} />
                     Edit
@@ -164,9 +193,9 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               </div>
             </div>
 
-            {!editMode && !plan && tasks.length === 0 && (
-              <div className="rounded-lg border border-dashed border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
-                <FileText size={20} className="mx-auto mb-2 text-stone-300 dark:text-stone-600" />
+            {!editMode && !plan && totalTaskCount === 0 && roles.length === 0 && (
+              <div className="rounded-lg border border-dashed border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 text-center text-sm text-stone-400 dark:text-neutral-500">
+                <FileText size={20} className="mx-auto mb-2 text-stone-300 dark:text-neutral-600" />
                 No plan yet.
                 <br />
                 <button
@@ -179,7 +208,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
 
             {!editMode && plan && (
-              <div className="rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone dark:prose-invert max-w-none">
+              <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone dark:prose-invert max-w-none">
                 <Markdown>{plan}</Markdown>
               </div>
             )}
@@ -189,7 +218,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-900 px-4 py-3 text-sm text-stone-700 dark:text-stone-300 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
+                  className="w-full rounded-lg border border-stone-300 dark:border-white/[0.1] bg-white dark:bg-dark-raised px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
                   rows={12}
                 />
                 <div className="flex items-center gap-2">
@@ -205,7 +234,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-600 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -214,72 +243,145 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
           </div>
 
-          {/* Tasks (Sub-issues) */}
+          {/* Roles & Tasks */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500 dark:text-stone-400">
-                Tasks
-                {tasks.length > 0 && (
-                  <span className="text-stone-400 dark:text-stone-500 ml-1">
-                    ({doneCount}/{tasks.length})
+              <span className="text-xs text-stone-500 dark:text-neutral-400">
+                Roles & Tasks
+                {totalTaskCount > 0 && (
+                  <span className="text-stone-400 dark:text-neutral-500 ml-1">
+                    ({doneTaskCount}/{totalTaskCount})
                   </span>
                 )}
               </span>
-              {subIssuesLoading && <Loader2 size={12} className="animate-spin text-stone-400 dark:text-stone-500" />}
+              {(subIssuesLoading || rolesLoading) && <Loader2 size={12} className="animate-spin text-stone-400 dark:text-neutral-500" />}
             </div>
 
             {/* Progress bar */}
-            {tasks.length > 0 && (
-              <div className="h-1.5 bg-stone-100 dark:bg-stone-800 rounded-full mb-3 overflow-hidden">
+            {totalTaskCount > 0 && (
+              <div className="h-1.5 bg-stone-100 dark:bg-dark-overlay rounded-full mb-3 overflow-hidden">
                 <div
                   className="h-full bg-brand rounded-full transition-all"
-                  style={{ width: `${(doneCount / tasks.length) * 100}%` }}
+                  style={{ width: `${(doneTaskCount / totalTaskCount) * 100}%` }}
                 />
               </div>
             )}
 
-            {/* Task list */}
-            <div className="space-y-1">
-              {tasks.map((task) => (
-                <SubIssueRow
-                  key={task.id}
-                  task={task}
-                  allPeople={allPeople}
-                  onToggle={() => toggleSubIssueMut.mutate(task)}
-                  onAssign={(assignees) => updateAssigneesMut.mutate({ subIssueNumber: task.number, assignees })}
-                  onDelete={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number })}
+            {/* Role sections */}
+            <div className="space-y-2">
+              {roles.map(({ role, tasks: roleTasks, totalPoints: rPts, donePoints: rDone }) => (
+                <RoleSection
+                  key={role.id}
+                  role={role}
+                  tasks={roleTasks}
+                  totalPoints={rPts}
+                  donePoints={rDone}
+                  onToggleTask={(task) => toggleSubIssueMut.mutate(task)}
+                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number })}
+                  onAddTask={(title, points) => createTaskMut.mutate({ roleNumber: role.number, featureId: feature.id, title, points, assignee: role.assignee ?? undefined })}
+                  onDeleteRole={() => deleteRoleMut.mutate({ featureId: feature.id, roleNumber: role.number })}
+                  isAdding={createTaskMut.isPending}
                 />
               ))}
             </div>
 
-            {/* Add task */}
-            <div className="flex items-center gap-2 mt-2">
+            {/* Legacy flat tasks (sub-issues without role) */}
+            {legacyTasks.length > 0 && (
+              <div className="mt-3">
+                <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Ungrouped Tasks</span>
+                <div className="space-y-1 mt-1">
+                  {legacyTasks.map((task) => (
+                    <div key={task.id} className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50 dark:hover:bg-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => toggleSubIssueMut.mutate(task)}
+                        className="text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer shrink-0"
+                      >
+                        {task.state === "closed"
+                          ? <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                          : <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                        }
+                      </button>
+                      <span className={`text-sm flex-1 ${task.state === "closed" ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300"}`}>
+                        {task.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number })}
+                        className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add ungrouped task */}
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={newTaskText}
+                    onChange={(e) => setNewTaskText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addLegacyTask()}
+                    placeholder="Add task..."
+                    className="flex-1 px-2 py-1 rounded border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  />
+                  <button
+                    type="button"
+                    onClick={addLegacyTask}
+                    disabled={!newTaskText.trim() || createSubIssueMut.isPending}
+                    className="px-2 py-1 rounded bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+                  >
+                    {createSubIssueMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Add role */}
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
               <input
                 type="text"
-                value={newTaskText}
-                onChange={(e) => setNewTaskText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addTask()}
-                placeholder="Add a task..."
-                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                value={newRoleText}
+                onChange={(e) => setNewRoleText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addRole()}
+                placeholder="Add a role..."
+                className="flex-1 min-w-[120px] px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
               />
+              <select
+                value={newRoleAssignee}
+                onChange={(e) => setNewRoleAssignee(e.target.value)}
+                className="px-2 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-600 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/30 cursor-pointer"
+              >
+                <option value="">Assignee</option>
+                {allPeople.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
               <button
                 type="button"
-                aria-label="Add task"
-                onClick={addTask}
-                disabled={!newTaskText.trim() || createSubIssueMut.isPending}
+                aria-label="Add role"
+                onClick={addRole}
+                disabled={!newRoleText.trim() || createRoleMut.isPending}
                 className="px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1"
               >
-                {createSubIssueMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {createRoleMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Role
               </button>
+              {createRoleMut.isError && (
+                <span className="text-xs text-red-500 w-full">
+                  Failed to create role: {(createRoleMut.error as any)?.message ?? "Unknown error"}
+                </span>
+              )}
             </div>
           </div>
 
           {/* Status History Timeline */}
           {draft.statusHistory && draft.statusHistory.length > 0 && (
             <div>
-              <span className="text-xs text-stone-500 dark:text-stone-400 block mb-2">History</span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-2">History</span>
               <div className="relative pl-4 space-y-2">
-                <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200 dark:bg-stone-700" />
+                <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200 dark:bg-white/[0.1]" />
                 {draft.statusHistory.map((entry, i) => {
                   const dotColor =
                     entry.status === "production"
@@ -298,13 +400,13 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   const ago = formatTimeAgo(date);
                   return (
                     <div key={i} className="relative flex items-center gap-2">
-                      <div className={`absolute -left-4 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white dark:ring-stone-900`} />
-                      <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{label}</span>
-                      <span className="text-xs text-stone-400 dark:text-stone-500">
+                      <div className={`absolute -left-4 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white dark:ring-white/[0.06]`} />
+                      <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+                      <span className="text-xs text-stone-400 dark:text-neutral-500">
                         {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
                         {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </span>
-                      <span className="text-xs text-stone-300 dark:text-stone-600">{ago}</span>
+                      <span className="text-xs text-stone-300 dark:text-neutral-600">{ago}</span>
                     </div>
                   );
                 })}
@@ -313,7 +415,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           )}
 
           {/* Status footer */}
-          <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-stone-500 pt-1">
+          <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-neutral-500 pt-1">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
                 draft.status === "production"
@@ -329,57 +431,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ---------- Sub-issue Row ----------
-
-function SubIssueRow({
-  task,
-  allPeople,
-  onToggle,
-  onAssign,
-  onDelete,
-}: {
-  task: SubIssue;
-  allPeople: string[];
-  onToggle: () => void;
-  onAssign: (assignees: string[]) => void;
-  onDelete: () => void;
-}) {
-  const isDone = task.state === "closed";
-
-  return (
-    <div className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50 dark:hover:bg-stone-800/50">
-      <button
-        type="button"
-        aria-label={isDone ? "Reopen task" : "Complete task"}
-        onClick={onToggle}
-        className="text-stone-400 dark:text-stone-500 hover:text-brand cursor-pointer shrink-0"
-      >
-        {isDone ? (
-          <CheckSquare size={16} className="text-brand" />
-        ) : (
-          <Square size={16} />
-        )}
-      </button>
-      <span className={`text-sm flex-1 ${isDone ? "line-through text-stone-400 dark:text-stone-500" : "text-stone-700 dark:text-stone-300"}`}>
-        {task.title}
-      </span>
-      <TaskAssignee
-        assignees={task.assignees}
-        allPeople={allPeople}
-        onChange={onAssign}
-      />
-      <button
-        type="button"
-        aria-label={`Delete task: ${task.title}`}
-        onClick={onDelete}
-        className="text-stone-300 dark:text-stone-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <X size={14} />
-      </button>
     </div>
   );
 }
@@ -400,64 +451,3 @@ function formatTimeAgo(date: Date): string {
   return `${months}mo ago`;
 }
 
-// ---------- Task Assignee Picker ----------
-
-function TaskAssignee({
-  assignees,
-  allPeople,
-  onChange,
-}: {
-  assignees: string[];
-  allPeople: string[];
-  onChange: (assignees: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const assignee = assignees[0];
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`text-xs px-1.5 py-0.5 rounded cursor-pointer ${
-          assignee
-            ? "bg-brand/10 text-brand hover:bg-brand/20"
-            : "text-stone-300 dark:text-stone-600 hover:text-stone-500 dark:hover:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
-        }`}
-      >
-        {assignee ? `@${assignee}` : "assign"}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg shadow-md z-10 w-40 max-h-48 overflow-y-auto">
-          <button
-            onClick={() => { onChange([]); setOpen(false); }}
-            className="w-full text-left px-3 py-1.5 text-xs text-stone-400 dark:text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer"
-          >
-            Unassign
-          </button>
-          {allPeople.map((p) => (
-            <button
-              key={p}
-              onClick={() => { onChange([p]); setOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer flex items-center gap-1.5 ${
-                p === assignee ? "text-brand font-medium" : "text-stone-700 dark:text-stone-300"
-              }`}
-            >
-              {p === assignee && <Check size={12} />}
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -45,13 +45,13 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
   }, []);
 
   return (
-    <header className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-700">
+    <header className="bg-white dark:bg-dark-raised border-b border-stone-200 dark:border-white/[0.06]">
       <div className="px-4 sm:px-8 flex items-center justify-between h-14">
         {/* Logo + Tabs */}
         <div className="flex items-center gap-6 h-full">
           <div className="flex items-center gap-2.5 shrink-0">
             <LogoMark className="w-7 h-7" />
-            <h1 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">Unticket</h1>
+            <h1 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">Unticket</h1>
           </div>
 
           <nav className="flex items-center gap-1 h-full overflow-x-auto">
@@ -63,7 +63,7 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
                   "px-3 py-1.5 text-sm transition-colors whitespace-nowrap cursor-pointer rounded-lg",
                   activeTab === id
                     ? "bg-brand/10 text-brand font-medium"
-                    : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800",
+                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200 hover:bg-stone-50 dark:hover:bg-white/[0.06]",
                 )}
               >
                 {label}
@@ -76,7 +76,7 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
         <div className="flex items-center gap-1.5 shrink-0" ref={menuRef}>
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-stone-500 dark:text-neutral-400 hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
             title={dark ? "Switch to light mode" : "Switch to dark mode"}
           >
             {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -85,9 +85,9 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
           {user && (
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] hover:bg-stone-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
             >
-              <span className="text-sm text-stone-700 dark:text-stone-300">
+              <span className="text-sm text-stone-700 dark:text-neutral-300">
                 {user.name ?? user.login}
                 {isAdmin && <span className="ml-1 text-xs text-brand/70">(admin)</span>}
               </span>
@@ -106,18 +106,18 @@ export function Header({ activeTab, onTabChange, onOpenSettings }: HeaderProps) 
           )}
 
           {menuOpen && (
-            <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg shadow-md py-1 min-w-[180px]">
+            <div className="absolute right-4 sm:right-8 top-14 z-50 bg-white dark:bg-dark-overlay border border-stone-200 dark:border-white/[0.06] rounded-lg shadow-md py-1 min-w-[180px]">
               <button
                 onClick={() => { setSelectedOrg(null); setMenuOpen(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-white/[0.1] cursor-pointer"
               >
                 <ArrowLeftRight className="w-4 h-4" />
                 Switch Organisation
               </button>
-              <div className="border-t border-stone-100 dark:border-stone-700 my-1" />
+              <div className="border-t border-stone-100 dark:border-white/[0.06] my-1" />
               <button
                 onClick={() => { logout(); setMenuOpen(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-stone-50 dark:hover:bg-stone-700 cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-stone-50 dark:hover:bg-white/[0.1] cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out

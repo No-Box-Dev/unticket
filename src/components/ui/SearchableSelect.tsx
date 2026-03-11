@@ -142,12 +142,12 @@ export function SearchableSelect({
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         className={cn(
-          "px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 cursor-pointer focus:outline-none focus:border-brand flex items-center gap-1.5",
+          "px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand flex items-center gap-1.5",
           className,
         )}
       >
         <span className="truncate">{selectedLabel ?? placeholder}</span>
-        <ChevronDown className="w-3 h-3 shrink-0 text-stone-400 dark:text-stone-500" />
+        <ChevronDown className="w-3 h-3 shrink-0 text-stone-400 dark:text-neutral-500" />
       </button>
       {open && createPortal(
         <div
@@ -160,7 +160,7 @@ export function SearchableSelect({
               ? { bottom: window.innerHeight - pos.top }
               : { top: pos.top }),
           }}
-          className="z-50 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg shadow-md py-1"
+          className="z-50 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-lg shadow-md py-1"
         >
           <div className="px-2 pb-1">
             <input
@@ -173,7 +173,7 @@ export function SearchableSelect({
               aria-controls={listboxId}
               aria-autocomplete="list"
               aria-activedescendant={highlightIndex >= 0 ? `${listboxId}-opt-${highlightIndex}` : undefined}
-              className="w-full px-2 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 focus:outline-none focus:border-brand"
+              className="w-full px-2 py-1 text-xs border border-stone-200 dark:border-white/[0.06] rounded bg-white dark:bg-dark-overlay text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand"
             />
           </div>
           <div id={listboxId} role="listbox" className="max-h-[200px] overflow-y-auto">
@@ -186,16 +186,16 @@ export function SearchableSelect({
                 aria-selected={option.value === value}
                 onClick={() => selectOption(option)}
                 className={cn(
-                  "w-full text-left px-3 py-1.5 text-xs text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer",
-                  option.value === value && "bg-stone-50 dark:bg-stone-800 font-medium text-brand",
-                  highlightIndex === i && "bg-stone-100 dark:bg-stone-800",
+                  "w-full text-left px-3 py-1.5 text-xs text-stone-700 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer",
+                  option.value === value && "bg-stone-50 dark:bg-dark-overlay font-medium text-brand",
+                  highlightIndex === i && "bg-stone-100 dark:bg-dark-overlay",
                 )}
               >
                 {option.label}
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="px-3 py-1.5 text-xs text-stone-400 dark:text-stone-500">No matches</div>
+              <div className="px-3 py-1.5 text-xs text-stone-400 dark:text-neutral-500">No matches</div>
             )}
           </div>
         </div>,

@@ -33,7 +33,7 @@ export function DashboardPage() {
   if (!selectedOrg) return null;
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+    <div className="min-h-screen bg-stone-50 dark:bg-dark-base">
       <CommandPalette onNavigate={(tab) => { setActiveTab(tab); setShowSettings(false); }} />
       <Header activeTab={activeTab} onTabChange={handleTabChange} onOpenSettings={() => setShowSettings(true)} />
       {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
@@ -53,7 +53,7 @@ export function DashboardPage() {
           <>
             <button
               onClick={() => setShowSettings(false)}
-              className="text-sm text-stone-500 dark:text-stone-400 hover:text-brand mb-4 cursor-pointer"
+              className="text-sm text-stone-500 dark:text-neutral-400 hover:text-brand mb-4 cursor-pointer"
             >
               &larr; Back to dashboard
             </button>
