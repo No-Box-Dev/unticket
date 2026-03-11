@@ -33,8 +33,6 @@ import {
   ChevronRight,
   X,
   ExternalLink,
-  GitPullRequest,
-  CircleDot,
 } from "lucide-react";
 
 const RANGE_OPTIONS = [
@@ -140,7 +138,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
 
   const { user } = useAuth();
   const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(repoNames);
-  const { data: allIssues, isLoading: issuesLoading } = useAllIssues(repoNames);
+  const { isLoading: issuesLoading } = useAllIssues(repoNames);
   const { data: closedIssues, isLoading: closedLoading } = useClosedIssues(repoNames);
   const { data: openPRs } = useOpenPRs(repoNames);
   const { data: openIssues } = useOpenIssues(repoNames);
