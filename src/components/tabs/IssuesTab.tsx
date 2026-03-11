@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { usePaginatedIssues, useIssueLabels, useRepos, useOrgMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
+import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -48,7 +48,7 @@ export function IssuesTab(_props: IssuesTabProps) {
   const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
-  const { data: members } = useOrgMembers();
+  const { data: members } = useActiveMembers();
   const updateAssignees = useUpdateIssueAssignees();
 
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);

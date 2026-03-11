@@ -22,6 +22,8 @@ import {
 import type { RateLimitInfo } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
+import { useMemo } from "react";
+import { useSettings } from "@/hooks/useConfigRepo";
 
 export function useOrgs() {
   const { user } = useAuth();
@@ -136,6 +138,19 @@ export function useOrgMembers() {
     queryFn: fetchOrgMembers,
     enabled: !!selectedOrg,
   });
+}
+
+/** Org members filtered by excludedMembers setting — use this for display. */
+export function useActiveMembers() {
+  const { data: orgMembers, isLoading } = useOrgMembers();
+  const { data: settings } = useSettings();
+  const data = useMemo(() => {
+    if (!orgMembers) return undefined;
+    const excluded = new Set(settings?.excludedMembers ?? []);
+    if (excluded.size === 0) return orgMembers;
+    return orgMembers.filter((m: any) => !excluded.has(m.login));
+  }, [orgMembers, settings]);
+  return { data, isLoading };
 }
 
 // ---------- Paginated issues hooks ----------

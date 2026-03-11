@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
-import { useOrgMembers, useAllPRs, useClosedIssues } from "@/hooks/useGitHub";
+import { useActiveMembers, useAllPRs, useClosedIssues } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import type { Person } from "@/lib/types";
@@ -9,7 +9,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   const { data: people } = usePeople();
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
-  const { data: orgMembers, isLoading: membersLoading } = useOrgMembers();
+  const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
 

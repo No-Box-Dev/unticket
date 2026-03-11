@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useOrgMembers } from "@/hooks/useGitHub";
+import { useActiveMembers } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, usePeople } from "@/hooks/useConfigRepo";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -40,7 +40,7 @@ interface EngineerWorkload {
 }
 
 export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) {
-  const { data: orgMembers, isLoading } = useOrgMembers();
+  const { data: orgMembers, isLoading } = useActiveMembers();
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();
   const { data: people } = usePeople();

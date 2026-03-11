@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useMergedPRs, useAllIssues, useClosedIssues, useOrgMembers, useOpenPRs, useOpenIssues } from "@/hooks/useGitHub";
+import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, useSprintSnapshots, usePeople } from "@/hooks/useConfigRepo";
 import {
   computeMetric,
@@ -144,7 +144,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const { data: openIssues } = useOpenIssues(repoNames);
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();
-  const { data: orgMembers } = useOrgMembers();
+  const { data: orgMembers } = useActiveMembers();
   const { data: people } = usePeople();
   const { data: snapshots } = useSprintSnapshots();
 

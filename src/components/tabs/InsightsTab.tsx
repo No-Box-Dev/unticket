@@ -5,7 +5,7 @@ import {
   useMergedPRs,
   useClosedIssues,
   useAllIssues,
-  useOrgMembers,
+  useActiveMembers,
 } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { BarChart } from "@/components/BarChart";
@@ -85,7 +85,7 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
   const { user } = useAuth();
   const { data: settings } = useSettings();
   const { data: people } = usePeople();
-  const { data: orgMembers } = useOrgMembers();
+  const { data: orgMembers } = useActiveMembers();
   const { data: features } = useFeatures();
 
   const [teamFilter, setTeamFilter] = useState<string>("all");
