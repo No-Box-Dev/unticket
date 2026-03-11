@@ -57,6 +57,7 @@ export type TabId =
   | "todos"
   | "engineers"
   | "insights"
+  | "workload"
   | "settings";
 
 export type TodoStatus = "backlog" | "in_progress" | "done";
@@ -90,7 +91,7 @@ export interface LegacyTodo {
 
 export type Effort = "low" | "medium" | "high";
 export type Priority = "high" | "medium" | "low" | "none";
-export type FeatureStatus = "plan" | "demo" | "production" | "future";
+export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
 
 // Sprint points
 export type Points = 1 | 2 | 3 | 5 | 8 | 13;

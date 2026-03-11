@@ -11,7 +11,7 @@ import { PRsTab } from "@/components/tabs/PRsTab";
 import { IssuesTab } from "@/components/tabs/IssuesTab";
 import { TodoTab } from "@/components/tabs/TodoTab";
 import { EngineersTab } from "@/components/tabs/EngineersTab";
-import { InsightsTab } from "@/components/tabs/InsightsTab";
+import { WorkloadTab } from "@/components/tabs/WorkloadTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import { CommandPalette } from "@/components/CommandPalette";
 import { cn } from "@/lib/cn";
@@ -50,14 +50,14 @@ export function DashboardPage() {
 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
           {activeTab === "settings" && <SettingsTab />}
-          {activeTab === "overview" && <OverviewTab repoNames={repoNames} />}
+          {activeTab === "overview" && <OverviewTab repoNames={repoNames} onTabChange={handleTabChange} />}
           {activeTab === "sprint" && <SprintTab repoNames={repoNames} />}
           {activeTab === "backlog" && <BacklogTab />}
           {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
           {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
           {activeTab === "todos" && <TodoTab />}
           {activeTab === "engineers" && <EngineersTab repoNames={repoNames} />}
-          {activeTab === "insights" && <InsightsTab repoNames={repoNames} />}
+          {activeTab === "workload" && <WorkloadTab repoNames={repoNames} />}
         </main>
       </div>
     </div>

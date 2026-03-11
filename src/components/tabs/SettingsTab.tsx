@@ -4,9 +4,9 @@ import { useRepos } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople, useAgentRules, useSaveAgentRules } from "@/hooks/useConfigRepo";
 import { TeamManagement } from "@/components/settings/TeamManagement";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
-import { pushClaudeMdToRepos, buildClaudeMdPreview } from "@/lib/claude-md-sync";
+import { pushClaudeMdToRepos, buildClaudeMdPreview, fetchClaudeMdContent, checkOutdatedRepos } from "@/lib/claude-md-sync";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
-import { Loader2, Plus, X, Pencil, Check, ExternalLink, RefreshCw } from "lucide-react";
+import { Loader2, Plus, X, Pencil, Check, ExternalLink, RefreshCw, Eye } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
@@ -283,6 +283,88 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
   const [showPreview, setShowPreview] = useState(false);
   const preview = buildClaudeMdPreview(org, currentRules);
 
+  // View CLAUDE.md state
+  const [viewingRepo, setViewingRepo] = useState<string | null>(null);
+  const [viewContent, setViewContent] = useState<string | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
+
+  async function handleViewRepo(repo: string) {
+    if (viewingRepo === repo) {
+      setViewingRepo(null);
+      return;
+    }
+    setViewingRepo(repo);
+    setViewContent(null);
+    setViewError(null);
+    setViewLoading(true);
+    try {
+      const file = await fetchClaudeMdContent(org, repo);
+      if (!file) {
+        setViewError("No CLAUDE.md found in this repository.");
+      } else {
+        setViewContent(file.content);
+      }
+    } catch (err: any) {
+      setViewError(err.status === 403 ? "No access to this repository." : (err.message ?? "Unknown error"));
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  // Check outdated state
+  const [checking, setChecking] = useState(false);
+  const [checkProgress, setCheckProgress] = useState<{ done: number; total: number } | null>(null);
+  const [outdatedRepos, setOutdatedRepos] = useState<string[] | null>(null);
+  const [noFileRepos, setNoFileRepos] = useState<string[]>([]);
+  const [checkErrors, setCheckErrors] = useState<string[]>([]);
+
+  async function handleCheckOutdated() {
+    const targets = repoNames.filter((r) => selected.has(r));
+    if (targets.length === 0) return;
+    setChecking(true);
+    setOutdatedRepos(null);
+    setNoFileRepos([]);
+    setCheckErrors([]);
+    setCheckProgress({ done: 0, total: targets.length });
+    try {
+      const res = await checkOutdatedRepos(org, targets, currentRules, (done, total) =>
+        setCheckProgress({ done, total }),
+      );
+      setOutdatedRepos(res.outdated);
+      setNoFileRepos(res.noFile);
+      setCheckErrors(res.errors);
+    } catch {
+      setCheckErrors(["Unexpected error checking repos"]);
+    } finally {
+      setChecking(false);
+      setCheckProgress(null);
+    }
+  }
+
+  async function handleUpdateOutdated() {
+    if (!outdatedRepos || outdatedRepos.length === 0) return;
+    const targets = [...outdatedRepos, ...noFileRepos];
+    if (targets.length === 0) return;
+    setSyncing(true);
+    setResult(null);
+    setProgress({ done: 0, total: targets.length });
+    try {
+      const res = await pushClaudeMdToRepos(org, targets, currentRules, (done, total) =>
+        setProgress({ done, total }),
+      );
+      setResult(res);
+      // Reset check state after successful update
+      setOutdatedRepos(null);
+      setNoFileRepos([]);
+    } catch {
+      setResult({ updated: 0, skipped: 0, errors: ["Unexpected error"], updatedRepos: [] });
+    } finally {
+      setSyncing(false);
+      setProgress(null);
+    }
+  }
+
   async function handlePush() {
     const targets = repoNames.filter((r) => selected.has(r));
     if (targets.length === 0) return;
@@ -412,18 +494,96 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
                   />
                   {name}
                 </label>
+                <button
+                  onClick={() => handleViewRepo(name)}
+                  className={`shrink-0 cursor-pointer ${viewingRepo === name ? "text-brand" : "text-stone-300 dark:text-neutral-600 hover:text-brand"}`}
+                  title="View CLAUDE.md"
+                >
+                  <Eye size={11} />
+                </button>
                 <a
                   href={`https://github.com/${org}/${name}/blob/main/CLAUDE.md`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-stone-300 dark:text-neutral-600 hover:text-brand shrink-0"
-                  title="View CLAUDE.md"
+                  title="View on GitHub"
                 >
                   <ExternalLink size={11} />
                 </a>
               </div>
             ))}
           </div>
+
+          {/* CLAUDE.md inline viewer */}
+          {viewingRepo && (
+            <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-stone-200 dark:border-white/[0.06]">
+                <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{viewingRepo}/CLAUDE.md</span>
+                <button onClick={() => setViewingRepo(null)} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-4 py-3 max-h-[400px] overflow-y-auto">
+                {viewLoading && (
+                  <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-neutral-500">
+                    <Loader2 size={14} className="animate-spin" /> Loading...
+                  </div>
+                )}
+                {viewError && <p className="text-xs text-stone-400 dark:text-neutral-500">{viewError}</p>}
+                {viewContent && (
+                  <pre className="text-xs text-stone-600 dark:text-neutral-400 font-mono whitespace-pre-wrap">{viewContent}</pre>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Check for updates */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleCheckOutdated}
+              disabled={checking || selected.size === 0}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.1] text-xs font-medium text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-white/[0.04] disabled:opacity-50 cursor-pointer"
+            >
+              {checking && <Loader2 size={14} className="animate-spin" />}
+              {checking
+                ? `Checking... (${checkProgress?.done ?? 0}/${checkProgress?.total ?? 0})`
+                : "Check for updates"}
+            </button>
+            {outdatedRepos !== null && !checking && (
+              <span className={`text-xs font-medium ${outdatedRepos.length + noFileRepos.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
+                {outdatedRepos.length + noFileRepos.length > 0
+                  ? `${outdatedRepos.length + noFileRepos.length} repo${outdatedRepos.length + noFileRepos.length !== 1 ? "s" : ""} need updating`
+                  : "All up to date"}
+              </span>
+            )}
+          </div>
+          {outdatedRepos !== null && (outdatedRepos.length + noFileRepos.length > 0) && !checking && (
+            <div className="space-y-2">
+              <div className="text-xs text-stone-500 dark:text-neutral-400 space-y-0.5">
+                {outdatedRepos.map((r) => (
+                  <p key={r}>• {r} <span className="text-stone-400 dark:text-neutral-500">(outdated)</span></p>
+                ))}
+                {noFileRepos.map((r) => (
+                  <p key={r}>• {r} <span className="text-stone-400 dark:text-neutral-500">(no file)</span></p>
+                ))}
+              </div>
+              <button
+                onClick={handleUpdateOutdated}
+                disabled={syncing}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 disabled:opacity-50 cursor-pointer"
+              >
+                {syncing && <Loader2 size={14} className="animate-spin" />}
+                {syncing
+                  ? `Updating... (${progress?.done ?? 0}/${progress?.total ?? 0})`
+                  : `Update ${outdatedRepos.length + noFileRepos.length} repo${outdatedRepos.length + noFileRepos.length !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
+          {checkErrors.length > 0 && (
+            <div className="text-xs text-red-500 space-y-0.5">
+              {checkErrors.map((e, i) => <p key={i}>{e}</p>)}
+            </div>
+          )}
 
           <button
             onClick={handlePush}

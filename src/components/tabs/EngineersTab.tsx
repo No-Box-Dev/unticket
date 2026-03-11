@@ -36,11 +36,15 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
     const peopleMap = new Map<string, Person>();
     for (const p of people ?? []) peopleMap.set(p.github, p);
 
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoff = thirtyDaysAgo.toISOString();
+
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
       const myFeatures = sprintFeatures.filter((f) => f.owners.includes(member.login));
-      const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at)?.length ?? 0;
-      const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login)?.length ?? 0;
+      const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
+      const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
 
       const myTasks = allTasks?.filter((t) => t.assignees.includes(member.login)) ?? [];
@@ -154,6 +158,9 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           </div>
 
           {/* Metric cards */}
+          <div className="mb-1">
+            <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Last 30 days</span>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <MetricCard label="PRs Merged" value={selected.prsMerged} color="text-purple-500" />
             <MetricCard label="Issues Solved" value={selected.issuesSolved} color="text-blue-500" />
@@ -166,11 +173,11 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
           <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
             <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Feature Pipeline</h3>
             <div className="space-y-2">
-              {(["plan", "demo", "production"] as const).map((status) => {
+              {(["plan", "in_progress", "demo", "tested", "production"] as const).map((status) => {
                 const count = selected.myFeatures.filter((f) => f.status === status).length;
-                const labels = { plan: "Plan", demo: "In Progress", production: "Complete" };
-                const colors = { plan: "#0E7C86", demo: "#F59E0B", production: "#22C55E" };
-                const max = Math.max(...["plan", "demo", "production"].map((s) => selected.myFeatures.filter((f) => f.status === s).length), 1);
+                const labels = { plan: "Plan", in_progress: "In Progress", demo: "Demo", tested: "Tested", production: "In Production" };
+                const colors = { plan: "#0E7C86", in_progress: "#F59E0B", demo: "#A855F7", tested: "#06B6D4", production: "#22C55E" };
+                const max = Math.max(...["plan", "in_progress", "demo", "tested", "production"].map((s) => selected.myFeatures.filter((f) => f.status === s).length), 1);
                 return (
                   <div key={status} className="flex items-center gap-3">
                     <span className="text-sm text-stone-500 w-20 shrink-0">{labels[status]}</span>

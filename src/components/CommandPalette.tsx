@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
-import { useFeatures, usePeople, useTodos, useSprint } from "@/hooks/useConfigRepo";
+import { useFeatures, usePeople, useTodos, useSprint, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
+import { useOrgMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/lib/theme";
+import { useSidebar } from "@/lib/sidebar";
 import type { TabId } from "@/lib/types";
 
 interface CommandPaletteProps {
@@ -10,7 +12,7 @@ interface CommandPaletteProps {
 }
 
 interface SearchResult {
-  type: "feature" | "person" | "tab" | "todo" | "task" | "action";
+  type: "feature" | "person" | "tab" | "todo" | "task" | "role" | "action";
   label: string;
   detail?: string;
   action: () => void;
@@ -22,9 +24,9 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "backlog", label: "Future Features", keywords: "backlog future" },
   { id: "prs", label: "Pull Requests", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
-  { id: "todos", label: "Todos", keywords: "todos tasks" },
-  // { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
-  { id: "insights", label: "Insights", keywords: "insights metrics analytics" },
+  { id: "todos", label: "Todos", keywords: "todos tasks personal" },
+  { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
+  { id: "workload", label: "Workload", keywords: "workload distribution points capacity analytics" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
@@ -37,9 +39,49 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
+  const { data: orgMembers } = useOrgMembers();
   const { data: todos } = useTodos();
   const { data: sprint } = useSprint();
   const { dark, toggle: toggleTheme } = useTheme();
+  const { setViewingSprint } = useSidebar();
+
+  // Sprint sub-issues for task/role search
+  const sprintFeatureIds = useMemo(() => {
+    if (!features || !sprint) return [];
+    return features.filter((f) => f.sprint === sprint.number).map((f) => f.id);
+  }, [features, sprint]);
+  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
+
+  // Build people lookup (org members + configured people)
+  const allPeople = useMemo(() => {
+    const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
+    const members = orgMembers ?? [];
+    return members.map((m: any) => {
+      const person = peopleMap.get(m.login);
+      return {
+        login: m.login,
+        name: person?.name ?? m.login,
+        role: person?.role ?? "",
+        teams: person?.teams ?? [],
+        avatar_url: m.avatar_url,
+      };
+    });
+  }, [people, orgMembers]);
+
+  // Unique roles from tasks
+  const roles = useMemo(() => {
+    if (!allTasks) return [];
+    const roleMap = new Map<number, { number: number; name: string; featureTitle: string; assignees: Set<string>; taskCount: number; doneCount: number }>();
+    for (const t of allTasks) {
+      if (!t.roleNumber) continue;
+      const r = roleMap.get(t.roleNumber) ?? { number: t.roleNumber, name: t.roleName ?? `Role #${t.roleNumber}`, featureTitle: t.featureTitle, assignees: new Set(), taskCount: 0, doneCount: 0 };
+      for (const a of t.assignees) r.assignees.add(a);
+      r.taskCount++;
+      if (t.state === "closed") r.doneCount++;
+      roleMap.set(t.roleNumber, r);
+    }
+    return Array.from(roleMap.values());
+  }, [allTasks]);
 
   // CMD+K to open
   useEffect(() => {
@@ -85,7 +127,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
 
     // Search features
     for (const f of features ?? []) {
-      if (items.length >= 25) break;
+      if (items.length >= 30) break;
       const searchText = `${f.title} ${f.owners.join(" ")} ${f.team ?? ""} ${f.priority ?? ""}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
@@ -97,7 +139,12 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             f.priority && f.priority !== "none" ? `${f.priority} priority` : null,
           ].filter(Boolean).join(" · "),
           action: () => {
-            onNavigate(f.status === "future" ? "backlog" : "sprint");
+            if (f.status === "future") {
+              onNavigate("backlog");
+            } else {
+              setViewingSprint(null);
+              onNavigate("sprint");
+            }
             setOpen(false);
           },
         });
@@ -105,22 +152,64 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     // Search people
-    for (const p of people ?? []) {
-      if (items.length >= 25) break;
-      const searchText = `${p.name} ${p.github} ${p.role} ${p.teams.join(" ")}`.toLowerCase();
+    for (const p of allPeople) {
+      if (items.length >= 30) break;
+      const searchText = `${p.name} ${p.login} ${p.role} ${p.teams.join(" ")}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "person",
-          label: p.name || p.github,
-          detail: [p.role, p.teams.join(", ")].filter(Boolean).join(" · "),
-          action: () => { onNavigate("engineers"); setOpen(false); },
+          label: p.name || p.login,
+          detail: [p.role, p.teams.join(", ")].filter(Boolean).join(" · ") || p.login,
+          action: () => { onNavigate("workload"); setOpen(false); },
+        });
+      }
+    }
+
+    // Search roles
+    for (const r of roles) {
+      if (items.length >= 30) break;
+      const searchText = `${r.name} ${r.featureTitle} ${Array.from(r.assignees).join(" ")}`.toLowerCase();
+      if (searchText.includes(q)) {
+        items.push({
+          type: "role",
+          label: r.name,
+          detail: `${r.featureTitle} · ${r.doneCount}/${r.taskCount} tasks · ${Array.from(r.assignees).join(", ")}`,
+          action: () => {
+            setViewingSprint(null);
+            onNavigate("sprint");
+            setOpen(false);
+          },
+        });
+      }
+    }
+
+    // Search tasks
+    for (const t of allTasks ?? []) {
+      if (items.length >= 30) break;
+      const searchText = `${t.title} ${t.featureTitle} ${t.assignees.join(" ")} ${t.roleName ?? ""}`.toLowerCase();
+      if (searchText.includes(q)) {
+        items.push({
+          type: "task",
+          label: t.title,
+          detail: [
+            t.featureTitle,
+            t.roleName,
+            t.assignees.join(", "),
+            t.points ? `${t.points}pt` : null,
+            t.state,
+          ].filter(Boolean).join(" · "),
+          action: () => {
+            setViewingSprint(null);
+            onNavigate("sprint");
+            setOpen(false);
+          },
         });
       }
     }
 
     // Search todos
     for (const t of todos ?? []) {
-      if (items.length >= 25) break;
+      if (items.length >= 30) break;
       const searchText = `${t.title} ${t.owner} ${t.repo ?? ""} ${t.status}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
@@ -154,8 +243,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       });
     }
 
-    return items.slice(0, 25);
-  }, [query, features, people, todos, sprint, onNavigate, dark, toggleTheme]);
+    return items.slice(0, 30);
+  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint]);
 
   // Keyboard navigation
   useEffect(() => { setSelectedIndex(0); }, [query]);
@@ -186,8 +275,9 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     person: "text-amber-500",
     tab: "text-stone-400 dark:text-neutral-500",
     todo: "text-purple-500",
-    task: "text-teal-500",
-    action: "text-blue-500",
+    task: "text-blue-500",
+    role: "text-teal-500",
+    action: "text-indigo-500",
   };
 
   return (
@@ -202,7 +292,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search features, people, todos, pages..."
+            placeholder="Search features, people, tasks, roles, todos..."
             className="flex-1 text-sm text-stone-800 dark:text-neutral-200 placeholder:text-stone-400 dark:placeholder:text-neutral-500 outline-none bg-transparent"
           />
           <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay rounded border border-stone-200 dark:border-white/[0.06] font-mono">

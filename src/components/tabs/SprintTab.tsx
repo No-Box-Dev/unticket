@@ -18,10 +18,12 @@ import { cn } from "@/lib/cn";
 type SprintView = "features" | "roles" | "tasks" | "metrics";
 type SortKey = "default" | "priority" | "title";
 
-const COLUMN_DEFS: { status: "plan" | "demo" | "production"; label: string; color: string }[] = [
+const COLUMN_DEFS: { status: FeatureStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
-  { status: "demo", label: "Demo", color: "bg-amber-500" },
-  { status: "production", label: "Production", color: "bg-green-500" },
+  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+  { status: "demo", label: "Demo", color: "bg-purple-500" },
+  { status: "tested", label: "Tested", color: "bg-cyan-500" },
+  { status: "production", label: "In Production", color: "bg-green-500" },
 ];
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
@@ -138,7 +140,9 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
   const sortedColumns = useMemo(() => ({
     plan: sortFeatures(sprintFeatures.filter((f) => f.status === "plan"), sortBy),
+    in_progress: sortFeatures(sprintFeatures.filter((f) => f.status === "in_progress"), sortBy),
     demo: sortFeatures(sprintFeatures.filter((f) => f.status === "demo"), sortBy),
+    tested: sortFeatures(sprintFeatures.filter((f) => f.status === "tested"), sortBy),
     production: sortFeatures(sprintFeatures.filter((f) => f.status === "production"), sortBy),
   }), [sprintFeatures, sortBy]);
 
@@ -522,7 +526,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
 
 interface FeaturesViewProps {
   sprintFeatures: Feature[];
-  sortedColumns: Record<"plan" | "demo" | "production", Feature[]>;
+  sortedColumns: Record<"plan" | "in_progress" | "demo" | "tested" | "production", Feature[]>;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
@@ -591,7 +595,7 @@ function FeaturesView({
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
         {COLUMN_DEFS.map((col) => {
           const items = sortedColumns[col.status];
           return (

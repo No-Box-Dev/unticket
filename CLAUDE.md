@@ -45,7 +45,7 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 **Features as GitHub Issues (on `{org}/.gitpulse` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
-- Label scheme: `feature` (marker), `status:{plan,demo,production,future}`, `priority:{low,medium,high}`, `team:{name}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
+- Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `priority:{low,medium,high}`, `team:{name}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
 - Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
 - Owners: Issue assignees
 - Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
@@ -112,7 +112,7 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 
 #### Sprint Board (`sprint` tab)
 Sprint config + feature cards backed by GitHub Issues (label: `feature`). Four view modes (ClickUp-style tab switcher):
-- **Features view**: Kanban board with Plan/Demo/Production columns, drag-and-drop, search/filter by person/team, sort by priority/title.
+- **Features view**: Kanban board with Plan/In Progress/Demo/Tested/In Production columns, drag-and-drop, search/filter by person/team, sort by priority/title.
 - **Roles view**: Cards grouped by person (assignee), showing tasks under each feature with progress bars and point totals.
 - **Tasks view**: Flat table of all tasks across features with columns: task, feature, role, assignee, points. Split into open/completed sections.
 - **Metrics view**: Sprint metrics dashboard (points, features, people breakdown).

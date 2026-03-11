@@ -13,15 +13,17 @@ import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 const STATUS_DOT: Record<FeatureStatus, string> = {
   plan: "bg-brand",
-  demo: "bg-amber-500",
+  in_progress: "bg-amber-500",
+  demo: "bg-purple-500",
+  tested: "bg-cyan-500",
   production: "bg-green-500",
   future: "bg-stone-300",
 };
 
-const COLUMNS: { status: TodoStatus; label: string }[] = [
-  { status: "backlog", label: "Backlog" },
-  { status: "in_progress", label: "In Progress" },
-  { status: "done", label: "Done" },
+const COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
+  { status: "backlog", label: "Backlog", color: "bg-stone-400" },
+  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+  { status: "done", label: "Done", color: "bg-green-500" },
 ];
 
 /** Map sprint task state to TodoStatus for display */
@@ -216,7 +218,7 @@ export function TodoTab() {
 
         {/* Kanban columns */}
         <div className="grid grid-cols-3 gap-4">
-          {COLUMNS.map(({ status, label }) => {
+          {COLUMNS.map(({ status, label, color }) => {
             const items = columns[status];
             const todoCount = items.filter((i) => !("_sprintTask" in i)).length;
             const sprintCount = items.filter((i) => "_sprintTask" in i).length;
@@ -232,20 +234,18 @@ export function TodoTab() {
                 )}
               >
                 {/* Column header */}
-                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center justify-between">
-                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
-                    {label}{" "}
-                    <span className="text-stone-400 dark:text-neutral-500 font-normal">
-                      ({todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""})
-                    </span>
+                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                  <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+                    {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
                   </span>
                   {status === "done" && todoCount > 0 && (
                     <button
                       onClick={clearDone}
-                      className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors"
+                      className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
                     >
                       <Trash2 size={13} />
-                      Clear
                     </button>
                   )}
                 </div>

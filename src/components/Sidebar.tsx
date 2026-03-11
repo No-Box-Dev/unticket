@@ -15,6 +15,7 @@ import {
   CheckSquare,
   Users,
   BarChart3,
+  Activity,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -58,7 +59,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Analytics",
     items: [
-      { id: "insights", label: "Insights", icon: BarChart3, adminOnly: true },
+      { id: "workload", label: "Workload", icon: Activity },
     ],
   },
 ];
