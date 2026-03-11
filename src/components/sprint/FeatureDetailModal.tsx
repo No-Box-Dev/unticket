@@ -383,19 +383,16 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               <div className="relative pl-4 space-y-2">
                 <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200 dark:bg-white/[0.1]" />
                 {draft.statusHistory.map((entry, i) => {
-                  const dotColor =
-                    entry.status === "production"
-                      ? "bg-green-500"
-                      : entry.status === "demo"
-                        ? "bg-amber-500"
-                        : entry.status === "plan"
-                          ? "bg-brand"
-                          : "bg-stone-400";
-                  const label =
-                    entry.status === "production" ? "Production"
-                    : entry.status === "demo" ? "Demo"
-                    : entry.status === "plan" ? "Plan"
-                    : "Future";
+                  const STATUS_COLORS: Record<string, string> = {
+                    plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
+                    tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-400",
+                  };
+                  const STATUS_LABELS: Record<string, string> = {
+                    plan: "Plan", in_progress: "In Progress", demo: "Demo",
+                    tested: "Tested", production: "In Production", future: "Future",
+                  };
+                  const dotColor = STATUS_COLORS[entry.status] ?? "bg-stone-400";
+                  const label = STATUS_LABELS[entry.status] ?? "Future";
                   const date = new Date(entry.timestamp);
                   const ago = formatTimeAgo(date);
                   return (
@@ -418,16 +415,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-neutral-500 pt-1">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
-                draft.status === "production"
-                  ? "bg-green-500"
-                  : draft.status === "demo"
-                    ? "bg-amber-500"
-                    : draft.status === "plan"
-                      ? "bg-brand"
-                      : "bg-stone-300"
+                ({ plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500", tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300" } as Record<string, string>)[draft.status] ?? "bg-stone-300"
               }`}
             />
-            {draft.status === "production" ? "Production" : draft.status === "demo" ? "Demo" : draft.status === "plan" ? "Plan" : "Future"}
+            {({ plan: "Plan", in_progress: "In Progress", demo: "Demo", tested: "Tested", production: "In Production", future: "Future" } as Record<string, string>)[draft.status] ?? "Future"}
           </div>
         </div>
       </div>

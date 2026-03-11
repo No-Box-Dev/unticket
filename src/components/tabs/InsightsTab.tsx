@@ -14,6 +14,7 @@ import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { BarChart3, X, ExternalLink } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 
 interface InsightsTabProps {
   repoNames: string[];
@@ -364,33 +365,14 @@ export function InsightsTab({ repoNames }: InsightsTabProps) {
         </div>
       )}
 
-      {/* Person selector: All + individual people */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => { setSelectedPerson(null); setSidebar(null); }}
-          className={cn(
-            "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
-            isAllView
-              ? "bg-brand text-white"
-              : "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 hover:border-brand hover:text-brand",
-          )}
-        >
-          All
-        </button>
-        {filteredPersonList.map((person) => (
-          <button
-            key={person.github}
-            onClick={() => { setSelectedPerson(person.github); setSidebar(null); }}
-            className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
-              activePerson === person.github
-                ? "bg-brand text-white"
-                : "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 hover:border-brand hover:text-brand",
-            )}
-          >
-            {person.name || person.github}
-          </button>
-        ))}
+      {/* Person selector */}
+      <div className="flex items-center gap-2">
+        <PersonSelect
+          value={selectedPerson}
+          onChange={(v) => { setSelectedPerson(typeof v === "string" ? v : null); setSidebar(null); }}
+          options={filteredPersonList.map((p) => ({ value: p.github, label: p.name || p.github }))}
+          placeholder="All People"
+        />
       </div>
 
       {/* Metric cards */}

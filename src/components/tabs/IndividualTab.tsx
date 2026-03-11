@@ -8,6 +8,7 @@ import type { MetricData } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 
 interface IndividualTabProps {
   repoNames: string[];
@@ -161,21 +162,13 @@ export function IndividualTab({ repoNames }: IndividualTabProps) {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {filteredPersonList.map((person) => (
-          <button
-            key={person.github}
-            onClick={() => setSelected(person.github)}
-            className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-full transition-colors cursor-pointer",
-              selectedPerson === person.github
-                ? "bg-brand text-white"
-                : "bg-white border border-stone-200 text-stone-600 hover:border-brand hover:text-brand",
-            )}
-          >
-            {person.name || person.github}
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <PersonSelect
+          value={selectedPerson}
+          onChange={(v) => setSelected(typeof v === "string" ? v : null)}
+          options={filteredPersonList.map((p) => ({ value: p.github, label: p.name || p.github }))}
+          placeholder="Select person"
+        />
       </div>
 
       {isLoading ? (

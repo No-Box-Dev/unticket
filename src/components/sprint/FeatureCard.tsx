@@ -35,14 +35,11 @@ export function FeatureCard({
 }: FeatureCardProps) {
   const hasPlan = !!feature.plan?.trim();
 
-  const dotColor =
-    feature.status === "production"
-      ? "bg-green-500"
-      : feature.status === "demo"
-        ? "bg-amber-500"
-        : feature.status === "plan"
-          ? "bg-brand"
-          : "bg-stone-300";
+  const STATUS_COLORS: Record<string, string> = {
+    plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
+    tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
+  };
+  const dotColor = STATUS_COLORS[feature.status] ?? "bg-stone-300";
 
   return (
     <div

@@ -27,7 +27,9 @@ const POINTS_PREFIX = "points:";
 const FEATURE_LABELS = [
   { name: "feature", color: "1B6971", description: "Sprint/backlog feature" },
   { name: "status:plan", color: "0E7C86", description: "Feature in planning" },
-  { name: "status:demo", color: "F59E0B", description: "Feature ready for demo" },
+  { name: "status:in_progress", color: "F59E0B", description: "Feature in progress" },
+  { name: "status:demo", color: "A855F7", description: "Feature ready for demo" },
+  { name: "status:tested", color: "06B6D4", description: "Feature tested" },
   { name: "status:production", color: "22C55E", description: "Feature in production" },
   { name: "status:future", color: "A8A29E", description: "Backlog feature" },
   { name: "priority:low", color: "22C55E", description: "Low priority" },
@@ -614,7 +616,8 @@ export async function migrateFeatures(
   await ensureFeatureLabels(org);
 
   const statusMap: Record<string, FeatureStatus> = {
-    active: "plan", plan: "plan", demo: "demo",
+    active: "in_progress", plan: "plan", in_progress: "in_progress",
+    demo: "demo", tested: "tested",
     done: "production", production: "production", future: "future",
   };
   const effortMap: Record<string, Effort> = { low: "low", medium: "medium", high: "high" };

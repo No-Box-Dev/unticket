@@ -3,6 +3,7 @@ import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,7 +31,7 @@ export function PRsTab({ repoNames }: PRsTabProps) {
   const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(repoNames);
   const { data: settings } = useSettings();
   const [teamFilter, setTeamFilter] = useState<string>("all");
-  const [personFilter, setPersonFilter] = useState<string>("all");
+  const [personFilter, setPersonFilter] = useState<string[]>([]);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
@@ -114,8 +115,8 @@ export function PRsTab({ repoNames }: PRsTabProps) {
         return repo && repoToTeam.get(repo) === teamFilter;
       });
     }
-    if (personFilter !== "all") {
-      list = list.filter((pr: any) => pr.user?.login === personFilter);
+    if (personFilter.length > 0) {
+      list = list.filter((pr: any) => personFilter.includes(pr.user?.login));
     }
     if (repoFilter !== "all") {
       list = list.filter((pr: any) => pr.head.repo?.name === repoFilter);
@@ -288,16 +289,13 @@ export function PRsTab({ repoNames }: PRsTabProps) {
           </select>
         )}
 
-        <select
-          value={personFilter}
-          onChange={(e) => setPersonFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
-        >
-          <option value="all">All Authors</option>
-          {authors.map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
+        <PersonSelect
+          value={personFilter.length > 0 ? personFilter : null}
+          onChange={(v) => setPersonFilter(Array.isArray(v) ? v : v ? [v] : [])}
+          options={authors.map((a) => ({ value: a, label: a }))}
+          placeholder="All Authors"
+          multi
+        />
 
         <SearchableSelect
           value={repoFilter}

@@ -1,0 +1,346 @@
+import { getOctokit } from "./github";
+import type { Todo, TodoStatus } from "./types";
+
+const REPO = ".gitpulse";
+const TODO_LABEL = "todo";
+const STATUS_PREFIX = "todo-status:";
+const OWNER_PREFIX = "todo-owner:";
+const FEATURE_PREFIX = "todo-feature:";
+const REPO_PREFIX = "todo-repo:";
+
+const TODO_LABELS = [
+  { name: "todo", color: "7C3AED", description: "Personal todo item" },
+  { name: "todo-status:backlog", color: "94A3B8", description: "Todo: backlog" },
+  { name: "todo-status:in_progress", color: "3B82F6", description: "Todo: in progress" },
+  { name: "todo-status:done", color: "22C55E", description: "Todo: done" },
+];
+
+// ---------- Label setup ----------
+
+const labelsEnsuredByOrg = new Set<string>();
+
+export async function ensureTodoLabels(org: string): Promise<void> {
+  if (labelsEnsuredByOrg.has(org)) return;
+  const ok = getOctokit();
+
+  const { data: existing } = await ok.rest.issues.listLabelsForRepo({
+    owner: org,
+    repo: REPO,
+    per_page: 100,
+  });
+  const existingNames = new Set(existing.map((l) => l.name));
+
+  for (const label of TODO_LABELS) {
+    if (!existingNames.has(label.name)) {
+      try {
+        await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
+      } catch (err: any) {
+        if (err?.status !== 422) throw err;
+      }
+    }
+  }
+  labelsEnsuredByOrg.add(org);
+}
+
+// ---------- Helpers ----------
+
+function extractLabel(labels: string[], prefix: string): string | undefined {
+  return labels.find((l) => l.startsWith(prefix))?.slice(prefix.length);
+}
+
+function buildTodoLabels(status: TodoStatus, owner: string, opts?: { featureId?: number; repo?: string }): string[] {
+  const labels = [TODO_LABEL, `${STATUS_PREFIX}${status}`, `${OWNER_PREFIX}${owner}`];
+  if (opts?.featureId) labels.push(`${FEATURE_PREFIX}${opts.featureId}`);
+  if (opts?.repo) labels.push(`${REPO_PREFIX}${opts.repo}`);
+  return labels;
+}
+
+function issueToTodo(issue: any): Todo {
+  const labelNames = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter(Boolean) as string[];
+
+  const statusLabel = extractLabel(labelNames, STATUS_PREFIX) as TodoStatus | undefined;
+  const owner = extractLabel(labelNames, OWNER_PREFIX) ?? issue.assignees?.[0]?.login ?? "";
+  const featureStr = extractLabel(labelNames, FEATURE_PREFIX);
+  const repo = extractLabel(labelNames, REPO_PREFIX);
+
+  // Derive status: if issue is closed → done, else use label
+  let status: TodoStatus;
+  if (issue.state === "closed") {
+    status = "done";
+  } else {
+    status = statusLabel ?? "backlog";
+  }
+
+  return {
+    id: issue.number,
+    globalId: issue.id,
+    title: issue.title,
+    owner,
+    status,
+    createdAt: issue.created_at,
+    closedAt: issue.closed_at ?? undefined,
+    featureId: featureStr ? parseInt(featureStr) : undefined,
+    repo,
+    html_url: issue.html_url,
+  };
+}
+
+// ---------- Ensure dynamic labels exist ----------
+
+async function ensureDynamicLabel(org: string, name: string, color: string, description: string): Promise<void> {
+  const ok = getOctokit();
+  try {
+    await ok.rest.issues.createLabel({ owner: org, repo: REPO, name, color, description });
+  } catch (err: any) {
+    if (err?.status !== 422) throw err; // 422 = already exists
+  }
+}
+
+// ---------- CRUD ----------
+
+export async function fetchTodos(org: string): Promise<Todo[]> {
+  await ensureTodoLabels(org);
+
+  const ok = getOctokit();
+  // Fetch both open and closed with todo label
+  const [open, closed] = await Promise.all([
+    ok.paginate(ok.rest.issues.listForRepo, {
+      owner: org,
+      repo: REPO,
+      labels: TODO_LABEL,
+      state: "open",
+      per_page: 100,
+    }),
+    ok.paginate(ok.rest.issues.listForRepo, {
+      owner: org,
+      repo: REPO,
+      labels: TODO_LABEL,
+      state: "closed",
+      per_page: 100,
+      since: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(), // last 90 days
+    }),
+  ]);
+
+  const all = [...open, ...closed].filter((i: any) => !i.pull_request);
+  return all.map(issueToTodo);
+}
+
+export async function fetchTodosByOwner(org: string, login: string): Promise<Todo[]> {
+  const all = await fetchTodos(org);
+  return all.filter((t) => t.owner === login);
+}
+
+export async function createTodo(
+  org: string,
+  title: string,
+  owner: string,
+  opts?: { featureId?: number; repo?: string },
+): Promise<Todo> {
+  await ensureTodoLabels(org);
+  const ok = getOctokit();
+
+  const labels = buildTodoLabels("backlog", owner, opts);
+
+  // Ensure owner-specific label exists
+  await ensureDynamicLabel(org, `${OWNER_PREFIX}${owner}`, "7C3AED", `Todos for ${owner}`);
+  if (opts?.featureId) {
+    await ensureDynamicLabel(org, `${FEATURE_PREFIX}${opts.featureId}`, "7C3AED", `Linked to feature #${opts.featureId}`);
+  }
+  if (opts?.repo) {
+    await ensureDynamicLabel(org, `${REPO_PREFIX}${opts.repo}`, "7C3AED", `Repo: ${opts.repo}`);
+  }
+
+  const { data } = await ok.rest.issues.create({
+    owner: org,
+    repo: REPO,
+    title,
+    labels,
+    assignees: [owner],
+  });
+
+  return issueToTodo(data);
+}
+
+export async function updateTodo(
+  org: string,
+  issueNumber: number,
+  updates: {
+    title?: string;
+    status?: TodoStatus;
+    featureId?: number | null;
+    repo?: string | null;
+  },
+): Promise<Todo> {
+  const ok = getOctokit();
+
+  // Get current issue to read existing labels
+  const { data: current } = await ok.rest.issues.get({
+    owner: org,
+    repo: REPO,
+    issue_number: issueNumber,
+  });
+
+  const currentLabels = (current.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter(Boolean) as string[];
+
+  // Rebuild labels
+  let newLabels = currentLabels.filter(
+    (l) =>
+      !l.startsWith(STATUS_PREFIX) &&
+      !l.startsWith(FEATURE_PREFIX) &&
+      !l.startsWith(REPO_PREFIX),
+  );
+
+  const status = updates.status ?? (extractLabel(currentLabels, STATUS_PREFIX) as TodoStatus) ?? "backlog";
+  newLabels.push(`${STATUS_PREFIX}${status}`);
+
+  if (updates.featureId !== undefined) {
+    if (updates.featureId !== null) {
+      const featureLabel = `${FEATURE_PREFIX}${updates.featureId}`;
+      await ensureDynamicLabel(org, featureLabel, "7C3AED", `Linked to feature #${updates.featureId}`);
+      newLabels.push(featureLabel);
+    }
+  } else {
+    // Preserve existing feature label
+    const existing = currentLabels.find((l) => l.startsWith(FEATURE_PREFIX));
+    if (existing) newLabels.push(existing);
+  }
+
+  if (updates.repo !== undefined) {
+    if (updates.repo !== null) {
+      const repoLabel = `${REPO_PREFIX}${updates.repo}`;
+      await ensureDynamicLabel(org, repoLabel, "7C3AED", `Repo: ${updates.repo}`);
+      newLabels.push(repoLabel);
+    }
+  } else {
+    const existing = currentLabels.find((l) => l.startsWith(REPO_PREFIX));
+    if (existing) newLabels.push(existing);
+  }
+
+  // Handle state change for done status
+  let state: "open" | "closed" | undefined;
+  if (updates.status === "done") {
+    state = "closed";
+  } else if (updates.status && updates.status !== "done" && current.state === "closed") {
+    state = "open";
+  }
+
+  const { data } = await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: issueNumber,
+    ...(updates.title ? { title: updates.title } : {}),
+    labels: newLabels,
+    ...(state ? { state } : {}),
+  });
+
+  return issueToTodo(data);
+}
+
+export async function closeTodo(org: string, issueNumber: number): Promise<Todo> {
+  return updateTodo(org, issueNumber, { status: "done" });
+}
+
+export async function reopenTodo(org: string, issueNumber: number): Promise<Todo> {
+  return updateTodo(org, issueNumber, { status: "in_progress" });
+}
+
+export async function deleteTodo(org: string, issueNumber: number): Promise<void> {
+  const ok = getOctokit();
+  // Remove the todo label and close the issue
+  const { data: current } = await ok.rest.issues.get({
+    owner: org,
+    repo: REPO,
+    issue_number: issueNumber,
+  });
+
+  const newLabels = (current.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter((l: string) => l !== TODO_LABEL);
+
+  await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: issueNumber,
+    labels: newLabels,
+    state: "closed",
+  });
+}
+
+// ---------- Sprint integration ----------
+
+export async function fetchTodosClosedInRange(
+  org: string,
+  login: string | null,
+  startDate: string,
+  endDate: string,
+): Promise<Todo[]> {
+  await ensureTodoLabels(org);
+  const ok = getOctokit();
+
+  const issues = await ok.paginate(ok.rest.issues.listForRepo, {
+    owner: org,
+    repo: REPO,
+    labels: TODO_LABEL,
+    state: "closed",
+    since: startDate,
+    per_page: 100,
+  });
+
+  const endDateEnd = endDate + "T23:59:59Z";
+
+  return issues
+    .filter((i: any) => !i.pull_request)
+    .filter((i: any) => {
+      if (!i.closed_at) return false;
+      return i.closed_at >= startDate && i.closed_at <= endDateEnd;
+    })
+    .map(issueToTodo)
+    .filter((t) => login === null || t.owner === login);
+}
+
+// ---------- Migration ----------
+
+export interface LegacyTodoForMigration {
+  id: string;
+  title: string;
+  owner: string;
+  status: TodoStatus;
+  createdAt: string;
+  featureId?: string;
+  repo?: string;
+}
+
+export async function migrateTodos(
+  org: string,
+  legacy: LegacyTodoForMigration[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<number> {
+  await ensureTodoLabels(org);
+
+  let created = 0;
+  for (const t of legacy) {
+    const featureId = t.featureId ? parseInt(t.featureId) : undefined;
+    const todo = await createTodo(org, t.title, t.owner, {
+      featureId: featureId && !isNaN(featureId) ? featureId : undefined,
+      repo: t.repo,
+    });
+
+    // If status is in_progress, update it
+    if (t.status === "in_progress") {
+      await updateTodo(org, todo.id, { status: "in_progress" });
+    }
+    // If done, close it
+    if (t.status === "done") {
+      await closeTodo(org, todo.id);
+    }
+
+    created++;
+    onProgress?.(created, legacy.length);
+  }
+
+  return created;
+}

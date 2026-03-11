@@ -59,4 +59,11 @@
   --color-dark-base: #0d1117;
   --color-dark-raised: #181a1f;
   --color-dark-overlay: #252830;
+
+  --animate-slide-in-right: slide-in-right 0.2s ease-out;
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
