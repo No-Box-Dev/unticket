@@ -617,7 +617,17 @@ export function useUpdateTodoItem() {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<Todo[]>(key);
       qc.setQueryData<Todo[]>(key, (old) =>
-        old?.map((t) => t.id === args.issueNumber ? { ...t, ...args.updates, status: args.updates.status ?? t.status } : t) ?? [],
+        old?.map((t) => {
+          if (t.id !== args.issueNumber) return t;
+          const { featureId, repo, ...rest } = args.updates;
+          return {
+            ...t,
+            ...rest,
+            status: args.updates.status ?? t.status,
+            featureId: featureId === null ? undefined : (featureId ?? t.featureId),
+            repo: repo === null ? undefined : (repo ?? t.repo),
+          };
+        }) ?? [],
       );
       return { previous, key };
     },

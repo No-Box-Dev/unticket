@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronRight, ChevronDown, ExternalLink, List } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -18,7 +18,8 @@ import { cn } from "@/lib/cn";
 type SprintView = "features" | "roles" | "tasks" | "metrics";
 type SortKey = "default" | "priority" | "title";
 
-const COLUMN_DEFS: { status: FeatureStatus; label: string; color: string }[] = [
+type BoardStatus = Exclude<FeatureStatus, "future">;
+const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
   { status: "demo", label: "Demo", color: "bg-purple-500" },
@@ -346,7 +347,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
           backfillStart={backfillStart} setBackfillStart={setBackfillStart}
           backfillEnd={backfillEnd} setBackfillEnd={setBackfillEnd}
           backfillFocus={backfillFocus} setBackfillFocus={setBackfillFocus}
-          onSave={(snap) => {
+          onSave={(snap: SprintSnapshot) => {
             const existing = (snapshots ?? []).filter((s) => s.sprintNumber !== snap.sprintNumber);
             saveSnapshotsMut.mutate([...existing, snap], {
               onSuccess: () => { setShowBackfill(false); setBackfillName(""); setBackfillStart(""); setBackfillEnd(""); setBackfillFocus(""); },
@@ -1159,25 +1160,6 @@ function TaskTableRow({ task, feature, statusLabel }: { task: SubIssueWithFeatur
 
 // ─── Shared Components ─────────────────────────────────────────────────
 
-function TaskRow({ task }: { task: SubIssueWithFeature }) {
-  return (
-    <div className="flex items-center gap-2 py-0.5">
-      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", task.state === "closed" ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
-      <a href={task.html_url} target="_blank" rel="noopener noreferrer" className="text-sm text-stone-600 dark:text-neutral-400 truncate hover:text-brand flex-1">
-        {task.title}
-      </a>
-      {task.points != null && (
-        <span className="text-[10px] font-medium text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay px-1.5 py-0.5 rounded">
-          {task.points}
-        </span>
-      )}
-      {task.state === "closed" && (
-        <span className="text-[10px] text-green-500 font-medium">Done</span>
-      )}
-    </div>
-  );
-}
-
 function ViewToggle({ value, onChange }: { value: SubViewMode; onChange: (v: SubViewMode) => void }) {
   return (
     <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
@@ -1261,7 +1243,8 @@ function MigrationBanner({ legacyCount, isPending, progress, onMigrate, onDismis
   );
 }
 
-function BackfillForm({ sprint, features, mergedPRs, closedIssues, allIssues, snapshots, isPending,
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function BackfillForm({ sprint: _sprint, features, mergedPRs, closedIssues, allIssues, snapshots: _snapshots, isPending,
   backfillNumber, setBackfillNumber, backfillName, setBackfillName, backfillStart, setBackfillStart,
   backfillEnd, setBackfillEnd, backfillFocus, setBackfillFocus, onSave, onCancel,
 }: any) {
