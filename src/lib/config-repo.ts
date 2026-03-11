@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from "./api";
-import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "./gitpulse-repo";
+import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./gitpulse-repo";
 import type { SprintConfig, Person, OrgSettings, Todo, SprintSnapshot } from "./types";
 
 // Sprint
@@ -11,19 +11,13 @@ export async function saveSprint(sprint: SprintConfig) {
   await apiPut("/api/config/sprint", sprint);
 }
 
-// People
-export async function fetchPeople(): Promise<Person[]> {
-  const data = await apiGet<Person[]>("/api/config/people");
-  if (!data) return [];
-  // Normalize: migrate legacy `team` string → `teams` array
-  return data.map((p) => ({
-    ...p,
-    teams: p.teams ?? (p.team ? [p.team] : []),
-  }));
+// People (GitHub-backed via .gitpulse repo)
+export async function fetchPeople(org: string): Promise<Person[]> {
+  return fetchPeopleFromRepo(org);
 }
 
-export async function savePeople(people: Person[]) {
-  await apiPut("/api/config/people", people);
+export async function savePeople(org: string, people: Person[]): Promise<void> {
+  return savePeopleToRepo(org, people);
 }
 
 // Settings

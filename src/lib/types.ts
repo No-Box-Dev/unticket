@@ -56,11 +56,26 @@ export type TabId =
   | "activity"
   | "todos"
   | "engineers"
-  | "insights";
+  | "insights"
+  | "settings";
 
 export type TodoStatus = "backlog" | "in_progress" | "done";
 
 export interface Todo {
+  id: number;              // GitHub issue number
+  globalId: number;        // GitHub global issue ID
+  title: string;
+  owner: string;           // GitHub login
+  status: TodoStatus;      // derived from labels
+  createdAt: string;       // from GitHub created_at
+  closedAt?: string;       // from GitHub closed_at (when done)
+  featureId?: number;      // linked feature issue number
+  repo?: string;           // optional repo context
+  html_url: string;        // GitHub issue URL
+}
+
+/** Legacy D1-backed todo (for migration) */
+export interface LegacyTodo {
   id: string;
   title: string;
   owner: string;
@@ -68,7 +83,6 @@ export interface Todo {
   createdAt: string;
   featureId?: string;
   repo?: string;
-  /** @deprecated — use `status === "done"` */
   done?: boolean;
 }
 
@@ -151,11 +165,33 @@ export interface SprintSnapshot {
     issuesClosed: number;
     featuresCompleted: number;
     featuresCarriedOver: number;
+    tasksDone: number;
+    tasksOpen: number;
+    totalPoints: number;
+    donePoints: number;
+    rolesCompleted: number;
+    totalRoles: number;
   };
   features: {
     title: string;
     status: FeatureStatus;
     owners: string[];
+  }[];
+  /** Per-engineer breakdown saved at sprint close */
+  engineers?: {
+    login: string;
+    tasksDone: number;
+    tasksOpen: number;
+    points: number;
+    prsMerged: number;
+    issuesClosed: number;
+  }[];
+  /** Personal todos completed during this sprint */
+  todosCompleted?: {
+    title: string;
+    owner: string;
+    closedAt: string;
+    featureId?: number;
   }[];
   createdAt: string;
 }

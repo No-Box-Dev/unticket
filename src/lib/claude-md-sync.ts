@@ -24,7 +24,18 @@ function buildPreamble(org: string): string {
 - When working on a feature, update its plan and check off tasks on the \`${org}/.gitpulse\` issue
 - When a feature has a working demo, update its status label to \`status:demo\` (remove \`status:plan\`, add \`status:demo\`)
 - When a feature is fully complete and in production, update to \`status:production\`
-- To update status via CLI: \`gh issue edit <number> --repo ${org}/.gitpulse --remove-label status:plan --add-label status:demo\``;
+- To update status via CLI: \`gh issue edit <number> --repo ${org}/.gitpulse --remove-label status:plan --add-label status:demo\`
+
+### Todos
+- Personal todos are GitHub Issues in \`${org}/.gitpulse\` with the \`todo\` label
+- Labels: \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`, \`todo-repo:{name}\`
+- Closing a todo issue marks it as done; reopening moves it back
+- List todos: \`gh issue list --repo ${org}/.gitpulse --label todo\`
+
+### People Config
+- Team member info (name, role, teams) is stored at \`${org}/.gitpulse/config/people.json\`
+- Format: \`[{ "github": "login", "name": "Display Name", "teams": ["Team"], "role": "Role" }]\`
+- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d\``;
 }
 
 function buildSection(org: string, rules: string[]): string {
@@ -57,6 +68,10 @@ function injectSection(existing: string, section: string): string {
 
   // Append
   return existing.trimEnd() + "\n\n" + section + "\n";
+}
+
+export function buildClaudeMdPreview(org: string, rules: string[]): string {
+  return buildSection(org, rules);
 }
 
 interface SyncResult {

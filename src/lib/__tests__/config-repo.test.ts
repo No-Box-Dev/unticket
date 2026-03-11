@@ -9,9 +9,12 @@ vi.mock("@/lib/gitpulse-repo", () => ({
   fetchTodoPlanFile: vi.fn(),
   todoPlanFilePath: vi.fn(),
   saveTodoPlanFile: vi.fn(),
+  fetchPeopleFromRepo: vi.fn(),
+  savePeopleToRepo: vi.fn(),
 }));
 
 import { apiGet, apiPut } from "@/lib/api";
+import { fetchPeopleFromRepo } from "@/lib/gitpulse-repo";
 import {
   fetchPeople,
   fetchSettings,
@@ -21,32 +24,20 @@ import {
 
 const mockApiGet = vi.mocked(apiGet);
 const mockApiPut = vi.mocked(apiPut);
+const mockFetchPeopleFromRepo = vi.mocked(fetchPeopleFromRepo);
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("fetchPeople", () => {
-  it("migrates legacy 'team' string to 'teams' array", async () => {
-    mockApiGet.mockResolvedValue([
-      { github: "alice", name: "Alice", role: "dev", team: "Backend" },
+describe("fetchPeople (GitHub-backed)", () => {
+  it("delegates to fetchPeopleFromRepo", async () => {
+    mockFetchPeopleFromRepo.mockResolvedValue([
+      { github: "alice", name: "Alice", role: "dev", teams: ["Backend"] },
     ]);
-    const result = await fetchPeople();
+    const result = await fetchPeople("test-org");
+    expect(mockFetchPeopleFromRepo).toHaveBeenCalledWith("test-org");
     expect(result[0].teams).toEqual(["Backend"]);
-  });
-
-  it("keeps existing teams array", async () => {
-    mockApiGet.mockResolvedValue([
-      { github: "bob", name: "Bob", role: "dev", teams: ["Frontend", "Design"] },
-    ]);
-    const result = await fetchPeople();
-    expect(result[0].teams).toEqual(["Frontend", "Design"]);
-  });
-
-  it("returns [] when API returns null", async () => {
-    mockApiGet.mockResolvedValue(null);
-    const result = await fetchPeople();
-    expect(result).toEqual([]);
   });
 });
 
@@ -97,7 +88,7 @@ describe("createConfigRepo", () => {
     vi.useRealTimers();
   });
 
-  it("seeds 4 config keys via apiPut (features moved to GitHub Issues)", async () => {
+  it("seeds 4 config keys via apiPut", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-18T12:00:00Z"));
 

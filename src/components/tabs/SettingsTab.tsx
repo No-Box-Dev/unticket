@@ -4,7 +4,7 @@ import { useRepos } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople, useAgentRules, useSaveAgentRules } from "@/hooks/useConfigRepo";
 import { TeamManagement } from "@/components/settings/TeamManagement";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
-import { pushClaudeMdToRepos } from "@/lib/claude-md-sync";
+import { pushClaudeMdToRepos, buildClaudeMdPreview } from "@/lib/claude-md-sync";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 import { Loader2, Plus, X, Pencil, Check, ExternalLink, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -280,8 +280,10 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
     else setSelectedRepos(new Set(repoNames));
   }
 
+  const [showPreview, setShowPreview] = useState(false);
+  const preview = buildClaudeMdPreview(org, currentRules);
+
   async function handlePush() {
-    if (currentRules.length === 0) return;
     const targets = repoNames.filter((r) => selected.has(r));
     if (targets.length === 0) return;
     setSyncing(true);
@@ -370,9 +372,23 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
         </button>
       </div>
 
+      {/* Preview */}
+      <div className="space-y-2 border-t border-stone-100 dark:border-white/[0.06] pt-4">
+        <button
+          onClick={() => setShowPreview(!showPreview)}
+          className="text-xs text-brand hover:text-brand/80 cursor-pointer"
+        >
+          {showPreview ? "Hide preview" : "Preview CLAUDE.md content"}
+        </button>
+        {showPreview && (
+          <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-xs text-stone-600 dark:text-neutral-400 font-mono whitespace-pre-wrap overflow-y-auto max-h-[400px]">
+            {preview}
+          </pre>
+        )}
+      </div>
+
       {/* Repo selector */}
-      {currentRules.length > 0 && (
-        <div className="space-y-2 border-t border-stone-100 dark:border-white/[0.06] pt-4">
+      <div className="space-y-2 border-t border-stone-100 dark:border-white/[0.06] pt-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">
               Push to repositories ({selected.size}/{repoNames.length})
@@ -452,7 +468,6 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { getOctokit } from "./github";
+import type { Person } from "./types";
 
 const REPO_NAME = ".gitpulse";
 
@@ -19,40 +20,70 @@ export async function ensureGitPulseRepo(org: string): Promise<boolean> {
 
 const CLAUDE_MD = `# .gitpulse
 
-Plans repository for unticket.ai. Contains implementation plans for features and todos.
-
-Config (sprint, features, people, settings, todos) is stored in D1 — not here.
+Central config and plans repository for [unticket.ai](https://app.unticket.ai).
 
 ## Structure
 
 \`\`\`
+config/
+  people.json       # Team members: name, role, teams per GitHub login
 plans/
-  PLAN-*.md   # Implementation plans per feature (e.g. PLAN-feat-1739482930123.md)
-  TODO-*.md   # Implementation plans per todo (e.g. TODO-a1b2c3d4-uuid.md)
-CLAUDE.md     # This file
+  PLAN-*.md         # Implementation plans per feature (e.g. PLAN-42.md)
+  TODO-*.md         # Implementation plans per todo (e.g. TODO-123.md)
+CLAUDE.md           # This file
 \`\`\`
 
-## Reading plans via CLI
+## Features (GitHub Issues in this repo)
+
+Features are tracked as issues with the \`feature\` label.
+- Labels: \`status:{plan,demo,production,future}\`, \`priority:{low,medium,high}\`, \`team:{name}\`
+- Sprints: GitHub Milestones named "Sprint N"
+- Owners: issue assignees
+- Tasks: sub-issues under feature issues (with \`points:{1,2,3,5,8,13}\` labels)
+
+\`\`\`bash
+gh issue list --repo {org}/.gitpulse --label feature
+gh issue view <number> --repo {org}/.gitpulse
+\`\`\`
+
+## Todos (GitHub Issues in this repo)
+
+Personal todos are issues with the \`todo\` label.
+- Labels: \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`, \`todo-repo:{name}\`
+- Closing a todo marks it done; reopening moves it back
+
+\`\`\`bash
+gh issue list --repo {org}/.gitpulse --label todo
+\`\`\`
+
+## People Config
+
+Team member metadata at \`config/people.json\`:
+
+\`\`\`json
+[
+  { "github": "login", "name": "Display Name", "teams": ["Team"], "role": "Role" }
+]
+\`\`\`
+
+\`\`\`bash
+# Read
+gh api repos/{org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d
+
+# Update (get SHA first)
+SHA=$(gh api repos/{org}/.gitpulse/contents/config/people.json --jq '.sha')
+cat people.json | base64 | gh api repos/{org}/.gitpulse/contents/config/people.json \\
+  -X PUT -f message="Update people" -f content=@- -f sha="$SHA"
+\`\`\`
+
+## Plans
 
 \`\`\`bash
 # List all plans
 gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'
 
-# Read a specific plan (feature ID is visible in the unticket.ai modal hint text)
-gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md --jq '.content' | base64 -d
-\`\`\`
-
-## Writing plans via CLI
-
-\`\`\`bash
-# Create a new plan (use the feature ID from the unticket.ai modal)
-echo '# Plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md \\
-  -X PUT -f message="Add plan" -f content=@-
-
-# Update existing plan (get SHA first)
-SHA=$(gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md --jq '.sha')
-echo '# Updated plan' | base64 | gh api repos/{org}/.gitpulse/contents/plans/PLAN-feat-1739482930123.md \\
-  -X PUT -f message="Update plan" -f content=@- -f sha="$SHA"
+# Read a plan
+gh api repos/{org}/.gitpulse/contents/plans/PLAN-42.md --jq '.content' | base64 -d
 \`\`\`
 `;
 
@@ -129,6 +160,30 @@ export async function saveTodoPlanFile(
   content: string,
 ): Promise<void> {
   await saveFileToGitPulse(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
+}
+
+// ---------- People config ----------
+
+const PEOPLE_PATH = "config/people.json";
+
+export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
+  const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
+  if (!result) return [];
+  try {
+    const data = JSON.parse(result.content) as Person[];
+    // Normalize: migrate legacy `team` string → `teams` array
+    return data.map((p) => ({
+      ...p,
+      teams: p.teams ?? (p.team ? [p.team] : []),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
+  const content = JSON.stringify(people, null, 2);
+  await saveFileToGitPulse(org, PEOPLE_PATH, content, "Update people config");
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------

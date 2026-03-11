@@ -13,13 +13,43 @@ vi.mock("@/lib/config-repo", () => ({
   fetchTodos: vi.fn(),
   saveTodos: vi.fn(),
   ensureConfigRepo: vi.fn(),
+  fetchAgentRules: vi.fn(),
+  saveAgentRules: vi.fn(),
+  fetchSprintSnapshots: vi.fn(),
+  saveSprintSnapshots: vi.fn(),
 }));
 
 vi.mock("@/lib/github-features", () => ({
   fetchFeatures: vi.fn(),
+  fetchFeaturesFromD1: vi.fn(),
   createFeature: vi.fn(),
   updateFeature: vi.fn(),
   deleteFeature: vi.fn(),
+  syncFeaturesFromGitHub: vi.fn(),
+  migrateFeatures: vi.fn(),
+  fetchLegacyFeatures: vi.fn(),
+  closeMilestone: vi.fn(),
+  findOrCreateMilestone: vi.fn(),
+  fetchSubIssues: vi.fn(),
+  createSubIssue: vi.fn(),
+  toggleSubIssue: vi.fn(),
+  updateSubIssueAssignees: vi.fn(),
+  deleteSubIssue: vi.fn(),
+  fetchRoles: vi.fn(),
+  createRole: vi.fn(),
+  deleteRole: vi.fn(),
+  fetchTasksForRole: vi.fn(),
+  createTask: vi.fn(),
+  updateTaskPoints: vi.fn(),
+}));
+
+vi.mock("@/lib/github-todos", () => ({
+  fetchTodosByOwner: vi.fn(),
+  createTodo: vi.fn(),
+  updateTodo: vi.fn(),
+  deleteTodo: vi.fn(),
+  fetchTodosClosedInRange: vi.fn(),
+  migrateTodos: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({

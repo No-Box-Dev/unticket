@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useRateLimit } from "@/hooks/useGitHub";
-import { Header } from "@/components/Header";
+import { useRepos } from "@/hooks/useGitHub";
+import { useSidebar } from "@/lib/sidebar";
+import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import { OverviewTab } from "@/components/tabs/OverviewTab";
 import { SprintTab } from "@/components/tabs/SprintTab";
 import { BacklogTab } from "@/components/tabs/BacklogTab";
@@ -12,13 +14,13 @@ import { EngineersTab } from "@/components/tabs/EngineersTab";
 import { InsightsTab } from "@/components/tabs/InsightsTab";
 import { SettingsTab } from "@/components/tabs/SettingsTab";
 import { CommandPalette } from "@/components/CommandPalette";
+import { cn } from "@/lib/cn";
 import type { TabId } from "@/lib/types";
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [showSettings, setShowSettings] = useState(false);
-  const { data: rateLimit } = useRateLimit();
+  const { collapsed } = useSidebar();
   const { data: repos } = useRepos();
   const repoNames = useMemo(
     () => repos?.map((r) => r.name) ?? [],
@@ -27,51 +29,37 @@ export function DashboardPage() {
 
   const handleTabChange = useCallback((tab: TabId) => {
     setActiveTab(tab);
-    setShowSettings(false);
   }, []);
 
   if (!selectedOrg) return null;
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-dark-base">
-      <CommandPalette onNavigate={(tab) => { setActiveTab(tab); setShowSettings(false); }} />
-      <Header activeTab={activeTab} onTabChange={handleTabChange} onOpenSettings={() => setShowSettings(true)} />
-      {rateLimit && rateLimit.remaining < rateLimit.limit * 0.2 && (
-        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 sm:px-8 py-1.5 flex items-center justify-between">
-          <span className="text-xs text-amber-700">
-            <span className="font-semibold">GitHub API:</span>{" "}
-            {rateLimit.remaining}/{rateLimit.limit} requests remaining
-            {" · "}resets {new Date(rateLimit.reset * 1000).toLocaleTimeString()}
-          </span>
-          {rateLimit.remaining === 0 && (
-            <span className="text-xs text-amber-600 font-medium ml-2 shrink-0">Rate limited</span>
-          )}
-        </div>
-      )}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {showSettings ? (
-          <>
-            <button
-              onClick={() => setShowSettings(false)}
-              className="text-sm text-stone-500 dark:text-neutral-400 hover:text-brand mb-4 cursor-pointer"
-            >
-              &larr; Back to dashboard
-            </button>
-            <SettingsTab />
-          </>
-        ) : (
-          <>
-            {activeTab === "overview" && <OverviewTab repoNames={repoNames} />}
-            {activeTab === "sprint" && <SprintTab repoNames={repoNames} />}
-            {activeTab === "backlog" && <BacklogTab />}
-            {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
-            {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
-            {activeTab === "todos" && <TodoTab />}
-            {activeTab === "engineers" && <EngineersTab repoNames={repoNames} />}
-            {activeTab === "insights" && <InsightsTab repoNames={repoNames} />}
-          </>
+    <div className="flex min-h-screen bg-stone-50 dark:bg-dark-base">
+      <CommandPalette onNavigate={handleTabChange} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Main content area — offset by sidebar width */}
+      <div
+        className={cn(
+          "flex-1 flex flex-col min-w-0 transition-[margin] duration-200",
+          "lg:ml-56",
+          collapsed && "lg:ml-14",
         )}
-      </main>
+      >
+        <TopBar activeTab={activeTab} />
+
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+          {activeTab === "settings" && <SettingsTab />}
+          {activeTab === "overview" && <OverviewTab repoNames={repoNames} />}
+          {activeTab === "sprint" && <SprintTab repoNames={repoNames} />}
+          {activeTab === "backlog" && <BacklogTab />}
+          {activeTab === "prs" && <PRsTab repoNames={repoNames} />}
+          {activeTab === "issues" && <IssuesTab repoNames={repoNames} />}
+          {activeTab === "todos" && <TodoTab />}
+          {activeTab === "engineers" && <EngineersTab repoNames={repoNames} />}
+          {activeTab === "insights" && <InsightsTab repoNames={repoNames} />}
+        </main>
+      </div>
     </div>
   );
 }

@@ -25,6 +25,7 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "todos", label: "Todos", keywords: "todos tasks" },
   // { id: "engineers", label: "Engineers", keywords: "engineers people team members" },
   { id: "insights", label: "Insights", keywords: "insights metrics analytics" },
+  { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
 export function CommandPalette({ onNavigate }: CommandPaletteProps) {
