@@ -1,4 +1,5 @@
 import { getSyncState, setSyncState } from "./db";
+import { parseFeatureMetadata, parseFeatureFromBranch } from "./feature-metadata";
 
 // Paginated GitHub API fetcher
 async function fetchAllPages(token, url, params = {}) {
@@ -134,6 +135,22 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
           JSON.stringify(pr.labels?.map((l) => ({ name: l.name, color: l.color })) ?? [])
         )
       )
+    );
+  }
+
+  // Auto-detect feature links from branch names
+  const branchLinkStmt = db.prepare(
+    `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+     VALUES (?, ?, ?, ?, 'branch')
+     ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+  );
+  const branchLinks = prs
+    .map((pr) => ({ featureNumber: parseFeatureFromBranch(pr.head?.ref), pr }))
+    .filter((x) => x.featureNumber !== null);
+  for (let i = 0; i < branchLinks.length; i += 50) {
+    const batch = branchLinks.slice(i, i + 50);
+    await db.batch(
+      batch.map((x) => branchLinkStmt.bind(orgId, x.featureNumber, repo, x.pr.number))
     );
   }
 
@@ -309,6 +326,22 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
         )
       )
     );
+  }
+
+  // Extract linkedPRs from feature metadata and populate pr_feature_links
+  const linkStmt = db.prepare(
+    `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+     VALUES (?, ?, ?, ?, 'metadata')
+     ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+  );
+  for (const f of features) {
+    const { metadata } = parseFeatureMetadata(f.body ?? "");
+    const linkedPRs = metadata.linkedPRs ?? [];
+    if (linkedPRs.length > 0) {
+      await db.batch(
+        linkedPRs.map((l) => linkStmt.bind(orgId, f.number, l.repo, l.number))
+      );
+    }
   }
 
   await setSyncState(db, orgId, "features");

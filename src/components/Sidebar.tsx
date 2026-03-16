@@ -119,7 +119,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             <div className="flex items-center gap-2.5 min-w-0">
               <LogoMark className="w-7 h-7 shrink-0" />
               <div className="min-w-0">
-                <h1 className="text-base font-bold text-stone-900 dark:text-neutral-100 font-display truncate">Unticket</h1>
+                <h1 className="text-base font-display truncate"><span className="font-bold text-brand">n1</span><span className="font-normal text-stone-500 dark:text-neutral-400">.vision</span></h1>
                 {sprint && (
                   <p className="text-[11px] text-stone-400 dark:text-neutral-500 truncate">
                     Sprint {sprint.number}

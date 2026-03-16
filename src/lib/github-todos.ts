@@ -2,14 +2,14 @@ import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
 const REPO = ".gitpulse";
-const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
-const OWNER_PREFIX = "todo-owner:";
 const FEATURE_PREFIX = "todo-feature:";
 const REPO_PREFIX = "todo-repo:";
 
-const TODO_LABELS = [
-  { name: "todo", color: "7C3AED", description: "Personal todo item" },
+// Labels that exclude an issue from being a todo
+const EXCLUDE_LABELS = new Set(["feature", "role"]);
+
+const STATUS_LABELS = [
   { name: "todo-status:backlog", color: "94A3B8", description: "Todo: backlog" },
   { name: "todo-status:in_progress", color: "3B82F6", description: "Todo: in progress" },
   { name: "todo-status:done", color: "22C55E", description: "Todo: done" },
@@ -30,7 +30,7 @@ export async function ensureTodoLabels(org: string): Promise<void> {
   });
   const existingNames = new Set(existing.map((l) => l.name));
 
-  for (const label of TODO_LABELS) {
+  for (const label of STATUS_LABELS) {
     if (!existingNames.has(label.name)) {
       try {
         await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
@@ -48,11 +48,12 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
   return labels.find((l) => l.startsWith(prefix))?.slice(prefix.length);
 }
 
-function buildTodoLabels(status: TodoStatus, owner: string, opts?: { featureId?: number; repo?: string }): string[] {
-  const labels = [TODO_LABEL, `${STATUS_PREFIX}${status}`, `${OWNER_PREFIX}${owner}`];
-  if (opts?.featureId) labels.push(`${FEATURE_PREFIX}${opts.featureId}`);
-  if (opts?.repo) labels.push(`${REPO_PREFIX}${opts.repo}`);
-  return labels;
+/** Returns true if the issue should be excluded from todos (features, roles). */
+function isExcluded(issue: any): boolean {
+  const labelNames = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter(Boolean) as string[];
+  return labelNames.some((l) => EXCLUDE_LABELS.has(l));
 }
 
 function issueToTodo(issue: any): Todo {
@@ -61,11 +62,11 @@ function issueToTodo(issue: any): Todo {
     .filter(Boolean) as string[];
 
   const statusLabel = extractLabel(labelNames, STATUS_PREFIX) as TodoStatus | undefined;
-  const owner = extractLabel(labelNames, OWNER_PREFIX) ?? issue.assignees?.[0]?.login ?? "";
+  const owner = issue.assignees?.[0]?.login ?? "";
   const featureStr = extractLabel(labelNames, FEATURE_PREFIX);
   const repo = extractLabel(labelNames, REPO_PREFIX);
 
-  // Derive status: if issue is closed → done, else use label
+  // Derive status: if issue is closed → done, else use label or default to backlog
   let status: TodoStatus;
   if (issue.state === "closed") {
     status = "done";
@@ -104,26 +105,28 @@ export async function fetchTodos(org: string): Promise<Todo[]> {
   await ensureTodoLabels(org);
 
   const ok = getOctokit();
-  // Fetch both open and closed with todo label
+  // Fetch all assigned issues (open + recently closed), then exclude features/roles
   const [open, closed] = await Promise.all([
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
       repo: REPO,
-      labels: TODO_LABEL,
       state: "open",
       per_page: 100,
     }),
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
       repo: REPO,
-      labels: TODO_LABEL,
       state: "closed",
       per_page: 100,
       since: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(), // last 90 days
     }),
   ]);
 
-  const all = [...open, ...closed].filter((i: any) => !i.pull_request);
+  const all = [...open, ...closed].filter((i: any) =>
+    !i.pull_request &&
+    !isExcluded(i) &&
+    (i.assignees?.length ?? 0) > 0
+  );
   return all.map(issueToTodo);
 }
 
@@ -141,15 +144,16 @@ export async function createTodo(
   await ensureTodoLabels(org);
   const ok = getOctokit();
 
-  const labels = buildTodoLabels("backlog", owner, opts);
-
-  // Ensure owner-specific label exists
-  await ensureDynamicLabel(org, `${OWNER_PREFIX}${owner}`, "7C3AED", `Todos for ${owner}`);
+  const labels: string[] = [`${STATUS_PREFIX}backlog`];
   if (opts?.featureId) {
-    await ensureDynamicLabel(org, `${FEATURE_PREFIX}${opts.featureId}`, "7C3AED", `Linked to feature #${opts.featureId}`);
+    const featureLabel = `${FEATURE_PREFIX}${opts.featureId}`;
+    await ensureDynamicLabel(org, featureLabel, "7C3AED", `Linked to feature #${opts.featureId}`);
+    labels.push(featureLabel);
   }
   if (opts?.repo) {
-    await ensureDynamicLabel(org, `${REPO_PREFIX}${opts.repo}`, "7C3AED", `Repo: ${opts.repo}`);
+    const repoLabel = `${REPO_PREFIX}${opts.repo}`;
+    await ensureDynamicLabel(org, repoLabel, "7C3AED", `Repo: ${opts.repo}`);
+    labels.push(repoLabel);
   }
 
   const { data } = await ok.rest.issues.create({
@@ -186,7 +190,7 @@ export async function updateTodo(
     .map((l: any) => (typeof l === "string" ? l : l.name))
     .filter(Boolean) as string[];
 
-  // Rebuild labels
+  // Rebuild labels — keep non-todo labels, rebuild status/feature/repo
   let newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
@@ -250,22 +254,10 @@ export async function reopenTodo(org: string, issueNumber: number): Promise<Todo
 
 export async function deleteTodo(org: string, issueNumber: number): Promise<void> {
   const ok = getOctokit();
-  // Remove the todo label and close the issue
-  const { data: current } = await ok.rest.issues.get({
-    owner: org,
-    repo: REPO,
-    issue_number: issueNumber,
-  });
-
-  const newLabels = (current.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
-    .filter((l: string) => l !== TODO_LABEL);
-
   await ok.rest.issues.update({
     owner: org,
     repo: REPO,
     issue_number: issueNumber,
-    labels: newLabels,
     state: "closed",
   });
 }
@@ -278,13 +270,11 @@ export async function fetchTodosClosedInRange(
   startDate: string,
   endDate: string,
 ): Promise<Todo[]> {
-  await ensureTodoLabels(org);
   const ok = getOctokit();
 
   const issues = await ok.paginate(ok.rest.issues.listForRepo, {
     owner: org,
     repo: REPO,
-    labels: TODO_LABEL,
     state: "closed",
     since: startDate,
     per_page: 100,
@@ -293,7 +283,7 @@ export async function fetchTodosClosedInRange(
   const endDateEnd = endDate + "T23:59:59Z";
 
   return issues
-    .filter((i: any) => !i.pull_request)
+    .filter((i: any) => !i.pull_request && !isExcluded(i) && (i.assignees?.length ?? 0) > 0)
     .filter((i: any) => {
       if (!i.closed_at) return false;
       return i.closed_at >= startDate && i.closed_at <= endDateEnd;

@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import { apiGet, apiPost, ApiError, broadcastError } from "./api";
+import { apiGet, apiPost, apiFetch, ApiError, broadcastError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -346,6 +346,20 @@ export async function fetchAllIssues(since?: string) {
   return res.data.map(transformIssue);
 }
 
+/**
+ * Extract a feature number from a branch name.
+ * Matches patterns like: feat/42-description, feature/42, fix/42-bug, 42-some-branch
+ */
+/** NOTE: Duplicated in functions/lib/feature-metadata.js — keep both in sync. */
+export function parseFeatureFromBranch(ref: string): number | null {
+  const match = ref.match(/^(?:feat|feature|fix|chore|refactor)\/(\d+)(?:-|$)/);
+  if (match) return Number(match[1]);
+  // Also match plain "42-description" branches
+  const plain = ref.match(/^(\d+)-/);
+  if (plain) return Number(plain[1]);
+  return null;
+}
+
 export async function fetchOrgMembers() {
   const members = await apiGet<ApiMember[]>("/api/members");
   return members.map((m) => ({
@@ -408,6 +422,34 @@ export async function updateIssueAssignees(
   assignees: string[],
 ): Promise<{ assignees: { login: string; avatar_url: string }[] }> {
   return apiPost("/api/assign", { repo, issue_number: issueNumber, assignees });
+}
+
+// ---------- PR-Feature Links ----------
+
+export interface PRLink {
+  pr_repo: string;
+  pr_number: number;
+  source: string;
+  created_at: string;
+}
+
+export async function fetchLinkedPRs(featureNumber: number): Promise<PRLink[]> {
+  return apiGet<PRLink[]>(`/api/pr-links?feature=${featureNumber}`);
+}
+
+export async function linkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
+  await apiPost("/api/pr-links", { feature_number: featureNumber, pr_repo: prRepo, pr_number: prNumber });
+}
+
+export async function unlinkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
+  const res = await apiFetch(
+    `/api/pr-links?feature=${featureNumber}&pr_repo=${encodeURIComponent(prRepo)}&pr_number=${prNumber}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiError((body as { error?: string }).error ?? `API error: ${res.status}`, res.status);
+  }
 }
 
 // ---------- Other ----------

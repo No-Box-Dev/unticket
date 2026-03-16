@@ -1,5 +1,6 @@
 import { jsonResponse, errorResponse } from "../lib/db";
 import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
+import { parseFeatureMetadata, parseFeatureFromBranch } from "../lib/feature-metadata";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -86,9 +87,24 @@ export async function onRequestPost(context) {
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
-      // Also upsert into features table if this is a .gitpulse repo issue with "feature" label
+      // Also upsert into features table if this is a .gitpulse repo issue
       if (repo === ".gitpulse") {
         await upsertFeature(db, orgId, payload.issue);
+        // Re-sync pr_feature_links from metadata (atomic delete + re-insert)
+        const { metadata } = parseFeatureMetadata(payload.issue.body ?? "");
+        const linkedPRs = metadata.linkedPRs ?? [];
+        const deleteStmt = db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND source = 'metadata'")
+          .bind(orgId, payload.issue.number);
+        if (linkedPRs.length > 0) {
+          const linkStmt = db.prepare(
+            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+             VALUES (?, ?, ?, ?, 'metadata')
+             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+          );
+          await db.batch([deleteStmt, ...linkedPRs.map((l) => linkStmt.bind(orgId, payload.issue.number, l.repo, l.number))]);
+        } else {
+          await deleteStmt.run();
+        }
       }
       return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number });
     }
@@ -100,6 +116,18 @@ export async function onRequestPost(context) {
       // Map merged PRs: GitHub sends action=closed with merged=true
       const pr = payload.pull_request;
       await upsertPR(db, orgId, repo, pr);
+      // Auto-detect feature link from branch name
+      const featureNumber = parseFeatureFromBranch(pr.head?.ref);
+      if (featureNumber) {
+        await db
+          .prepare(
+            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+             VALUES (?, ?, ?, ?, 'branch')
+             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+          )
+          .bind(orgId, featureNumber, repo, pr.number)
+          .run();
+      }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
     }
 

@@ -49,14 +49,10 @@ export type TabId =
   | "overview"
   | "sprint"
   | "backlog"
-  | "team"
-  | "individual"
   | "prs"
   | "issues"
-  | "activity"
   | "todos"
   | "engineers"
-  | "insights"
   | "workload"
   | "settings";
 
@@ -73,18 +69,6 @@ export interface Todo {
   featureId?: number;      // linked feature issue number
   repo?: string;           // optional repo context
   html_url: string;        // GitHub issue URL
-}
-
-/** Legacy D1-backed todo (for migration) */
-export interface LegacyTodo {
-  id: string;
-  title: string;
-  owner: string;
-  status: TodoStatus;
-  createdAt: string;
-  featureId?: string;
-  repo?: string;
-  done?: boolean;
 }
 
 // .gitpulse config repo types
@@ -119,6 +103,11 @@ export interface StatusHistoryEntry {
   timestamp: string; // ISO 8601
 }
 
+export interface LinkedPR {
+  repo: string;
+  number: number;
+}
+
 export interface Feature {
   id: number;
   title: string;
@@ -131,6 +120,7 @@ export interface Feature {
   plan?: string;
   url?: string;
   statusHistory?: StatusHistoryEntry[];
+  linkedPRs?: LinkedPR[];
 }
 
 export interface Person {
