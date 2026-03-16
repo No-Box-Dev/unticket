@@ -1,9 +1,13 @@
 import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues } from "@/hooks/useGitHub";
+import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import type { Person } from "@/lib/types";
+import { ChevronDown, ChevronRight, GitPullRequest, GitMerge, ExternalLink } from "lucide-react";
+import type { Person, Feature } from "@/lib/types";
+import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
+
+type ViewMode = "features" | "roles" | "tasks";
 
 export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   const { data: people } = usePeople();
@@ -14,6 +18,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   const { data: closedIssues } = useClosedIssues(repoNames);
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("features");
 
   const sprintFeatures = useMemo(() => {
     if (!features || !sprint) return [];
@@ -24,15 +29,14 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   const { data: allTasks } = useAllSprintSubIssues(featureIds);
 
   const featureMap = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const f of sprintFeatures) m.set(f.id, f.title);
+    const m = new Map<number, Feature>();
+    for (const f of sprintFeatures) m.set(f.id, f);
     return m;
   }, [sprintFeatures]);
 
-  // Build a unified list: all org members, enriched with people config if available
+  // Build engineer list
   const engineers = useMemo(() => {
     if (!orgMembers) return [];
-
     const peopleMap = new Map<string, Person>();
     for (const p of people ?? []) peopleMap.set(p.github, p);
 
@@ -46,10 +50,14 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
       const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
       const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
-
       const myTasks = allTasks?.filter((t) => t.assignees.includes(member.login)) ?? [];
       const tasksDone = myTasks.filter((t) => t.state === "closed").length;
       const tasksOpen = myTasks.filter((t) => t.state === "open").length;
+
+      // Roles: unique role names from tasks
+      const myRoles = [...new Map(
+        myTasks.filter((t) => t.roleName).map((t) => [t.roleNumber!, { number: t.roleNumber!, name: t.roleName!, featureId: t.featureId }])
+      ).values()];
 
       return {
         login: member.login,
@@ -59,6 +67,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
         teams: person?.teams ?? [],
         myFeatures,
         myTasks,
+        myRoles,
         prsMerged,
         issuesSolved,
         featuresDone,
@@ -141,7 +150,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
             </div>
           </div>
 
-          {/* AI Summary */}
+          {/* Summary */}
           <div className="bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] rounded-xl p-4">
             <p className="text-sm text-stone-600 dark:text-neutral-300">
               <span className="font-medium text-stone-700 dark:text-neutral-200">{selected.name}</span>
@@ -153,6 +162,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
               <span className="font-semibold">{selected.myTasks.length}</span>
               {" task"}{selected.myTasks.length !== 1 ? "s" : ""}
               {selected.tasksDone > 0 && <> (<span className="font-semibold text-green-600">{selected.tasksDone} done</span>, <span className="font-semibold text-blue-500">{selected.tasksOpen} open</span>)</>}
+              {selected.myRoles.length > 0 && <> across <span className="font-semibold">{selected.myRoles.length}</span> role{selected.myRoles.length !== 1 ? "s" : ""}</>}
               .
             </p>
           </div>
@@ -169,83 +179,258 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
             <MetricCard label="Tasks Open" value={selected.tasksOpen} color="text-amber-500" />
           </div>
 
-          {/* Feature Pipeline */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Feature Pipeline</h3>
-            <div className="space-y-2">
-              {(["plan", "in_progress", "demo", "tested", "production"] as const).map((status) => {
-                const count = selected.myFeatures.filter((f) => f.status === status).length;
-                const labels = { plan: "Plan", in_progress: "In Progress", demo: "Demo", tested: "Tested", production: "In Production" };
-                const colors = { plan: "#0E7C86", in_progress: "#F59E0B", demo: "#A855F7", tested: "#06B6D4", production: "#22C55E" };
-                const max = Math.max(...["plan", "in_progress", "demo", "tested", "production"].map((s) => selected.myFeatures.filter((f) => f.status === s).length), 1);
+          {/* View selector + work items */}
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
+            <div className="flex items-center border-b border-stone-200 dark:border-white/[0.06]">
+              {(["features", "roles", "tasks"] as const).map((mode) => {
+                const counts = { features: selected.myFeatures.length, roles: selected.myRoles.length, tasks: selected.myTasks.length };
                 return (
-                  <div key={status} className="flex items-center gap-3">
-                    <span className="text-sm text-stone-500 w-20 shrink-0">{labels[status]}</span>
-                    <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden">
-                      <div
-                        className="h-full rounded transition-all duration-500"
-                        style={{
-                          width: `${Math.max((count / max) * 100, count > 0 ? 10 : 0)}%`,
-                          backgroundColor: colors[status],
-                        }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium text-stone-500 w-6 text-right">{count}</span>
-                  </div>
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={cn(
+                      "px-4 py-3 text-sm font-medium capitalize transition-colors cursor-pointer",
+                      viewMode === mode
+                        ? "text-brand border-b-2 border-brand"
+                        : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200",
+                    )}
+                  >
+                    {mode} ({counts[mode]})
+                  </button>
                 );
               })}
             </div>
-          </div>
 
-          {/* Current tasks (sub-issues) */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Current Tasks</h3>
-            {selected.myTasks.filter((t) => t.state === "open").length > 0 ? (
-              <div className="space-y-2">
-                {selected.myTasks
-                  .filter((t) => t.state === "open")
-                  .map((t) => (
-                    <div key={t.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-white/[0.06] last:border-0">
-                      <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-stone-700 dark:text-neutral-300 block truncate">{t.title}</span>
-                        <span className="text-[10px] text-stone-400">{featureMap.get(t.featureId) ?? `Feature #${t.featureId}`}</span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-sm text-stone-400">No open tasks</p>
-            )}
-          </div>
-
-          {/* Current features (non-production) */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
-            <h3 className="font-semibold text-stone-900 dark:text-neutral-100 mb-3">Current Features</h3>
-            {selected.myFeatures.filter((f) => f.status !== "production").length > 0 ? (
-              <div className="space-y-2">
-                {selected.myFeatures
-                  .filter((f) => f.status !== "production")
-                  .map((f) => (
-                    <div key={f.id} className="flex items-center gap-3 py-2 border-b border-stone-100 dark:border-white/[0.06] last:border-0">
-                      <div
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: f.status === "demo" ? "#F59E0B" : "#0E7C86" }}
-                      />
-                      <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1">{f.title}</span>
-                      <span className="text-xs text-stone-400 capitalize">{f.priority ?? "—"}</span>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-sm text-stone-400">All features complete!</p>
-            )}
+            <div className="p-4">
+              {viewMode === "features" && (
+                <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} featureMap={featureMap} />
+              )}
+              {viewMode === "roles" && (
+                <RolesView roles={selected.myRoles} tasks={selected.myTasks} featureMap={featureMap} />
+              )}
+              {viewMode === "tasks" && (
+                <TasksView tasks={selected.myTasks} featureMap={featureMap} />
+              )}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+// ---------- View Components ----------
+
+const STATUS_COLORS: Record<string, string> = {
+  plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
+  tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
+};
+const STATUS_LABELS: Record<string, string> = {
+  plan: "Plan", in_progress: "In Progress", demo: "Demo",
+  tested: "Tested", production: "Production", future: "Future",
+};
+
+function FeaturesView({ features, tasks, featureMap }: {
+  features: Feature[];
+  tasks: SubIssueWithFeature[];
+  featureMap: Map<number, Feature>;
+}) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  if (features.length === 0) return <p className="text-sm text-stone-400">No features assigned</p>;
+
+  return (
+    <div className="space-y-1">
+      {features.map((f) => {
+        const isExpanded = expandedId === f.id;
+        const featureTasks = tasks.filter((t) => t.featureId === f.id);
+        const doneCount = featureTasks.filter((t) => t.state === "closed").length;
+        return (
+          <div key={f.id}>
+            <button
+              onClick={() => setExpandedId(isExpanded ? null : f.id)}
+              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+            >
+              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
+              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[f.status])} />
+              <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1 truncate">{f.title}</span>
+              <span className="text-xs text-stone-400">{STATUS_LABELS[f.status]}</span>
+              {featureTasks.length > 0 && (
+                <span className="text-xs text-stone-400">{doneCount}/{featureTasks.length}</span>
+              )}
+            </button>
+            {isExpanded && (
+              <FeatureDetail featureId={f.id} tasks={featureTasks} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RolesView({ roles, tasks, featureMap }: {
+  roles: { number: number; name: string; featureId: number }[];
+  tasks: SubIssueWithFeature[];
+  featureMap: Map<number, Feature>;
+}) {
+  const [expandedRole, setExpandedRole] = useState<number | null>(null);
+
+  if (roles.length === 0) return <p className="text-sm text-stone-400">No roles assigned</p>;
+
+  return (
+    <div className="space-y-1">
+      {roles.map((role) => {
+        const isExpanded = expandedRole === role.number;
+        const roleTasks = tasks.filter((t) => t.roleNumber === role.number);
+        const doneCount = roleTasks.filter((t) => t.state === "closed").length;
+        const feature = featureMap.get(role.featureId);
+        return (
+          <div key={role.number}>
+            <button
+              onClick={() => setExpandedRole(isExpanded ? null : role.number)}
+              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+            >
+              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
+              <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+              <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1 truncate">{role.name}</span>
+              {feature && <span className="text-xs text-stone-400 truncate max-w-[150px]">{feature.title}</span>}
+              {roleTasks.length > 0 && (
+                <span className="text-xs text-stone-400">{doneCount}/{roleTasks.length}</span>
+              )}
+            </button>
+            {isExpanded && (
+              <div className="ml-7 mb-2">
+                <FeatureDetail featureId={role.featureId} tasks={roleTasks} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TasksView({ tasks, featureMap }: {
+  tasks: SubIssueWithFeature[];
+  featureMap: Map<number, Feature>;
+}) {
+  const [expandedFeatureId, setExpandedFeatureId] = useState<number | null>(null);
+
+  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
+
+  // Group tasks by feature
+  const grouped = useMemo(() => {
+    const map = new Map<number, SubIssueWithFeature[]>();
+    for (const t of tasks) {
+      const list = map.get(t.featureId) ?? [];
+      list.push(t);
+      map.set(t.featureId, list);
+    }
+    return [...map.entries()];
+  }, [tasks]);
+
+  return (
+    <div className="space-y-1">
+      {grouped.map(([featureId, featureTasks]) => {
+        const feature = featureMap.get(featureId);
+        const isExpanded = expandedFeatureId === featureId;
+        const doneCount = featureTasks.filter((t) => t.state === "closed").length;
+        return (
+          <div key={featureId}>
+            <button
+              onClick={() => setExpandedFeatureId(isExpanded ? null : featureId)}
+              className="w-full flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+            >
+              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
+              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[feature?.status ?? "plan"])} />
+              <span className="text-xs text-stone-500 dark:text-neutral-400 shrink-0">{feature?.title ?? `Feature #${featureId}`}</span>
+              <span className="text-xs text-stone-400 ml-auto">{doneCount}/{featureTasks.length}</span>
+            </button>
+            {isExpanded && (
+              <div className="ml-7 space-y-1 mb-2">
+                {featureTasks.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-green-500" : "bg-blue-400")} />
+                    <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700 dark:text-neutral-300")}>{t.title}</span>
+                    {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
+                    {t.points && <span className="text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">{t.points}pt</span>}
+                  </div>
+                ))}
+                <LinkedPRsPanel featureId={featureId} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- Linked PRs Panel ----------
+
+function FeatureDetail({ featureId, tasks }: { featureId: number; tasks: SubIssueWithFeature[] }) {
+  return (
+    <div className="ml-7 mb-2 space-y-1">
+      {tasks.length > 0 && (
+        <div className="space-y-1">
+          {tasks.map((t) => (
+            <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-green-500" : "bg-blue-400")} />
+              <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700 dark:text-neutral-300")}>{t.title}</span>
+              {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
+              {t.points && <span className="text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">{t.points}pt</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <LinkedPRsPanel featureId={featureId} />
+    </div>
+  );
+}
+
+function LinkedPRsPanel({ featureId }: { featureId: number }) {
+  const { data: prs, isLoading } = usePRsForFeature(featureId);
+
+  if (isLoading) return <div className="py-2 px-2"><Spinner className="w-4 h-4 text-stone-400" /></div>;
+  if (!prs || prs.length === 0) return null;
+
+  return (
+    <div className="border-t border-stone-100 dark:border-white/[0.06] pt-2 mt-1">
+      <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider px-2">Linked PRs</span>
+      <div className="space-y-0.5 mt-1">
+        {prs.map((pr) => {
+          const isMerged = pr.state === "closed" || (pr as any).merged_at;
+          const source = (pr as any).linkSource as string | undefined;
+          return (
+            <a
+              key={pr.id}
+              href={pr.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-stone-50 dark:hover:bg-white/[0.06] group"
+            >
+              {isMerged
+                ? <GitMerge size={12} className="text-purple-500 shrink-0" />
+                : <GitPullRequest size={12} className="text-green-500 shrink-0" />
+              }
+              <span className="text-xs text-stone-400 shrink-0">{pr.repo}#{pr.number}</span>
+              <span className="text-xs text-stone-600 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
+              {source && (
+                <span className={cn("text-[9px] px-1 py-0.5 rounded-full shrink-0",
+                  source === "branch" ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-stone-100 dark:bg-white/[0.06] text-stone-500"
+                )}>{source}</span>
+              )}
+              <ExternalLink size={10} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Metric Card ----------
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (

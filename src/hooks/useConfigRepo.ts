@@ -7,8 +7,6 @@ import {
   savePeople,
   fetchSettings,
   saveSettings,
-  fetchTodos as fetchTodosD1,
-  saveTodos as saveTodosD1,
   fetchAgentRules,
   saveAgentRules,
   fetchSprintSnapshots,
@@ -22,9 +20,7 @@ import {
   updateTodo as ghUpdateTodo,
   deleteTodo as ghDeleteTodo,
   fetchTodosClosedInRange as ghFetchTodosClosedInRange,
-  migrateTodos as ghMigrateTodos,
 } from "@/lib/github-todos";
-import type { LegacyTodoForMigration } from "@/lib/github-todos";
 import {
   fetchFeaturesFromD1,
   createFeature as ghCreateFeature,
@@ -670,31 +666,6 @@ export function useTodosClosedInRange(startDate: string | undefined, endDate: st
     queryFn: () => ghFetchTodosClosedInRange(selectedOrg!, null, startDate!, endDate!),
     enabled: !!selectedOrg && !!startDate && !!endDate,
     staleTime: 5 * 60 * 1000,
-  });
-}
-
-// Legacy D1 todos (for migration)
-export function useLegacyTodos() {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["legacyTodos", selectedOrg],
-    queryFn: fetchTodosD1,
-    enabled: !!selectedOrg,
-    staleTime: Infinity,
-  });
-}
-
-export function useMigrateTodos() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { legacy: LegacyTodoForMigration[]; onProgress?: (done: number, total: number) => void }) =>
-      ghMigrateTodos(selectedOrg!, args.legacy, args.onProgress),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["todos", selectedOrg] });
-      // Clear D1 todos after migration
-      saveTodosD1([]);
-    },
   });
 }
 

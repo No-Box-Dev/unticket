@@ -95,7 +95,7 @@ Key server functions in `functions/lib/github-sync.js`:
 Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. On `issues.closed`, captures `sender.login` as `closed_by`. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
 
 ### GitHub Data Hooks (`src/hooks/useGitHub.ts`)
-TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useActivity`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`, `useUpdateIssueAssignees`.
+TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`, `useUpdateIssueAssignees`.
 
 ### Shared UI Components
 - `src/components/ui/SearchableSelect.tsx` — Reusable portal-based searchable single-select dropdown. Props: `value`, `onChange`, `options: {value, label}[]`, `placeholder`, `className`. Includes ARIA attributes, keyboard navigation (Escape/Arrow/Enter), auto-flip positioning, scroll/resize repositioning. Used for repo dropdowns in Issues, PRs, and Todos tabs.
@@ -109,6 +109,9 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 ## Features
 
 ### Active Tabs (visible in tab bar)
+
+#### Overview (`overview` tab)
+Dashboard landing page with sprint health banner, key metrics (PR throughput, cycle time, issues resolved, features shipped), attention alerts, open PR/issue age distributions, contributor activity table, sprint velocity trend, sprint burndown chart (ideal vs actual feature completion line chart using `computeBurndown`), and features-by-sprint breakdown. Range selector (2w–All). Clickable elements navigate to relevant tabs.
 
 #### Sprint Board (`sprint` tab)
 Sprint config + feature cards backed by GitHub Issues (label: `feature`). Four view modes (ClickUp-style tab switcher):
@@ -129,18 +132,7 @@ Server-side paginated view of open + closed issues (closed since sprint start). 
 Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 #### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`), and repo context (`todo-repo:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature (issue number), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints. Legacy D1 todos can be migrated via `useMigrateTodos()`.
-
-#### Insights (`insights` tab) — admin only
-Admin-only tab (visible when `useIsAdmin()` returns true) with two views: **Team** (aggregate metrics across the org, filterable by team) and **Individual** (per-person metrics with a person selector). Four metric cards each with weekly bar chart and total count: PRs Merged, Issues Created, Issues Solved, Features Implemented (status = production, bar chart from `statusHistory` timestamps). Issues Solved uses `closed_by` field (who actually closed the issue) rather than assignee. Replaces the old Team Dashboard and Individual Dashboard tabs. Date range selector: 1m/10w/6m/1y.
-
-### Disabled Tabs (components exist but not wired in TabBar/DashboardPage)
-
-#### Activity (`activity` tab)
-Recent activity feed across repos.
-
-#### Team Dashboard (`team` tab) — replaced by Insights
-#### Individual Dashboard (`individual` tab) — replaced by Insights
+Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`), and repo context (`todo-repo:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature (issue number), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
 
 ### Other Features
 
