@@ -37,7 +37,7 @@ export function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
             <LogoMark className="w-9 h-9" />
-            <h1 className="text-2xl font-bold text-stone-900 dark:text-neutral-100 font-display">Unticket</h1>
+            <h1 className="text-2xl font-display"><span className="font-bold text-brand">n1</span><span className="font-normal text-stone-500 dark:text-neutral-400">.vision</span></h1>
           </div>
           <p className="text-stone-500 dark:text-neutral-400">
             AI-powered project management for GitHub

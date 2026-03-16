@@ -1,0 +1,117 @@
+import { getCtx, jsonResponse, errorResponse } from "../lib/db";
+import {
+  parseFeatureMetadata,
+  serializeFeatureMetadata,
+  readFeatureIssue,
+  updateFeatureBody,
+} from "../lib/feature-metadata";
+
+// GET /api/pr-links?feature=42 — query D1 cache for linked PRs
+export async function onRequestGet(context) {
+  const { orgId } = getCtx(context);
+  const url = new URL(context.request.url);
+  const feature = url.searchParams.get("feature");
+
+  if (!feature) return errorResponse("feature query param required", 400);
+
+  const rows = await context.env.DB
+    .prepare(
+      "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
+    )
+    .bind(orgId, parseInt(feature))
+    .all();
+
+  return jsonResponse(rows.results);
+}
+
+// POST /api/pr-links — link a PR to a feature (GitHub metadata + D1)
+export async function onRequestPost(context) {
+  const { orgId, token, orgLogin } = getCtx(context);
+  const { feature_number, pr_repo, pr_number } = await context.request.json();
+
+  if (!feature_number || !pr_repo || !pr_number) {
+    return errorResponse("feature_number, pr_repo, pr_number required", 400);
+  }
+
+  // 1. Read feature issue body from GitHub
+  const issue = await readFeatureIssue(token, orgLogin, feature_number);
+  const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
+
+  // 2. Add to linkedPRs (deduplicate)
+  const linkedPRs = metadata.linkedPRs ?? [];
+  const exists = linkedPRs.some(
+    (l) => l.repo === pr_repo && l.number === pr_number
+  );
+  if (!exists) {
+    linkedPRs.push({ repo: pr_repo, number: pr_number });
+    metadata.linkedPRs = linkedPRs;
+
+    // 3. Write back to GitHub
+    const newBody = serializeFeatureMetadata(content, metadata);
+    await updateFeatureBody(token, orgLogin, feature_number, newBody);
+
+    // Also update features table in D1 with new body
+    await context.env.DB
+      .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
+      .bind(newBody, orgId, feature_number)
+      .run();
+  }
+
+  // 4. Upsert D1 cache
+  await context.env.DB
+    .prepare(
+      `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+       VALUES (?, ?, ?, ?, 'manual')
+       ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+    )
+    .bind(orgId, feature_number, pr_repo, pr_number)
+    .run();
+
+  return jsonResponse({ ok: true });
+}
+
+// DELETE /api/pr-links?feature=42&pr_repo=api-backend&pr_number=601 — unlink
+export async function onRequestDelete(context) {
+  const { orgId, token, orgLogin } = getCtx(context);
+  const url = new URL(context.request.url);
+  const feature = url.searchParams.get("feature");
+  const prRepo = url.searchParams.get("pr_repo");
+  const prNumber = url.searchParams.get("pr_number");
+
+  if (!feature || !prRepo || !prNumber) {
+    return errorResponse("feature, pr_repo, pr_number required", 400);
+  }
+
+  const featureNumber = parseInt(feature);
+  const prNum = parseInt(prNumber);
+
+  // 1. Read feature issue body from GitHub
+  const issue = await readFeatureIssue(token, orgLogin, featureNumber);
+  const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
+
+  // 2. Remove from linkedPRs
+  const linkedPRs = (metadata.linkedPRs ?? []).filter(
+    (l) => !(l.repo === prRepo && l.number === prNum)
+  );
+  metadata.linkedPRs = linkedPRs;
+
+  // 3. Write back to GitHub
+  const newBody = serializeFeatureMetadata(content, metadata);
+  await updateFeatureBody(token, orgLogin, featureNumber, newBody);
+
+  // Also update features table in D1
+  await context.env.DB
+    .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
+    .bind(newBody, orgId, featureNumber)
+    .run();
+
+  // 4. Remove from D1 cache
+  await context.env.DB
+    .prepare(
+      "DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND pr_repo = ? AND pr_number = ?"
+    )
+    .bind(orgId, featureNumber, prRepo, prNum)
+    .run();
+
+  return jsonResponse({ ok: true });
+}

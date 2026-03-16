@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2, GitPullRequest, GitMerge, Search, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { PointsBadge } from "./PointsSelect";
 import { RoleSection } from "./RoleSection";
 import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask } from "@/hooks/useConfigRepo";
+import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
+import { fetchAllPRs } from "@/lib/github";
 import type { Feature, Priority } from "@/lib/types";
 
 // ---------- Component ----------
@@ -24,6 +27,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const [newRoleText, setNewRoleText] = useState("");
   const [newRoleAssignee, setNewRoleAssignee] = useState("");
   const [newTaskText, setNewTaskText] = useState("");
+  const [showLinkPR, setShowLinkPR] = useState(false);
+  const [prSearch, setPrSearch] = useState("");
+  const [prRepoFilter, setPrRepoFilter] = useState("");
+  const [prCreatorFilter, setPrCreatorFilter] = useState("");
 
   // Sub-issues (legacy flat tasks)
   const { data: subIssues, isLoading: subIssuesLoading } = useSubIssues(feature.id);
@@ -36,6 +43,19 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const createRoleMut = useCreateRole();
   const deleteRoleMut = useDeleteRole();
   const createTaskMut = useCreateTask();
+
+  // Linked PRs (branch + explicit)
+  const { data: linkedPRs, isLoading: prsLoading } = usePRsForFeature(feature.id);
+  const linkPRMut = useLinkPR();
+  const unlinkPRMut = useUnlinkPR();
+
+  // All PRs for the link dropdown — only fetch when dropdown is open
+  const { data: allPRsData } = useQuery({
+    queryKey: ["allPRsForLink"],
+    queryFn: () => fetchAllPRs(),
+    enabled: showLinkPR,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -374,6 +394,164 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 </span>
               )}
             </div>
+          </div>
+
+          {/* Linked PRs */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs text-stone-500 dark:text-neutral-400">
+                Linked PRs
+                {linkedPRs && linkedPRs.length > 0 && (
+                  <span className="text-stone-400 dark:text-neutral-500 ml-1">({linkedPRs.length})</span>
+                )}
+              </span>
+              {prsLoading && <Loader2 size={12} className="animate-spin text-stone-400 dark:text-neutral-500" />}
+              <button
+                type="button"
+                onClick={() => setShowLinkPR(!showLinkPR)}
+                className="text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer ml-auto"
+                title="Link a PR"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {/* Link PR dropdown */}
+            {showLinkPR && (
+              <div className="mb-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-stone-100 dark:border-white/[0.06]">
+                  <Search size={14} className="text-stone-400 dark:text-neutral-500 shrink-0" />
+                  <input
+                    type="text"
+                    value={prSearch}
+                    onChange={(e) => setPrSearch(e.target.value)}
+                    placeholder="Search PRs by title..."
+                    className="flex-1 text-sm bg-transparent border-none outline-none dark:text-neutral-100"
+                    autoFocus
+                  />
+                </div>
+                {/* Repo + Creator filters */}
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-stone-100 dark:border-white/[0.06]">
+                  <select
+                    value={prRepoFilter}
+                    onChange={(e) => setPrRepoFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-stone-600 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/30 cursor-pointer"
+                  >
+                    <option value="">All repos</option>
+                    {(() => {
+                      const repos = [...new Set((allPRsData ?? []).map((pr) => pr.repo).filter(Boolean))].sort();
+                      return repos.map((r) => <option key={r} value={r}>{r}</option>);
+                    })()}
+                  </select>
+                  <select
+                    value={prCreatorFilter}
+                    onChange={(e) => setPrCreatorFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-stone-600 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/30 cursor-pointer"
+                  >
+                    <option value="">All creators</option>
+                    {(() => {
+                      const creators = [...new Set((allPRsData ?? []).map((pr) => pr.user?.login).filter(Boolean))].sort() as string[];
+                      return creators.map((c) => <option key={c} value={c}>{c}</option>);
+                    })()}
+                  </select>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {(() => {
+                    const linkedSet = new Set((linkedPRs ?? []).map((pr) => `${pr.repo}:${pr.number}`));
+                    const q = prSearch.toLowerCase();
+                    const filtered = (allPRsData ?? [])
+                      .filter((pr) => !linkedSet.has(`${pr.repo}:${pr.number}`))
+                      .filter((pr) => !prRepoFilter || pr.repo === prRepoFilter)
+                      .filter((pr) => !prCreatorFilter || pr.user?.login === prCreatorFilter)
+                      .filter((pr) =>
+                        !q || pr.title.toLowerCase().includes(q)
+                      )
+                      .slice(0, 20);
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="px-3 py-4 text-center text-xs text-stone-400 dark:text-neutral-500">
+                          {prSearch || prRepoFilter || prCreatorFilter ? "No matching PRs" : "No PRs available"}
+                        </div>
+                      );
+                    }
+                    return filtered.map((pr) => (
+                      <button
+                        key={`${pr.repo}:${pr.number}`}
+                        type="button"
+                        onClick={() => {
+                          linkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo ?? "", prNumber: pr.number });
+                          setShowLinkPR(false);
+                          setPrSearch("");
+                          setPrRepoFilter("");
+                          setPrCreatorFilter("");
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-stone-50 dark:hover:bg-white/[0.06] text-left cursor-pointer"
+                      >
+                        <Link2 size={12} className="text-stone-400 dark:text-neutral-500 shrink-0" />
+                        <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.repo}#{pr.number}</span>
+                        <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
+                        {pr.user && <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.user.login}</span>}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              {(linkedPRs ?? []).map((pr) => {
+                const isMerged = pr.state === "closed" && pr.html_url.includes("pull");
+                const repoName = pr.head.repo?.name ?? "";
+                const source = (pr as any).linkSource as string | undefined;
+                const isManual = source === "manual";
+                return (
+                  <div
+                    key={pr.id}
+                    className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] group"
+                  >
+                    <a
+                      href={pr.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 flex-1 min-w-0"
+                    >
+                      {isMerged
+                        ? <GitMerge size={14} className="text-purple-500 shrink-0" />
+                        : <GitPullRequest size={14} className="text-green-500 shrink-0" />
+                      }
+                      <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{repoName}#{pr.number}</span>
+                      <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
+                      {source && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                          source === "branch"
+                            ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                            : "bg-stone-100 dark:bg-white/[0.06] text-stone-500 dark:text-neutral-400"
+                        }`}>
+                          {source}
+                        </span>
+                      )}
+                      {pr.user && (
+                        <span className="text-xs text-stone-400 dark:text-neutral-500">{pr.user.login}</span>
+                      )}
+                      <ExternalLink size={12} className="text-stone-300 dark:text-neutral-600 opacity-0 group-hover:opacity-100 shrink-0" />
+                    </a>
+                    {isManual && (
+                      <button
+                        type="button"
+                        onClick={() => unlinkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo ?? repoName, prNumber: pr.number })}
+                        className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        title="Unlink PR"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {!prsLoading && (!linkedPRs || linkedPRs.length === 0) && !showLinkPR && (
+              <div className="text-xs text-stone-400 dark:text-neutral-500">No linked PRs</div>
+            )}
           </div>
 
           {/* Status History Timeline */}
