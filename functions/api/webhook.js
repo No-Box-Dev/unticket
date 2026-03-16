@@ -90,23 +90,20 @@ export async function onRequestPost(context) {
       // Also upsert into features table if this is a .gitpulse repo issue
       if (repo === ".gitpulse") {
         await upsertFeature(db, orgId, payload.issue);
-        // Re-sync pr_feature_links from metadata
+        // Re-sync pr_feature_links from metadata (atomic delete + re-insert)
         const { metadata } = parseFeatureMetadata(payload.issue.body ?? "");
         const linkedPRs = metadata.linkedPRs ?? [];
-        // Clear existing metadata-sourced links for this feature and re-insert
-        await db
-          .prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND source = 'metadata'")
-          .bind(orgId, payload.issue.number)
-          .run();
+        const deleteStmt = db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND source = 'metadata'")
+          .bind(orgId, payload.issue.number);
         if (linkedPRs.length > 0) {
           const linkStmt = db.prepare(
             `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
              VALUES (?, ?, ?, ?, 'metadata')
              ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
           );
-          await db.batch(
-            linkedPRs.map((l) => linkStmt.bind(orgId, payload.issue.number, l.repo, l.number))
-          );
+          await db.batch([deleteStmt, ...linkedPRs.map((l) => linkStmt.bind(orgId, payload.issue.number, l.repo, l.number))]);
+        } else {
+          await deleteStmt.run();
         }
       }
       return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number });

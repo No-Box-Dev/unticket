@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2, GitPullRequest, GitMerge, Search, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
@@ -56,6 +56,26 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     enabled: showLinkPR,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Derived data for link dropdown
+  const availableRepos = useMemo(() =>
+    [...new Set((allPRsData ?? []).map((pr) => pr.repo).filter(Boolean))].sort(),
+    [allPRsData],
+  );
+  const availableCreators = useMemo(() =>
+    [...new Set((allPRsData ?? []).map((pr) => pr.user?.login).filter(Boolean))].sort() as string[],
+    [allPRsData],
+  );
+  const filteredLinkablePRs = useMemo(() => {
+    const linkedSet = new Set((linkedPRs ?? []).map((pr) => `${pr.repo}:${pr.number}`));
+    const q = prSearch.toLowerCase();
+    return (allPRsData ?? [])
+      .filter((pr) => !linkedSet.has(`${pr.repo}:${pr.number}`))
+      .filter((pr) => !prRepoFilter || pr.repo === prRepoFilter)
+      .filter((pr) => !prCreatorFilter || pr.user?.login === prCreatorFilter)
+      .filter((pr) => !q || pr.title.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [allPRsData, linkedPRs, prSearch, prRepoFilter, prCreatorFilter]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -438,10 +458,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                     className="text-xs px-2 py-1 rounded border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-stone-600 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/30 cursor-pointer"
                   >
                     <option value="">All repos</option>
-                    {(() => {
-                      const repos = [...new Set((allPRsData ?? []).map((pr) => pr.repo).filter(Boolean))].sort();
-                      return repos.map((r) => <option key={r} value={r}>{r}</option>);
-                    })()}
+                    {availableRepos.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
                   <select
                     value={prCreatorFilter}
@@ -449,51 +466,33 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                     className="text-xs px-2 py-1 rounded border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-stone-600 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/30 cursor-pointer"
                   >
                     <option value="">All creators</option>
-                    {(() => {
-                      const creators = [...new Set((allPRsData ?? []).map((pr) => pr.user?.login).filter(Boolean))].sort() as string[];
-                      return creators.map((c) => <option key={c} value={c}>{c}</option>);
-                    })()}
+                    {availableCreators.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="max-h-[200px] overflow-y-auto">
-                  {(() => {
-                    const linkedSet = new Set((linkedPRs ?? []).map((pr) => `${pr.repo}:${pr.number}`));
-                    const q = prSearch.toLowerCase();
-                    const filtered = (allPRsData ?? [])
-                      .filter((pr) => !linkedSet.has(`${pr.repo}:${pr.number}`))
-                      .filter((pr) => !prRepoFilter || pr.repo === prRepoFilter)
-                      .filter((pr) => !prCreatorFilter || pr.user?.login === prCreatorFilter)
-                      .filter((pr) =>
-                        !q || pr.title.toLowerCase().includes(q)
-                      )
-                      .slice(0, 20);
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="px-3 py-4 text-center text-xs text-stone-400 dark:text-neutral-500">
-                          {prSearch || prRepoFilter || prCreatorFilter ? "No matching PRs" : "No PRs available"}
-                        </div>
-                      );
-                    }
-                    return filtered.map((pr) => (
-                      <button
-                        key={`${pr.repo}:${pr.number}`}
-                        type="button"
-                        onClick={() => {
-                          linkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo ?? "", prNumber: pr.number });
-                          setShowLinkPR(false);
-                          setPrSearch("");
-                          setPrRepoFilter("");
-                          setPrCreatorFilter("");
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-stone-50 dark:hover:bg-white/[0.06] text-left cursor-pointer"
-                      >
-                        <Link2 size={12} className="text-stone-400 dark:text-neutral-500 shrink-0" />
-                        <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.repo}#{pr.number}</span>
-                        <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
-                        {pr.user && <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.user.login}</span>}
-                      </button>
-                    ));
-                  })()}
+                  {filteredLinkablePRs.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-xs text-stone-400 dark:text-neutral-500">
+                      {prSearch || prRepoFilter || prCreatorFilter ? "No matching PRs" : "No PRs available"}
+                    </div>
+                  ) : filteredLinkablePRs.map((pr) => (
+                    <button
+                      key={`${pr.repo}:${pr.number}`}
+                      type="button"
+                      onClick={() => {
+                        linkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo ?? "", prNumber: pr.number });
+                        setShowLinkPR(false);
+                        setPrSearch("");
+                        setPrRepoFilter("");
+                        setPrCreatorFilter("");
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-stone-50 dark:hover:bg-white/[0.06] text-left cursor-pointer"
+                    >
+                      <Link2 size={12} className="text-stone-400 dark:text-neutral-500 shrink-0" />
+                      <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.repo}#{pr.number}</span>
+                      <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
+                      {pr.user && <span className="text-xs text-stone-400 dark:text-neutral-500 shrink-0">{pr.user.login}</span>}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -538,7 +537,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                     {isManual && (
                       <button
                         type="button"
-                        onClick={() => unlinkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo ?? repoName, prNumber: pr.number })}
+                        onClick={() => unlinkPRMut.mutate({ featureId: feature.id, prRepo: pr.repo, prNumber: pr.number })}
                         className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                         title="Unlink PR"
                       >

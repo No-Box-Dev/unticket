@@ -99,19 +99,15 @@ export async function onRequestDelete(context) {
   const newBody = serializeFeatureMetadata(content, metadata);
   await updateFeatureBody(token, orgLogin, featureNumber, newBody);
 
-  // Also update features table in D1
-  await context.env.DB
-    .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
-    .bind(newBody, orgId, featureNumber)
-    .run();
-
-  // 4. Remove from D1 cache
-  await context.env.DB
-    .prepare(
+  // 4. Update features table + remove link atomically
+  await context.env.DB.batch([
+    context.env.DB.prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
+      .bind(newBody, orgId, featureNumber),
+    context.env.DB.prepare(
       "DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND pr_repo = ? AND pr_number = ?"
     )
-    .bind(orgId, featureNumber, prRepo, prNum)
-    .run();
+      .bind(orgId, featureNumber, prRepo, prNum),
+  ]);
 
   return jsonResponse({ ok: true });
 }

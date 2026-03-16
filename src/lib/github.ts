@@ -350,6 +350,7 @@ export async function fetchAllIssues(since?: string) {
  * Extract a feature number from a branch name.
  * Matches patterns like: feat/42-description, feature/42, fix/42-bug, 42-some-branch
  */
+/** NOTE: Duplicated in functions/lib/feature-metadata.js — keep both in sync. */
 export function parseFeatureFromBranch(ref: string): number | null {
   const match = ref.match(/^(?:feat|feature|fix|chore|refactor)\/(\d+)(?:-|$)/);
   if (match) return Number(match[1]);
