@@ -1,6 +1,6 @@
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
-import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry, Points, PersonRole } from "./types";
+import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry, Points, PersonRole, LinkedPR } from "./types";
 import { VALID_POINTS } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -50,6 +50,7 @@ const METADATA_RE = /\n?<!-- gitpulse:metadata\n([\s\S]*?)\n-->\s*$/;
 
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
+  linkedPRs?: LinkedPR[];
 }
 
 function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
@@ -64,7 +65,9 @@ function parseMetadata(body: string): { content: string; metadata: FeatureMetada
 }
 
 function serializeMetadata(content: string, metadata: FeatureMetadata): string {
-  const hasData = metadata.statusHistory && metadata.statusHistory.length > 0;
+  const hasData =
+    (metadata.statusHistory && metadata.statusHistory.length > 0) ||
+    (metadata.linkedPRs && metadata.linkedPRs.length > 0);
   if (!hasData) return content;
   return `${content}\n\n<!-- gitpulse:metadata\n${JSON.stringify(metadata)}\n-->`;
 }
@@ -125,6 +128,7 @@ function issueToFeature(issue: any): Feature {
     plan: content || undefined,
     url: issue.html_url,
     statusHistory: metadata.statusHistory,
+    linkedPRs: metadata.linkedPRs,
   };
 }
 
@@ -300,6 +304,7 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 
   const metadata: FeatureMetadata = {
     statusHistory: updated.statusHistory,
+    linkedPRs: updated.linkedPRs,
   };
   const body = serializeMetadata(updated.plan ?? "", metadata);
 
