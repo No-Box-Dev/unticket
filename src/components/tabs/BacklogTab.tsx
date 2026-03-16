@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { useSprint, useFeatures, usePeople, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
-import { useIsAdmin } from "@/hooks/useGitHub";
+import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
 import type { Feature } from "@/lib/types";
 import { Archive, ArrowUpDown } from "lucide-react";
 
@@ -28,7 +28,7 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
 export function BacklogTab() {
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
-  const { data: people } = usePeople();
+  const { data: orgMembers } = useActiveMembers();
   const createFeatureMut = useCreateFeature();
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
@@ -38,8 +38,8 @@ export function BacklogTab() {
   const [sortBy, setSortBy] = useState<SortKey>("title");
 
   const allPeopleNames = useMemo(
-    () => (people ?? []).map((p) => p.github),
-    [people],
+    () => (orgMembers ?? []).map((m) => m.login),
+    [orgMembers],
   );
 
   const allTeamNames = useMemo(
