@@ -5,7 +5,7 @@ import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { SprintMetrics } from "@/components/sprint/SprintMetrics";
-import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues } from "@/hooks/useGitHub";
+import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues, useActiveMembers } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
@@ -51,6 +51,7 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
+  const { data: orgMembers } = useActiveMembers();
   const createFeatureMut = useCreateFeature();
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
@@ -97,8 +98,8 @@ export function SprintTab({ repoNames }: SprintTabProps) {
     : null;
 
   const allPeopleNames = useMemo(
-    () => (people ?? []).map((p) => p.github),
-    [people],
+    () => (orgMembers ?? []).map((m) => m.login),
+    [orgMembers],
   );
 
   const allTeamNames = useMemo(
