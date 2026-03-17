@@ -11,7 +11,6 @@ const TAB_LABELS: Partial<Record<TabId, string>> = {
   issues: "Issues",
   todos: "My Todos",
   engineers: "Engineers",
-  insights: "Insights",
   settings: "Settings",
 };
 

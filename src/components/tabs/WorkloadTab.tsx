@@ -156,11 +156,19 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
       .sort((a, b) => b.count - a.count);
   }, [sprintFeatures]);
 
-  // Max values for bar scaling
+  // Max points for distribution chart scaling
   const maxPoints = useMemo(() => Math.max(...engineers.map((e) => e.totalPoints), 1), [engineers]);
-  const maxTasks = useMemo(() => Math.max(...engineers.map((e) => e.totalTasks), 1), [engineers]);
-  const maxRoles = useMemo(() => Math.max(...engineers.map((e) => e.totalRoles), 1), [engineers]);
-  const maxFeatures = useMemo(() => Math.max(...engineers.map((e) => e.totalFeatures), 1), [engineers]);
+
+  // Sprint elapsed percentage
+  const elapsedPct = useMemo(() => {
+    if (!sprint?.startDate || !sprint?.endDate) return 0;
+    const now = new Date();
+    const start = new Date(sprint.startDate + "T00:00:00");
+    const end = new Date(sprint.endDate + "T23:59:59");
+    const elapsed = Math.max(0, now.getTime() - start.getTime());
+    const duration = Math.max(1, end.getTime() - start.getTime());
+    return Math.min(1, elapsed / duration);
+  }, [sprint]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-brand" /></div>;
@@ -181,10 +189,9 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
           Sprint Workload {sprint ? `— ${sprint.name}` : ""}
         </h2>
         <div className="flex items-center gap-4 text-xs text-stone-400 dark:text-neutral-500">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500 inline-block" /> Points</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /> Tasks</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" /> Roles</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-brand inline-block" /> Features</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500 inline-block" /> Done</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500/30 inline-block" /> Remaining</span>
+          <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-stone-400 dark:bg-neutral-400 inline-block" /> Sprint Pace</span>
         </div>
       </div>
 
@@ -275,7 +282,10 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 block truncate">{eng.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 truncate">{eng.name}</span>
+                  <StatusBadge donePoints={eng.donePoints} totalPoints={eng.totalPoints} elapsedPct={elapsedPct} />
+                </div>
                 {eng.features.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {eng.features.map((f) => (
@@ -297,37 +307,25 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
               </div>
             </div>
 
-            {/* Workload bars */}
-            <div className="space-y-1.5">
-              <WorkloadBar
-                label="Points"
-                done={eng.donePoints}
-                total={eng.totalPoints}
-                max={maxPoints}
-                color="bg-purple-500"
-              />
-              <WorkloadBar
-                label="Tasks"
-                done={eng.doneTasks}
-                total={eng.totalTasks}
-                max={maxTasks}
-                color="bg-blue-500"
-              />
-              <WorkloadBar
-                label="Roles"
-                done={eng.doneRoles}
-                total={eng.totalRoles}
-                max={maxRoles}
-                color="bg-teal-500"
-              />
-              <WorkloadBar
-                label="Features"
-                done={eng.doneFeatures}
-                total={eng.totalFeatures}
-                max={maxFeatures}
-                color="bg-brand"
-              />
-            </div>
+            {/* Points progress bar with pace marker */}
+            {eng.totalPoints > 0 && (
+              <div className="relative h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-visible">
+                <div
+                  className="h-full rounded-l bg-purple-500/30 absolute left-0 top-0"
+                  style={{ width: "100%" }}
+                />
+                <div
+                  className="h-full rounded-l bg-purple-500 absolute left-0 top-0 transition-all duration-500"
+                  style={{ width: `${(eng.donePoints / eng.totalPoints) * 100}%` }}
+                />
+                {/* Sprint pace marker */}
+                <div
+                  className="absolute top-0 w-0.5 h-full bg-stone-800 dark:bg-neutral-200 z-10"
+                  style={{ left: `${elapsedPct * 100}%` }}
+                  title={`Sprint ${Math.round(elapsedPct * 100)}% elapsed`}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -335,37 +333,28 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   );
 }
 
-function WorkloadBar({
-  label,
-  done,
-  total,
-  max,
-  color,
-}: {
-  label: string;
-  done: number;
-  total: number;
-  max: number;
-  color: string;
-}) {
-  if (total === 0) return null;
-  const totalPct = (total / max) * 100;
-  const donePct = total > 0 ? (done / total) * 100 : 0;
+const STATUS_BADGE = {
+  "on-track": { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300", label: "On Track" },
+  "at-risk": { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300", label: "At Risk" },
+  "behind": { bg: "bg-red-100 dark:bg-red-900/40", text: "text-red-700 dark:text-red-300", label: "Behind" },
+} as const;
 
+function getPointsStatus(donePoints: number, totalPoints: number, elapsedPct: number): "on-track" | "at-risk" | "behind" {
+  if (totalPoints === 0) return "on-track";
+  const completionPct = donePoints / totalPoints;
+  const diff = completionPct - elapsedPct;
+  if (diff >= -0.1) return "on-track";
+  if (diff >= -0.3) return "at-risk";
+  return "behind";
+}
+
+function StatusBadge({ donePoints, totalPoints, elapsedPct }: { donePoints: number; totalPoints: number; elapsedPct: number }) {
+  const status = getPointsStatus(donePoints, totalPoints, elapsedPct);
+  const badge = STATUS_BADGE[status];
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] text-stone-400 dark:text-neutral-500 w-12 shrink-0">{label}</span>
-      <div className="flex-1 h-4 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden relative">
-        <div
-          className={cn("h-full rounded transition-all duration-500 absolute left-0 top-0", color, "opacity-30")}
-          style={{ width: `${totalPct}%` }}
-        />
-        <div
-          className={cn("h-full rounded transition-all duration-500 absolute left-0 top-0", color)}
-          style={{ width: `${totalPct * (donePct / 100)}%` }}
-        />
-      </div>
-    </div>
+    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", badge.bg, badge.text)}>
+      {badge.label}
+    </span>
   );
 }
 
