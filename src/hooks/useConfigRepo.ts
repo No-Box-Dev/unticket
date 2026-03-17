@@ -266,29 +266,64 @@ export function useToggleSubIssue() {
   return useMutation({
     mutationFn: (sub: SubIssue) => toggleSubIssue(selectedOrg!, sub),
     onMutate: async (sub) => {
-      const key = ["subIssues", selectedOrg];
-      await qc.cancelQueries({ queryKey: key });
-      const queries = qc.getQueriesData<SubIssue[]>({ queryKey: key });
-      const previous = new Map<string, SubIssue[]>();
-      for (const [qKey, data] of queries) {
+      const newState = sub.state === "open" ? "closed" : "open";
+
+      // Optimistic update for flat sub-issues cache
+      const subKey = ["subIssues", selectedOrg];
+      await qc.cancelQueries({ queryKey: subKey });
+      const subQueries = qc.getQueriesData<SubIssue[]>({ queryKey: subKey });
+      const previousSubs = new Map<string, SubIssue[]>();
+      for (const [qKey, data] of subQueries) {
         if (data?.some((s) => s.id === sub.id)) {
-          previous.set(JSON.stringify(qKey), data);
+          previousSubs.set(JSON.stringify(qKey), data);
           qc.setQueryData<SubIssue[]>(qKey, (old) =>
-            old?.map((s) => s.id === sub.id ? { ...s, state: s.state === "open" ? "closed" : "open" } : s) ?? [],
+            old?.map((s) => s.id === sub.id ? { ...s, state: newState } : s) ?? [],
           );
         }
       }
-      return { previous };
+
+      // Optimistic update for rolesWithTasks cache (tasks inside roles)
+      const rwKey = ["rolesWithTasks", selectedOrg];
+      await qc.cancelQueries({ queryKey: rwKey });
+      const rwQueries = qc.getQueriesData<RoleWithTasks[]>({ queryKey: rwKey });
+      const previousRoles = new Map<string, RoleWithTasks[]>();
+      for (const [qKey, data] of rwQueries) {
+        const hasTask = data?.some((r) => r.tasks.some((t) => t.id === sub.id));
+        if (hasTask) {
+          previousRoles.set(JSON.stringify(qKey), data!);
+          qc.setQueryData<RoleWithTasks[]>(qKey, (old) =>
+            (old ?? []).map((r) => {
+              const taskIdx = r.tasks.findIndex((t) => t.id === sub.id);
+              if (taskIdx === -1) return r;
+              const tasks = r.tasks.map((t) =>
+                t.id === sub.id ? { ...t, state: newState as "open" | "closed" } : t,
+              );
+              const donePoints = tasks
+                .filter((t) => t.state === "closed")
+                .reduce((sum, t) => sum + (t.points ?? 0), 0);
+              return { ...r, tasks, donePoints };
+            }),
+          );
+        }
+      }
+
+      return { previousSubs, previousRoles };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
+      if (context?.previousSubs) {
+        for (const [key, data] of context.previousSubs) {
+          qc.setQueryData(JSON.parse(key), data);
+        }
+      }
+      if (context?.previousRoles) {
+        for (const [key, data] of context.previousRoles) {
           qc.setQueryData(JSON.parse(key), data);
         }
       }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg] });
     },
   });
 }
