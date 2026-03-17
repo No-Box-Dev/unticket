@@ -18,7 +18,7 @@ export async function onRequestGet(context) {
     .prepare(
       "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
     )
-    .bind(orgId, parseInt(feature))
+    .bind(orgId, parseInt(feature, 10))
     .all();
 
   return jsonResponse(rows.results);
@@ -82,8 +82,8 @@ export async function onRequestDelete(context) {
     return errorResponse("feature, pr_repo, pr_number required", 400);
   }
 
-  const featureNumber = parseInt(feature);
-  const prNum = parseInt(prNumber);
+  const featureNumber = parseInt(feature, 10);
+  const prNum = parseInt(prNumber, 10);
 
   // 1. Read feature issue body from GitHub
   const issue = await readFeatureIssue(token, orgLogin, featureNumber);

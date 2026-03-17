@@ -306,6 +306,38 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     return computeVelocityTrend(snapshots);
   }, [snapshots]);
 
+  // Sprint burndown (points: total vs done per sprint, respects range)
+  const sprintBurndown = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return null;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - weeks * 7);
+    const cutoffStr = cutoff.toISOString();
+
+    const entries: { label: string; total: number; done: number }[] = [];
+
+    // Past sprints from snapshots
+    for (const s of snapshots) {
+      if (s.startDate < cutoffStr && s.endDate < cutoffStr) continue;
+      entries.push({
+        label: `S${s.sprintNumber}`,
+        total: s.metrics.totalPoints,
+        done: s.metrics.donePoints,
+      });
+    }
+
+    // Current sprint (live data, not yet in snapshots)
+    if (sprint && !snapshots.some((s) => s.sprintNumber === sprint.number)) {
+      entries.push({
+        label: `S${sprint.number}`,
+        total: sprintPoints.total,
+        done: sprintPoints.done,
+      });
+    }
+
+    entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    return entries.length > 0 ? entries : null;
+  }, [snapshots, sprint, sprintPoints, weeks]);
+
   // Features by sprint (collapsible)
   const cutoffDate = useMemo(() => {
     const d = new Date();
@@ -618,6 +650,24 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         </div>
       )}
 
+      {/* Sprint Points Burndown */}
+      {sprintBurndown && (
+        <div className={card}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-stone-500 dark:text-neutral-400 uppercase tracking-wider">Sprint Points</h3>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-[10px] text-stone-400 dark:text-neutral-500">
+                <div className="w-2.5 h-2.5 rounded-sm bg-stone-200 dark:bg-neutral-700" /> Total
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-stone-400 dark:text-neutral-500">
+                <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "#1B6971" }} /> Done
+              </div>
+            </div>
+          </div>
+          <SprintPointsChart data={sprintBurndown} />
+        </div>
+      )}
+
       {/* Features by Sprint — click feature → sprint tab */}
       {featuresBySprint.length > 0 && (
         <div className="space-y-3">
@@ -846,6 +896,54 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "demo") return <Rocket size={14} className="text-blue-500 shrink-0" />;
   if (status === "plan") return <Clock size={14} className="text-amber-500 shrink-0" />;
   return <Circle size={14} className="text-stone-300 dark:text-neutral-600 shrink-0" />;
+}
+
+function SprintPointsChart({ data }: { data: { label: string; total: number; done: number }[] }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const maxVal = Math.max(...data.map((d) => d.total), 1);
+
+  return (
+    <div className="w-full">
+      <div className="flex items-end gap-3" style={{ height: 120 }}>
+        {data.map((s, i) => {
+          const totalH = Math.max(2, Math.round((s.total / maxVal) * 100));
+          const doneH = s.total > 0 ? Math.max(0, Math.round((s.done / maxVal) * 100)) : 0;
+          const isHovered = hovered === i;
+          const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+
+          return (
+            <div
+              key={s.label}
+              className="flex-1 flex flex-col items-center justify-end"
+              style={{ height: 120 }}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {isHovered && (
+                <span className="text-[10px] font-semibold text-stone-600 dark:text-neutral-300 mb-1">
+                  {s.done}/{s.total} ({pct}%)
+                </span>
+              )}
+              <div className="w-full relative rounded-t overflow-hidden" style={{ height: totalH }}>
+                <div className="absolute inset-0 bg-stone-200 dark:bg-neutral-700 transition-opacity" style={{ opacity: isHovered ? 0.8 : 0.5 }} />
+                <div
+                  className="absolute bottom-0 left-0 right-0 rounded-t transition-opacity"
+                  style={{ height: doneH, backgroundColor: "#1B6971", opacity: isHovered ? 1 : 0.75 }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-3 mt-1">
+        {data.map((s) => (
+          <div key={s.label} className="flex-1 text-center">
+            <span className="text-[10px] text-stone-400 dark:text-neutral-500">{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function MetricCard({ title, metric, color, daily, onClick }: { title: string; metric: MetricData; color: string; daily?: boolean; onClick?: () => void }) {

@@ -501,7 +501,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               {(linkedPRs ?? []).map((pr) => {
                 const isMerged = pr.state === "closed" && pr.html_url.includes("pull");
                 const repoName = pr.head.repo?.name ?? "";
-                const source = (pr as any).linkSource as string | undefined;
+                const source = "linkSource" in pr ? (pr.linkSource as string | undefined) : undefined;
                 const isManual = source === "manual";
                 return (
                   <div
