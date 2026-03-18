@@ -90,13 +90,18 @@ function issueToTodo(issue: any): Todo {
 
 // ---------- Ensure dynamic labels exist ----------
 
+const dynamicLabelsEnsured = new Set<string>();
+
 async function ensureDynamicLabel(org: string, name: string, color: string, description: string): Promise<void> {
+  const cacheKey = `${org}:${name}`;
+  if (dynamicLabelsEnsured.has(cacheKey)) return;
   const ok = getOctokit();
   try {
     await ok.rest.issues.createLabel({ owner: org, repo: REPO, name, color, description });
   } catch (err: any) {
     if (err?.status !== 422) throw err; // 422 = already exists
   }
+  dynamicLabelsEnsured.add(cacheKey);
 }
 
 // ---------- CRUD ----------

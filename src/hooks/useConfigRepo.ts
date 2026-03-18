@@ -45,6 +45,7 @@ import {
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
+import { useRef } from "react";
 import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
@@ -272,10 +273,10 @@ export function useToggleSubIssue() {
       const subKey = ["subIssues", selectedOrg];
       await qc.cancelQueries({ queryKey: subKey });
       const subQueries = qc.getQueriesData<SubIssue[]>({ queryKey: subKey });
-      const previousSubs = new Map<string, SubIssue[]>();
+      const previousSubs: [readonly unknown[], SubIssue[]][] = [];
       for (const [qKey, data] of subQueries) {
         if (data?.some((s) => s.id === sub.id)) {
-          previousSubs.set(JSON.stringify(qKey), data);
+          previousSubs.push([qKey, data]);
           qc.setQueryData<SubIssue[]>(qKey, (old) =>
             old?.map((s) => s.id === sub.id ? { ...s, state: newState } : s) ?? [],
           );
@@ -286,11 +287,11 @@ export function useToggleSubIssue() {
       const rwKey = ["rolesWithTasks", selectedOrg];
       await qc.cancelQueries({ queryKey: rwKey });
       const rwQueries = qc.getQueriesData<RoleWithTasks[]>({ queryKey: rwKey });
-      const previousRoles = new Map<string, RoleWithTasks[]>();
+      const previousRoles: [readonly unknown[], RoleWithTasks[]][] = [];
       for (const [qKey, data] of rwQueries) {
         const hasTask = data?.some((r) => r.tasks.some((t) => t.id === sub.id));
         if (hasTask) {
-          previousRoles.set(JSON.stringify(qKey), data!);
+          previousRoles.push([qKey, data!]);
           qc.setQueryData<RoleWithTasks[]>(qKey, (old) =>
             (old ?? []).map((r) => {
               const taskIdx = r.tasks.findIndex((t) => t.id === sub.id);
@@ -312,12 +313,12 @@ export function useToggleSubIssue() {
     onError: (_err, _vars, context) => {
       if (context?.previousSubs) {
         for (const [key, data] of context.previousSubs) {
-          qc.setQueryData(JSON.parse(key), data);
+          qc.setQueryData(key, data);
         }
       }
       if (context?.previousRoles) {
         for (const [key, data] of context.previousRoles) {
-          qc.setQueryData(JSON.parse(key), data);
+          qc.setQueryData(key, data);
         }
       }
     },
@@ -427,7 +428,7 @@ export function useRolesWithTasks(featureId: number) {
 export function useCreateRole() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
-  let tempId = -1;
+  const tempIdRef = useRef(-1);
   return useMutation({
     mutationFn: (args: { featureId: number; title: string; assignee?: string }) =>
       ghCreateRole(selectedOrg!, args.featureId, args.title, args.assignee),
@@ -435,9 +436,10 @@ export function useCreateRole() {
       const key = ["rolesWithTasks", selectedOrg, args.featureId];
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      const id = tempIdRef.current--;
       const optimisticRole: PersonRole = {
-        id: tempId--,
-        number: tempId,
+        id,
+        number: id,
         title: args.title,
         assignee: args.assignee ?? null,
         state: "open",
@@ -491,7 +493,7 @@ export function useDeleteRole() {
 export function useCreateTask() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
-  let tempId = -1000;
+  const tempIdRef = useRef(-1000);
   return useMutation({
     mutationFn: (args: { roleNumber: number; featureId: number; title: string; points?: Points; assignee?: string }) =>
       ghCreateTask(selectedOrg!, args.roleNumber, args.title, args.points, args.assignee),
@@ -499,9 +501,10 @@ export function useCreateTask() {
       const key = ["rolesWithTasks", selectedOrg, args.featureId];
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      const taskId = tempIdRef.current--;
       const optimisticTask: SubIssue = {
-        id: tempId--,
-        number: tempId,
+        id: taskId,
+        number: taskId,
         title: args.title,
         state: "open",
         assignees: args.assignee ? [args.assignee] : [],

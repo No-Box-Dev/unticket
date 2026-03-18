@@ -22,7 +22,7 @@ import {
   linkPR,
   unlinkPR,
 } from "@/lib/github";
-import type { RateLimitInfo, PRLink } from "@/lib/github";
+import type { RateLimitInfo } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
@@ -138,12 +138,13 @@ export function useOrgMembers() {
 export function useActiveMembers() {
   const { data: orgMembers, isLoading } = useOrgMembers();
   const { data: settings } = useSettings();
+  const excludedMembers = settings?.excludedMembers;
   const data = useMemo(() => {
     if (!orgMembers) return undefined;
-    const excluded = new Set(settings?.excludedMembers ?? []);
+    const excluded = new Set(excludedMembers ?? []);
     if (excluded.size === 0) return orgMembers;
-    return orgMembers.filter((m: any) => !excluded.has(m.login));
-  }, [orgMembers, settings]);
+    return orgMembers.filter((m: { login: string }) => !excluded.has(m.login));
+  }, [orgMembers, excludedMembers]);
   return { data, isLoading };
 }
 
@@ -262,7 +263,7 @@ export function usePRsForFeature(featureId: number) {
   const { data: prLinks } = useLinkedPRs(featureId);
 
   return useQuery({
-    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks],
+    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks?.length ?? 0],
     queryFn: async () => {
       const all = await fetchAllPRs();
       // Branch-detected PRs

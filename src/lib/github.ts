@@ -45,16 +45,21 @@ function wrapOctokitError(err: unknown): never {
       localStorage.removeItem("gp_token");
       localStorage.removeItem("n1_github_token");
       window.dispatchEvent(new CustomEvent("gp:force-logout"));
+      broadcastError("Token expired or revoked", 401);
       throw new ApiError("Token expired or revoked", 401);
     }
     if (status === 403 || status === 429) {
+      broadcastError(err.message || "Rate limit exceeded", status);
       throw new ApiError(err.message || "Rate limit exceeded", status);
     }
     if (status) {
+      broadcastError(err.message, status);
       throw new ApiError(err.message, status);
     }
+    broadcastError(err.message, 0);
     throw new ApiError(err.message, 0);
   }
+  broadcastError(String(err), 0);
   throw new ApiError(String(err), 0);
 }
 
@@ -384,6 +389,7 @@ export interface IssueQueryParams {
   page?: number;
   pageSize?: number;
   repos?: string[];
+  assignee?: string;
   label?: string;
   sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
@@ -396,6 +402,7 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
   if (params.page) qs.set("page", String(params.page));
   if (params.pageSize) qs.set("page_size", String(params.pageSize));
   if (params.repos?.length) qs.set("repos", params.repos.join(","));
+  if (params.assignee) qs.set("assignee", params.assignee);
   if (params.label) qs.set("label", params.label);
   if (params.sort) qs.set("sort", params.sort);
   if (params.sortDir) qs.set("sort_dir", params.sortDir);
