@@ -20,18 +20,19 @@ type SortDir = "asc" | "desc";
 
 interface PRsTabProps {
   repoNames: string[];
+  navFilter?: import("@/lib/types").NavFilter | null;
 }
 
 type PRView = "open" | "merged";
 
-export function PRsTab({ repoNames }: PRsTabProps) {
+export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const qc = useQueryClient();
   const [view, setView] = useState<PRView>("open");
   const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(repoNames);
   const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(repoNames);
   const { data: settings } = useSettings();
   const [teamFilter, setTeamFilter] = useState<string>("all");
-  const [personFilter, setPersonFilter] = useState<string[]>([]);
+  const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);

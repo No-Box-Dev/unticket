@@ -45,9 +45,10 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
 
 interface SprintTabProps {
   repoNames: string[];
+  navFilter?: import("@/lib/types").NavFilter | null;
 }
 
-export function SprintTab({ repoNames }: SprintTabProps) {
+export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
@@ -71,12 +72,12 @@ export function SprintTab({ repoNames }: SprintTabProps) {
   const { data: completedTodos } = useTodosClosedInRange(sprint?.startDate, sprint?.endDate);
   const { viewingSprint, setViewingSprint } = useSidebar();
 
-  const [sprintView, setSprintView] = useState<SprintView>("features");
+  const [sprintView, setSprintView] = useState<SprintView>((navFilter?.view as SprintView) || "features");
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
-  const [selectedPersons, setSelectedPersons] = useState<string[]>([]);
+  const [selectedPersons, setSelectedPersons] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);

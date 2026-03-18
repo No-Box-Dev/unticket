@@ -18,7 +18,7 @@ import { CircularProgress } from "@/components/CircularProgress";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth";
-import type { MetricData, Feature, SprintSnapshot, TabId } from "@/lib/types";
+import type { MetricData, Feature, SprintSnapshot, TabId, NavFilter } from "@/lib/types";
 import {
   CheckCircle2,
   Circle,
@@ -48,7 +48,7 @@ const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-w
 
 interface OverviewTabProps {
   repoNames: string[];
-  onTabChange?: (tab: TabId) => void;
+  onTabChange?: (tab: TabId, filter?: NavFilter) => void;
 }
 
 /** Get the production timestamp for a feature, or null */
@@ -445,7 +445,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const taskPct = taskStats.total > 0 ? Math.round((taskStats.closed / taskStats.total) * 100) : 0;
   const pointsPct = sprintPoints.total > 0 ? Math.round((sprintPoints.done / sprintPoints.total) * 100) : 0;
   const elapsedPct = sprintTiming?.elapsedPct ?? 0;
-  const nav = (tab: TabId) => onTabChange?.(tab);
+  const nav = (tab: TabId, filter?: NavFilter) => onTabChange?.(tab, filter);
 
   return (
     <div className="space-y-6">
@@ -615,21 +615,39 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
               <tbody>
                 {contributors.map((c) => {
                   const isMe = c.login === user?.login;
+                  const cellHover = "cursor-pointer hover:text-brand hover:underline underline-offset-2 transition-colors";
                   return (
                     <tr
                       key={c.login}
-                      onClick={() => nav("engineers")}
                       className={cn(
-                        "border-t border-stone-100 dark:border-white/[0.04] cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors",
+                        "border-t border-stone-100 dark:border-white/[0.04] hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors",
                         isMe && "border-l-2 border-l-brand",
                       )}
                     >
-                      <td className={cn("py-1.5 text-stone-700 dark:text-neutral-300", isMe && "pl-2 font-medium")}>{nameOf(c.login)}</td>
-                      <td className="py-1.5 text-right text-stone-600 dark:text-neutral-400">{c.prsMerged}</td>
-                      <td className="py-1.5 text-right text-stone-600 dark:text-neutral-400">{c.issuesClosed}</td>
-                      <td className="py-1.5 text-right text-stone-600 dark:text-neutral-400">{c.rolesTotal > 0 ? `${c.rolesDone}/${c.rolesTotal}` : "—"}</td>
-                      <td className="py-1.5 text-right text-stone-600 dark:text-neutral-400">{c.tasksTotal > 0 ? `${c.tasksDone}/${c.tasksTotal}` : "—"}</td>
-                      <td className="py-1.5 text-right font-semibold text-stone-700 dark:text-neutral-200">{c.pointsDone}</td>
+                      <td
+                        onClick={() => nav("engineers", { person: c.login })}
+                        className={cn("py-1.5 text-stone-700 dark:text-neutral-300 cursor-pointer", cellHover, isMe && "pl-2 font-medium")}
+                      >{nameOf(c.login)}</td>
+                      <td
+                        onClick={() => nav("prs", { person: c.login })}
+                        className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
+                      >{c.prsMerged}</td>
+                      <td
+                        onClick={() => nav("issues", { person: c.login })}
+                        className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
+                      >{c.issuesClosed}</td>
+                      <td
+                        onClick={() => nav("sprint", { person: c.login, view: "roles" })}
+                        className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
+                      >{c.rolesTotal > 0 ? `${c.rolesDone}/${c.rolesTotal}` : "—"}</td>
+                      <td
+                        onClick={() => nav("sprint", { person: c.login, view: "tasks" })}
+                        className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
+                      >{c.tasksTotal > 0 ? `${c.tasksDone}/${c.tasksTotal}` : "—"}</td>
+                      <td
+                        onClick={() => nav("sprint", { person: c.login })}
+                        className={cn("py-1.5 text-right font-semibold text-stone-700 dark:text-neutral-200", cellHover)}
+                      >{c.pointsDone}</td>
                     </tr>
                   );
                 })}

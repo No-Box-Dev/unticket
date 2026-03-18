@@ -5,6 +5,7 @@ import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLe
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 import { AssignDropdown } from "@/components/sprint/AssignDropdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
@@ -40,9 +41,10 @@ const PAGE_SIZE = 30;
 
 interface IssuesTabProps {
   repoNames: string[];
+  navFilter?: import("@/lib/types").NavFilter | null;
 }
 
-export function IssuesTab(_props: IssuesTabProps) {
+export function IssuesTab({ navFilter }: IssuesTabProps) {
   const qc = useQueryClient();
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: settings } = useSettings();
@@ -55,6 +57,7 @@ export function IssuesTab(_props: IssuesTabProps) {
 
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -85,6 +88,7 @@ export function IssuesTab(_props: IssuesTabProps) {
     page: openPage,
     pageSize: PAGE_SIZE,
     repos: filteredRepos,
+    assignee: assigneeFilter.length === 1 ? assigneeFilter[0] : undefined,
     label: labelFilter !== "all" ? labelFilter : undefined,
     sort: sortKey,
     sortDir,
@@ -100,6 +104,7 @@ export function IssuesTab(_props: IssuesTabProps) {
     page: closedPage,
     pageSize: PAGE_SIZE,
     repos: filteredRepos,
+    assignee: assigneeFilter.length === 1 ? assigneeFilter[0] : undefined,
     label: labelFilter !== "all" ? labelFilter : undefined,
     sort: sortKey,
     sortDir,
@@ -291,6 +296,17 @@ export function IssuesTab(_props: IssuesTabProps) {
             ))}
           </select>
         )}
+
+        <PersonSelect
+          value={assigneeFilter.length > 0 ? assigneeFilter : null}
+          onChange={(v) => {
+            setAssigneeFilter(Array.isArray(v) ? v : v ? [v] : []);
+            resetPages();
+          }}
+          options={memberLogins.map((l) => ({ value: l, label: l }))}
+          placeholder="All Assignees"
+          multi
+        />
 
         <SearchableSelect
           value={repoFilter}

@@ -1,7 +1,7 @@
 import { getCtx, jsonResponse } from "../lib/db";
 
 // GET /api/prs — query cached pull requests
-// Query params: state, author, since, repo
+// Query params: state, author, since, repo, page, page_size
 export async function onRequestGet(context) {
   const { orgId } = getCtx(context);
   const url = new URL(context.request.url);
@@ -10,6 +10,8 @@ export async function onRequestGet(context) {
   const author = url.searchParams.get("author");
   const since = url.searchParams.get("since");
   const repo = url.searchParams.get("repo");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "500", 10) || 500));
 
   let query = "SELECT * FROM pull_requests WHERE org_id = ?";
   const bindings = [orgId];
@@ -34,7 +36,13 @@ export async function onRequestGet(context) {
     bindings.push(repo);
   }
 
-  query += " ORDER BY updated_at DESC";
+  // Count total
+  const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as count");
+  const countResult = await context.env.DB.prepare(countQuery).bind(...bindings).first();
+  const totalCount = countResult?.count ?? 0;
+
+  query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
+  bindings.push(pageSize, (page - 1) * pageSize);
 
   const stmt = context.env.DB.prepare(query);
   const rows = await stmt.bind(...bindings).all();

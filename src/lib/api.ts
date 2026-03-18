@@ -13,7 +13,6 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
     this.status = status;
-    broadcastError(message, status);
   }
 
   get isUnauthorized() {
@@ -77,6 +76,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   // Stale / revoked token → force logout so user re-authenticates
   if (res.status === 401) {
     forceLogout();
+    broadcastError(message, 401);
     throw new ApiError(message, 401);
   }
 
@@ -86,9 +86,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
     const resetInfo = resetHeader
       ? `. Try again in ${resetHeader}s`
       : "";
-    throw new ApiError(`Rate limit exceeded${resetInfo}`, 429);
+    const msg = `Rate limit exceeded${resetInfo}`;
+    broadcastError(msg, 429);
+    throw new ApiError(msg, 429);
   }
 
+  broadcastError(message, res.status);
   throw new ApiError(message, res.status);
 }
 
