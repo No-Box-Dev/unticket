@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues } from "@/hooks/useGitHub";
+import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, useSprintSnapshots, usePeople } from "@/hooks/useConfigRepo";
 import {
   computeMetric,
@@ -148,6 +148,15 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const { data: people } = usePeople();
   const { data: snapshots } = useSprintSnapshots();
 
+  // Auto-sync when data is stale so overview shows fresh numbers
+  const { data: syncStatus } = useSyncStatus();
+  const { mutate: triggerSync, isPending: isSyncing } = useTriggerSync();
+  useEffect(() => {
+    if (syncStatus?.isStale && !isSyncing) {
+      triggerSync();
+    }
+  }, [syncStatus?.isStale, isSyncing, triggerSync]);
+
   // Task data for current sprint
   const sprintFeatureIds = useMemo(() => {
     if (!features || !sprint) return [];
@@ -155,7 +164,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   }, [features, sprint]);
   const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
-  const isLoading = mergedLoading || issuesLoading || closedLoading;
+  const isLoading = mergedLoading || issuesLoading || closedLoading || isSyncing;
   const isDaily = weeks <= 2;
   const compute = (dates: string[]) =>
     isDaily ? computeMetricDaily(dates, weeks * 7) : computeMetric(dates, weeks);
@@ -607,8 +616,8 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
                   <th className="text-left pb-2 font-semibold">Person</th>
                   <th className="text-right pb-2 font-semibold">PRs</th>
                   <th className="text-right pb-2 font-semibold">Issues</th>
-                  <th className="text-right pb-2 font-semibold">Roles</th>
-                  <th className="text-right pb-2 font-semibold">Tasks</th>
+                  <th onClick={() => nav("sprint", { view: "roles" })} className="text-right pb-2 font-semibold cursor-pointer hover:text-brand transition-colors">Roles Completed</th>
+                  <th onClick={() => nav("sprint", { view: "tasks" })} className="text-right pb-2 font-semibold cursor-pointer hover:text-brand transition-colors">Tasks Completed</th>
                   <th className="text-right pb-2 font-semibold">Points</th>
                 </tr>
               </thead>
