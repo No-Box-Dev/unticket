@@ -2,8 +2,8 @@ import type { WeeklyBucket, MetricData } from "./types";
 
 function getWeekStart(date: Date): string {
   const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  d.setUTCHours(0, 0, 0, 0);
   return d.toISOString().split("T")[0];
 }
 
@@ -33,7 +33,7 @@ function buildWeeklyBuckets(dates: string[], weeks: number): WeeklyBucket[] {
 
 function getDay(date: Date): string {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d.toISOString().split("T")[0];
 }
 

@@ -9,7 +9,7 @@ import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 type ViewMode = "features" | "roles" | "tasks";
 
-export function EngineersTab({ repoNames }: { repoNames: string[] }) {
+export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
@@ -17,7 +17,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
 
-  const [selectedLogin, setSelectedLogin] = useState<string | null>(null);
+  const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
   const [viewMode, setViewMode] = useState<ViewMode>("features");
 
   const sprintFeatures = useMemo(() => {
@@ -203,7 +203,7 @@ export function EngineersTab({ repoNames }: { repoNames: string[] }) {
 
             <div className="p-4">
               {viewMode === "features" && (
-                <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} featureMap={featureMap} />
+                <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} />
               )}
               {viewMode === "roles" && (
                 <RolesView roles={selected.myRoles} tasks={selected.myTasks} featureMap={featureMap} />
@@ -230,10 +230,9 @@ const STATUS_LABELS: Record<string, string> = {
   tested: "Tested", production: "Production", future: "Future",
 };
 
-function FeaturesView({ features, tasks, featureMap }: {
+function FeaturesView({ features, tasks }: {
   features: Feature[];
   tasks: SubIssueWithFeature[];
-  featureMap: Map<number, Feature>;
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 

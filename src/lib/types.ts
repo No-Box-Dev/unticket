@@ -56,6 +56,11 @@ export type TabId =
   | "workload"
   | "settings";
 
+export interface NavFilter {
+  person?: string;
+  view?: string;
+}
+
 export type TodoStatus = "backlog" | "in_progress" | "done";
 
 export interface Todo {

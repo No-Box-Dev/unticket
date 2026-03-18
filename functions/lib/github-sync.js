@@ -178,31 +178,34 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
 
   const issues = allItems.filter((i) => !i.pull_request);
 
-  // Fetch closed_by for closed issues via events API
+  // Fetch closed_by for closed issues via events API (batched to avoid N+1)
   const closedByMap = new Map();
   const closedIssues = issues.filter((i) => i.state === "closed");
-  for (const issue of closedIssues) {
-    try {
-      const eventsRes = await fetch(
-        `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-Agent": "GitPulse",
-            Accept: "application/vnd.github+json",
-          },
-        }
-      );
-      if (eventsRes.ok) {
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < closedIssues.length; i += BATCH_SIZE) {
+    const batch = closedIssues.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (issue) => {
+        const eventsRes = await fetch(
+          `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "User-Agent": "GitPulse",
+              Accept: "application/vnd.github+json",
+            },
+          }
+        );
+        if (!eventsRes.ok) return { number: issue.number, login: null };
         const events = await eventsRes.json();
-        // Find the last "closed" event
         const closedEvent = events.filter((e) => e.event === "closed").pop();
-        if (closedEvent?.actor?.login) {
-          closedByMap.set(issue.number, closedEvent.actor.login);
-        }
+        return { number: issue.number, login: closedEvent?.actor?.login ?? null };
+      })
+    );
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value.login) {
+        closedByMap.set(result.value.number, result.value.login);
       }
-    } catch {
-      // Skip if events fetch fails — closed_by will be null
     }
   }
 
@@ -292,6 +295,10 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
   const features = issues.filter((i) => !i.pull_request);
 
   console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
+
+  if (features.length === 0 && issues.length > 0) {
+    console.warn(`[unticket.ai] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
+  }
 
   const stmt = db.prepare(
     `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
@@ -423,11 +430,21 @@ export async function syncInit(db, token, orgId, orgLogin) {
 // ---------- syncRepo: sync PRs + issues for a single repo ----------
 
 export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) {
-  const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
-  await syncPRs(db, token, orgId, orgLogin, repo, prSince);
+  try {
+    const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
+    await syncPRs(db, token, orgId, orgLogin, repo, prSince);
+  } catch (err) {
+    console.error(`[unticket.ai] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
+    throw err;
+  }
 
-  const issueSince = force ? null : (await getSyncState(db, orgId, `issues:${repo}`))?.lastSynced;
-  await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
+  try {
+    const issueSince = force ? null : (await getSyncState(db, orgId, `issues:${repo}`))?.lastSynced;
+    await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
+  } catch (err) {
+    console.error(`[unticket.ai] syncRepo issues failed for ${repo}:`, err?.message ?? err);
+    throw err;
+  }
 }
 
 // ---------- Upsert helpers for webhook events ----------
