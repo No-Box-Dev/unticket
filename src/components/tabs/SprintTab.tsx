@@ -112,9 +112,9 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
     ? sortedSnapshots.find((s) => s.sprintNumber === viewingSprint) ?? null
     : null;
 
-  const viewingFutureSprint = viewingSprint !== null && !activeSnapshot
-    ? futureSprints.includes(viewingSprint) ? viewingSprint : null
-    : null;
+  const isViewingFutureSprint =
+    viewingSprint !== null && !activeSnapshot && futureSprints.includes(viewingSprint);
+  const viewingFutureSprint = isViewingFutureSprint ? viewingSprint : null;
 
   // The effective sprint number for feature filtering
   const effectiveSprintNumber = viewingFutureSprint ?? sprint?.number ?? 0;
@@ -154,13 +154,13 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const sprintFeatures = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return (features ?? []).filter((f) => {
-      if (f.sprint !== sprint?.number || f.status === "future") return false;
+      if (f.sprint !== effectiveSprintNumber || f.status === "future") return false;
       if (selectedPersons.length > 0 && !f.owners.some((o) => selectedPersons.some((p) => o.toLowerCase() === p.toLowerCase()))) return false;
       if (selectedTeam && f.team !== selectedTeam) return false;
       if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [features, sprint, selectedPersons, selectedTeam, searchQuery]);
+  }, [features, effectiveSprintNumber, selectedPersons, selectedTeam, searchQuery]);
 
   const sortedColumns = useMemo(() => ({
     plan: sortFeatures(sprintFeatures.filter((f) => f.status === "plan"), sortBy),
