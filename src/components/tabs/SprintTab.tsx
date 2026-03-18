@@ -94,9 +94,30 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
     [snapshots],
   );
 
+  // Detect future sprint numbers from features (sprints ahead of current)
+  const futureSprints = useMemo(() => {
+    if (!features || !sprint) return [];
+    const snapshotNums = new Set((snapshots ?? []).map((s) => s.sprintNumber));
+    const nums = new Set<number>();
+    for (const f of features) {
+      if (f.sprint !== null && f.sprint > sprint.number && !snapshotNums.has(f.sprint)) {
+        nums.add(f.sprint);
+      }
+    }
+    return [...nums].sort((a, b) => a - b);
+  }, [features, sprint, snapshots]);
+
+  // Determine what we're viewing: null = current sprint, number = snapshot or future
   const activeSnapshot = viewingSprint !== null
     ? sortedSnapshots.find((s) => s.sprintNumber === viewingSprint) ?? null
     : null;
+
+  const viewingFutureSprint = viewingSprint !== null && !activeSnapshot
+    ? futureSprints.includes(viewingSprint) ? viewingSprint : null
+    : null;
+
+  // The effective sprint number for feature filtering
+  const effectiveSprintNumber = viewingFutureSprint ?? sprint?.number ?? 0;
 
   const allPeopleNames = useMemo(
     () => (orgMembers ?? []).map((m) => m.login),
@@ -123,8 +144,8 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
 
   // All sprint features (unfiltered, for metrics view)
   const allSprintFeatures = useMemo(() => {
-    return (features ?? []).filter((f) => f.sprint === sprint?.number && f.status !== "future");
-  }, [features, sprint]);
+    return (features ?? []).filter((f) => f.sprint === effectiveSprintNumber && f.status !== "future");
+  }, [features, effectiveSprintNumber]);
 
   const metricsFeatureIds = useMemo(() => allSprintFeatures.map((f) => f.id), [allSprintFeatures]);
   const { data: allTasks, isLoading: tasksLoading } = useAllSprintSubIssues(metricsFeatureIds);
@@ -264,6 +285,11 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
               className="appearance-none pl-2.5 pr-7 py-1.5 text-sm font-semibold rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-700 dark:text-neutral-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand/30"
             >
               <option value="current">Sprint {sprint.number}</option>
+              {futureSprints.map((num) => (
+                <option key={`future-${num}`} value={num}>
+                  Sprint {num} (upcoming)
+                </option>
+              ))}
               {sortedSnapshots.map((snap) => (
                 <option key={snap.sprintNumber} value={snap.sprintNumber}>
                   Sprint {snap.sprintNumber}{snap.name ? ` — ${snap.name}` : ""}
