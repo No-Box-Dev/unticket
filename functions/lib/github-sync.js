@@ -197,7 +197,13 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
           }
         );
         if (!eventsRes.ok) return { number: issue.number, login: null };
-        const events = await eventsRes.json();
+        let events;
+        try {
+          events = await eventsRes.json();
+        } catch {
+          console.error(`[unticket.ai] Failed to parse events JSON for issue #${issue.number}`);
+          return { number: issue.number, login: null };
+        }
         const closedEvent = events.filter((e) => e.event === "closed").pop();
         return { number: issue.number, login: closedEvent?.actor?.login ?? null };
       })
