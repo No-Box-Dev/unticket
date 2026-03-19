@@ -90,6 +90,7 @@ function buildLabels(f: {
   priority?: Priority;
 }): string[] {
   const labels = [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
+  if (f.effort) labels.push(`${EFFORT_PREFIX}${f.effort}`);
   if (f.priority && f.priority !== "none") labels.push(`${PRIORITY_PREFIX}${f.priority}`);
   return labels;
 }

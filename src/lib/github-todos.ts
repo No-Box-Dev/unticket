@@ -2,13 +2,16 @@ import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
 const REPO = ".gitpulse";
+const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
 const FEATURE_PREFIX = "todo-feature:";
+const OWNER_PREFIX = "todo-owner:";
 
 // Labels that exclude an issue from being a todo
 const EXCLUDE_LABELS = new Set(["feature", "role"]);
 
 const STATUS_LABELS = [
+  { name: TODO_LABEL, color: "64748B", description: "Personal todo item" },
   { name: "todo-status:backlog", color: "94A3B8", description: "Todo: backlog" },
   { name: "todo-status:in_progress", color: "3B82F6", description: "Todo: in progress" },
   { name: "todo-status:done", color: "22C55E", description: "Todo: done" },
@@ -146,7 +149,9 @@ export async function createTodo(
   await ensureTodoLabels(org);
   const ok = getOctokit();
 
-  const labels: string[] = [`${STATUS_PREFIX}backlog`];
+  const ownerLabel = `${OWNER_PREFIX}${owner}`;
+  await ensureDynamicLabel(org, ownerLabel, "64748B", `Todo owner: ${owner}`);
+  const labels: string[] = [TODO_LABEL, `${STATUS_PREFIX}backlog`, ownerLabel];
   if (opts?.featureId) {
     const featureLabel = `${FEATURE_PREFIX}${opts.featureId}`;
     await ensureDynamicLabel(org, featureLabel, "7C3AED", `Linked to feature #${opts.featureId}`);
