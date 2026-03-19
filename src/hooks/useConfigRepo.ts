@@ -805,12 +805,25 @@ export function useAdvanceSprint() {
       // 2. Ensure the new milestone exists on GitHub first
       await findOrCreateMilestone(org, newSprint.number);
 
-      // 3. Move plan/demo features to new sprint
-      const toMove = features.filter(
-        (f) => f.sprint === oldSprintNumber && (f.status === "plan" || f.status === "demo"),
-      );
+      const sprintFeatures = features.filter((f) => f.sprint === oldSprintNumber && f.status !== "future");
+      const toClose = sprintFeatures.filter((f) => f.status === "production");
+      const toMove = sprintFeatures.filter((f) => f.status !== "production");
+      const total = toClose.length + toMove.length;
       const failed: number[] = [];
       let done = 0;
+
+      // 3. Close features that are in production (close the GitHub issue)
+      for (const f of toClose) {
+        try {
+          await ghDeleteFeature(org, f.id);
+        } catch {
+          failed.push(f.id);
+        }
+        done++;
+        onProgress?.(done, total);
+      }
+
+      // 4. Move all non-production features to the new sprint
       for (const f of toMove) {
         try {
           await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
@@ -818,10 +831,10 @@ export function useAdvanceSprint() {
           failed.push(f.id);
         }
         done++;
-        onProgress?.(done, toMove.length);
+        onProgress?.(done, total);
       }
 
-      // 4. Only persist sprint config and close old milestone if all features moved
+      // 5. Only persist sprint config and close old milestone if all features processed
       if (failed.length === 0) {
         await saveSprint(newSprint);
         await closeMilestone(org, oldSprintNumber);

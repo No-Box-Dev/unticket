@@ -69,12 +69,12 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
           <div className="rounded-lg bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] px-4 py-3 text-sm text-stone-600 dark:text-neutral-400 space-y-1">
             {productionCount > 0 && (
               <p>
-                <span className="font-medium text-green-600">Production</span> features ({productionCount}) will be archived on Sprint {currentSprint.number}
+                <span className="font-medium text-green-600">Production</span> features ({productionCount}) will be closed
               </p>
             )}
             {movingCount > 0 && (
               <p>
-                <span className="font-medium text-brand">Plan</span> and <span className="font-medium text-amber-600">Demo</span> features ({movingCount}) will move to Sprint {nextNumber}
+                All other features ({movingCount}) will move to Sprint {nextNumber}
               </p>
             )}
             {productionCount === 0 && movingCount === 0 && (
