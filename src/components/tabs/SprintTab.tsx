@@ -16,7 +16,7 @@ import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 
 type SprintView = "features" | "roles" | "tasks" | "metrics";
-type SortKey = "default" | "priority" | "title";
+type SortKey = "default" | "title";
 
 type BoardStatus = Exclude<FeatureStatus, "future">;
 const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
@@ -27,14 +27,10 @@ const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "production", label: "In Production", color: "bg-green-500" },
 ];
 
-const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
-
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   if (key === "default") return features;
   return [...features].sort((a, b) => {
     switch (key) {
-      case "priority":
-        return (PRIORITY_ORDER[a.priority ?? "none"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "none"] ?? 3);
       case "title":
         return a.title.localeCompare(b.title);
       default:
@@ -594,7 +590,6 @@ function FeaturesView({
             className="px-2 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-500 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="default">Default</option>
-            <option value="priority">Priority</option>
             <option value="title">Title A-Z</option>
           </select>
         </div>

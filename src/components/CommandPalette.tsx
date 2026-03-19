@@ -127,7 +127,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     // Search features
     for (const f of features ?? []) {
       if (items.length >= 30) break;
-      const searchText = `${f.title} ${f.owners.join(" ")} ${f.priority ?? ""}`.toLowerCase();
+      const searchText = `${f.title} ${f.owners.join(" ")}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "feature",
@@ -135,7 +135,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           detail: [
             f.sprint ? `Sprint ${f.sprint}` : "Backlog",
             f.owners.length > 0 ? f.owners.join(", ") : null,
-            f.priority && f.priority !== "none" ? `${f.priority} priority` : null,
           ].filter(Boolean).join(" · "),
           action: () => {
             if (f.status === "future") {

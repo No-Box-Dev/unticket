@@ -77,8 +77,6 @@ export interface Todo {
 
 // .gitpulse config repo types
 
-export type Effort = "low" | "medium" | "high";
-export type Priority = "high" | "medium" | "low" | "none";
 export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
 
 // Sprint points
@@ -118,8 +116,6 @@ export interface Feature {
   owners: string[];
   status: FeatureStatus;
   sprint: number | null;
-  effort?: Effort;
-  priority?: Priority;
   plan?: string;
   url?: string;
   statusHistory?: StatusHistoryEntry[];

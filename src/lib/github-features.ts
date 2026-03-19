@@ -1,6 +1,6 @@
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
-import type { Feature, FeatureStatus, Effort, Priority, StatusHistoryEntry, Points, PersonRole, LinkedPR } from "./types";
+import type { Feature, FeatureStatus, StatusHistoryEntry, Points, PersonRole, LinkedPR } from "./types";
 import { VALID_POINTS } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -18,8 +18,6 @@ interface D1FeatureRow {
 const REPO = ".gitpulse";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
-const EFFORT_PREFIX = "effort:";
-const PRIORITY_PREFIX = "priority:";
 const ROLE_LABEL = "role";
 const POINTS_PREFIX = "points:";
 
@@ -31,9 +29,6 @@ const FEATURE_LABELS = [
   { name: "status:tested", color: "06B6D4", description: "Feature tested" },
   { name: "status:production", color: "22C55E", description: "Feature in production" },
   { name: "status:future", color: "A8A29E", description: "Backlog feature" },
-  { name: "priority:low", color: "22C55E", description: "Low priority" },
-  { name: "priority:medium", color: "F97316", description: "Medium priority" },
-  { name: "priority:high", color: "EF4444", description: "High priority" },
   { name: "role", color: "6366F1", description: "Person role (sub-issue grouping)" },
   { name: "points:1", color: "22C55E", description: "1 sprint point" },
   { name: "points:2", color: "84CC16", description: "2 sprint points" },
@@ -86,13 +81,8 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
 
 function buildLabels(f: {
   status: FeatureStatus;
-  effort?: Effort;
-  priority?: Priority;
 }): string[] {
-  const labels = [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
-  if (f.effort) labels.push(`${EFFORT_PREFIX}${f.effort}`);
-  if (f.priority && f.priority !== "none") labels.push(`${PRIORITY_PREFIX}${f.priority}`);
-  return labels;
+  return [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
 }
 
 function issueToFeature(issue: any): Feature {
@@ -101,8 +91,6 @@ function issueToFeature(issue: any): Feature {
     .filter(Boolean) as string[];
 
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
-  const effort = extractLabel(labelNames, EFFORT_PREFIX) as Effort | undefined;
-  const priority = extractLabel(labelNames, PRIORITY_PREFIX) as Priority | undefined;
   const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
 
@@ -118,8 +106,6 @@ function issueToFeature(issue: any): Feature {
     owners: (issue.assignees ?? []).map((a: any) => a.login),
     status,
     sprint,
-    effort,
-    priority,
     plan: content || undefined,
     url: issue.html_url,
     statusHistory: metadata.statusHistory,
@@ -253,14 +239,12 @@ export async function createFeature(
   opts: {
     status: FeatureStatus;
     sprint: number | null;
-    effort?: Effort;
-    priority?: Priority;
     owners?: string[];
     plan?: string;
   },
 ): Promise<Feature> {
   const ok = getOctokit();
-  const labels = buildLabels({ ...opts, priority: opts.priority });
+  const labels = buildLabels({ ...opts });
 
   let milestone: number | undefined;
   if (opts.sprint !== null) {
@@ -602,8 +586,6 @@ export interface LegacyFeature {
   owners: string[];
   status: string;
   sprint: number | null;
-  effort: string;
-  priority?: string;
   plan?: string;
 }
 
@@ -619,17 +601,13 @@ export async function migrateFeatures(
     demo: "demo", tested: "tested",
     done: "production", production: "production", future: "future",
   };
-  const effortMap: Record<string, Effort> = { low: "low", medium: "medium", high: "high" };
-
   let created = 0;
   for (const f of legacy) {
     const status = statusMap[f.status] ?? "plan";
-    const effort = effortMap[f.effort] ?? "medium";
-    const priority = (f.priority && f.priority !== "none" ? f.priority : undefined) as Priority | undefined;
 
     await createFeature(org, f.title, {
-      status, sprint: f.sprint, effort,
-      priority, owners: f.owners, plan: f.plan,
+      status, sprint: f.sprint,
+      owners: f.owners, plan: f.plan,
     });
     created++;
     onProgress?.(created, legacy.length);

@@ -98,8 +98,6 @@ export function extractCreatedDates(items: { created_at: string }[]): string[] {
 
 // ---------- Ref tab helpers ----------
 
-export const EFFORT_POINTS: Record<string, number> = { low: 1, medium: 2, high: 3 };
-
 import type { Feature, SprintConfig, StatusHistoryEntry } from "./types";
 
 /** Compute burndown data for a sprint: ideal line + actual remaining features per day. */

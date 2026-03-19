@@ -46,7 +46,7 @@ import {
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import { useRef } from "react";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -98,7 +98,7 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort?: Effort; priority?: Priority; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     onSuccess: (newFeature) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>

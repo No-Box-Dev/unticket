@@ -10,8 +10,6 @@ const baseFeature: Feature = {
   owners: [],
   status: "plan",
   sprint: 1,
-  effort: "medium",
-  priority: "high",
 };
 
 const defaultProps = {
@@ -29,11 +27,6 @@ describe("FeatureCard", () => {
     const feat = { ...baseFeature, title: longTitle };
     render(<FeatureCard {...defaultProps} feature={feat} />);
     expect(screen.getByText(longTitle)).toBeInTheDocument();
-  });
-
-  it("renders priority tag", () => {
-    render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByTitle("Priority: high")).toBeInTheDocument();
   });
 
   it("title click calls onOpenDetail", async () => {

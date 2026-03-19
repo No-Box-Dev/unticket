@@ -500,7 +500,7 @@ function TodoDetailModal({
             id="todo-detail-title"
             value={todo.title}
             onChange={(e) => onUpdate({ title: e.target.value })}
-            className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full truncate"
+            className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full"
           />
           <div className="flex items-center gap-2 shrink-0">
             {todo.html_url && (

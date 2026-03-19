@@ -7,16 +7,12 @@ import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
 import type { Feature } from "@/lib/types";
 import { Archive, ArrowUpDown } from "lucide-react";
 
-type SortKey = "default" | "priority" | "title";
-
-const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
+type SortKey = "default" | "title";
 
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   if (key === "default") return features;
   return [...features].sort((a, b) => {
     switch (key) {
-      case "priority":
-        return (PRIORITY_ORDER[a.priority ?? "none"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "none"] ?? 3);
       case "title":
         return a.title.localeCompare(b.title);
       default:
@@ -91,7 +87,6 @@ export function BacklogTab() {
             className="px-2 py-1 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-500 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="default">Default order</option>
-            <option value="priority">Priority</option>
             <option value="title">Title A-Z</option>
           </select>
         </div>
