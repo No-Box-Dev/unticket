@@ -70,11 +70,11 @@ export function FeatureCard({
           onChange={(owners) => onUpdate({ ...feature, owners })}
         />
         <div className="flex-1 min-w-0" />
-        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1.5">
           {mode === "sprint" && (
             <button
-              onClick={() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null })}
-              className="p-1 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+              onClick={(e) => { e.stopPropagation(); onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }); }}
+              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
               title="Move to Backlog"
             >
               <Archive size={13} />
@@ -82,8 +82,8 @@ export function FeatureCard({
           )}
           {mode === "backlog" && currentSprint && (
             <button
-              onClick={() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint })}
-              className="p-1 text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+              onClick={(e) => { e.stopPropagation(); onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }); }}
+              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
               title="Move to Sprint"
             >
               <ArrowUpFromLine size={13} />
@@ -91,8 +91,8 @@ export function FeatureCard({
           )}
           {isAdmin && (
             <button
-              onClick={() => onDelete(feature.id)}
-              className="p-1 text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950"
+              onClick={(e) => { e.stopPropagation(); onDelete(feature.id); }}
+              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Delete"
             >
               <Trash2 size={13} />
