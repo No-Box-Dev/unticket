@@ -167,16 +167,18 @@ export async function saveTodoPlanFile(
 const PEOPLE_PATH = "config/people.json";
 
 export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
-  const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
-  if (!result) return [];
   try {
+    const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
+    if (!result) return [];
     const data = JSON.parse(result.content) as Person[];
     // Normalize: migrate legacy `team` string → `teams` array
     return data.map((p) => ({
       ...p,
       teams: p.teams ?? (p.team ? [p.team] : []),
     }));
-  } catch {
+  } catch (error) {
+    // people.json missing, repo doesn't exist, or any other error — return empty
+    console.warn("[unticket.ai] Failed to fetch people.json:", error);
     return [];
   }
 }
