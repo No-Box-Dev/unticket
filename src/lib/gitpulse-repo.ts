@@ -167,9 +167,9 @@ export async function saveTodoPlanFile(
 const PEOPLE_PATH = "config/people.json";
 
 export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
-  const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
-  if (!result) return [];
   try {
+    const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
+    if (!result) return [];
     const data = JSON.parse(result.content) as Person[];
     // Normalize: migrate legacy `team` string → `teams` array
     return data.map((p) => ({
@@ -177,6 +177,7 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
       teams: p.teams ?? (p.team ? [p.team] : []),
     }));
   } catch {
+    // people.json missing, repo doesn't exist, or any other error — return empty
     return [];
   }
 }
