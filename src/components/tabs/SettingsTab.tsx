@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople, useAgentRules, useSaveAgentRules } from "@/hooks/useConfigRepo";
-import { TeamManagement } from "@/components/settings/TeamManagement";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { pushClaudeMdToRepos, buildClaudeMdPreview, fetchClaudeMdContent, checkOutdatedRepos } from "@/lib/claude-md-sync";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
@@ -49,21 +48,11 @@ export function SettingsTab() {
         </button>
       </div>
 
-      {/* Teams */}
-      {settings && repos && (
-        <TeamManagement
-          settings={settings}
-          saveSettings={saveSettings}
-          repos={repos as any}
-        />
-      )}
-
       {/* People */}
       {settings && (
         <PeopleManagement
           people={people ?? []}
           savePeople={savePeople}
-          teams={settings.teams}
           orgMembers={orgMembers ?? []}
           settings={settings}
           saveSettings={saveSettings}

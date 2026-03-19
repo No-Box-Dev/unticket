@@ -46,7 +46,7 @@ import {
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import { useRef } from "react";
-import type { SprintConfig, Feature, FeatureStatus, Effort, Priority, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -98,7 +98,7 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort?: Effort; team?: string; priority?: Priority; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     onSuccess: (newFeature) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
@@ -627,10 +627,9 @@ export function useCreateTodoItem() {
   const { selectedOrg, user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; featureId?: number; repo?: string }) =>
+    mutationFn: (args: { title: string; featureId?: number }) =>
       ghCreateTodo(selectedOrg!, args.title, user!.login, {
         featureId: args.featureId,
-        repo: args.repo,
       }),
     onSuccess: (newTodo) => {
       qc.setQueryData<Todo[]>(["todos", selectedOrg, user?.login], (old) =>
@@ -644,7 +643,7 @@ export function useUpdateTodoItem() {
   const { selectedOrg, user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null; repo?: string | null } }) =>
+    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null } }) =>
       ghUpdateTodo(selectedOrg!, args.issueNumber, args.updates),
     onMutate: async (args) => {
       const key = ["todos", selectedOrg, user?.login];
@@ -653,13 +652,12 @@ export function useUpdateTodoItem() {
       qc.setQueryData<Todo[]>(key, (old) =>
         old?.map((t) => {
           if (t.id !== args.issueNumber) return t;
-          const { featureId, repo, ...rest } = args.updates;
+          const { featureId, ...rest } = args.updates;
           return {
             ...t,
             ...rest,
             status: args.updates.status ?? t.status,
             featureId: featureId === null ? undefined : (featureId ?? t.featureId),
-            repo: repo === null ? undefined : (repo ?? t.repo),
           };
         }) ?? [],
       );
@@ -805,12 +803,25 @@ export function useAdvanceSprint() {
       // 2. Ensure the new milestone exists on GitHub first
       await findOrCreateMilestone(org, newSprint.number);
 
-      // 3. Move plan/demo features to new sprint
-      const toMove = features.filter(
-        (f) => f.sprint === oldSprintNumber && (f.status === "plan" || f.status === "demo"),
-      );
+      const sprintFeatures = features.filter((f) => f.sprint === oldSprintNumber && f.status !== "future");
+      const toClose = sprintFeatures.filter((f) => f.status === "production");
+      const toMove = sprintFeatures.filter((f) => f.status !== "production");
+      const total = toClose.length + toMove.length;
       const failed: number[] = [];
       let done = 0;
+
+      // 3. Close features that are in production (close the GitHub issue)
+      for (const f of toClose) {
+        try {
+          await ghDeleteFeature(org, f.id);
+        } catch {
+          failed.push(f.id);
+        }
+        done++;
+        onProgress?.(done, total);
+      }
+
+      // 4. Move all non-production features to the new sprint
       for (const f of toMove) {
         try {
           await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
@@ -818,10 +829,10 @@ export function useAdvanceSprint() {
           failed.push(f.id);
         }
         done++;
-        onProgress?.(done, toMove.length);
+        onProgress?.(done, total);
       }
 
-      // 4. Only persist sprint config and close old milestone if all features moved
+      // 5. Only persist sprint config and close old milestone if all features processed
       if (failed.length === 0) {
         await saveSprint(newSprint);
         await closeMilestone(org, oldSprintNumber);

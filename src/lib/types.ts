@@ -72,14 +72,11 @@ export interface Todo {
   createdAt: string;       // from GitHub created_at
   closedAt?: string;       // from GitHub closed_at (when done)
   featureId?: number;      // linked feature issue number
-  repo?: string;           // optional repo context
   html_url: string;        // GitHub issue URL
 }
 
 // .gitpulse config repo types
 
-export type Effort = "low" | "medium" | "high";
-export type Priority = "high" | "medium" | "low" | "none";
 export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
 
 // Sprint points
@@ -116,12 +113,9 @@ export interface LinkedPR {
 export interface Feature {
   id: number;
   title: string;
-  team?: string;
   owners: string[];
   status: FeatureStatus;
   sprint: number | null;
-  effort?: Effort;
-  priority?: Priority;
   plan?: string;
   url?: string;
   statusHistory?: StatusHistoryEntry[];
@@ -131,20 +125,10 @@ export interface Feature {
 export interface Person {
   github: string;
   name: string;
-  teams: string[];
   role: string;
-  /** @deprecated — use `teams` */
-  team?: string;
-}
-
-export interface Team {
-  name: string;
-  color: string;
-  repos: string[];
 }
 
 export interface OrgSettings {
-  teams: Team[];
   draftRepos?: string[];
   excludedMembers?: string[];
 }
@@ -198,7 +182,7 @@ export interface IssueWithRepo extends IssueInfo {
   repo: string;
 }
 
-// Metric types for Team/Individual tabs
+// Metric types
 export interface WeeklyBucket {
   weekStart: string;
   value: number;

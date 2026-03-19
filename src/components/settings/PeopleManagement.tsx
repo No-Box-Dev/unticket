@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Person, Team, OrgSettings } from "@/lib/types";
+import type { Person, OrgSettings } from "@/lib/types";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 interface OrgMember {
@@ -12,19 +12,16 @@ interface OrgMember {
 interface Props {
   people: Person[];
   savePeople: UseMutationResult<void, Error, Person[]>;
-  teams: Team[];
   orgMembers: OrgMember[];
   settings: OrgSettings;
   saveSettings: UseMutationResult<void, Error, OrgSettings>;
 }
 
-export function PeopleManagement({ people, savePeople, teams, orgMembers, settings, saveSettings }: Props) {
+export function PeopleManagement({ people, savePeople, orgMembers, settings, saveSettings }: Props) {
   const [search, setSearch] = useState("");
   const [editingLogin, setEditingLogin] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState("");
-  const [editTeams, setEditTeams] = useState<string[]>([]);
-
   const excluded = new Set(settings.excludedMembers ?? []);
   const peopleMap = new Map(people.map((p) => [p.github, p]));
 
@@ -36,7 +33,6 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
       avatar_url: m.avatar_url,
       name: person?.name ?? m.login,
       role: person?.role ?? "",
-      teams: person?.teams ?? [],
       active: !excluded.has(m.login),
     };
   });
@@ -46,8 +42,7 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
         (m) =>
           m.name.toLowerCase().includes(search.toLowerCase()) ||
           m.login.toLowerCase().includes(search.toLowerCase()) ||
-          m.role.toLowerCase().includes(search.toLowerCase()) ||
-          m.teams.some((t) => t.toLowerCase().includes(search.toLowerCase())),
+          m.role.toLowerCase().includes(search.toLowerCase()),
       )
     : members;
 
@@ -67,7 +62,6 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
     setEditingLogin(login);
     setEditName(m.name === m.login ? "" : m.name);
     setEditRole(m.role);
-    setEditTeams([...m.teams]);
   }
 
   function cancelEdit() {
@@ -81,21 +75,12 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
       github: editingLogin,
       name: editName.trim() || editingLogin,
       role: editRole.trim(),
-      teams: editTeams,
     };
     const next = existing
       ? people.map((p) => (p.github === editingLogin ? updated : p))
       : [...people, updated];
     savePeople.mutate(next);
     setEditingLogin(null);
-  }
-
-  function toggleTeam(teamName: string) {
-    setEditTeams((prev) => {
-      if (prev.includes(teamName)) return prev.filter((t) => t !== teamName);
-      if (prev.length >= 2) return prev;
-      return [...prev, teamName];
-    });
   }
 
   return (
@@ -116,7 +101,7 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, GitHub, role, or team..."
+            placeholder="Search by name, GitHub, or role..."
             className="w-full text-xs border border-stone-200 dark:border-white/[0.06] rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/30 dark:bg-dark-overlay dark:text-neutral-100"
           />
         </div>
@@ -165,25 +150,6 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
                     )}
                   </div>
                   {member.role && <div className="text-xs text-stone-400 dark:text-neutral-500">{member.role}</div>}
-                </div>
-
-                {/* Teams */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {member.teams.map((teamName) => {
-                    const team = teams.find((t) => t.name === teamName);
-                    return (
-                      <span
-                        key={teamName}
-                        className="inline-flex items-center gap-1 text-xs text-stone-500 dark:text-neutral-400 bg-stone-50 dark:bg-white/[0.04] px-1.5 py-0.5 rounded-full"
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: team?.color ?? "#94a3b8" }}
-                        />
-                        {teamName}
-                      </span>
-                    );
-                  })}
                 </div>
 
                 {/* Edit button */}
@@ -238,44 +204,6 @@ export function PeopleManagement({ people, savePeople, teams, orgMembers, settin
                     </button>
                   </div>
 
-                  {/* Team Assignment */}
-                  {teams.length > 0 && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-stone-600 dark:text-neutral-400">Teams</span>
-                        <span className="text-xs text-stone-400 dark:text-neutral-500">(max 2)</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {teams.map((team) => {
-                          const selected = editTeams.includes(team.name);
-                          const atMax = editTeams.length >= 2 && !selected;
-                          return (
-                            <button
-                              key={team.name}
-                              onClick={() => toggleTeam(team.name)}
-                              disabled={atMax}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full transition-colors ${
-                                selected
-                                  ? "text-white font-medium cursor-pointer"
-                                  : atMax
-                                    ? "bg-stone-50 dark:bg-white/[0.04] text-stone-300 dark:text-neutral-600 cursor-default"
-                                    : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1] cursor-pointer"
-                              }`}
-                              style={selected ? { backgroundColor: team.color } : undefined}
-                            >
-                              {!selected && (
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ backgroundColor: team.color }}
-                                />
-                              )}
-                              {team.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

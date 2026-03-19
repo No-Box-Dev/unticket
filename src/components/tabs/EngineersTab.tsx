@@ -144,8 +144,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             )}
             <div>
               <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">{selected.name}</h2>
-              {(selected.role || selected.teams.length > 0) && (
-                <p className="text-sm text-stone-400">{[selected.role, selected.teams.join(", ")].filter(Boolean).join(" · ")}</p>
+              {selected.role && (
+                <p className="text-sm text-stone-400">{selected.role}</p>
               )}
             </div>
           </div>

@@ -42,12 +42,9 @@ describe("fetchPeople (GitHub-backed)", () => {
 });
 
 describe("fetchSettings", () => {
-  it("adds repos:[] to teams missing it and draftRepos:[]", async () => {
-    mockApiGet.mockResolvedValue({
-      teams: [{ name: "Team", color: "#fff" }],
-    });
+  it("normalizes draftRepos to []", async () => {
+    mockApiGet.mockResolvedValue({});
     const result = await fetchSettings();
-    expect(result!.teams[0].repos).toEqual([]);
     expect(result!.draftRepos).toEqual([]);
   });
 

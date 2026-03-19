@@ -1,15 +1,12 @@
 import { cn } from "@/lib/cn";
-import { TeamTag } from "./TeamTag";
-import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, Priority } from "@/lib/types";
+import type { Feature } from "@/lib/types";
 import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
   allPeople: string[];
-  allTeams: string[];
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
@@ -23,7 +20,6 @@ interface FeatureCardProps {
 export function FeatureCard({
   feature,
   allPeople,
-  allTeams,
   onUpdate,
   onDelete,
   onOpenDetail,
@@ -66,23 +62,14 @@ export function FeatureCard({
       </div>
 
       {/* Row 2: tags + people + hover actions */}
-      <div className="flex items-center gap-2 mt-1.5 ml-6">
+      <div className="flex items-center gap-2 mt-1.5 ml-6 flex-wrap">
         <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
-        <PriorityTag
-          priority={feature.priority ?? "none"}
-          onChange={(priority: Priority) => onUpdate({ ...feature, priority })}
-        />
-        <TeamTag
-          team={feature.team}
-          teams={allTeams}
-          onChange={(team) => onUpdate({ ...feature, team })}
-        />
         <AssignDropdown
           owners={feature.owners}
           allPeople={allPeople}
           onChange={(owners) => onUpdate({ ...feature, owners })}
         />
-        <div className="flex-1" />
+        <div className="flex-1 min-w-0" />
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {mode === "sprint" && (
             <button

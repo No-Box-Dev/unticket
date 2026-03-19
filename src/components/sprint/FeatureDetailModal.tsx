@@ -2,14 +2,13 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2, GitPullRequest, GitMerge, Search, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
-import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { PointsBadge } from "./PointsSelect";
 import { RoleSection } from "./RoleSection";
 import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask } from "@/hooks/useConfigRepo";
 import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
 import { fetchAllPRs } from "@/lib/github";
-import type { Feature, Priority } from "@/lib/types";
+import type { Feature } from "@/lib/types";
 
 // ---------- Component ----------
 
@@ -179,17 +178,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
         </div>
         <div className="px-5 py-4 space-y-5">
           {/* Meta row */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint</span>
               <span className="text-sm text-stone-700 dark:text-neutral-300">{draft.sprint ?? "Backlog"}</span>
-            </div>
-            <div>
-              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Priority</span>
-              <PriorityTag
-                priority={draft.priority ?? "none"}
-                onChange={(priority: Priority) => update({ priority })}
-              />
             </div>
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Points</span>

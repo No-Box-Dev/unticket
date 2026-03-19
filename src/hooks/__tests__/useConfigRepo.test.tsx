@@ -86,7 +86,7 @@ beforeEach(() => {
 
 describe("useUpdateFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "plan", sprint: 1, effort: "low",
+    id: 1, title: "Test", owners: [], status: "plan", sprint: 1,
   };
   const updated: Feature = { ...feature, title: "Updated", status: "demo" };
 
@@ -131,7 +131,7 @@ describe("useUpdateFeature", () => {
 
 describe("useDeleteFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "plan", sprint: 1, effort: "low",
+    id: 1, title: "Test", owners: [], status: "plan", sprint: 1,
   };
 
   it("optimistically removes from cache", async () => {
