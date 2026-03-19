@@ -1,5 +1,4 @@
 import { cn } from "@/lib/cn";
-import { TeamTag } from "./TeamTag";
 import { PriorityTag } from "./PriorityTag";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
@@ -9,7 +8,6 @@ import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
 interface FeatureCardProps {
   feature: Feature;
   allPeople: string[];
-  allTeams: string[];
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
@@ -23,7 +21,6 @@ interface FeatureCardProps {
 export function FeatureCard({
   feature,
   allPeople,
-  allTeams,
   onUpdate,
   onDelete,
   onOpenDetail,
@@ -71,11 +68,6 @@ export function FeatureCard({
         <PriorityTag
           priority={feature.priority ?? "none"}
           onChange={(priority: Priority) => onUpdate({ ...feature, priority })}
-        />
-        <TeamTag
-          team={feature.team}
-          teams={allTeams}
-          onChange={(team) => onUpdate({ ...feature, team })}
         />
         <AssignDropdown
           owners={feature.owners}

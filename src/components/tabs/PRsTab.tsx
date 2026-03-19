@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
 import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
-import { useSettings } from "@/hooks/useConfigRepo";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -30,8 +29,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const [view, setView] = useState<PRView>("open");
   const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(repoNames);
   const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(repoNames);
-  const { data: settings } = useSettings();
-  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
@@ -74,22 +71,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>("age");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const teams = useMemo(
-    () => settings?.teams ?? [],
-    [settings],
-  );
-
-  // Build repo→team lookup
-  const repoToTeam = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of teams) {
-      for (const r of t.repos ?? []) {
-        map.set(r, t.name);
-      }
-    }
-    return map;
-  }, [teams]);
-
   // Unique authors and repos for dropdowns
   const authors = useMemo(() => {
     const set = new Set<string>();
@@ -110,12 +91,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
 
   const filtered = useMemo(() => {
     let list = prs ?? [];
-    if (teamFilter !== "all") {
-      list = list.filter((pr: any) => {
-        const repo = pr.head.repo?.name;
-        return repo && repoToTeam.get(repo) === teamFilter;
-      });
-    }
     if (personFilter.length > 0) {
       list = list.filter((pr: any) => personFilter.includes(pr.user?.login));
     }
@@ -123,7 +98,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       list = list.filter((pr: any) => pr.head.repo?.name === repoFilter);
     }
     return list;
-  }, [prs, teamFilter, personFilter, repoFilter, repoToTeam]);
+  }, [prs, personFilter, repoFilter]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -277,19 +252,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           </button>
         </div>
 
-        {teams.length > 1 && (
-          <select
-            value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
-          >
-            <option value="all">All Teams</option>
-            {teams.map((t) => (
-              <option key={t.name} value={t.name}>{t.name}</option>
-            ))}
-          </select>
-        )}
-
         <PersonSelect
           value={personFilter.length > 0 ? personFilter : null}
           onChange={(v) => setPersonFilter(Array.isArray(v) ? v : v ? [v] : [])}
@@ -342,7 +304,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
               >
                 Title <SortIcon col="title" />
               </th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400">Team</th>
               <th
                 onClick={() => toggleSort("author")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
@@ -367,13 +328,13 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center">
+                <td colSpan={6} className="px-4 py-8 text-center">
                   <Spinner className="mx-auto" />
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
                   No pull requests found
                 </td>
               </tr>
@@ -382,7 +343,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                 const age = daysAgo(pr.created_at);
                 const isStale = age > 7;
                 const repoName = pr.head.repo?.name ?? "";
-                const team = teams.find((t) => (t.repos ?? []).includes(repoName));
                 return (
                   <tr
                     key={pr.id}
@@ -415,19 +375,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                       <div className="text-xs text-stone-400 dark:text-neutral-500 truncate">
                         {pr.head.ref} → {pr.base.ref}
                       </div>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {team ? (
-                        <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: team.color }}
-                          />
-                          {team.name}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-stone-300">—</span>
-                      )}
                     </td>
                     <td className="px-4 py-2.5 text-stone-500 dark:text-neutral-400">{pr.user?.login}</td>
                     <td className="px-4 py-2.5 text-stone-500 dark:text-neutral-400 text-xs">

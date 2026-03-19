@@ -116,7 +116,6 @@ export interface LinkedPR {
 export interface Feature {
   id: number;
   title: string;
-  team?: string;
   owners: string[];
   status: FeatureStatus;
   sprint: number | null;
@@ -131,20 +130,10 @@ export interface Feature {
 export interface Person {
   github: string;
   name: string;
-  teams: string[];
   role: string;
-  /** @deprecated — use `teams` */
-  team?: string;
-}
-
-export interface Team {
-  name: string;
-  color: string;
-  repos: string[];
 }
 
 export interface OrgSettings {
-  teams: Team[];
   draftRepos?: string[];
   excludedMembers?: string[];
 }
@@ -198,7 +187,7 @@ export interface IssueWithRepo extends IssueInfo {
   repo: string;
 }
 
-// Metric types for Team/Individual tabs
+// Metric types
 export interface WeeklyBucket {
   weekStart: string;
   value: number;

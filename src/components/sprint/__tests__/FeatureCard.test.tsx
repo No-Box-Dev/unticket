@@ -7,7 +7,6 @@ import type { Feature } from "@/lib/types";
 const baseFeature: Feature = {
   id: 1,
   title: "Test Feature",
-  team: "Engineering",
   owners: [],
   status: "plan",
   sprint: 1,
@@ -18,7 +17,6 @@ const baseFeature: Feature = {
 const defaultProps = {
   feature: baseFeature,
   allPeople: ["alice", "bob"],
-  allTeams: ["Engineering", "Design"],
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
@@ -31,11 +29,6 @@ describe("FeatureCard", () => {
     const feat = { ...baseFeature, title: longTitle };
     render(<FeatureCard {...defaultProps} feature={feat} />);
     expect(screen.getByText(longTitle)).toBeInTheDocument();
-  });
-
-  it("renders team tag", () => {
-    render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByText("Engineering")).toBeInTheDocument();
   });
 
   it("renders priority tag", () => {

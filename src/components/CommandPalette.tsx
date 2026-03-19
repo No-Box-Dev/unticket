@@ -62,7 +62,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         login: m.login,
         name: person?.name ?? m.login,
         role: person?.role ?? "",
-        teams: person?.teams ?? [],
         avatar_url: m.avatar_url,
       };
     });
@@ -128,7 +127,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     // Search features
     for (const f of features ?? []) {
       if (items.length >= 30) break;
-      const searchText = `${f.title} ${f.owners.join(" ")} ${f.team ?? ""} ${f.priority ?? ""}`.toLowerCase();
+      const searchText = `${f.title} ${f.owners.join(" ")} ${f.priority ?? ""}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "feature",
@@ -154,12 +153,12 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     // Search people
     for (const p of allPeople) {
       if (items.length >= 30) break;
-      const searchText = `${p.name} ${p.login} ${p.role} ${p.teams.join(" ")}`.toLowerCase();
+      const searchText = `${p.name} ${p.login} ${p.role}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "person",
           label: p.name || p.login,
-          detail: [p.role, p.teams.join(", ")].filter(Boolean).join(" · ") || p.login,
+          detail: p.role || p.login,
           action: () => { onNavigate("workload"); setOpen(false); },
         });
       }

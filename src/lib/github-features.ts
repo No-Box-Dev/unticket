@@ -20,7 +20,6 @@ const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 const EFFORT_PREFIX = "effort:";
 const PRIORITY_PREFIX = "priority:";
-const TEAM_PREFIX = "team:";
 const ROLE_LABEL = "role";
 const POINTS_PREFIX = "points:";
 
@@ -89,11 +88,9 @@ function buildLabels(f: {
   status: FeatureStatus;
   effort?: Effort;
   priority?: Priority;
-  team?: string;
 }): string[] {
   const labels = [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
   if (f.priority && f.priority !== "none") labels.push(`${PRIORITY_PREFIX}${f.priority}`);
-  if (f.team) labels.push(`${TEAM_PREFIX}${f.team}`);
   return labels;
 }
 
@@ -105,8 +102,6 @@ function issueToFeature(issue: any): Feature {
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
   const effort = extractLabel(labelNames, EFFORT_PREFIX) as Effort | undefined;
   const priority = extractLabel(labelNames, PRIORITY_PREFIX) as Priority | undefined;
-  const team = extractLabel(labelNames, TEAM_PREFIX);
-
   const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
 
@@ -119,7 +114,6 @@ function issueToFeature(issue: any): Feature {
   return {
     id: issue.number,
     title: issue.title,
-    team,
     owners: (issue.assignees ?? []).map((a: any) => a.login),
     status,
     sprint,
@@ -259,7 +253,6 @@ export async function createFeature(
     status: FeatureStatus;
     sprint: number | null;
     effort?: Effort;
-    team?: string;
     priority?: Priority;
     owners?: string[];
     plan?: string;
@@ -634,7 +627,7 @@ export async function migrateFeatures(
     const priority = (f.priority && f.priority !== "none" ? f.priority : undefined) as Priority | undefined;
 
     await createFeature(org, f.title, {
-      status, sprint: f.sprint, effort, team: f.team,
+      status, sprint: f.sprint, effort,
       priority, owners: f.owners, plan: f.plan,
     });
     created++;

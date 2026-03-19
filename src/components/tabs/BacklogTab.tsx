@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSprint, useFeatures, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
@@ -33,18 +33,12 @@ export function BacklogTab() {
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
   const isAdmin = useIsAdmin();
-  const { data: settings } = useSettings();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("title");
 
   const allPeopleNames = useMemo(
     () => (orgMembers ?? []).map((m) => m.login),
     [orgMembers],
-  );
-
-  const allTeamNames = useMemo(
-    () => (settings?.teams ?? []).map((t) => t.name),
-    [settings],
   );
 
   const futureFeatures = useMemo(
@@ -111,7 +105,6 @@ export function BacklogTab() {
               key={feature.id}
               feature={feature}
               allPeople={allPeopleNames}
-              allTeams={allTeamNames}
               onUpdate={updateFeature}
               onDelete={deleteFeature}
               onOpenDetail={setDetailFeature}

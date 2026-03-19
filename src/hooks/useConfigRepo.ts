@@ -98,7 +98,7 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort?: Effort; team?: string; priority?: Priority; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; effort?: Effort; priority?: Priority; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     onSuccess: (newFeature) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
