@@ -72,7 +72,6 @@ export interface Todo {
   createdAt: string;       // from GitHub created_at
   closedAt?: string;       // from GitHub closed_at (when done)
   featureId?: number;      // linked feature issue number
-  repo?: string;           // optional repo context
   html_url: string;        // GitHub issue URL
 }
 

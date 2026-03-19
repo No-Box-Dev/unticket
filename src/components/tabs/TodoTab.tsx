@@ -1,14 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
-import { useRepos } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
-import { Plus, X, Trash2, GitBranch, ExternalLink, FileText, Pencil, Save, Loader2, Zap } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import type { Todo, TodoStatus, Feature, FeatureStatus, RepoInfo } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 const STATUS_DOT: Record<FeatureStatus, string> = {
@@ -40,12 +38,10 @@ export function TodoTab() {
   const deleteTodoMut = useDeleteTodoItem();
   const [input, setInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const dragOverCardIdRef = useRef<string | null>(null);
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
-  const { data: repos } = useRepos();
 
   // Sprint tasks assigned to me
   const sprintFeatureIds = useMemo(
@@ -94,7 +90,6 @@ export function TodoTab() {
     createTodoMut.mutate({
       title,
       featureId: featureId && !isNaN(featureId) ? featureId : undefined,
-      repo: selectedRepo ?? undefined,
     });
     setInput("");
     setSelectedFeatureId(null);
@@ -196,16 +191,6 @@ export function TodoTab() {
               <option key={f.id} value={String(f.id)}>{f.title}</option>
             ))}
           </select>
-          <SearchableSelect
-            value={selectedRepo ?? ""}
-            onChange={(v) => setSelectedRepo(v || null)}
-            options={[
-              { value: "", label: "No repo" },
-              ...(repos ?? []).map((r) => ({ value: r.name, label: r.name })),
-            ]}
-            placeholder="No repo"
-            className="py-2.5"
-          />
           <button
             onClick={addTodo}
             disabled={!input.trim() || createTodoMut.isPending}
@@ -326,7 +311,6 @@ export function TodoTab() {
           todo={detailTodo}
           feature={detailTodo.featureId ? featureMap.get(detailTodo.featureId) : undefined}
           allFeatures={myFeatures}
-          repos={repos ?? []}
           org={selectedOrg}
           onUpdate={(patch) => {
             updateTodoMut.mutate({
@@ -434,26 +418,10 @@ function TodoCard({
         >
           {todo.title}
         </span>
-        {(feature || todo.repo) && (
-          <span className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {feature && (
-              <span className="flex items-center gap-1.5">
-                <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[feature.status])} />
-                <span className="text-xs text-stone-400 dark:text-neutral-500">{feature.title}</span>
-              </span>
-            )}
-            {todo.repo && (
-              <a
-                href={org ? `https://github.com/${org}/${todo.repo}` : "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
-              >
-                <GitBranch size={10} />
-                {todo.repo}
-              </a>
-            )}
+        {feature && (
+          <span className="flex items-center gap-1.5 mt-0.5">
+            <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[feature.status])} />
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{feature.title}</span>
           </span>
         )}
       </div>
@@ -473,7 +441,6 @@ function TodoDetailModal({
   todo,
   feature,
   allFeatures,
-  repos,
   org,
   onUpdate,
   onClose,
@@ -481,9 +448,8 @@ function TodoDetailModal({
   todo: Todo;
   feature?: Feature;
   allFeatures: Feature[];
-  repos: RepoInfo[];
   org: string | null;
-  onUpdate: (patch: { title?: string; status?: TodoStatus; featureId?: number | null; repo?: string | null }) => void;
+  onUpdate: (patch: { title?: string; status?: TodoStatus; featureId?: number | null }) => void;
   onClose: () => void;
 }) {
   const [plan, setPlan] = useState<string | null>(null);
@@ -509,10 +475,6 @@ function TodoDetailModal({
 
   const planUrl = org
     ? `https://github.com/${org}/.gitpulse/blob/main/${todoPlanFilePath(planId)}`
-    : null;
-
-  const repoUrl = org && todo.repo
-    ? `https://github.com/${org}/${todo.repo}`
     : null;
 
   useEffect(() => {
@@ -573,31 +535,6 @@ function TodoDetailModal({
                   <option key={f.id} value={String(f.id)}>{f.title}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Repo</span>
-              <div className="flex items-center gap-1.5">
-                <SearchableSelect
-                  value={todo.repo ?? ""}
-                  onChange={(v) => onUpdate({ repo: v || null })}
-                  options={[
-                    { value: "", label: "None" },
-                    ...repos.map((r) => ({ value: r.name, label: r.name })),
-                  ]}
-                  placeholder="None"
-                />
-                {repoUrl && (
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
-                    title="Open on GitHub"
-                  >
-                    <ExternalLink size={13} />
-                  </a>
-                )}
-              </div>
             </div>
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Status</span>

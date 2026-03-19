@@ -627,10 +627,9 @@ export function useCreateTodoItem() {
   const { selectedOrg, user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; featureId?: number; repo?: string }) =>
+    mutationFn: (args: { title: string; featureId?: number }) =>
       ghCreateTodo(selectedOrg!, args.title, user!.login, {
         featureId: args.featureId,
-        repo: args.repo,
       }),
     onSuccess: (newTodo) => {
       qc.setQueryData<Todo[]>(["todos", selectedOrg, user?.login], (old) =>
@@ -644,7 +643,7 @@ export function useUpdateTodoItem() {
   const { selectedOrg, user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null; repo?: string | null } }) =>
+    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null } }) =>
       ghUpdateTodo(selectedOrg!, args.issueNumber, args.updates),
     onMutate: async (args) => {
       const key = ["todos", selectedOrg, user?.login];
@@ -653,13 +652,12 @@ export function useUpdateTodoItem() {
       qc.setQueryData<Todo[]>(key, (old) =>
         old?.map((t) => {
           if (t.id !== args.issueNumber) return t;
-          const { featureId, repo, ...rest } = args.updates;
+          const { featureId, ...rest } = args.updates;
           return {
             ...t,
             ...rest,
             status: args.updates.status ?? t.status,
             featureId: featureId === null ? undefined : (featureId ?? t.featureId),
-            repo: repo === null ? undefined : (repo ?? t.repo),
           };
         }) ?? [],
       );
