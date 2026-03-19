@@ -176,8 +176,9 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
       ...p,
       teams: p.teams ?? (p.team ? [p.team] : []),
     }));
-  } catch {
+  } catch (error) {
     // people.json missing, repo doesn't exist, or any other error — return empty
+    console.warn("[unticket.ai] Failed to fetch people.json:", error);
     return [];
   }
 }
