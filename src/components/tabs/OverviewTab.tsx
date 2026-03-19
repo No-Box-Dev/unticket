@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, useSprintSnapshots, usePeople } from "@/hooks/useConfigRepo";
@@ -148,11 +148,13 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const { data: people } = usePeople();
   const { data: snapshots } = useSprintSnapshots();
 
-  // Auto-sync when data is stale so overview shows fresh numbers
+  // Auto-sync when data is stale so overview shows fresh numbers (once per mount)
   const { data: syncStatus } = useSyncStatus();
   const { mutate: triggerSync, isPending: isSyncing } = useTriggerSync();
+  const autoSyncAttempted = useRef(false);
   useEffect(() => {
-    if (syncStatus?.isStale && !isSyncing) {
+    if (syncStatus?.isStale && !isSyncing && !autoSyncAttempted.current) {
+      autoSyncAttempted.current = true;
       triggerSync();
     }
   }, [syncStatus?.isStale, isSyncing, triggerSync]);
