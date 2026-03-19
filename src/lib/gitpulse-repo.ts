@@ -170,12 +170,7 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
   try {
     const result = await fetchFileFromGitPulse(org, PEOPLE_PATH);
     if (!result) return [];
-    const data = JSON.parse(result.content) as Person[];
-    // Normalize: migrate legacy `team` string → `teams` array
-    return data.map((p) => ({
-      ...p,
-      teams: p.teams ?? (p.team ? [p.team] : []),
-    }));
+    return JSON.parse(result.content) as Person[];
   } catch (error) {
     // people.json missing, repo doesn't exist, or any other error — return empty
     console.warn("[unticket.ai] Failed to fetch people.json:", error);

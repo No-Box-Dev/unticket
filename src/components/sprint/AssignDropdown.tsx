@@ -64,12 +64,12 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
       <button
         ref={triggerRef}
         onClick={() => setOpen(!open)}
-        className="text-xs cursor-pointer"
+        className="text-xs cursor-pointer text-left"
       >
         {owners.length === 0 ? (
-          <span className="text-stone-300 dark:text-neutral-600 hover:text-stone-400 dark:hover:text-neutral-500">+ Assign</span>
+          <span className="text-stone-300 dark:text-neutral-600 hover:text-stone-400 dark:hover:text-neutral-500 whitespace-nowrap">+ Assign</span>
         ) : (
-          <span className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400">{owners.join(", ")}</span>
+          <span className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 break-words">{owners.join(", ")}</span>
         )}
       </button>
       {open && createPortal(

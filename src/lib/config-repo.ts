@@ -24,8 +24,6 @@ export async function savePeople(org: string, people: Person[]): Promise<void> {
 export async function fetchSettings(): Promise<OrgSettings | null> {
   const settings = await apiGet<OrgSettings | null>("/api/config/settings");
   if (!settings) return null;
-  // Normalize teams: add repos[] if missing (backward compat)
-  settings.teams = settings.teams.map((t) => ({ ...t, repos: t.repos ?? [] }));
   settings.draftRepos = settings.draftRepos ?? [];
   return settings;
 }
@@ -84,9 +82,7 @@ export async function createConfigRepo(): Promise<void> {
     focus: "Set up your first sprint",
   });
   await apiPut("/api/config/people", []);
-  await apiPut("/api/config/settings", {
-    teams: [{ name: "Team", color: "#1B6971", repos: [] }],
-  });
+  await apiPut("/api/config/settings", {});
   await apiPut("/api/config/todos", []);
 }
 

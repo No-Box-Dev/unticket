@@ -166,7 +166,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   }, [features, sprint]);
   const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
-  const isLoading = mergedLoading || issuesLoading || closedLoading || isSyncing;
+  const isLoading = mergedLoading || issuesLoading || closedLoading;
   const isDaily = weeks <= 2;
   const compute = (dates: string[]) =>
     isDaily ? computeMetricDaily(dates, weeks * 7) : computeMetric(dates, weeks);

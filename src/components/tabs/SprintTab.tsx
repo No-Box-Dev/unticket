@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useSettings, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -16,7 +16,7 @@ import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 
 type SprintView = "features" | "roles" | "tasks" | "metrics";
-type SortKey = "default" | "priority" | "title";
+type SortKey = "default" | "title";
 
 type BoardStatus = Exclude<FeatureStatus, "future">;
 const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
@@ -27,14 +27,10 @@ const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "production", label: "In Production", color: "bg-green-500" },
 ];
 
-const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
-
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   if (key === "default") return features;
   return [...features].sort((a, b) => {
     switch (key) {
-      case "priority":
-        return (PRIORITY_ORDER[a.priority ?? "none"] ?? 3) - (PRIORITY_ORDER[b.priority ?? "none"] ?? 3);
       case "title":
         return a.title.localeCompare(b.title);
       default:
@@ -64,7 +60,6 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
-  const { data: settings } = useSettings();
   const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
@@ -78,7 +73,6 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
   const [selectedPersons, setSelectedPersons] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [migrateProgress, setMigrateProgress] = useState<{ done: number; total: number } | null>(null);
   const [migrateDismissed, setMigrateDismissed] = useState(false);
@@ -124,11 +118,6 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
     [orgMembers],
   );
 
-  const allTeamNames = useMemo(
-    () => (settings?.teams ?? []).map((t) => t.name),
-    [settings],
-  );
-
   const personPills = useMemo(() => {
     const myLogin = user?.login;
     const names = (people ?? []).map((p) => p.name || p.github);
@@ -156,11 +145,10 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
     return (features ?? []).filter((f) => {
       if (f.sprint !== effectiveSprintNumber || f.status === "future") return false;
       if (selectedPersons.length > 0 && !f.owners.some((o) => selectedPersons.some((p) => o.toLowerCase() === p.toLowerCase()))) return false;
-      if (selectedTeam && f.team !== selectedTeam) return false;
       if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [features, effectiveSprintNumber, selectedPersons, selectedTeam, searchQuery]);
+  }, [features, effectiveSprintNumber, selectedPersons, searchQuery]);
 
   const sortedColumns = useMemo(() => ({
     plan: sortFeatures(sprintFeatures.filter((f) => f.status === "plan"), sortBy),
@@ -408,10 +396,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           setSearchQuery={setSearchQuery}
           selectedPersons={selectedPersons}
           setSelectedPersons={setSelectedPersons}
-          selectedTeam={selectedTeam}
-          setSelectedTeam={setSelectedTeam}
           personPills={personPills}
-          allTeamNames={allTeamNames}
           allPeopleNames={allPeopleNames}
           sortBy={sortBy}
           setSortBy={setSortBy}
@@ -425,6 +410,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           onOpenDetail={setDetailFeature}
           onAdd={addFeature}
           isAdmin={isAdmin}
+          singleColumn={isViewingFutureSprint}
         />
       )}
 
@@ -439,10 +425,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           setSearchQuery={setSearchQuery}
           selectedPersons={selectedPersons}
           setSelectedPersons={setSelectedPersons}
-          selectedTeam={selectedTeam}
-          setSelectedTeam={setSelectedTeam}
           personPills={personPills}
-          allTeamNames={allTeamNames}
           onOpenDetail={setDetailFeature}
           features={features}
         />
@@ -459,10 +442,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           setSearchQuery={setSearchQuery}
           selectedPersons={selectedPersons}
           setSelectedPersons={setSelectedPersons}
-          selectedTeam={selectedTeam}
-          setSelectedTeam={setSelectedTeam}
           personPills={personPills}
-          allTeamNames={allTeamNames}
         />
       )}
 
@@ -560,10 +540,7 @@ interface FeaturesViewProps {
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
   setSelectedPersons: (p: string[]) => void;
-  selectedTeam: string | null;
-  setSelectedTeam: (t: string | null) => void;
   personPills: { login: string; name: string }[];
-  allTeamNames: string[];
   allPeopleNames: string[];
   sortBy: SortKey;
   setSortBy: (k: SortKey) => void;
@@ -577,13 +554,14 @@ interface FeaturesViewProps {
   onOpenDetail: (f: Feature) => void;
   onAdd: (title: string) => void;
   isAdmin: boolean;
+  singleColumn?: boolean;
 }
 
 function FeaturesView({
   sortedColumns, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
-  selectedTeam, setSelectedTeam, personPills, allTeamNames, allPeopleNames,
+  personPills, allPeopleNames,
   sortBy, setSortBy, dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
-  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin, singleColumn,
 }: FeaturesViewProps) {
   return (
     <div className="space-y-2">
@@ -604,11 +582,6 @@ function FeaturesView({
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
 
-        {allTeamNames.length > 0 && (
-          <FilterDropdown value={selectedTeam} onChange={setSelectedTeam} placeholder="All teams"
-            options={allTeamNames.map((t) => ({ value: t, label: t }))} />
-        )}
-
         <div className="flex items-center gap-1">
           <ArrowUpDown size={13} className="text-stone-400 dark:text-neutral-500" />
           <select
@@ -617,60 +590,107 @@ function FeaturesView({
             className="px-2 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-500 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="default">Default</option>
-            <option value="priority">Priority</option>
             <option value="title">Title A-Z</option>
           </select>
         </div>
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        {COLUMN_DEFS.map((col) => {
-          const items = sortedColumns[col.status];
-          return (
-            <div
-              key={col.status}
-              onDragOver={(e) => onDragOver(e, col.status)}
-              onDragLeave={onDragLeave}
-              onDrop={(e) => onDrop(e, col.status)}
-              className={cn(
-                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
-                dragOverCol === col.status && "border-brand/50 bg-brand/5",
-              )}
-            >
-              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
-                <span className={cn("w-2.5 h-2.5 rounded-full", col.color)} />
-                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
-                  {col.label}
-                </span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
-              </div>
-              <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
-                {items.map((feature) => (
-                  <FeatureCard
-                    key={feature.id}
-                    feature={feature}
-                    allPeople={allPeopleNames}
-                    allTeams={allTeamNames}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
-                    onOpenDetail={onOpenDetail}
-                    mode="sprint"
-                    isAdmin={isAdmin}
-                    draggable
-                    onDragStart={onDragStart}
-                  />
-                ))}
-                {items.length === 0 && (
-                  <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
-                    Drag features here
-                  </div>
+      {singleColumn ? (
+        <div>
+          {(() => {
+            const planCol = COLUMN_DEFS.find((c) => c.status === "plan")!;
+            const items = sortedColumns.plan;
+            return (
+              <div
+                onDragOver={(e) => onDragOver(e, planCol.status)}
+                onDragLeave={onDragLeave}
+                onDrop={(e) => onDrop(e, planCol.status)}
+                className={cn(
+                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
+                  dragOverCol === planCol.status && "border-brand/50 bg-brand/5",
                 )}
+              >
+                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                  <span className={cn("w-2.5 h-2.5 rounded-full", planCol.color)} />
+                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                    {planCol.label}
+                  </span>
+                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                </div>
+                <div className="p-2 pb-3 space-y-2">
+                  {items.map((feature) => (
+                    <FeatureCard
+                      key={feature.id}
+                      feature={feature}
+                      allPeople={allPeopleNames}
+                      onUpdate={onUpdate}
+                      onDelete={onDelete}
+                      onOpenDetail={onOpenDetail}
+                      mode="sprint"
+                      isAdmin={isAdmin}
+                      draggable
+                      onDragStart={onDragStart}
+                    />
+                  ))}
+                  {items.length === 0 && (
+                    <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                      Drag features here
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })()}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
+          {COLUMN_DEFS.map((col) => {
+            const items = sortedColumns[col.status];
+            return (
+              <div
+                key={col.status}
+                onDragOver={(e) => onDragOver(e, col.status)}
+                onDragLeave={onDragLeave}
+                onDrop={(e) => onDrop(e, col.status)}
+                className={cn(
+                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
+                  dragOverCol === col.status && "border-brand/50 bg-brand/5",
+                )}
+              >
+                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                  <span className={cn("w-2.5 h-2.5 rounded-full", col.color)} />
+                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                    {col.label}
+                  </span>
+                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                </div>
+                <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
+                  {items.map((feature) => (
+                    <FeatureCard
+                      key={feature.id}
+                      feature={feature}
+                      allPeople={allPeopleNames}
+                      onUpdate={onUpdate}
+                      onDelete={onDelete}
+                      onOpenDetail={onOpenDetail}
+                      mode="sprint"
+                      isAdmin={isAdmin}
+                      draggable
+                      onDragStart={onDragStart}
+                    />
+                  ))}
+                  {items.length === 0 && (
+                    <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                      Drag features here
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -710,25 +730,15 @@ const TASK_STATUS_DOT: Record<TaskStatus, string> = {
 
 type SubViewMode = "list" | "board";
 
-/** Build a person→teams lookup from people config */
-function buildPersonTeams(people: Person[] | undefined): Map<string, string[]> {
-  const m = new Map<string, string[]>();
-  for (const p of people ?? []) m.set(p.github, p.teams);
-  return m;
-}
-
-/** Filter tasks by person and team (team = any assignee belongs to that team) */
+/** Filter tasks by person and search query */
 function filterTasks(
   tasks: SubIssueWithFeature[],
   searchQuery: string,
   selectedPersons: string[],
-  selectedTeam: string | null,
-  personTeams: Map<string, string[]>,
 ): SubIssueWithFeature[] {
   const q = searchQuery.toLowerCase().trim();
   return tasks.filter((t) => {
     if (selectedPersons.length > 0 && !t.assignees.some((a) => selectedPersons.some((p) => a.toLowerCase() === p.toLowerCase()))) return false;
-    if (selectedTeam && !t.assignees.some((a) => (personTeams.get(a) ?? []).includes(selectedTeam))) return false;
     if (q && !t.title.toLowerCase().includes(q) && !t.roleName?.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -743,25 +753,21 @@ interface RolesViewProps {
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
   setSelectedPersons: (p: string[]) => void;
-  selectedTeam: string | null;
-  setSelectedTeam: (t: string | null) => void;
   personPills: { login: string; name: string }[];
-  allTeamNames: string[];
   onOpenDetail: (f: Feature) => void;
   features: Feature[] | undefined;
 }
 
 function RolesView({
   sprintFeatures, allTasks, tasksLoading, people, searchQuery, setSearchQuery,
-  selectedPersons, setSelectedPersons, selectedTeam, setSelectedTeam,
-  personPills, allTeamNames, onOpenDetail, features,
+  selectedPersons, setSelectedPersons,
+  personPills, onOpenDetail, features,
 }: RolesViewProps) {
   const [viewMode, setViewMode] = useState<SubViewMode>("board");
-  const personTeams = useMemo(() => buildPersonTeams(people), [people]);
 
   const filtered = useMemo(
-    () => filterTasks(allTasks ?? [], searchQuery, selectedPersons, selectedTeam, personTeams),
-    [allTasks, searchQuery, selectedPersons, selectedTeam, personTeams],
+    () => filterTasks(allTasks ?? [], searchQuery, selectedPersons),
+    [allTasks, searchQuery, selectedPersons],
   );
 
   const featureById = useMemo(() => {
@@ -845,10 +851,6 @@ function RolesView({
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
-        {allTeamNames.length > 0 && (
-          <FilterDropdown value={selectedTeam} onChange={setSelectedTeam} placeholder="All teams"
-            options={allTeamNames.map((t) => ({ value: t, label: t }))} />
-        )}
         <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
@@ -1002,19 +1004,15 @@ interface TasksViewProps {
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
   setSelectedPersons: (p: string[]) => void;
-  selectedTeam: string | null;
-  setSelectedTeam: (t: string | null) => void;
   personPills: { login: string; name: string }[];
-  allTeamNames: string[];
 }
 
 function TasksView({
   allTasks, tasksLoading, sprintFeatures, people, searchQuery, setSearchQuery,
-  selectedPersons, setSelectedPersons, selectedTeam, setSelectedTeam,
-  personPills, allTeamNames,
+  selectedPersons, setSelectedPersons,
+  personPills,
 }: TasksViewProps) {
   const [viewMode, setViewMode] = useState<SubViewMode>("board");
-  const personTeams = useMemo(() => buildPersonTeams(people), [people]);
 
   const featureMap = useMemo(() => {
     const m = new Map<number, Feature>();
@@ -1023,8 +1021,8 @@ function TasksView({
   }, [sprintFeatures]);
 
   const filteredTasks = useMemo(
-    () => filterTasks(allTasks ?? [], searchQuery, selectedPersons, selectedTeam, personTeams),
-    [allTasks, searchQuery, selectedPersons, selectedTeam, personTeams],
+    () => filterTasks(allTasks ?? [], searchQuery, selectedPersons),
+    [allTasks, searchQuery, selectedPersons],
   );
 
   const taskColumns = useMemo(() => {
@@ -1059,10 +1057,6 @@ function TasksView({
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
-        {allTeamNames.length > 0 && (
-          <FilterDropdown value={selectedTeam} onChange={setSelectedTeam} placeholder="All teams"
-            options={allTeamNames.map((t) => ({ value: t, label: t }))} />
-        )}
         <ViewToggle value={viewMode} onChange={setViewMode} />
         <div className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
           {openCount} open · {doneCount} done

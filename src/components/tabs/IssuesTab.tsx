@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
-import { useSprint, useSettings } from "@/hooks/useConfigRepo";
+import { useSprint } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -47,7 +47,6 @@ interface IssuesTabProps {
 export function IssuesTab({ navFilter }: IssuesTabProps) {
   const qc = useQueryClient();
   const { data: sprint, isLoading: sprintLoading } = useSprint();
-  const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
   const { data: members } = useActiveMembers();
@@ -55,7 +54,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
-  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [labelFilter, setLabelFilter] = useState<string>("all");
@@ -64,19 +62,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
-  const teams = useMemo(() => settings?.teams ?? [], [settings]);
-
-  // Resolve team filter → repo names
+  // Resolve repo filter → repo names
   const filteredRepos = useMemo(() => {
-    if (teamFilter !== "all") {
-      const team = teams.find((t) => t.name === teamFilter);
-      return team?.repos ?? [];
-    }
     if (repoFilter !== "all") {
       return [repoFilter];
     }
     return undefined; // no repo filter
-  }, [teamFilter, repoFilter, teams]);
+  }, [repoFilter]);
 
   // Open issues query
   const {
@@ -280,23 +272,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        {teams.length > 1 && (
-          <select
-            value={teamFilter}
-            onChange={(e) => {
-              setTeamFilter(e.target.value);
-              setRepoFilter("all");
-              resetPages();
-            }}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
-          >
-            <option value="all">All Teams</option>
-            {teams.map((t) => (
-              <option key={t.name} value={t.name}>{t.name}</option>
-            ))}
-          </select>
-        )}
-
         <PersonSelect
           value={assigneeFilter.length > 0 ? assigneeFilter : null}
           onChange={(v) => {
@@ -312,7 +287,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           value={repoFilter}
           onChange={(v) => {
             setRepoFilter(v);
-            setTeamFilter("all");
             resetPages();
           }}
           options={[
@@ -371,7 +345,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
               >
                 Title <SortIcon col="title" />
               </th>
-              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Team</th>
               <th
                 onClick={() => toggleSort("repo")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
@@ -392,26 +365,26 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center">
+                <td colSpan={8} className="px-4 py-8 text-center">
                   <Spinner className="mx-auto" />
                 </td>
               </tr>
             ) : openTotal === 0 && closedTotal === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
                   No issues found
                 </td>
               </tr>
             ) : (
               <>
                 {(openData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed={false} teams={teams} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
+                  <IssueRow key={issue.id} issue={issue} closed={false} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
                 ))}
 
                 {/* Open pagination */}
                 {openPages > 1 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2">
                       <PaginationControls
                         page={openPage}
                         totalPages={openPages}
@@ -425,7 +398,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 {closedTotal > 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={8}
                       className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider bg-stone-50 dark:bg-white/[0.04] border-t-2 border-stone-200 dark:border-white/[0.06]"
                     >
                       Closed During Sprint
@@ -434,13 +407,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 )}
 
                 {(closedData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed teams={teams} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
+                  <IssueRow key={issue.id} issue={issue} closed allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
                 ))}
 
                 {/* Closed pagination */}
                 {closedPages > 1 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-2">
+                    <td colSpan={8} className="px-4 py-2">
                       <PaginationControls
                         page={closedPage}
                         totalPages={closedPages}
@@ -493,9 +466,8 @@ function PaginationControls({
   );
 }
 
-function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; closed: boolean; teams: { name: string; color: string; repos: string[] }[]; allPeople: string[]; onAssign: (assignees: string[]) => void }) {
+function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: boolean; allPeople: string[]; onAssign: (assignees: string[]) => void }) {
   const age = daysAgo(issue.created_at);
-  const team = teams.find((t) => (t.repos ?? []).includes(issue.repo));
 
   return (
     <tr className={cn("hover:bg-stone-50 dark:hover:bg-white/[0.06]", closed && "text-stone-400 dark:text-neutral-500")}>
@@ -508,19 +480,6 @@ function IssueRow({ issue, closed, teams, allPeople, onAssign }: { issue: any; c
       </td>
       <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
       <td className="px-3 py-2 max-w-md truncate">{issue.title}</td>
-      <td className="px-3 py-2">
-        {team ? (
-          <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: team.color }}
-            />
-            {team.name}
-          </span>
-        ) : (
-          <span className="text-xs text-stone-300">—</span>
-        )}
-      </td>
       <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 text-xs">{issue.repo || "—"}</td>
       <td className="px-3 py-2">
         <div className="flex gap-1 flex-wrap">

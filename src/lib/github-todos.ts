@@ -2,14 +2,16 @@ import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
 const REPO = ".gitpulse";
+const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
 const FEATURE_PREFIX = "todo-feature:";
-const REPO_PREFIX = "todo-repo:";
+const OWNER_PREFIX = "todo-owner:";
 
 // Labels that exclude an issue from being a todo
 const EXCLUDE_LABELS = new Set(["feature", "role"]);
 
 const STATUS_LABELS = [
+  { name: TODO_LABEL, color: "64748B", description: "Personal todo item" },
   { name: "todo-status:backlog", color: "94A3B8", description: "Todo: backlog" },
   { name: "todo-status:in_progress", color: "3B82F6", description: "Todo: in progress" },
   { name: "todo-status:done", color: "22C55E", description: "Todo: done" },
@@ -64,7 +66,6 @@ function issueToTodo(issue: any): Todo {
   const statusLabel = extractLabel(labelNames, STATUS_PREFIX) as TodoStatus | undefined;
   const owner = issue.assignees?.[0]?.login ?? "";
   const featureStr = extractLabel(labelNames, FEATURE_PREFIX);
-  const repo = extractLabel(labelNames, REPO_PREFIX);
 
   // Derive status: if issue is closed → done, else use label or default to backlog
   let status: TodoStatus;
@@ -83,7 +84,6 @@ function issueToTodo(issue: any): Todo {
     createdAt: issue.created_at,
     closedAt: issue.closed_at ?? undefined,
     featureId: featureStr ? parseInt(featureStr) : undefined,
-    repo,
     html_url: issue.html_url,
   };
 }
@@ -144,23 +144,19 @@ export async function createTodo(
   org: string,
   title: string,
   owner: string,
-  opts?: { featureId?: number; repo?: string },
+  opts?: { featureId?: number },
 ): Promise<Todo> {
   await ensureTodoLabels(org);
   const ok = getOctokit();
 
-  const labels: string[] = [`${STATUS_PREFIX}backlog`];
+  const ownerLabel = `${OWNER_PREFIX}${owner}`;
+  await ensureDynamicLabel(org, ownerLabel, "64748B", `Todo owner: ${owner}`);
+  const labels: string[] = [TODO_LABEL, `${STATUS_PREFIX}backlog`, ownerLabel];
   if (opts?.featureId) {
     const featureLabel = `${FEATURE_PREFIX}${opts.featureId}`;
     await ensureDynamicLabel(org, featureLabel, "7C3AED", `Linked to feature #${opts.featureId}`);
     labels.push(featureLabel);
   }
-  if (opts?.repo) {
-    const repoLabel = `${REPO_PREFIX}${opts.repo}`;
-    await ensureDynamicLabel(org, repoLabel, "7C3AED", `Repo: ${opts.repo}`);
-    labels.push(repoLabel);
-  }
-
   const { data } = await ok.rest.issues.create({
     owner: org,
     repo: REPO,
@@ -179,7 +175,6 @@ export async function updateTodo(
     title?: string;
     status?: TodoStatus;
     featureId?: number | null;
-    repo?: string | null;
   },
 ): Promise<Todo> {
   const ok = getOctokit();
@@ -195,12 +190,11 @@ export async function updateTodo(
     .map((l: any) => (typeof l === "string" ? l : l.name))
     .filter(Boolean) as string[];
 
-  // Rebuild labels — keep non-todo labels, rebuild status/feature/repo
+  // Rebuild labels — keep non-todo labels, rebuild status/feature
   let newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
-      !l.startsWith(FEATURE_PREFIX) &&
-      !l.startsWith(REPO_PREFIX),
+      !l.startsWith(FEATURE_PREFIX),
   );
 
   const status = updates.status ?? (extractLabel(currentLabels, STATUS_PREFIX) as TodoStatus) ?? "backlog";
@@ -215,17 +209,6 @@ export async function updateTodo(
   } else {
     // Preserve existing feature label
     const existing = currentLabels.find((l) => l.startsWith(FEATURE_PREFIX));
-    if (existing) newLabels.push(existing);
-  }
-
-  if (updates.repo !== undefined) {
-    if (updates.repo !== null) {
-      const repoLabel = `${REPO_PREFIX}${updates.repo}`;
-      await ensureDynamicLabel(org, repoLabel, "7C3AED", `Repo: ${updates.repo}`);
-      newLabels.push(repoLabel);
-    }
-  } else {
-    const existing = currentLabels.find((l) => l.startsWith(REPO_PREFIX));
     if (existing) newLabels.push(existing);
   }
 
