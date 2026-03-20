@@ -11,6 +11,7 @@ interface RoleSectionProps {
   donePoints: number;
   onToggleTask: (task: SubIssue) => void;
   onDeleteTask: (task: SubIssue) => void;
+  onUpdateTaskPoints: (task: SubIssue, points: Points) => void;
   onAddTask: (title: string, points?: Points) => void;
   onDeleteRole: () => void;
   isAdding: boolean;
@@ -23,6 +24,7 @@ export function RoleSection({
   donePoints,
   onToggleTask,
   onDeleteTask,
+  onUpdateTaskPoints,
   onAddTask,
   onDeleteRole,
   isAdding,
@@ -84,6 +86,7 @@ export function RoleSection({
               task={task}
               onToggle={() => onToggleTask(task)}
               onDelete={() => onDeleteTask(task)}
+              onUpdatePoints={(points) => onUpdateTaskPoints(task, points)}
             />
           ))}
 
@@ -117,10 +120,12 @@ function TaskRow({
   task,
   onToggle,
   onDelete,
+  onUpdatePoints,
 }: {
   task: SubIssue;
   onToggle: () => void;
   onDelete: () => void;
+  onUpdatePoints: (points: Points) => void;
 }) {
   const isDone = task.state === "closed";
 
@@ -136,11 +141,7 @@ function TaskRow({
       <span className={`text-sm flex-1 ${isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300"}`}>
         {task.title}
       </span>
-      {task.points && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
-          {task.points}pt
-        </span>
-      )}
+      <PointsSelect value={task.points ?? undefined} onChange={onUpdatePoints} />
       {task.assignees.length > 0 && (
         <span className="text-xs text-brand bg-brand/10 px-1.5 py-0.5 rounded">
           @{task.assignees[0]}
