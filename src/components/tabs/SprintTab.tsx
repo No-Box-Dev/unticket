@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -9,7 +9,8 @@ import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues, useActiveMembe
 import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
+import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
+import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -60,6 +61,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
+  const updateTaskPointsMut = useUpdateTaskPoints();
   const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
@@ -443,6 +445,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           personPills={personPills}
           onOpenDetail={setDetailFeature}
           features={features}
+          onUpdateTaskPoints={(taskNumber, points) => updateTaskPointsMut.mutate({ taskNumber, points })}
         />
       )}
 
@@ -772,12 +775,13 @@ interface RolesViewProps {
   personPills: { login: string; name: string }[];
   onOpenDetail: (f: Feature) => void;
   features: Feature[] | undefined;
+  onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }
 
 function RolesView({
   sprintFeatures, allTasks, tasksLoading, people, searchQuery, setSearchQuery,
   selectedPersons, setSelectedPersons,
-  personPills, onOpenDetail, features,
+  personPills, onOpenDetail, features, onUpdateTaskPoints,
 }: RolesViewProps) {
   const filtered = useMemo(
     () => filterTasks(allTasks ?? [], searchQuery, selectedPersons),
@@ -895,14 +899,10 @@ function RolesView({
                         <div key={task.id} className="flex items-center gap-2 py-0.5">
                           <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
                           <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-                            className={cn("text-sm hover:text-brand", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
+                            className={cn("text-sm hover:text-brand flex-1", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
                             {task.title}
                           </a>
-                          {task.points != null && (
-                            <span className="text-[10px] font-medium text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay px-1.5 py-0.5 rounded ml-auto shrink-0">
-                              {task.points}pt
-                            </span>
-                          )}
+                          <PointsSelect value={task.points ?? undefined} onChange={(pts) => onUpdateTaskPoints(task.number, pts)} />
                         </div>
                       );
                     })}
