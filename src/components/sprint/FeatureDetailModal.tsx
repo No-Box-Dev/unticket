@@ -17,9 +17,10 @@ interface FeatureDetailModalProps {
   allPeople: string[];
   onClose: () => void;
   onUpdate: (updated: Feature) => void;
+  sprintOptions?: { value: number | null; label: string }[];
 }
 
-export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
+export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, sprintOptions }: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -181,7 +182,24 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint</span>
-              <span className="text-sm text-stone-700 dark:text-neutral-300">{draft.sprint ?? "Backlog"}</span>
+              {sprintOptions ? (
+                <select
+                  value={draft.sprint ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const sprint = val === "" ? null : Number(val);
+                    const status = sprint === null ? "future" : (draft.status === "future" ? "plan" : draft.status);
+                    update({ sprint, status });
+                  }}
+                  className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
+                >
+                  {sprintOptions.map((opt) => (
+                    <option key={opt.value ?? "backlog"} value={opt.value ?? ""}>{opt.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-sm text-stone-700 dark:text-neutral-300">{draft.sprint ?? "Backlog"}</span>
+              )}
             </div>
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Points</span>
