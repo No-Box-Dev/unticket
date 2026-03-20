@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useSprint, useFeatures, useCreateFeature, useUpdateFeature, useDeleteFeature } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
@@ -21,7 +21,7 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   });
 }
 
-export function BacklogTab() {
+export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: number; onUrlChange?: (featureId: number | null) => void }) {
   const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
   const { data: orgMembers } = useActiveMembers();
@@ -30,6 +30,25 @@ export function BacklogTab() {
   const deleteFeatureMut = useDeleteFeature();
   const isAdmin = useIsAdmin();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+
+  // Open feature from URL
+  useEffect(() => {
+    if (urlFeatureId && features && !detailFeature) {
+      const f = features.find((feat) => feat.id === urlFeatureId);
+      if (f) setDetailFeature(f);
+    }
+  }, [urlFeatureId, features, detailFeature]);
+
+  const openDetail = useCallback((f: Feature) => {
+    setDetailFeature(f);
+    onUrlChange?.(f.id);
+  }, [onUrlChange]);
+
+  const closeDetail = useCallback(() => {
+    setDetailFeature(null);
+    onUrlChange?.(null);
+  }, [onUrlChange]);
+
   const [sortBy, setSortBy] = useState<SortKey>("title");
 
   const allPeopleNames = useMemo(
@@ -121,7 +140,7 @@ export function BacklogTab() {
               allPeople={allPeopleNames}
               onUpdate={updateFeature}
               onDelete={deleteFeature}
-              onOpenDetail={setDetailFeature}
+              onOpenDetail={openDetail}
               mode="backlog"
               isAdmin={isAdmin}
               currentSprint={sprint?.number}
@@ -144,7 +163,7 @@ export function BacklogTab() {
           key={detailFeature.id}
           feature={detailFeature}
           allPeople={allPeopleNames}
-          onClose={() => setDetailFeature(null)}
+          onClose={closeDetail}
           onUpdate={updateFeature}
           sprintOptions={sprintOptions}
         />

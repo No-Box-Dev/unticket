@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
@@ -43,9 +43,12 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
 interface SprintTabProps {
   repoNames: string[];
   navFilter?: import("@/lib/types").NavFilter | null;
+  urlFeatureId?: number;
+  urlSprintNum?: number;
+  onUrlChange?: (featureId: number | null, sprintNum: number | null) => void;
 }
 
-export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
+export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, onUrlChange }: SprintTabProps) {
   const { data: sprint, isLoading: sprintLoading } = useSprint();
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
@@ -71,6 +74,31 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
 
   const [sprintView, setSprintView] = useState<SprintView>((navFilter?.view as SprintView) || "features");
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+
+  // Sync sprint from URL
+  useEffect(() => {
+    if (urlSprintNum != null && sprint && urlSprintNum !== sprint.number) {
+      setViewingSprint(urlSprintNum);
+    }
+  }, [urlSprintNum, sprint, setViewingSprint]);
+
+  // Open feature from URL
+  useEffect(() => {
+    if (urlFeatureId && features && !detailFeature) {
+      const f = features.find((feat) => feat.id === urlFeatureId);
+      if (f) setDetailFeature(f);
+    }
+  }, [urlFeatureId, features, detailFeature]);
+
+  const openDetail = useCallback((f: Feature) => {
+    setDetailFeature(f);
+    onUrlChange?.(f.id, viewingSprint ?? sprint?.number ?? null);
+  }, [onUrlChange, viewingSprint, sprint]);
+
+  const closeDetail = useCallback(() => {
+    setDetailFeature(null);
+    onUrlChange?.(null, viewingSprint ?? sprint?.number ?? null);
+  }, [onUrlChange, viewingSprint, sprint]);
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [advanceFailedCount, setAdvanceFailedCount] = useState(0);
   const [sortBy, setSortBy] = useState<SortKey>("title");
@@ -424,7 +452,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           onDrop={handleDrop}
           onUpdate={updateFeature}
           onDelete={deleteFeature}
-          onOpenDetail={setDetailFeature}
+          onOpenDetail={openDetail}
           onAdd={addFeature}
           isAdmin={isAdmin}
           singleColumn={isViewingFutureSprint}
@@ -443,7 +471,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           selectedPersons={selectedPersons}
           setSelectedPersons={setSelectedPersons}
           personPills={personPills}
-          onOpenDetail={setDetailFeature}
+          onOpenDetail={openDetail}
           features={features}
           onUpdateTaskPoints={(taskNumber, points) => updateTaskPointsMut.mutate({ taskNumber, points })}
         />
@@ -469,7 +497,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           key={detailFeature.id}
           feature={detailFeature}
           allPeople={allPeopleNames}
-          onClose={() => setDetailFeature(null)}
+          onClose={closeDetail}
           onUpdate={updateFeature}
           sprintOptions={sprintOptions}
         />

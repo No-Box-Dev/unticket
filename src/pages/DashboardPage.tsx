@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useRepos } from "@/hooks/useGitHub";
 import { useSidebar } from "@/lib/sidebar";
@@ -17,10 +18,11 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { cn } from "@/lib/cn";
 import type { TabId, NavFilter } from "@/lib/types";
 
+const VALID_TABS = new Set<string>(["overview", "sprint", "backlog", "prs", "issues", "todos", "engineers", "workload", "settings"]);
+
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [navFilter, setNavFilter] = useState<NavFilter | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { collapsed } = useSidebar();
   const { data: repos } = useRepos();
   const repoNames = useMemo(
@@ -28,10 +30,23 @@ export function DashboardPage() {
     [repos],
   );
 
+  // Derive state from URL
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabId = tabParam && VALID_TABS.has(tabParam) ? tabParam as TabId : "overview";
+  const featureId = searchParams.get("f") ? Number(searchParams.get("f")) : undefined;
+  const sprintNum = searchParams.get("s") ? Number(searchParams.get("s")) : undefined;
+  const personParam = searchParams.get("person") ?? undefined;
+  const viewParam = searchParams.get("view") ?? undefined;
+
+  const navFilter: NavFilter | null = personParam || viewParam ? { person: personParam, view: viewParam } : null;
+
   const handleTabChange = useCallback((tab: TabId, filter?: NavFilter) => {
-    setActiveTab(tab);
-    setNavFilter(filter ?? null);
-  }, []);
+    const params: Record<string, string> = {};
+    if (tab !== "overview") params.tab = tab;
+    if (filter?.person) params.person = filter.person;
+    if (filter?.view) params.view = filter.view;
+    setSearchParams(params, { replace: true });
+  }, [setSearchParams]);
 
   if (!selectedOrg) return null;
 
@@ -53,8 +68,19 @@ export function DashboardPage() {
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "overview" && <OverviewTab repoNames={repoNames} onTabChange={handleTabChange} />}
-          {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} />}
-          {activeTab === "backlog" && <BacklogTab />}
+          {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} urlFeatureId={featureId} urlSprintNum={sprintNum} onUrlChange={(f, s) => {
+            const params: Record<string, string> = { tab: "sprint" };
+            if (s != null) params.s = String(s);
+            if (f != null) params.f = String(f);
+            if (personParam) params.person = personParam;
+            if (viewParam) params.view = viewParam;
+            setSearchParams(params, { replace: true });
+          }} />}
+          {activeTab === "backlog" && <BacklogTab urlFeatureId={featureId} onUrlChange={(f) => {
+            const params: Record<string, string> = { tab: "backlog" };
+            if (f != null) params.f = String(f);
+            setSearchParams(params, { replace: true });
+          }} />}
           {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
           {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
           {activeTab === "todos" && <TodoTab />}
