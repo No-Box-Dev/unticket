@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -9,7 +9,8 @@ import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues, useActiveMembe
 import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, FeatureStatus, SprintSnapshot } from "@/lib/types";
+import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
+import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -60,6 +61,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
+  const updateTaskPointsMut = useUpdateTaskPoints();
   const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
@@ -443,6 +445,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           personPills={personPills}
           onOpenDetail={setDetailFeature}
           features={features}
+          onUpdateTaskPoints={(taskNumber, points) => updateTaskPointsMut.mutate({ taskNumber, points })}
         />
       )}
 
@@ -772,15 +775,14 @@ interface RolesViewProps {
   personPills: { login: string; name: string }[];
   onOpenDetail: (f: Feature) => void;
   features: Feature[] | undefined;
+  onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }
 
 function RolesView({
   sprintFeatures, allTasks, tasksLoading, people, searchQuery, setSearchQuery,
   selectedPersons, setSelectedPersons,
-  personPills, onOpenDetail, features,
+  personPills, onOpenDetail, features, onUpdateTaskPoints,
 }: RolesViewProps) {
-  const [viewMode, setViewMode] = useState<SubViewMode>("board");
-
   const filtered = useMemo(
     () => filterTasks(allTasks ?? [], searchQuery, selectedPersons),
     [allTasks, searchQuery, selectedPersons],
@@ -792,57 +794,36 @@ function RolesView({
     return m;
   }, [sprintFeatures]);
 
-  // Build enriched tasks with featureName + featureStatus + person display name
-  type EnrichedTask = SubIssueWithFeature & { featureName: string; fStatus: FeatureStatus; personLogin: string; personName: string };
+  // Group tasks by person, then by role within each person
+  type EnrichedTask = SubIssueWithFeature & { featureName: string; fStatus: FeatureStatus };
 
-  // Explode tasks by assignee so each person gets their own copy
-  const allEnriched = useMemo(() => {
-    const items: EnrichedTask[] = [];
+  const personRoles = useMemo(() => {
+    // Build per-person → per-role grouping
+    const byPerson = new Map<string, { name: string; roles: Map<string, { roleName: string; featureName: string; featureId: number; tasks: EnrichedTask[] }> }>();
+
     for (const task of filtered) {
       const feat = featureById.get(task.featureId);
+      const enriched: EnrichedTask = { ...task, featureName: feat?.title ?? "Unknown", fStatus: feat?.status ?? "plan" };
       const assignees = task.assignees.length > 0 ? task.assignees : ["Unassigned"];
-      for (const assignee of assignees) {
-        const person = (people ?? []).find((p) => p.github === assignee);
-        items.push({
-          ...task,
-          featureName: feat?.title ?? "Unknown",
-          fStatus: feat?.status ?? "plan",
-          personLogin: assignee,
-          personName: person?.name || assignee,
-        });
+
+      for (const login of assignees) {
+        if (!byPerson.has(login)) {
+          const person = (people ?? []).find((p) => p.github === login);
+          byPerson.set(login, { name: person?.name || login, roles: new Map() });
+        }
+        const roleKey = `${task.featureId}:${task.roleNumber ?? "none"}`;
+        const personData = byPerson.get(login)!;
+        if (!personData.roles.has(roleKey)) {
+          personData.roles.set(roleKey, { roleName: task.roleName ?? "Tasks", featureName: feat?.title ?? "Unknown", featureId: task.featureId, tasks: [] });
+        }
+        personData.roles.get(roleKey)!.tasks.push(enriched);
       }
     }
-    return items;
+
+    return [...byPerson.entries()]
+      .map(([login, { name, roles }]) => ({ login, name, roles: [...roles.values()] }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [filtered, people, featureById]);
-
-  // Get sorted unique people
-  const sortedPeople = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const t of allEnriched) {
-      if (!seen.has(t.personLogin)) seen.set(t.personLogin, t.personName);
-    }
-    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [allEnriched]);
-
-  // Split into columns
-  const columns = useMemo(() => {
-    const result: Record<TaskStatus, EnrichedTask[]> = { plan: [], in_progress: [], demo: [], tested: [], production: [] };
-    for (const t of allEnriched) result[classifyTask(t, t.fStatus)].push(t);
-    return result;
-  }, [allEnriched]);
-
-  // Group tasks within a column by person
-  function groupByPerson(tasks: EnrichedTask[]): [string, string, EnrichedTask[]][] {
-    const groups = new Map<string, EnrichedTask[]>();
-    for (const t of tasks) {
-      const arr = groups.get(t.personLogin) ?? [];
-      arr.push(t);
-      groups.set(t.personLogin, arr);
-    }
-    return sortedPeople
-      .filter(([login]) => groups.has(login))
-      .map(([login, name]) => [login, name, groups.get(login)!]);
-  }
 
   if (tasksLoading) {
     return (
@@ -854,7 +835,7 @@ function RolesView({
 
   return (
     <div className="space-y-3">
-      {/* Filters + view toggle */}
+      {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
@@ -867,108 +848,71 @@ function RolesView({
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
-        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
-      {allEnriched.length === 0 && (
+      {personRoles.length === 0 && (
         <div className="text-center py-12 text-sm text-stone-400 dark:text-neutral-500">
           No tasks with assignees found. Add roles and tasks to features first.
         </div>
       )}
 
-      {/* Board view: 5-column kanban, tasks grouped by person within each column */}
-      {viewMode === "board" && allEnriched.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
-          {TASK_COLUMNS.map(({ status, label, color }) => {
-            const colTasks = columns[status];
-            const grouped = groupByPerson(colTasks);
-            return (
-              <div key={status} className="rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50">
-                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
-                  <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
-                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{colTasks.length}</span>
-                </div>
-                <div className="p-2 pb-3 overflow-y-auto max-h-[calc(100vh-260px)] space-y-3">
-                  {grouped.map(([login, name, tasks]) => (
-                    <div key={login}>
-                      {/* Person sub-header */}
-                      <div className="flex items-center gap-2 px-1 mb-1.5">
-                        <div className="w-5 h-5 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[9px] font-bold shrink-0">
-                          {name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-500 dark:text-neutral-400 truncate">{name}</span>
-                        <span className="text-[10px] text-stone-400 dark:text-neutral-500">{tasks.length}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {tasks.map((task) => (
-                          <RoleTaskCard key={`${task.id}-${login}`} task={task} onOpenDetail={onOpenDetail} features={features} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {colTasks.length === 0 && (
-                    <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">—</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Flat list: person → roles → tasks */}
+      {personRoles.map(({ login, name, roles }) => {
+        const allTasks = roles.flatMap((r) => r.tasks);
+        const doneCount = allTasks.filter((t) => t.state === "closed").length;
+        const totalPts = allTasks.reduce((s, t) => s + (t.points ?? 0), 0);
+        const donePts = allTasks.filter((t) => t.state === "closed").reduce((s, t) => s + (t.points ?? 0), 0);
 
-      {/* List view: table grouped by person with status column */}
-      {viewMode === "list" && allEnriched.length > 0 && (
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
-          <div className="grid grid-cols-[1fr_140px_100px_80px_60px] gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/[0.06] text-[10px] uppercase tracking-wider font-medium text-stone-400 dark:text-neutral-500">
-            <span>Task</span>
-            <span>Feature</span>
-            <span>Status</span>
-            <span>Role</span>
-            <span className="text-right">Pts</span>
-          </div>
-          {sortedPeople.map(([login, name]) => {
-            const personTasks = allEnriched.filter((t) => t.personLogin === login);
-            if (personTasks.length === 0) return null;
-            const doneCount = personTasks.filter((t) => t.state === "closed").length;
-            const totalPts = personTasks.reduce((s, t) => s + (t.points ?? 0), 0);
-            const donePts = personTasks.filter((t) => t.state === "closed").reduce((s, t) => s + (t.points ?? 0), 0);
-            return (
-              <div key={login}>
-                <div className="px-4 py-2 bg-stone-50 dark:bg-dark-overlay border-b border-stone-100 dark:border-white/[0.06] flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[9px] font-bold shrink-0">
-                    {name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{name}</span>
-                  <span className="text-[10px] text-stone-400 dark:text-neutral-500 ml-auto">
-                    {doneCount}/{personTasks.length} done · {donePts}/{totalPts} pts
-                  </span>
-                </div>
-                {personTasks.map((task) => {
-                  const s = classifyTask(task, task.fStatus);
-                  const statusLabel = TASK_STATUS_LABELS[s];
-                  const statusColor = TASK_STATUS_COLORS[s];
-                  return (
-                    <div key={`${task.id}-${login}`} className={cn(
-                      "grid grid-cols-[1fr_140px_100px_80px_60px] gap-2 px-4 py-2 border-b border-stone-50 dark:border-white/[0.03] hover:bg-stone-50 dark:hover:bg-white/[0.03] items-center",
-                      s === "production" && "opacity-60",
-                    )}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={cn("w-2 h-2 rounded-full shrink-0", TASK_STATUS_DOT[s])} />
-                        <a href={task.html_url} target="_blank" rel="noopener noreferrer" className="text-sm text-stone-700 dark:text-neutral-300 truncate hover:text-brand">{task.title}</a>
-                      </div>
-                      <span className="text-xs text-stone-400 dark:text-neutral-500 truncate">{task.featureName}</span>
-                      <span className={cn("text-[10px] font-medium", statusColor)}>{statusLabel}</span>
-                      <span className="text-xs text-stone-400 dark:text-neutral-500 truncate">{task.roleName ?? "—"}</span>
-                      <span className="text-xs text-stone-500 dark:text-neutral-400 text-right font-medium">{task.points ?? "—"}</span>
-                    </div>
-                  );
-                })}
+        return (
+          <div key={login} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+            {/* Person header */}
+            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold shrink-0">
+                {name.slice(0, 2).toUpperCase()}
               </div>
-            );
-          })}
-        </div>
-      )}
+              <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{name}</span>
+              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+                {doneCount}/{allTasks.length} done{totalPts > 0 && ` · ${donePts}/${totalPts} pts`}
+              </span>
+            </div>
+
+            {/* Roles */}
+            <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
+              {roles.map((role, i) => (
+                <div key={i} className="px-4 py-2.5">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs font-medium text-stone-600 dark:text-neutral-300">{role.roleName}</span>
+                    <button
+                      onClick={() => {
+                        const f = (features ?? []).find((feat) => feat.id === role.featureId);
+                        if (f) onOpenDetail(f);
+                      }}
+                      className="text-[10px] text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
+                    >
+                      {role.featureName}
+                    </button>
+                  </div>
+                  <div className="space-y-0.5 ml-1">
+                    {role.tasks.map((task) => {
+                      const isDone = task.state === "closed";
+                      return (
+                        <div key={task.id} className="flex items-center gap-2 py-0.5">
+                          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
+                          <a href={task.html_url} target="_blank" rel="noopener noreferrer"
+                            className={cn("text-sm hover:text-brand flex-1", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
+                            {task.title}
+                          </a>
+                          <PointsSelect value={task.points ?? undefined} onChange={(pts) => onUpdateTaskPoints(task.number, pts)} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
