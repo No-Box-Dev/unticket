@@ -11,7 +11,6 @@ import {
   computeContributorActivity,
   computeAlerts,
   computeVelocityTrend,
-  computeEngineerStatus,
 } from "@/lib/metrics";
 import { BarChart } from "@/components/BarChart";
 import { CircularProgress } from "@/components/CircularProgress";
@@ -194,25 +193,6 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     const done = allTasks.filter((t) => t.state === "closed").reduce((sum, t) => sum + (t.points ?? 0), 0);
     return { total, done };
   }, [allTasks]);
-
-  // At-risk features count
-  const atRiskCount = useMemo(() => {
-    if (!features || !sprint) return 0;
-    const sprintFeatures = features.filter((f) => f.sprint === sprint.number);
-    const ownerMap = new Map<string, Feature[]>();
-    for (const f of sprintFeatures) {
-      for (const o of f.owners) {
-        if (!ownerMap.has(o)) ownerMap.set(o, []);
-        ownerMap.get(o)!.push(f);
-      }
-    }
-    let count = 0;
-    for (const personFeatures of ownerMap.values()) {
-      const status = computeEngineerStatus(personFeatures, sprint);
-      if (status === "at-risk" || status === "behind") count++;
-    }
-    return count;
-  }, [features, sprint]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -503,20 +483,13 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
               </div>
             </button>
 
-            {/* At-risk — click → sprint tab */}
+            {/* Features — click → sprint tab */}
             <button onClick={() => nav("sprint")} className="p-5 text-left hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors rounded-r-xl cursor-pointer">
-              <span className="text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider block mb-1">At Risk</span>
-              {atRiskCount === 0 ? (
-                <div className="flex items-center gap-1.5 mt-1">
-                  <CheckCircle2 size={14} className="text-green-500" />
-                  <span className="text-sm font-medium text-green-600 dark:text-green-400">All on track</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 mt-1">
-                  <AlertTriangle size={14} className="text-amber-500" />
-                  <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">{atRiskCount} at risk</span>
-                </div>
-              )}
+              <span className="text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider block mb-1">Features</span>
+              <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 block">
+                {(features ?? []).filter((f) => f.sprint === sprint?.number && f.status === "production").length}/{(features ?? []).filter((f) => f.sprint === sprint?.number && f.status !== "future").length}
+              </span>
+              <span className="text-xs text-stone-500 dark:text-neutral-400 block mt-0.5">shipped</span>
             </button>
           </div>
         </div>
@@ -668,7 +641,52 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         )}
       </div>
 
-      {/* Section 5: Velocity & Features */}
+      {/* Section 5: Sprint Workload */}
+      {sprintPoints.total > 0 && (
+        <div className={card}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-semibold text-stone-500 dark:text-neutral-400 uppercase tracking-wider">Sprint Points by Person</h3>
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{sprintPoints.done}/{sprintPoints.total} pts done</span>
+          </div>
+          <div className="space-y-2">
+            {(() => {
+              const byPerson = new Map<string, { done: number; total: number }>();
+              for (const t of allTasks ?? []) {
+                for (const a of t.assignees) {
+                  const entry = byPerson.get(a) ?? { done: 0, total: 0 };
+                  entry.total += t.points ?? 0;
+                  if (t.state === "closed") entry.done += t.points ?? 0;
+                  byPerson.set(a, entry);
+                }
+              }
+              const sorted = [...byPerson.entries()]
+                .filter(([, v]) => v.total > 0)
+                .sort((a, b) => b[1].total - a[1].total);
+              const max = Math.max(...sorted.map(([, v]) => v.total), 1);
+              return sorted.map(([login, { done, total }]) => (
+                <button
+                  key={login}
+                  onClick={() => nav("engineers", { person: login })}
+                  className="flex items-center gap-2 w-full cursor-pointer group"
+                >
+                  <span className="text-xs text-stone-600 dark:text-neutral-400 w-24 truncate shrink-0 group-hover:text-brand transition-colors">
+                    {nameOf(login)}
+                  </span>
+                  <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden relative">
+                    <div className="h-full bg-brand/20 rounded absolute left-0 top-0" style={{ width: `${(total / max) * 100}%` }} />
+                    <div className="h-full bg-brand rounded absolute left-0 top-0 transition-all" style={{ width: `${(done / max) * 100}%` }} />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-stone-500 dark:text-neutral-400">
+                      {done}/{total}
+                    </span>
+                  </div>
+                </button>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Section 6: Velocity & Features */}
       {velocity && velocity.history.length >= 2 && (
         <div className={card}>
           <div className="flex items-center justify-between mb-3">
