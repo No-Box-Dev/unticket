@@ -93,7 +93,6 @@ export function TodoTab() {
     });
     setInput("");
     setSelectedFeatureId(null);
-    setSelectedRepo(null);
   }
 
   function addFeatureTodo(feature: Feature) {
@@ -254,7 +253,7 @@ export function TodoTab() {
                         key={todo.id}
                         todo={todo}
                         feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
-                        org={selectedOrg}
+
                         onDelete={() => handleDeleteTodo(todo.id)}
                         onClick={() => setDetailTodo(todo)}
                         onDragStart={handleDragStart}
@@ -376,7 +375,6 @@ function SprintTaskCard({
 function TodoCard({
   todo,
   feature,
-  org,
   onDelete,
   onClick,
   onDragStart,
@@ -385,7 +383,6 @@ function TodoCard({
 }: {
   todo: Todo;
   feature?: Feature;
-  org: string | null;
   onDelete: () => void;
   onClick: () => void;
   onDragStart: (e: React.DragEvent, todo: Todo) => void;
