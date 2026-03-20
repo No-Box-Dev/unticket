@@ -208,12 +208,12 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     // Search todos
     for (const t of todos ?? []) {
       if (items.length >= 30) break;
-      const searchText = `${t.title} ${t.owner} ${t.repo ?? ""} ${t.status}`.toLowerCase();
+      const searchText = `${t.title} ${t.owner} ${t.status}`.toLowerCase();
       if (searchText.includes(q)) {
         items.push({
           type: "todo",
           label: t.title,
-          detail: [t.owner, t.status.replace("_", " "), t.repo].filter(Boolean).join(" · "),
+          detail: [t.owner, t.status.replace("_", " ")].filter(Boolean).join(" · "),
           action: () => { onNavigate("todos"); setOpen(false); },
         });
       }

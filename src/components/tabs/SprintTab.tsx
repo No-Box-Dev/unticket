@@ -455,7 +455,6 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           allTasks={allTasks}
           tasksLoading={tasksLoading}
           sprintFeatures={allSprintFeatures}
-          people={people}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           selectedPersons={selectedPersons}
@@ -737,9 +736,6 @@ const TASK_COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
   { status: "production", label: "In Production", color: "bg-green-500" },
 ];
 
-const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  plan: "Plan", in_progress: "In Progress", demo: "Demo", tested: "Tested", production: "In Production",
-};
 const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
   plan: "text-brand", in_progress: "text-amber-500", demo: "text-purple-500", tested: "text-cyan-500", production: "text-green-500",
 };
@@ -917,49 +913,12 @@ function RolesView({
   );
 }
 
-function RoleTaskCard({ task, onOpenDetail, features }: {
-  task: SubIssueWithFeature & { featureName: string; fStatus?: FeatureStatus };
-  onOpenDetail: (f: Feature) => void;
-  features: Feature[] | undefined;
-}) {
-  const status = classifyTask(task, task.fStatus);
-  return (
-    <div className={cn(
-      "bg-white dark:bg-dark-raised rounded-lg p-2.5 border border-stone-200 dark:border-white/[0.06] shadow-sm",
-      status === "production" && "opacity-60",
-    )}>
-      <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-        className="text-xs font-medium text-stone-700 dark:text-neutral-300 hover:text-brand leading-snug line-clamp-2 block">
-        {task.title}
-      </a>
-      <div className="flex items-center gap-1.5 mt-1.5">
-        <button
-          onClick={() => {
-            const f = (features ?? []).find((feat) => feat.title === task.featureName);
-            if (f) onOpenDetail(f);
-          }}
-          className="text-[10px] text-stone-400 dark:text-neutral-500 truncate hover:text-brand cursor-pointer"
-        >
-          {task.featureName}
-        </button>
-        <div className="flex-1" />
-        {task.points != null && (
-          <span className="text-[10px] font-medium text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay px-1.5 py-0.5 rounded shrink-0">
-            {task.points}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Tasks View ────────────────────────────────────────────────────────
 
 interface TasksViewProps {
   allTasks: SubIssueWithFeature[] | undefined;
   tasksLoading: boolean;
   sprintFeatures: Feature[];
-  people: Person[] | undefined;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
@@ -968,7 +927,7 @@ interface TasksViewProps {
 }
 
 function TasksView({
-  allTasks, tasksLoading, sprintFeatures, people, searchQuery, setSearchQuery,
+  allTasks, tasksLoading, sprintFeatures, searchQuery, setSearchQuery,
   selectedPersons, setSelectedPersons,
   personPills,
 }: TasksViewProps) {
@@ -1169,31 +1128,6 @@ function ViewToggle({ value, onChange }: { value: SubViewMode; onChange: (v: Sub
         <List size={11} />
         List
       </button>
-    </div>
-  );
-}
-
-function FilterDropdown({ value, onChange, placeholder, options }: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  placeholder: string;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-700 dark:text-neutral-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand/30"
-      >
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1.5">
-        <svg className="w-3.5 h-3.5 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-      </div>
     </div>
   );
 }

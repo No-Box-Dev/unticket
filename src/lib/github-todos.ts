@@ -289,7 +289,6 @@ export interface LegacyTodoForMigration {
   status: TodoStatus;
   createdAt: string;
   featureId?: string;
-  repo?: string;
 }
 
 export async function migrateTodos(
@@ -304,7 +303,6 @@ export async function migrateTodos(
     const featureId = t.featureId ? parseInt(t.featureId) : undefined;
     const todo = await createTodo(org, t.title, t.owner, {
       featureId: featureId && !isNaN(featureId) ? featureId : undefined,
-      repo: t.repo,
     });
 
     // If status is in_progress, update it
