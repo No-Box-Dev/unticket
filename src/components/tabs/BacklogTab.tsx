@@ -31,13 +31,18 @@ export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: numbe
   const isAdmin = useIsAdmin();
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
 
-  // Open feature from URL
+  // Open/close feature from URL
   useEffect(() => {
-    if (urlFeatureId && features && !detailFeature) {
-      const f = features.find((feat) => feat.id === urlFeatureId);
-      if (f) setDetailFeature(f);
+    if (!features) return;
+    if (urlFeatureId) {
+      if (detailFeature?.id !== urlFeatureId) {
+        const f = features.find((feat) => feat.id === urlFeatureId);
+        if (f) setDetailFeature(f);
+      }
+    } else if (detailFeature) {
+      setDetailFeature(null);
     }
-  }, [urlFeatureId, features, detailFeature]);
+  }, [urlFeatureId, features]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDetail = useCallback((f: Feature) => {
     setDetailFeature(f);

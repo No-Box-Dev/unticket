@@ -77,18 +77,29 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
 
   // Sync sprint from URL
   useEffect(() => {
-    if (urlSprintNum != null && sprint && urlSprintNum !== sprint.number) {
-      setViewingSprint(urlSprintNum);
+    if (urlSprintNum != null) {
+      if (sprint && urlSprintNum !== sprint.number) {
+        setViewingSprint(urlSprintNum);
+      } else if (sprint && urlSprintNum === sprint.number && viewingSprint !== null) {
+        setViewingSprint(null); // reset to current sprint
+      }
+    } else if (viewingSprint !== null) {
+      setViewingSprint(null);
     }
-  }, [urlSprintNum, sprint, setViewingSprint]);
+  }, [urlSprintNum, sprint, viewingSprint, setViewingSprint]);
 
-  // Open feature from URL
+  // Open/close feature from URL
   useEffect(() => {
-    if (urlFeatureId && features && !detailFeature) {
-      const f = features.find((feat) => feat.id === urlFeatureId);
-      if (f) setDetailFeature(f);
+    if (!features) return;
+    if (urlFeatureId) {
+      if (detailFeature?.id !== urlFeatureId) {
+        const f = features.find((feat) => feat.id === urlFeatureId);
+        if (f) setDetailFeature(f);
+      }
+    } else if (detailFeature) {
+      setDetailFeature(null);
     }
-  }, [urlFeatureId, features, detailFeature]);
+  }, [urlFeatureId, features]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDetail = useCallback((f: Feature) => {
     setDetailFeature(f);

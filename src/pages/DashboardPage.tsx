@@ -33,8 +33,10 @@ export function DashboardPage() {
   // Derive state from URL
   const tabParam = searchParams.get("tab");
   const activeTab: TabId = tabParam && VALID_TABS.has(tabParam) ? tabParam as TabId : "overview";
-  const featureId = searchParams.get("f") ? Number(searchParams.get("f")) : undefined;
-  const sprintNum = searchParams.get("s") ? Number(searchParams.get("s")) : undefined;
+  const rawF = searchParams.get("f");
+  const rawS = searchParams.get("s");
+  const featureId = rawF ? (Number.isFinite(Number(rawF)) ? Number(rawF) : undefined) : undefined;
+  const sprintNum = rawS ? (Number.isFinite(Number(rawS)) ? Number(rawS) : undefined) : undefined;
   const personParam = searchParams.get("person") ?? undefined;
   const viewParam = searchParams.get("view") ?? undefined;
 
