@@ -42,6 +42,25 @@ export function BacklogTab() {
     [features],
   );
 
+  const sprintOptions = useMemo(() => {
+    const opts: { value: number | null; label: string }[] = [];
+    if (sprint) opts.push({ value: sprint.number, label: `Sprint ${sprint.number}` });
+    // Detect future sprint numbers from features
+    const futureNums = new Set<number>();
+    for (const f of features ?? []) {
+      if (f.sprint !== null && sprint && f.sprint > sprint.number) futureNums.add(f.sprint);
+    }
+    for (const num of [...futureNums].sort((a, b) => a - b)) {
+      opts.push({ value: num, label: `Sprint ${num} (upcoming)` });
+    }
+    const nextNum = (sprint?.number ?? 0) + 1;
+    if (!opts.some((o) => o.value === nextNum)) {
+      opts.push({ value: nextNum, label: `Sprint ${nextNum} (new)` });
+    }
+    opts.push({ value: null, label: "Backlog" });
+    return opts;
+  }, [sprint, features]);
+
   const sortedFeatures = useMemo(
     () => sortFeatures(futureFeatures, sortBy),
     [futureFeatures, sortBy],
@@ -127,6 +146,7 @@ export function BacklogTab() {
           allPeople={allPeopleNames}
           onClose={() => setDetailFeature(null)}
           onUpdate={updateFeature}
+          sprintOptions={sprintOptions}
         />
       )}
     </div>

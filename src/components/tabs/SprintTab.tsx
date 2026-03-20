@@ -118,6 +118,21 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
     [orgMembers],
   );
 
+  const sprintOptions = useMemo(() => {
+    const opts: { value: number | null; label: string }[] = [];
+    if (sprint) opts.push({ value: sprint.number, label: `Sprint ${sprint.number}` });
+    for (const num of futureSprints) {
+      opts.push({ value: num, label: `Sprint ${num} (upcoming)` });
+    }
+    // Allow moving to a new future sprint (current + 1 if not already listed)
+    const nextNum = (sprint?.number ?? 0) + 1;
+    if (!opts.some((o) => o.value === nextNum)) {
+      opts.push({ value: nextNum, label: `Sprint ${nextNum} (new)` });
+    }
+    opts.push({ value: null, label: "Backlog" });
+    return opts;
+  }, [sprint, futureSprints]);
+
   const personPills = useMemo(() => {
     const myLogin = user?.login;
     const names = (people ?? []).map((p) => p.name || p.github);
@@ -454,6 +469,7 @@ export function SprintTab({ repoNames, navFilter }: SprintTabProps) {
           allPeople={allPeopleNames}
           onClose={() => setDetailFeature(null)}
           onUpdate={updateFeature}
+          sprintOptions={sprintOptions}
         />
       )}
 
