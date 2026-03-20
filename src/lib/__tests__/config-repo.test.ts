@@ -33,11 +33,11 @@ beforeEach(() => {
 describe("fetchPeople (GitHub-backed)", () => {
   it("delegates to fetchPeopleFromRepo", async () => {
     mockFetchPeopleFromRepo.mockResolvedValue([
-      { github: "alice", name: "Alice", role: "dev", teams: ["Backend"] },
+      { github: "alice", name: "Alice", role: "dev", team: "Backend" },
     ]);
     const result = await fetchPeople("test-org");
     expect(mockFetchPeopleFromRepo).toHaveBeenCalledWith("test-org");
-    expect(result[0].teams).toEqual(["Backend"]);
+    expect(result[0].team).toEqual("Backend");
   });
 });
 

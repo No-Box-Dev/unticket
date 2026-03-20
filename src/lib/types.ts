@@ -126,6 +126,7 @@ export interface Person {
   github: string;
   name: string;
   role: string;
+  team?: string;
 }
 
 export interface OrgSettings {

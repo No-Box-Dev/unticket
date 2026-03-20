@@ -64,7 +64,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         avatar_url: member.avatar_url,
         name: person?.name ?? member.login,
         role: person?.role ?? "",
-        teams: person?.teams ?? [],
+        team: person?.team ?? "",
         myFeatures,
         myTasks,
         myRoles,
@@ -122,7 +122,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">{eng.name}</div>
-                  <div className="text-xs text-stone-400 truncate">{eng.teams[0] ?? eng.role}</div>
+                  <div className="text-xs text-stone-400 truncate">{eng.team || eng.role}</div>
                 </div>
               </button>
             );
@@ -144,8 +144,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             )}
             <div>
               <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">{selected.name}</h2>
-              {selected.role && (
-                <p className="text-sm text-stone-400">{selected.role}</p>
+              {(selected.role || selected.team) && (
+                <p className="text-sm text-stone-400">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
               )}
             </div>
           </div>
