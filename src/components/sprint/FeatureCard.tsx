@@ -30,6 +30,7 @@ export function FeatureCard({
   isAdmin,
 }: FeatureCardProps) {
   const hasPlan = !!feature.plan?.trim();
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
   const STATUS_COLORS: Record<string, string> = {
     plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
@@ -73,7 +74,7 @@ export function FeatureCard({
         <div className="flex items-center gap-1.5">
           {mode === "sprint" && (
             <button
-              onClick={(e) => { e.stopPropagation(); onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }); }}
+              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }))}
               className="p-1 text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
               title="Move to Backlog"
             >
@@ -82,7 +83,7 @@ export function FeatureCard({
           )}
           {mode === "backlog" && currentSprint && (
             <button
-              onClick={(e) => { e.stopPropagation(); onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }); }}
+              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }))}
               className="p-1 text-stone-300 dark:text-neutral-600 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
               title="Move to Sprint"
             >
@@ -91,7 +92,7 @@ export function FeatureCard({
           )}
           {isAdmin && (
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(feature.id); }}
+              onClick={stop(() => onDelete(feature.id))}
               className="p-1 text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Delete"
             >
