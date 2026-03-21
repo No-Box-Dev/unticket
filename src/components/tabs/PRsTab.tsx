@@ -148,7 +148,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       {/* Sync Modal */}
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+          <div role="dialog" aria-modal="true" className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
               <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">
                 {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}

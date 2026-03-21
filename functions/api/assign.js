@@ -9,6 +9,17 @@ export async function onRequestPost(context) {
     return errorResponse("Missing repo, issue_number, or assignees");
   }
 
+  // Validate inputs to prevent path traversal and injection
+  if (typeof repo !== "string" || !/^[\w.-]+$/.test(repo)) {
+    return errorResponse("Invalid repo name", 400);
+  }
+  if (!Number.isInteger(issue_number) || issue_number <= 0) {
+    return errorResponse("Invalid issue_number", 400);
+  }
+  if (!assignees.every((a) => typeof a === "string" && /^[\w-]+$/.test(a))) {
+    return errorResponse("Invalid assignee username", 400);
+  }
+
   // Update on GitHub
   const ghRes = await fetch(
     `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue_number}`,

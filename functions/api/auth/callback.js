@@ -41,12 +41,15 @@ export async function onRequestGet(context) {
     });
   }
 
-  // Redirect back to app with token (never cache — token is per-user)
+  // Read and forward the state param so the client can verify CSRF
+  const state = url.searchParams.get("state") || "";
+
+  // Redirect back to app with token in fragment (never sent to servers/Referer headers)
   const origin = url.origin;
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${origin}/?token=${data.access_token}&t=${Date.now()}`,
+      Location: `${origin}/#token=${data.access_token}&state=${encodeURIComponent(state)}&t=${Date.now()}`,
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
       "CDN-Cache-Control": "no-store",
       "Cloudflare-CDN-Cache-Control": "no-store",

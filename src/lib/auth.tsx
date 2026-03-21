@@ -72,10 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check for OAuth callback token in URL params
-    const params = new URLSearchParams(window.location.search);
+    // Check for OAuth callback token in URL fragment (never sent to servers)
+    const fragment = window.location.hash.replace(/^#/, "");
+    const params = new URLSearchParams(fragment);
     const callbackToken = params.get("token");
     if (callbackToken) {
+      // Verify CSRF state before accepting the token
+      const returnedState = params.get("state") || "";
+      const savedState = sessionStorage.getItem("gp_oauth_state") || "";
+      sessionStorage.removeItem("gp_oauth_state");
+      if (!savedState || returnedState !== savedState) {
+        setAuthError("OAuth state mismatch — possible CSRF attack. Please try logging in again.");
+        setIsLoading(false);
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
       window.history.replaceState({}, "", window.location.pathname);
       localStorage.setItem("gp_token", callbackToken);
       resetOctokit();
