@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useFeatures, usePeople, useTodos, useSprint, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
@@ -42,6 +43,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const { data: orgMembers } = useActiveMembers();
   const { data: todos } = useTodos();
   const { data: sprint } = useSprint();
+  const [, setSearchParams] = useSearchParams();
   const { dark, toggle: toggleTheme } = useTheme();
   const { setViewingSprint } = useSidebar();
 
@@ -138,10 +140,10 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           ].filter(Boolean).join(" · "),
           action: () => {
             if (f.status === "future") {
-              onNavigate("backlog");
+              setSearchParams({ tab: "backlog", f: String(f.id) }, { replace: true });
             } else {
               setViewingSprint(null);
-              onNavigate("sprint");
+              setSearchParams({ tab: "sprint", f: String(f.id) }, { replace: true });
             }
             setOpen(false);
           },

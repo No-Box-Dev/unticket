@@ -151,6 +151,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
       <div
+        role="dialog"
+        aria-modal="true"
         className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >

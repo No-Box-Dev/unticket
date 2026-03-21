@@ -34,6 +34,7 @@ export function useOrgs() {
     queryKey: ["orgs"],
     queryFn: fetchOrgs,
     enabled: !!user,
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -43,6 +44,7 @@ export function useRepos() {
     queryKey: ["repos", selectedOrg],
     queryFn: fetchRepos,
     enabled: !!selectedOrg,
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -131,6 +133,7 @@ export function useOrgMembers() {
     queryKey: ["orgMembers", selectedOrg],
     queryFn: fetchOrgMembers,
     enabled: !!selectedOrg,
+    staleTime: 10 * 60 * 1000,
   });
 }
 

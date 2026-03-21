@@ -104,11 +104,14 @@ export function TodoTab() {
   }
 
   function handleDeleteTodo(id: number) {
+    if (!window.confirm("Delete this todo?")) return;
     deleteTodoMut.mutate(id);
   }
 
   function clearDone() {
     const doneTodos = todos.filter((t) => t.status === "done");
+    if (doneTodos.length === 0) return;
+    if (!window.confirm(`Delete ${doneTodos.length} completed todo${doneTodos.length === 1 ? "" : "s"}?`)) return;
     for (const t of doneTodos) {
       deleteTodoMut.mutate(t.id);
     }
@@ -201,7 +204,7 @@ export function TodoTab() {
         </div>
 
         {/* Kanban columns */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {COLUMNS.map(({ status, label, color }) => {
             const items = columns[status];
             const todoCount = items.filter((i) => !("_sprintTask" in i)).length;

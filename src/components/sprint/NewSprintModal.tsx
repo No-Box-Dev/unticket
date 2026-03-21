@@ -51,6 +51,8 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
         className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >

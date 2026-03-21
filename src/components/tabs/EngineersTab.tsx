@@ -95,9 +95,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   }
 
   return (
-    <div className="flex gap-4 min-h-[600px]">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[600px]">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden self-start sticky top-4">
+      <div className="w-full lg:w-64 lg:shrink-0 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden self-start sticky top-4">
         <div className="px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
           <h3 className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Engineers ({engineers.length})</h3>
         </div>

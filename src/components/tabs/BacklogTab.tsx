@@ -3,6 +3,7 @@ import { useSprint, useFeatures, useCreateFeature, useUpdateFeature, useDeleteFe
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
+import { Spinner } from "@/components/Spinner";
 import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
 import type { Feature } from "@/lib/types";
 import { Archive, ArrowUpDown } from "lucide-react";
@@ -23,7 +24,7 @@ function sortFeatures(features: Feature[], key: SortKey): Feature[] {
 
 export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: number; onUrlChange?: (featureId: number | null) => void }) {
   const { data: sprint } = useSprint();
-  const { data: features } = useFeatures();
+  const { data: features, isLoading: featuresLoading } = useFeatures();
   const { data: orgMembers } = useActiveMembers();
   const createFeatureMut = useCreateFeature();
   const updateFeatureMut = useUpdateFeature();
@@ -108,6 +109,14 @@ export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: numbe
       sprint: null,
     });
   };
+
+  if (featuresLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

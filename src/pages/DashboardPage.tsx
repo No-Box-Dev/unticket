@@ -1,22 +1,25 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useRepos } from "@/hooks/useGitHub";
 import { useSidebar } from "@/lib/sidebar";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
-import { OverviewTab } from "@/components/tabs/OverviewTab";
-import { SprintTab } from "@/components/tabs/SprintTab";
-import { BacklogTab } from "@/components/tabs/BacklogTab";
-import { PRsTab } from "@/components/tabs/PRsTab";
-import { IssuesTab } from "@/components/tabs/IssuesTab";
-import { TodoTab } from "@/components/tabs/TodoTab";
-import { EngineersTab } from "@/components/tabs/EngineersTab";
-import { WorkloadTab } from "@/components/tabs/WorkloadTab";
-import { SettingsTab } from "@/components/tabs/SettingsTab";
+import { Spinner } from "@/components/Spinner";
 import { CommandPalette } from "@/components/CommandPalette";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { cn } from "@/lib/cn";
 import type { TabId, NavFilter } from "@/lib/types";
+
+const OverviewTab = lazy(() => import("@/components/tabs/OverviewTab").then(m => ({ default: m.OverviewTab })));
+const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ default: m.SprintTab })));
+const BacklogTab = lazy(() => import("@/components/tabs/BacklogTab").then(m => ({ default: m.BacklogTab })));
+const PRsTab = lazy(() => import("@/components/tabs/PRsTab").then(m => ({ default: m.PRsTab })));
+const IssuesTab = lazy(() => import("@/components/tabs/IssuesTab").then(m => ({ default: m.IssuesTab })));
+const TodoTab = lazy(() => import("@/components/tabs/TodoTab").then(m => ({ default: m.TodoTab })));
+const EngineersTab = lazy(() => import("@/components/tabs/EngineersTab").then(m => ({ default: m.EngineersTab })));
+const WorkloadTab = lazy(() => import("@/components/tabs/WorkloadTab").then(m => ({ default: m.WorkloadTab })));
+const SettingsTab = lazy(() => import("@/components/tabs/SettingsTab").then(m => ({ default: m.SettingsTab })));
 
 const VALID_TABS = new Set<string>(["overview", "sprint", "backlog", "prs", "issues", "todos", "engineers", "workload", "settings"]);
 
@@ -68,26 +71,30 @@ export function DashboardPage() {
         <TopBar activeTab={activeTab} />
 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-          {activeTab === "settings" && <SettingsTab />}
-          {activeTab === "overview" && <OverviewTab repoNames={repoNames} onTabChange={handleTabChange} />}
-          {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} urlFeatureId={featureId} urlSprintNum={sprintNum} onUrlChange={(f, s) => {
-            const params: Record<string, string> = { tab: "sprint" };
-            if (s != null) params.s = String(s);
-            if (f != null) params.f = String(f);
-            if (personParam) params.person = personParam;
-            if (viewParam) params.view = viewParam;
-            setSearchParams(params, { replace: true });
-          }} />}
-          {activeTab === "backlog" && <BacklogTab urlFeatureId={featureId} onUrlChange={(f) => {
-            const params: Record<string, string> = { tab: "backlog" };
-            if (f != null) params.f = String(f);
-            setSearchParams(params, { replace: true });
-          }} />}
-          {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
-          {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
-          {activeTab === "todos" && <TodoTab />}
-          {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
-          {activeTab === "workload" && <WorkloadTab repoNames={repoNames} />}
+          <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-brand" /></div>}>
+            <ErrorBoundary key={activeTab}>
+              {activeTab === "settings" && <SettingsTab />}
+              {activeTab === "overview" && <OverviewTab repoNames={repoNames} onTabChange={handleTabChange} />}
+              {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} urlFeatureId={featureId} urlSprintNum={sprintNum} onUrlChange={(f, s) => {
+                const params: Record<string, string> = { tab: "sprint" };
+                if (s != null) params.s = String(s);
+                if (f != null) params.f = String(f);
+                if (personParam) params.person = personParam;
+                if (viewParam) params.view = viewParam;
+                setSearchParams(params, { replace: true });
+              }} />}
+              {activeTab === "backlog" && <BacklogTab urlFeatureId={featureId} onUrlChange={(f) => {
+                const params: Record<string, string> = { tab: "backlog" };
+                if (f != null) params.f = String(f);
+                setSearchParams(params, { replace: true });
+              }} />}
+              {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
+              {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
+              {activeTab === "todos" && <TodoTab />}
+              {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
+              {activeTab === "workload" && <WorkloadTab repoNames={repoNames} />}
+            </ErrorBoundary>
+          </Suspense>
         </main>
       </div>
     </div>

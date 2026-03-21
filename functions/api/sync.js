@@ -55,7 +55,7 @@ export async function onRequestPost(context) {
     const message = e instanceof Error ? e.message : "Sync failed";
     const stack = e instanceof Error ? e.stack : undefined;
     console.error("[sync] error:", message, stack);
-    return errorResponse(`${message}${cursor ? ` (repo: ${cursor})` : ""}`, 500);
+    return errorResponse("Sync failed. Please try again later.", 500);
   }
 }
 

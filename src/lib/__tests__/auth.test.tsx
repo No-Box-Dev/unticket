@@ -51,12 +51,13 @@ beforeEach(() => {
     removeItem: (key: string) => { delete storage[key]; },
   });
 
-  // Default location — no query params
+  // Default location — no query/hash params
   Object.defineProperty(window, "location", {
     value: {
       origin: "http://localhost",
       pathname: "/",
       search: "",
+      hash: "",
       href: "http://localhost/",
     },
     writable: true,
@@ -132,12 +133,16 @@ describe("useAuth", () => {
   });
 
   it("OAuth callback: extracts token from URL, stores, fetches user", async () => {
+    // Set up CSRF state so the callback passes verification
+    const state = "test-state-123";
+    sessionStorage.setItem("gp_oauth_state", state);
     Object.defineProperty(window, "location", {
       value: {
         origin: "http://localhost",
         pathname: "/",
-        search: "?token=oauth-tok-123",
-        href: "http://localhost/?token=oauth-tok-123",
+        search: "",
+        hash: `#token=oauth-tok-123&state=${state}`,
+        href: `http://localhost/#token=oauth-tok-123&state=${state}`,
       },
       writable: true,
       configurable: true,
