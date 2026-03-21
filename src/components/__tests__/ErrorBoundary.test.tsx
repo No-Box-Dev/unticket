@@ -52,7 +52,7 @@ describe("ErrorBoundary", () => {
       return <div>Recovered</div>;
     }
 
-    const { rerender } = render(
+    render(
       <ErrorBoundary>
         <ConditionalChild />
       </ErrorBoundary>,
@@ -77,7 +77,7 @@ describe("ErrorBoundary", () => {
     });
 
     // Child that always throws — forces retry to hit error state again each time
-    function AlwaysThrows() {
+    function AlwaysThrows(): React.JSX.Element {
       throw new Error("Persistent error");
     }
 
