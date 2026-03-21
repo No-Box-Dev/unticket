@@ -45,7 +45,7 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 **Features as GitHub Issues (on `{org}/.gitpulse` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
-- Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `priority:{low,medium,high}`, `team:{name}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
+- Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
 - Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
 - Owners: Issue assignees
 - Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
@@ -55,7 +55,7 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 **Todos as GitHub Issues (on `{org}/.gitpulse` repo):**
 - `src/lib/github-todos.ts` — CRUD via Octokit (`fetchTodos`, `fetchTodosByOwner`, `createTodo`, `updateTodo`, `closeTodo`, `reopenTodo`, `deleteTodo`, `fetchTodosClosedInRange`, `migrateTodos`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useTodos()`, `useCreateTodoItem()`, `useUpdateTodoItem()`, `useDeleteTodoItem()`, `useTodosClosedInRange()`, `useLegacyTodos()`, `useMigrateTodos()`
-- Label scheme: `todo` (marker), `todo-status:{backlog,in_progress,done}`, `todo-owner:{login}`, `todo-feature:{number}`, `todo-repo:{name}`
+- Label scheme: `todo` (marker), `todo-status:{backlog,in_progress,done}`, `todo-owner:{login}`, `todo-feature:{number}`
 - Status derived from labels + issue state (closed → done)
 - Drag-and-drop updates labels and opens/closes the GitHub issue
 - Sprint snapshots capture `todosCompleted` when advancing sprints
@@ -115,26 +115,26 @@ Dashboard landing page with sprint health banner, key metrics (PR throughput, cy
 
 #### Sprint Board (`sprint` tab)
 Sprint config + feature cards backed by GitHub Issues (label: `feature`). Four view modes (ClickUp-style tab switcher):
-- **Features view**: Kanban board with Plan/In Progress/Demo/Tested/In Production columns, drag-and-drop, search/filter by person/team, sort by priority/title.
+- **Features view**: Kanban board with Plan/In Progress/Demo/Tested/In Production columns, drag-and-drop, search/filter by person, sort by title. Future sprints show single Plan column at full width.
 - **Roles view**: Cards grouped by person (assignee), showing tasks under each feature with progress bars and point totals.
 - **Tasks view**: Flat table of all tasks across features with columns: task, feature, role, assignee, points. Split into open/completed sections.
 - **Metrics view**: Sprint metrics dashboard (points, features, people breakdown).
 Sprint selector dropdown in sidebar (under Sprint Board nav item) allows switching to past sprint snapshots. `viewingSprint` state shared between sidebar and SprintTab via Zustand store.
-Features have owners, priority, status (encoded as labels), and implementation plans (issue body with Markdown). Detail modal shows plan as Markdown and a **role/task hierarchy**: Features → Person Roles (sub-issues with `role` label) → Tasks (sub-issues of roles with `points:X` labels). Points roll up: Task → Role → Feature. Sprint points use numeric values (1,2,3,5,8,13) on individual tasks.
+Features have owners, status (encoded as labels), and implementation plans (issue body with Markdown). Detail modal shows plan as Markdown, a sprint selector (move between sprints/backlog), and a **role/task hierarchy**: Features → Person Roles (sub-issues with `role` label) → Tasks (sub-issues of roles with `points:X` labels, editable inline). Points roll up: Task → Role → Feature. Sprint points use numeric values (1,2,3,5,8,13) on individual tasks.
 
 #### Backlog (`backlog` tab)
 Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
 
 #### Issues (`issues` tab)
-Server-side paginated view of open + closed issues (closed since sprint start). Filters: team, repo (searchable), label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
+Server-side paginated view of open + closed issues (closed since sprint start). Filters: repo (searchable), assignee, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
 #### PRs (`prs` tab)
-Open + merged PR view with toggle. Filters: team, author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
+Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 #### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`), and repo context (`todo-repo:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature (issue number), a repo (searchable dropdown), and an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/repo (searchable)/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
+Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
 
 ### Other Features
 
 #### Settings (`settings` tab, sidebar bottom)
-Manages teams/repos and people config. Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via sidebar Settings nav item. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
+Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via sidebar Settings nav item. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.

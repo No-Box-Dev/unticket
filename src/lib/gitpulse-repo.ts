@@ -36,7 +36,7 @@ CLAUDE.md           # This file
 ## Features (GitHub Issues in this repo)
 
 Features are tracked as issues with the \`feature\` label.
-- Labels: \`status:{plan,in_progress,demo,tested,production,future}\`, \`priority:{low,medium,high}\`, \`team:{name}\`
+- Labels: \`status:{plan,in_progress,demo,tested,production,future}\`
 - Sprints: GitHub Milestones named "Sprint N"
 - Owners: issue assignees
 - Tasks: sub-issues under feature issues (with \`points:{1,2,3,5,8,13}\` labels)
@@ -49,7 +49,7 @@ gh issue view <number> --repo {org}/.gitpulse
 ## Todos (GitHub Issues in this repo)
 
 Personal todos are issues with the \`todo\` label.
-- Labels: \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`, \`todo-repo:{name}\`
+- Labels: \`todo\`, \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`
 - Closing a todo marks it done; reopening moves it back
 
 \`\`\`bash
