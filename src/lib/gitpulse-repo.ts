@@ -181,7 +181,7 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
-  await saveFileToGitPulse(org, PEOPLE_PATH, content, "Update people config");
+  await saveFileToGitPulse(org, PEOPLE_PATHS[0], content, "Update people config");
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------
