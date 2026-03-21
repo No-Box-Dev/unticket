@@ -1,42 +1,56 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useActiveMembers } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, usePeople } from "@/hooks/useConfigRepo";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FeatureStatus } from "@/lib/types";
+import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
-const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5";
+const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl";
 
-const DONE_STATUSES: FeatureStatus[] = ["tested", "production"];
-
-const STATUS_COLORS: Record<FeatureStatus, { bg: string; text: string; label: string }> = {
-  plan: { bg: "bg-stone-200 dark:bg-neutral-700", text: "text-stone-600 dark:text-neutral-300", label: "Plan" },
-  in_progress: { bg: "bg-blue-100 dark:bg-blue-900/40", text: "text-blue-700 dark:text-blue-300", label: "In Progress" },
-  demo: { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300", label: "Demo" },
-  tested: { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300", label: "Tested" },
-  production: { bg: "bg-green-100 dark:bg-green-900/40", text: "text-green-700 dark:text-green-300", label: "Production" },
-  future: { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-700 dark:text-purple-300", label: "Future" },
+const STATUS_COLORS: Record<FeatureStatus, { bg: string; dot: string; text: string; label: string }> = {
+  plan: { bg: "bg-brand/10", dot: "bg-brand", text: "text-brand", label: "Plan" },
+  in_progress: { bg: "bg-amber-50 dark:bg-amber-900/20", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", label: "In Progress" },
+  demo: { bg: "bg-purple-50 dark:bg-purple-900/20", dot: "bg-purple-500", text: "text-purple-600 dark:text-purple-400", label: "Demo" },
+  tested: { bg: "bg-cyan-50 dark:bg-cyan-900/20", dot: "bg-cyan-500", text: "text-cyan-600 dark:text-cyan-400", label: "Tested" },
+  production: { bg: "bg-green-50 dark:bg-green-900/20", dot: "bg-green-500", text: "text-green-600 dark:text-green-400", label: "Production" },
+  future: { bg: "bg-stone-50 dark:bg-white/[0.04]", dot: "bg-stone-300", text: "text-stone-500", label: "Future" },
 };
 
-// Donut chart colors per person (cycle through)
 const PERSON_COLORS = [
-  "#8b5cf6", "#3b82f6", "#14b8a6", "#f59e0b", "#ef4444",
-  "#ec4899", "#6366f1", "#06b6d4", "#84cc16", "#f97316",
+  "#0E7C86", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444",
+  "#ec4899", "#14b8a6", "#06b6d4", "#84cc16", "#f97316",
 ];
+
+const ON_TRACK_THRESHOLD = -0.1;
+const AT_RISK_THRESHOLD = -0.3;
+
+const STATUS_BADGE_STYLES = {
+  "on-track": "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+  "at-risk": "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
+  "behind": "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
+} as const;
+
+function getPaceStatus(donePoints: number, totalPoints: number, elapsedPct: number): "on-track" | "at-risk" | "behind" {
+  if (totalPoints === 0) return "on-track";
+  const diff = (donePoints / totalPoints) - elapsedPct;
+  if (diff >= ON_TRACK_THRESHOLD) return "on-track";
+  if (diff >= AT_RISK_THRESHOLD) return "at-risk";
+  return "behind";
+}
 
 interface EngineerWorkload {
   login: string;
   name: string;
+  team: string;
   avatar_url: string | null;
   totalPoints: number;
   donePoints: number;
   totalTasks: number;
   doneTasks: number;
-  totalRoles: number;
-  doneRoles: number;
-  totalFeatures: number;
-  doneFeatures: number;
-  features: { title: string; status: FeatureStatus }[];
+  features: { id: number; title: string; status: FeatureStatus }[];
+  tasks: SubIssueWithFeature[];
 }
 
 export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) {
@@ -44,6 +58,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();
   const { data: people } = usePeople();
+  const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
 
   const sprintFeatureIds = useMemo(() => {
     if (!features || !sprint) return [];
@@ -53,122 +68,80 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
 
   const sprintFeatures = useMemo(() => {
     if (!features || !sprint) return [];
-    return features.filter((f) => f.sprint === sprint.number);
+    return features.filter((f) => f.sprint === sprint.number && f.status !== "future");
   }, [features, sprint]);
 
   const engineers = useMemo((): EngineerWorkload[] => {
     if (!orgMembers) return [];
-
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
 
-    // Tasks per person
-    const tasksByPerson = new Map<string, { done: number; total: number; points: number; donePoints: number }>();
+    const tasksByPerson = new Map<string, { done: number; total: number; points: number; donePoints: number; tasks: SubIssueWithFeature[] }>();
     for (const t of allTasks ?? []) {
       for (const a of t.assignees) {
-        const entry = tasksByPerson.get(a) ?? { done: 0, total: 0, points: 0, donePoints: 0 };
+        const entry = tasksByPerson.get(a) ?? { done: 0, total: 0, points: 0, donePoints: 0, tasks: [] };
         entry.total++;
         entry.points += t.points ?? 0;
-        if (t.state === "closed") {
-          entry.done++;
-          entry.donePoints += t.points ?? 0;
-        }
+        if (t.state === "closed") { entry.done++; entry.donePoints += t.points ?? 0; }
+        entry.tasks.push(t);
         tasksByPerson.set(a, entry);
       }
     }
 
-    // Roles per person
-    const rolesByPerson = new Map<string, { done: number; total: number }>();
-    const roleGroups = new Map<number, { assignees: Set<string>; tasks: { state: string }[] }>();
-    for (const t of allTasks ?? []) {
-      if (!t.roleNumber) continue;
-      const group = roleGroups.get(t.roleNumber) ?? { assignees: new Set(), tasks: [] };
-      for (const a of t.assignees) group.assignees.add(a);
-      group.tasks.push(t);
-      roleGroups.set(t.roleNumber, group);
-    }
-    for (const group of roleGroups.values()) {
-      const allClosed = group.tasks.every((t) => t.state === "closed");
-      for (const login of group.assignees) {
-        const entry = rolesByPerson.get(login) ?? { done: 0, total: 0 };
-        entry.total++;
-        if (allClosed) entry.done++;
-        rolesByPerson.set(login, entry);
-      }
-    }
-
-    // Features per person
-    const featuresByPerson = new Map<string, { title: string; status: FeatureStatus }[]>();
+    const featuresByPerson = new Map<string, { id: number; title: string; status: FeatureStatus }[]>();
     for (const f of sprintFeatures) {
       for (const o of f.owners) {
         if (!featuresByPerson.has(o)) featuresByPerson.set(o, []);
-        featuresByPerson.get(o)!.push({ title: f.title, status: f.status });
+        featuresByPerson.get(o)!.push({ id: f.id, title: f.title, status: f.status });
       }
     }
 
     return orgMembers.map((m: any) => {
       const person = peopleMap.get(m.login);
-      const tasks = tasksByPerson.get(m.login) ?? { done: 0, total: 0, points: 0, donePoints: 0 };
-      const roles = rolesByPerson.get(m.login) ?? { done: 0, total: 0 };
+      const tasks = tasksByPerson.get(m.login) ?? { done: 0, total: 0, points: 0, donePoints: 0, tasks: [] };
       const personFeatures = featuresByPerson.get(m.login) ?? [];
       return {
         login: m.login,
         name: person?.name ?? m.login,
+        team: person?.team ?? "",
         avatar_url: m.avatar_url,
         totalPoints: tasks.points,
         donePoints: tasks.donePoints,
         totalTasks: tasks.total,
         doneTasks: tasks.done,
-        totalRoles: roles.total,
-        doneRoles: roles.done,
-        totalFeatures: personFeatures.length,
-        doneFeatures: personFeatures.filter((f) => DONE_STATUSES.includes(f.status)).length,
         features: personFeatures,
+        tasks: tasks.tasks,
       };
     })
-    .filter((e) => e.totalPoints > 0 || e.totalTasks > 0 || e.totalRoles > 0 || e.features.length > 0)
+    .filter((e) => e.totalPoints > 0 || e.totalTasks > 0 || e.features.length > 0)
     .sort((a, b) => b.totalPoints - a.totalPoints);
   }, [orgMembers, people, allTasks, sprintFeatures]);
 
-  // Team totals
   const totals = useMemo(() => {
-    const t = { points: 0, donePoints: 0, tasks: 0, doneTasks: 0, roles: 0, doneRoles: 0, features: 0, doneFeatures: 0 };
+    const t = { points: 0, donePoints: 0, tasks: 0, doneTasks: 0 };
     for (const e of engineers) {
       t.points += e.totalPoints;
       t.donePoints += e.donePoints;
       t.tasks += e.totalTasks;
       t.doneTasks += e.doneTasks;
-      t.roles += e.totalRoles;
-      t.doneRoles += e.doneRoles;
-      t.features += e.totalFeatures;
-      t.doneFeatures += e.doneFeatures;
     }
     return t;
   }, [engineers]);
 
-  // Feature status breakdown
   const featureStatusBreakdown = useMemo(() => {
     const counts = new Map<FeatureStatus, number>();
-    for (const f of sprintFeatures) {
-      counts.set(f.status, (counts.get(f.status) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .map(([status, count]) => ({ status, count }))
-      .sort((a, b) => b.count - a.count);
+    for (const f of sprintFeatures) counts.set(f.status, (counts.get(f.status) ?? 0) + 1);
+    return Array.from(counts.entries()).map(([status, count]) => ({ status, count }));
   }, [sprintFeatures]);
 
-  // Max points for distribution chart scaling
-  const maxPoints = useMemo(() => Math.max(...engineers.map((e) => e.totalPoints), 1), [engineers]);
-
-  // Sprint elapsed percentage
   const elapsedPct = useMemo(() => {
     if (!sprint?.startDate || !sprint?.endDate) return 0;
     const now = new Date();
     const start = new Date(sprint.startDate + "T00:00:00");
     const end = new Date(sprint.endDate + "T23:59:59");
-    const elapsed = Math.max(0, now.getTime() - start.getTime());
-    const duration = Math.max(1, end.getTime() - start.getTime());
-    return Math.min(1, elapsed / duration);
+    return Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / Math.max(1, end.getTime() - start.getTime())));
   }, [sprint]);
+
+  const maxPoints = useMemo(() => Math.max(...engineers.map((e) => e.totalPoints), 1), [engineers]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-brand" /></div>;
@@ -182,209 +155,234 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
     );
   }
 
+  const pointsPct = totals.points > 0 ? Math.round((totals.donePoints / totals.points) * 100) : 0;
+  const tasksPct = totals.tasks > 0 ? Math.round((totals.doneTasks / totals.tasks) * 100) : 0;
+  const sprintPct = Math.round(elapsedPct * 100);
+  const sprintTotalDays = sprint ? Math.round((new Date(sprint.endDate + "T23:59:59").getTime() - new Date(sprint.startDate + "T00:00:00").getTime()) / 86400000) : 0;
+  const sprintElapsedDays = Math.max(1, Math.round(elapsedPct * sprintTotalDays));
+  const shippedCount = sprintFeatures.filter((f) => f.status === "production").length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">
-          Sprint Workload {sprint ? `— ${sprint.name}` : ""}
-        </h2>
+    <div className="space-y-5">
+      {/* Sprint header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">
+            Sprint Workload {sprint ? `— ${sprint.name}` : ""}
+          </h2>
+          {sprint && (
+            <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">
+              {new Date(sprint.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {new Date(sprint.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Day {sprintElapsedDays} of {sprintTotalDays}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-4 text-xs text-stone-400 dark:text-neutral-500">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500 inline-block" /> Done</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-500/30 inline-block" /> Remaining</span>
-          <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-stone-400 dark:bg-neutral-400 inline-block" /> Sprint Pace</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand inline-block" /> Done</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand/20 inline-block" /> Remaining</span>
+          <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-stone-800 dark:bg-neutral-200 inline-block" /> Pace</span>
         </div>
       </div>
 
-      {/* Team-level summary */}
+      {/* Top-level metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard label="Points" done={totals.donePoints} total={totals.points} color="text-purple-500" />
-        <SummaryCard label="Tasks" done={totals.doneTasks} total={totals.tasks} color="text-blue-500" />
-        <SummaryCard label="Roles" done={totals.doneRoles} total={totals.roles} color="text-teal-500" />
-        <SummaryCard label="Features" done={totals.doneFeatures} total={totals.features} color="text-brand" />
+        <RingCard label="Sprint" value={`${sprintPct}%`} pct={sprintPct} color="#0E7C86" sub="elapsed" />
+        <RingCard label="Points" value={`${totals.donePoints}/${totals.points}`} pct={pointsPct} color="#8b5cf6" sub={`${pointsPct}% done`} />
+        <RingCard label="Tasks" value={`${totals.doneTasks}/${totals.tasks}`} pct={tasksPct} color="#3b82f6" sub={`${tasksPct}% done`} />
+        <RingCard label="Features" value={`${shippedCount}/${sprintFeatures.length}`} pct={sprintFeatures.length > 0 ? Math.round((shippedCount / sprintFeatures.length) * 100) : 0} color="#10b981" sub="shipped" />
       </div>
 
-      {/* Distribution charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Points distribution */}
-        <div className={card}>
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">
-            Points Distribution
-          </h3>
-          <div className="space-y-2">
-            {engineers.filter((e) => e.totalPoints > 0).map((eng, i) => (
-              <div key={eng.login} className="flex items-center gap-2">
-                <span className="text-xs text-stone-600 dark:text-neutral-400 w-24 truncate shrink-0">{eng.name}</span>
-                <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden relative">
-                  <div
-                    className="h-full rounded absolute left-0 top-0 opacity-30"
-                    style={{ width: `${(eng.totalPoints / maxPoints) * 100}%`, backgroundColor: PERSON_COLORS[i % PERSON_COLORS.length] }}
-                  />
-                  <div
-                    className="h-full rounded absolute left-0 top-0"
-                    style={{ width: `${(eng.donePoints / maxPoints) * 100}%`, backgroundColor: PERSON_COLORS[i % PERSON_COLORS.length] }}
-                  />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-stone-500 dark:text-neutral-400">
-                    {eng.donePoints}/{eng.totalPoints}
-                  </span>
-                </div>
+      {/* Feature pipeline */}
+      {featureStatusBreakdown.length > 0 && (
+        <div className={card + " p-4"}>
+          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">Feature Pipeline</h3>
+          <div className="h-8 rounded-lg overflow-hidden flex">
+            {featureStatusBreakdown.map(({ status, count }) => (
+              <div
+                key={status}
+                className={cn("h-full flex items-center justify-center gap-1 text-xs font-medium transition-all", STATUS_COLORS[status].bg, STATUS_COLORS[status].text)}
+                style={{ width: `${(count / sprintFeatures.length) * 100}%` }}
+                title={`${STATUS_COLORS[status].label}: ${count}`}
+              >
+                <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[status].dot)} />
+                {count}
               </div>
             ))}
           </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+            {featureStatusBreakdown.map(({ status, count }) => (
+              <span key={status} className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-neutral-400">
+                <span className={cn("w-2 h-2 rounded-full", STATUS_COLORS[status].dot)} />
+                {STATUS_COLORS[status].label} {count}
+              </span>
+            ))}
+          </div>
         </div>
+      )}
 
-        {/* Feature status breakdown */}
-        <div className={card}>
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">
-            Features by Status
-          </h3>
-          {featureStatusBreakdown.length === 0 ? (
-            <p className="text-sm text-stone-400 dark:text-neutral-500">No features this sprint.</p>
-          ) : (
-            <>
-              {/* Stacked bar */}
-              <div className="h-6 rounded overflow-hidden flex mb-4">
-                {featureStatusBreakdown.map(({ status, count }) => (
-                  <div
-                    key={status}
-                    className={cn("h-full flex items-center justify-center text-[10px] font-medium", STATUS_COLORS[status].bg, STATUS_COLORS[status].text)}
-                    style={{ width: `${(count / sprintFeatures.length) * 100}%` }}
-                    title={`${STATUS_COLORS[status].label}: ${count}`}
-                  >
-                    {count}
-                  </div>
-                ))}
-              </div>
-              {/* Legend */}
-              <div className="flex flex-wrap gap-3">
-                {featureStatusBreakdown.map(({ status, count }) => (
-                  <div key={status} className="flex items-center gap-1.5">
-                    <span className={cn("w-2.5 h-2.5 rounded-sm", STATUS_COLORS[status].bg)} />
-                    <span className="text-xs text-stone-500 dark:text-neutral-400">{STATUS_COLORS[status].label}</span>
-                    <span className="text-xs font-semibold text-stone-700 dark:text-neutral-200">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      {/* Workload per person */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Per Person</h3>
+        {engineers.map((eng, i) => {
+          const pct = eng.totalPoints > 0 ? Math.round((eng.donePoints / eng.totalPoints) * 100) : 0;
+          const taskDonePct = eng.totalTasks > 0 ? Math.round((eng.doneTasks / eng.totalTasks) * 100) : 0;
+          const isExpanded = expandedPerson === eng.login;
+          const color = PERSON_COLORS[i % PERSON_COLORS.length];
+          const status = getPaceStatus(eng.donePoints, eng.totalPoints, elapsedPct);
 
-      {/* Per-engineer cards */}
-      <div className="space-y-3">
-        {engineers.map((eng) => (
-          <div key={eng.login} className={card}>
-            <div className="flex items-center gap-3 mb-3">
-              {eng.avatar_url ? (
-                <img src={eng.avatar_url} className="w-8 h-8 rounded-full shrink-0" alt="" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-dark-overlay flex items-center justify-center text-xs font-bold text-stone-500 shrink-0">
-                  {eng.name[0]?.toUpperCase() ?? "?"}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 truncate">{eng.name}</span>
-                  <StatusBadge donePoints={eng.donePoints} totalPoints={eng.totalPoints} elapsedPct={elapsedPct} />
-                </div>
-                {eng.features.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {eng.features.map((f) => (
-                      <span
-                        key={f.title}
-                        className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", STATUS_COLORS[f.status].bg, STATUS_COLORS[f.status].text)}
-                      >
-                        {f.title}
-                      </span>
-                    ))}
+          return (
+            <div key={eng.login} className={card + " overflow-hidden"}>
+              {/* Main row */}
+              <button
+                onClick={() => setExpandedPerson(isExpanded ? null : eng.login)}
+                className="w-full flex items-center gap-3 p-4 text-left cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.03] transition-colors"
+              >
+                {/* Avatar */}
+                {eng.avatar_url ? (
+                  <img src={eng.avatar_url} className="w-9 h-9 rounded-full shrink-0" alt="" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ backgroundColor: color }}>
+                    {eng.name.slice(0, 2).toUpperCase()}
                   </div>
                 )}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <Stat label="Pts" done={eng.donePoints} total={eng.totalPoints} />
-                <Stat label="Tasks" done={eng.doneTasks} total={eng.totalTasks} />
-                <Stat label="Roles" done={eng.doneRoles} total={eng.totalRoles} />
-                <Stat label="Feat" done={eng.doneFeatures} total={eng.totalFeatures} />
-              </div>
+
+                {/* Name + team + features */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{eng.name}</span>
+                    {eng.team && <span className="text-[10px] text-stone-400 dark:text-neutral-500">{eng.team}</span>}
+                    {eng.totalPoints > 0 && (
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", STATUS_BADGE_STYLES[status])}>
+                        {status === "on-track" ? "On Track" : status === "at-risk" ? "At Risk" : "Behind"}
+                      </span>
+                    )}
+                  </div>
+                  {eng.features.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {eng.features.map((f) => (
+                        <span key={f.id} className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", STATUS_COLORS[f.status].bg, STATUS_COLORS[f.status].text)}>
+                          {f.title}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="hidden sm:flex items-center gap-4 shrink-0">
+                  <div className="text-center">
+                    <span className="text-sm font-bold text-stone-800 dark:text-neutral-200 block">{eng.donePoints}/{eng.totalPoints}</span>
+                    <span className="text-[9px] text-stone-400 dark:text-neutral-500 uppercase">Points</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-bold text-stone-800 dark:text-neutral-200 block">{eng.doneTasks}/{eng.totalTasks}</span>
+                    <span className="text-[9px] text-stone-400 dark:text-neutral-500 uppercase">Tasks</span>
+                  </div>
+                </div>
+
+                {/* Chevron */}
+                <div className="shrink-0 text-stone-400 dark:text-neutral-500">
+                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </div>
+              </button>
+
+              {/* Points progress bar */}
+              {eng.totalPoints > 0 && (
+                <div className="px-4 pb-3">
+                  <div className="relative h-4 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-visible">
+                    <div className="h-full rounded-full absolute left-0 top-0 opacity-20" style={{ width: `${(eng.totalPoints / maxPoints) * 100}%`, backgroundColor: color }} />
+                    <div className="h-full rounded-full absolute left-0 top-0 transition-all duration-500" style={{ width: `${(eng.donePoints / maxPoints) * 100}%`, backgroundColor: color }} />
+                    <div className="absolute top-0 w-0.5 h-full bg-stone-800 dark:bg-neutral-200 z-10" style={{ left: `${elapsedPct * (eng.totalPoints / maxPoints) * 100}%` }} title={`Sprint ${sprintPct}% elapsed`} />
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded: task list grouped by feature */}
+              {isExpanded && (
+                <div className="border-t border-stone-100 dark:border-white/[0.06] bg-stone-50/50 dark:bg-white/[0.02]">
+                  {/* Stats on mobile */}
+                  <div className="sm:hidden flex items-center gap-4 px-4 py-2 border-b border-stone-100 dark:border-white/[0.06]">
+                    <span className="text-xs text-stone-500 dark:text-neutral-400">{eng.donePoints}/{eng.totalPoints} pts ({pct}%)</span>
+                    <span className="text-xs text-stone-500 dark:text-neutral-400">{eng.doneTasks}/{eng.totalTasks} tasks ({taskDonePct}%)</span>
+                  </div>
+
+                  {eng.features.length > 0 ? (
+                    (() => {
+                      const tasksByFeature = new Map<number, SubIssueWithFeature[]>();
+                      for (const t of eng.tasks) {
+                        const arr = tasksByFeature.get(t.featureId) ?? [];
+                        arr.push(t);
+                        tasksByFeature.set(t.featureId, arr);
+                      }
+                      return eng.features.map((f) => {
+                      const featureTasks = tasksByFeature.get(f.id) ?? [];
+                      const done = featureTasks.filter((t) => t.state === "closed").length;
+                      return (
+                        <div key={f.id} className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] last:border-b-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[f.status].dot)} />
+                            <span className="text-xs font-semibold text-stone-700 dark:text-neutral-300">{f.title}</span>
+                            {featureTasks.length > 0 && (
+                              <span className="text-[10px] text-stone-400 dark:text-neutral-500 ml-auto">{done}/{featureTasks.length}</span>
+                            )}
+                          </div>
+                          {featureTasks.length > 0 && (
+                            <div className="space-y-1 ml-4">
+                              {featureTasks.map((t) => (
+                                <div key={t.id} className="flex items-center gap-2">
+                                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
+                                  <a href={t.html_url} target="_blank" rel="noopener noreferrer"
+                                    className={cn("text-xs hover:text-brand flex-1", t.state === "closed" ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-600 dark:text-neutral-400")}>
+                                    {t.title}
+                                  </a>
+                                  {t.points != null && (
+                                    <span className="text-[10px] text-stone-400 dark:text-neutral-500 shrink-0">{t.points}pt</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {featureTasks.length === 0 && (
+                            <p className="text-[11px] text-stone-400 dark:text-neutral-500 ml-4">No tasks assigned</p>
+                          )}
+                        </div>
+                      );
+                    });
+                    })()
+                  ) : (
+                    <div className="px-4 py-3">
+                      <p className="text-xs text-stone-400 dark:text-neutral-500">No features assigned</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-
-            {/* Points progress bar with pace marker */}
-            {eng.totalPoints > 0 && (
-              <div className="relative h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-visible">
-                <div
-                  className="h-full rounded-l bg-purple-500/30 absolute left-0 top-0"
-                  style={{ width: "100%" }}
-                />
-                <div
-                  className="h-full rounded-l bg-purple-500 absolute left-0 top-0 transition-all duration-500"
-                  style={{ width: `${(eng.donePoints / eng.totalPoints) * 100}%` }}
-                />
-                {/* Sprint pace marker */}
-                <div
-                  className="absolute top-0 w-0.5 h-full bg-stone-800 dark:bg-neutral-200 z-10"
-                  style={{ left: `${elapsedPct * 100}%` }}
-                  title={`Sprint ${Math.round(elapsedPct * 100)}% elapsed`}
-                />
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const STATUS_BADGE = {
-  "on-track": { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300", label: "On Track" },
-  "at-risk": { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300", label: "At Risk" },
-  "behind": { bg: "bg-red-100 dark:bg-red-900/40", text: "text-red-700 dark:text-red-300", label: "Behind" },
-} as const;
+// --- Ring metric card ---
 
-function getPointsStatus(donePoints: number, totalPoints: number, elapsedPct: number): "on-track" | "at-risk" | "behind" {
-  if (totalPoints === 0) return "on-track";
-  const completionPct = donePoints / totalPoints;
-  const diff = completionPct - elapsedPct;
-  if (diff >= -0.1) return "on-track";
-  if (diff >= -0.3) return "at-risk";
-  return "behind";
-}
+function RingCard({ label, value, pct, color, sub }: { label: string; value: string; pct: number; color: string; sub: string }) {
+  const r = 28;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.min(pct, 100) / 100) * c;
 
-function StatusBadge({ donePoints, totalPoints, elapsedPct }: { donePoints: number; totalPoints: number; elapsedPct: number }) {
-  const status = getPointsStatus(donePoints, totalPoints, elapsedPct);
-  const badge = STATUS_BADGE[status];
   return (
-    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", badge.bg, badge.text)}>
-      {badge.label}
-    </span>
-  );
-}
-
-function Stat({ label, done, total }: { label: string; done: number; total: number }) {
-  if (total === 0) return null;
-  return (
-    <div className="text-center">
-      <span className="text-xs font-semibold text-stone-700 dark:text-neutral-200 block">{done}/{total}</span>
-      <span className="text-[9px] text-stone-400 dark:text-neutral-500 uppercase">{label}</span>
-    </div>
-  );
-}
-
-function SummaryCard({ label, done, total, color }: { label: string; done: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  return (
-    <div className={card}>
-      <div className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-1">{label}</div>
-      <div className="flex items-baseline gap-2">
-        <span className={cn("text-2xl font-semibold", color)}>{done}</span>
-        <span className="text-sm text-stone-400 dark:text-neutral-500">/ {total}</span>
-        {total > 0 && (
-          <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{pct}%</span>
-        )}
+    <div className={card + " p-4 flex items-center gap-4"}>
+      <div className="relative w-16 h-16 shrink-0">
+        <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-stone-100 dark:text-white/[0.06]" />
+          <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} className="transition-all duration-700" />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-stone-700 dark:text-neutral-200">{pct}%</span>
       </div>
-      <div className="h-1.5 bg-stone-100 dark:bg-dark-overlay rounded-full mt-2 overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all duration-500", color.replace("text-", "bg-"))}
-          style={{ width: `${pct}%` }}
-        />
+      <div>
+        <span className="text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider block">{label}</span>
+        <span className="text-lg font-bold text-stone-800 dark:text-neutral-200 block leading-tight">{value}</span>
+        <span className="text-[10px] text-stone-400 dark:text-neutral-500">{sub}</span>
       </div>
     </div>
   );
