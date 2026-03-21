@@ -34,7 +34,7 @@ function buildPreamble(org: string): string {
 ### People Config
 - Team member info (name, role, team) is stored at \`${org}/.gitpulse/people.json\`
 - Format: \`[{ "github": "login", "name": "Display Name", "role": "Role", "team": "Team" }]\`
-- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d\``;
+- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/people.json --jq '.content' | base64 -d\``;
 }
 
 function buildSection(org: string, rules: string[]): string {
