@@ -12,6 +12,7 @@ interface RoleSectionProps {
   onToggleTask: (task: SubIssue) => void;
   onDeleteTask: (task: SubIssue) => void;
   onUpdateTaskPoints: (task: SubIssue, points: Points) => void;
+  onUpdateTaskTitle: (task: SubIssue, newTitle: string) => void;
   onAddTask: (title: string, points?: Points) => void;
   onDeleteRole: () => void;
   isAdding: boolean;
@@ -25,6 +26,7 @@ export function RoleSection({
   onToggleTask,
   onDeleteTask,
   onUpdateTaskPoints,
+  onUpdateTaskTitle,
   onAddTask,
   onDeleteRole,
   isAdding,
@@ -87,6 +89,7 @@ export function RoleSection({
               onToggle={() => onToggleTask(task)}
               onDelete={() => onDeleteTask(task)}
               onUpdatePoints={(points) => onUpdateTaskPoints(task, points)}
+              onUpdateTitle={(newTitle) => onUpdateTaskTitle(task, newTitle)}
             />
           ))}
 
@@ -121,13 +124,32 @@ function TaskRow({
   onToggle,
   onDelete,
   onUpdatePoints,
+  onUpdateTitle,
 }: {
   task: SubIssue;
   onToggle: () => void;
   onDelete: () => void;
   onUpdatePoints: (points: Points) => void;
+  onUpdateTitle: (newTitle: string) => void;
 }) {
   const isDone = task.state === "closed";
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(task.title);
+
+  function commitEdit() {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== task.title) {
+      onUpdateTitle(trimmed);
+    } else {
+      setEditValue(task.title);
+    }
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditValue(task.title);
+  }
 
   return (
     <div className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50 dark:hover:bg-white/[0.06]">
@@ -138,9 +160,27 @@ function TaskRow({
       >
         {isDone ? <CheckSquare size={15} className="text-brand" /> : <Square size={15} />}
       </button>
-      <span className={`text-sm flex-1 ${isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300"}`}>
-        {task.title}
-      </span>
+      {editing ? (
+        <input
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") cancelEdit();
+          }}
+          autoFocus
+          className="text-sm flex-1 px-1 py-0 rounded border border-brand/40 bg-white dark:bg-dark-raised text-stone-700 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-brand/30"
+        />
+      ) : (
+        <span
+          className={`text-sm flex-1 cursor-text ${isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300"}`}
+          onClick={() => { setEditValue(task.title); setEditing(true); }}
+        >
+          {task.title}
+        </span>
+      )}
       <PointsSelect value={task.points ?? undefined} onChange={onUpdatePoints} />
       {task.assignees.length > 0 && (
         <span className="text-xs text-brand bg-brand/10 px-1.5 py-0.5 rounded">

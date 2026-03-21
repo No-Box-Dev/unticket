@@ -1,3 +1,5 @@
+import { encryptToken, decryptToken } from "./lib/crypto";
+
 // Cache validated tokens for 5 min to avoid hammering GitHub /user
 const tokenCache = new Map();
 // Cache org membership checks (keyed by tokenHash:orgLogin)
@@ -165,16 +167,18 @@ export async function onRequest(context) {
     orgRow = result;
   }
 
-  // Upsert session
+  // Upsert session (encrypt token before storing in D1)
+  const encryptionKey = context.env.ENCRYPTION_KEY;
+  const encryptedToken = await encryptToken(token, encryptionKey);
   await context.env.DB.prepare(
     `INSERT INTO sessions (org_id, github_login, encrypted_token, updated_at)
      VALUES (?, ?, ?, datetime('now'))
      ON CONFLICT(org_id, github_login) DO UPDATE SET
        encrypted_token = excluded.encrypted_token,
        updated_at = datetime('now')`
-  ).bind(orgRow.id, userLogin, token).run();
+  ).bind(orgRow.id, userLogin, encryptedToken).run();
 
-  // Set context data for downstream handlers
+  // Set context data for downstream handlers (plaintext token for API calls)
   context.data.orgId = orgRow.id;
   context.data.orgLogin = orgLogin;
   context.data.userLogin = userLogin;

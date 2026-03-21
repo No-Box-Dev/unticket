@@ -5,7 +5,7 @@ import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
 import { PointsBadge } from "./PointsSelect";
 import { RoleSection } from "./RoleSection";
-import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask, useUpdateTaskPoints, useUpdateTaskTitle } from "@/hooks/useConfigRepo";
 import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
 import { fetchAllPRs } from "@/lib/github";
 import type { Feature } from "@/lib/types";
@@ -44,6 +44,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   const deleteRoleMut = useDeleteRole();
   const createTaskMut = useCreateTask();
   const updateTaskPointsMut = useUpdateTaskPoints();
+  const updateTaskTitleMut = useUpdateTaskTitle();
 
   // Linked PRs (branch + explicit)
   const { data: linkedPRs, isLoading: prsLoading } = usePRsForFeature(feature.id);
@@ -332,6 +333,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                   onToggleTask={(task) => toggleSubIssueMut.mutate(task)}
                   onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number })}
                   onUpdateTaskPoints={(task, points) => updateTaskPointsMut.mutate({ taskNumber: task.number, points })}
+                  onUpdateTaskTitle={(task, newTitle) => updateTaskTitleMut.mutate({ taskNumber: task.number, featureId: feature.id, title: newTitle })}
                   onAddTask={(title, points) => createTaskMut.mutate({ roleNumber: role.number, featureId: feature.id, title, points, assignee: role.assignee ?? undefined })}
                   onDeleteRole={() => deleteRoleMut.mutate({ featureId: feature.id, roleNumber: role.number })}
                   isAdding={createTaskMut.isPending}

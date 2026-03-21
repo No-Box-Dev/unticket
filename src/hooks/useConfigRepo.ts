@@ -42,6 +42,7 @@ import {
   fetchTasksForRole,
   createTask as ghCreateTask,
   updateTaskPoints as ghUpdateTaskPoints,
+  updateTaskTitle as ghUpdateTaskTitle,
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
@@ -177,18 +178,20 @@ export function useAllSprintSubIssues(featureIds: number[]) {
     queryFn: async () => {
       if (!selectedOrg || featureIds.length === 0) return [];
       const results: SubIssueWithFeature[] = [];
-      // Batch features
+      // Batch features in groups of 10 to balance parallelism vs rate limits
       const batches = [];
-      for (let i = 0; i < featureIds.length; i += 5) {
-        batches.push(featureIds.slice(i, i + 5));
+      for (let i = 0; i < featureIds.length; i += 10) {
+        batches.push(featureIds.slice(i, i + 10));
       }
       for (const batch of batches) {
         const batchResults = await Promise.all(
           batch.map(async (fid) => {
             try {
-              // Fetch direct sub-issues of the feature
-              const subs = await fetchSubIssues(selectedOrg, fid);
-              const roles = await fetchRoles(selectedOrg, fid);
+              // Fetch sub-issues and roles in parallel (eliminates N+1)
+              const [subs, roles] = await Promise.all([
+                fetchSubIssues(selectedOrg, fid),
+                fetchRoles(selectedOrg, fid),
+              ]);
               const roleNumbers = new Set(roles.map((r) => r.number));
               const items: SubIssueWithFeature[] = [];
 
@@ -199,7 +202,7 @@ export function useAllSprintSubIssues(featureIds: number[]) {
                 }
               }
 
-              // Tasks under roles
+              // Tasks under roles — fetch all role tasks in parallel
               if (roles.length > 0) {
                 const roleTasks = await Promise.all(
                   roles.map(async (role) => {
@@ -555,6 +558,36 @@ export function useUpdateTaskPoints() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roleTasks", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg] });
+    },
+  });
+}
+
+export function useUpdateTaskTitle() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { taskNumber: number; featureId: number; title: string }) =>
+      ghUpdateTaskTitle(selectedOrg!, args.taskNumber, args.title),
+    onMutate: async (args) => {
+      // Optimistic update in rolesWithTasks cache
+      const key = ["rolesWithTasks", selectedOrg, args.featureId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<RoleWithTasks[]>(key);
+      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+        (old ?? []).map((r) => ({
+          ...r,
+          tasks: r.tasks.map((t) =>
+            t.number === args.taskNumber ? { ...t, title: args.title } : t,
+          ),
+        })),
+      );
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+    onSettled: (_data, _err, args) => {
+      qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg, args.featureId] });
     },
   });
 }
