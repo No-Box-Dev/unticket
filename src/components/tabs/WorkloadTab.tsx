@@ -23,6 +23,23 @@ const PERSON_COLORS = [
   "#ec4899", "#14b8a6", "#06b6d4", "#84cc16", "#f97316",
 ];
 
+const ON_TRACK_THRESHOLD = -0.1;
+const AT_RISK_THRESHOLD = -0.3;
+
+const STATUS_BADGE_STYLES = {
+  "on-track": "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+  "at-risk": "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
+  "behind": "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
+} as const;
+
+function getPaceStatus(donePoints: number, totalPoints: number, elapsedPct: number): "on-track" | "at-risk" | "behind" {
+  if (totalPoints === 0) return "on-track";
+  const diff = (donePoints / totalPoints) - elapsedPct;
+  if (diff >= ON_TRACK_THRESHOLD) return "on-track";
+  if (diff >= AT_RISK_THRESHOLD) return "at-risk";
+  return "behind";
+}
+
 interface EngineerWorkload {
   login: string;
   name: string;
@@ -57,7 +74,6 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   const engineers = useMemo((): EngineerWorkload[] => {
     if (!orgMembers) return [];
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
-    const featureMap = new Map(sprintFeatures.map((f) => [f.id, f]));
 
     const tasksByPerson = new Map<string, { done: number; total: number; points: number; donePoints: number; tasks: SubIssueWithFeature[] }>();
     for (const t of allTasks ?? []) {
@@ -142,6 +158,9 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   const pointsPct = totals.points > 0 ? Math.round((totals.donePoints / totals.points) * 100) : 0;
   const tasksPct = totals.tasks > 0 ? Math.round((totals.doneTasks / totals.tasks) * 100) : 0;
   const sprintPct = Math.round(elapsedPct * 100);
+  const sprintTotalDays = sprint ? Math.round((new Date(sprint.endDate + "T23:59:59").getTime() - new Date(sprint.startDate + "T00:00:00").getTime()) / 86400000) : 0;
+  const sprintElapsedDays = Math.max(1, Math.round(elapsedPct * sprintTotalDays));
+  const shippedCount = sprintFeatures.filter((f) => f.status === "production").length;
 
   return (
     <div className="space-y-5">
@@ -153,7 +172,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
           </h2>
           {sprint && (
             <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">
-              {new Date(sprint.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {new Date(sprint.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Day {Math.max(1, Math.round(elapsedPct * (Math.round((new Date(sprint.endDate + "T23:59:59").getTime() - new Date(sprint.startDate + "T00:00:00").getTime()) / 86400000))))} of {Math.round((new Date(sprint.endDate + "T23:59:59").getTime() - new Date(sprint.startDate + "T00:00:00").getTime()) / 86400000)}
+              {new Date(sprint.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {new Date(sprint.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Day {sprintElapsedDays} of {sprintTotalDays}
             </p>
           )}
         </div>
@@ -169,7 +188,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
         <RingCard label="Sprint" value={`${sprintPct}%`} pct={sprintPct} color="#0E7C86" sub="elapsed" />
         <RingCard label="Points" value={`${totals.donePoints}/${totals.points}`} pct={pointsPct} color="#8b5cf6" sub={`${pointsPct}% done`} />
         <RingCard label="Tasks" value={`${totals.doneTasks}/${totals.tasks}`} pct={tasksPct} color="#3b82f6" sub={`${tasksPct}% done`} />
-        <RingCard label="Features" value={`${sprintFeatures.filter((f) => f.status === "production").length}/${sprintFeatures.length}`} pct={sprintFeatures.length > 0 ? Math.round((sprintFeatures.filter((f) => f.status === "production").length / sprintFeatures.length) * 100) : 0} color="#10b981" sub="shipped" />
+        <RingCard label="Features" value={`${shippedCount}/${sprintFeatures.length}`} pct={sprintFeatures.length > 0 ? Math.round((shippedCount / sprintFeatures.length) * 100) : 0} color="#10b981" sub="shipped" />
       </div>
 
       {/* Feature pipeline */}
@@ -208,13 +227,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
           const taskDonePct = eng.totalTasks > 0 ? Math.round((eng.doneTasks / eng.totalTasks) * 100) : 0;
           const isExpanded = expandedPerson === eng.login;
           const color = PERSON_COLORS[i % PERSON_COLORS.length];
-          const pace = eng.totalPoints > 0 ? (eng.donePoints / eng.totalPoints) - elapsedPct : 0;
-          const status = pace >= -0.1 ? "on-track" : pace >= -0.3 ? "at-risk" : "behind";
-          const statusStyles = {
-            "on-track": "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
-            "at-risk": "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
-            "behind": "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
-          };
+          const status = getPaceStatus(eng.donePoints, eng.totalPoints, elapsedPct);
 
           return (
             <div key={eng.login} className={card + " overflow-hidden"}>
@@ -238,7 +251,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                     <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{eng.name}</span>
                     {eng.team && <span className="text-[10px] text-stone-400 dark:text-neutral-500">{eng.team}</span>}
                     {eng.totalPoints > 0 && (
-                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", statusStyles[status])}>
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", STATUS_BADGE_STYLES[status])}>
                         {status === "on-track" ? "On Track" : status === "at-risk" ? "At Risk" : "Behind"}
                       </span>
                     )}
@@ -293,8 +306,15 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                   </div>
 
                   {eng.features.length > 0 ? (
-                    eng.features.map((f) => {
-                      const featureTasks = eng.tasks.filter((t) => t.featureId === f.id);
+                    (() => {
+                      const tasksByFeature = new Map<number, SubIssueWithFeature[]>();
+                      for (const t of eng.tasks) {
+                        const arr = tasksByFeature.get(t.featureId) ?? [];
+                        arr.push(t);
+                        tasksByFeature.set(t.featureId, arr);
+                      }
+                      return eng.features.map((f) => {
+                      const featureTasks = tasksByFeature.get(f.id) ?? [];
                       const done = featureTasks.filter((t) => t.state === "closed").length;
                       return (
                         <div key={f.id} className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] last:border-b-0">
@@ -326,7 +346,8 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                           )}
                         </div>
                       );
-                    })
+                    });
+                    })()
                   ) : (
                     <div className="px-4 py-3">
                       <p className="text-xs text-stone-400 dark:text-neutral-500">No features assigned</p>
