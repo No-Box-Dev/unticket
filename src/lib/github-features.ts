@@ -527,6 +527,17 @@ export async function createTask(
   return { ...toSubIssue(issue), roleNumber };
 }
 
+export async function updateTaskTitle(org: string, taskNumber: number, title: string): Promise<SubIssue> {
+  const ok = getOctokit();
+  const { data } = await ok.rest.issues.update({
+    owner: org,
+    repo: REPO,
+    issue_number: taskNumber,
+    title,
+  });
+  return toSubIssue(data);
+}
+
 export async function updateTaskPoints(org: string, taskNumber: number, points: Points | undefined): Promise<SubIssue> {
   const ok = getOctokit();
   // Get current labels, remove old points labels, add new one

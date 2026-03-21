@@ -14,7 +14,7 @@ export async function onRequestPost(context) {
   try {
     if (!cursor) {
       // Phase 1: init (repos list, members, config migration)
-      const repoNames = await syncInit(context.env.DB, token, orgId, orgLogin);
+      const repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
 
       if (repoNames.length === 0) {
         return jsonResponse({ done: true, repos: 0 });

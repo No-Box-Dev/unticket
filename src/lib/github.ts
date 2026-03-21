@@ -1,15 +1,22 @@
-import { Octokit } from "octokit";
+import { Octokit } from "@octokit/rest";
+import { paginateRest } from "@octokit/plugin-paginate-rest";
+import { throttling } from "@octokit/plugin-throttling";
+import { retry } from "@octokit/plugin-retry";
 import { apiGet, apiPost, apiFetch, ApiError, broadcastError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
-let octokitInstance: Octokit | null = null;
+const CustomOctokit = Octokit.plugin(paginateRest, throttling, retry);
 
-export function getOctokit(): Octokit {
+type CustomOctokitInstance = InstanceType<typeof CustomOctokit>;
+
+let octokitInstance: CustomOctokitInstance | null = null;
+
+export function getOctokit(): CustomOctokitInstance {
   if (!octokitInstance) {
     const token = localStorage.getItem("gp_token");
     if (!token) throw new Error("Not authenticated");
-    octokitInstance = new Octokit({
+    octokitInstance = new CustomOctokit({
       auth: token,
       throttle: {
         onRateLimit: (retryAfter: number, options: any, _octokit: any, retryCount: number) => {

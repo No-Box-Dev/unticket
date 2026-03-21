@@ -290,11 +290,15 @@ export async function syncMembers(db, token, orgId, orgLogin) {
 
 // ---------- Sync Features (.gitpulse repo issues) ----------
 
-export async function syncFeatures(db, token, orgId, orgLogin) {
+export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
+  const since = force ? null : (await getSyncState(db, orgId, "features"))?.lastSynced;
+  const params = { state: "all", sort: "updated", direction: "desc" };
+  if (since) params.since = since;
+
   const issues = await fetchAllPages(
     token,
     `https://api.github.com/repos/${orgLogin}/.gitpulse/issues`,
-    { state: "all", sort: "updated", direction: "desc" }
+    params
   );
 
   // Every issue on the .gitpulse repo is a feature (filter out PRs only)
@@ -357,7 +361,10 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     }
   }
 
-  await setSyncState(db, orgId, "features");
+  // Only advance sync timestamp if we got data or this is a fresh sync
+  if (features.length > 0 || !since) {
+    await setSyncState(db, orgId, "features");
+  }
   return { synced: features.length, total: issues.length };
 }
 
@@ -419,11 +426,11 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
 
 // ---------- syncInit: lightweight init (repos + members + config migration) ----------
 
-export async function syncInit(db, token, orgId, orgLogin) {
+export async function syncInit(db, token, orgId, orgLogin, force = false) {
   await migrateGitPulseConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
-  await syncFeatures(db, token, orgId, orgLogin);
+  await syncFeatures(db, token, orgId, orgLogin, force);
 
   const repoRows = await db
     .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
