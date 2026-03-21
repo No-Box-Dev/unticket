@@ -92,9 +92,9 @@ export function FeatureCard({
           )}
           {isAdmin && (
             <button
-              onClick={stop(() => { if (window.confirm("Delete this feature? This will close the GitHub issue.")) onDelete(feature.id); })}
+              onClick={stop(() => { if (window.confirm("Remove this feature? It will be downgraded to a regular issue.")) onDelete(feature.id); })}
               className="p-1 text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Delete"
+              title="Remove"
             >
               <Trash2 size={13} />
             </button>

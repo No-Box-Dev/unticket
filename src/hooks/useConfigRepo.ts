@@ -29,6 +29,7 @@ import {
   migrateFeatures as ghMigrateFeatures,
   fetchLegacyFeatures,
   closeMilestone,
+  reopenMilestone,
   findOrCreateMilestone,
   fetchSubIssues,
   createSubIssue,
@@ -872,6 +873,39 @@ export function useAdvanceSprint() {
       }
 
       return { failed };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] });
+    },
+  });
+}
+
+export function useRevertSprint() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { snapshot: SprintSnapshot }) => {
+      const { snapshot } = args;
+      const org = selectedOrg!;
+
+      // 1. Restore sprint config from the snapshot
+      await saveSprint({
+        number: snapshot.sprintNumber,
+        name: snapshot.name,
+        startDate: snapshot.startDate,
+        endDate: snapshot.endDate,
+        focus: snapshot.focus,
+      });
+
+      // 2. Reopen the old milestone
+      await reopenMilestone(org, snapshot.sprintNumber);
+
+      // 3. Remove the snapshot from saved snapshots
+      const existing = await fetchSprintSnapshots();
+      const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
+      await saveSprintSnapshots(filtered);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
