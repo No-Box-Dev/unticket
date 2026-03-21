@@ -16,7 +16,7 @@ export async function onRequestPost(context) {
   if (!Number.isInteger(issue_number) || issue_number <= 0) {
     return errorResponse("Invalid issue_number", 400);
   }
-  if (!assignees.every((a) => typeof a === "string" && /^[\w-]+$/.test(a))) {
+  if (!assignees.every((a) => typeof a === "string" && /^[a-zA-Z0-9-]+$/.test(a))) {
     return errorResponse("Invalid assignee username", 400);
   }
 
