@@ -345,14 +345,14 @@ export async function fetchOpenIssues() {
 }
 
 export async function fetchClosedIssues(since?: string) {
-  const params = new URLSearchParams({ state: "closed", page_size: "1000" });
+  const params = new URLSearchParams({ state: "closed", page_size: "5000" });
   if (since) params.set("closed_since", since);
   const res = await apiGet<{ data: ApiIssue[]; totalCount: number }>(`/api/issues?${params}`);
   return res.data.map(transformIssue);
 }
 
 export async function fetchAllIssues(since?: string) {
-  const params = new URLSearchParams({ state: "all", page_size: "1000" });
+  const params = new URLSearchParams({ state: "all", page_size: "5000" });
   if (since) params.set("since", since);
   const res = await apiGet<{ data: ApiIssue[]; totalCount: number }>(`/api/issues?${params}`);
   return res.data.map(transformIssue);
