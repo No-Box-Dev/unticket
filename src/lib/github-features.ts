@@ -303,13 +303,19 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 
 export async function deleteFeature(org: string, issueNumber: number): Promise<void> {
   const ok = getOctokit();
+  // Downgrade to regular issue: remove feature + status labels, clear milestone
+  const { data: issue } = await ok.rest.issues.get({ owner: org, repo: REPO, issue_number: issueNumber });
+  const keepLabels = (issue.labels ?? [])
+    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .filter((l: string) => l !== FEATURE_LABEL && !l.startsWith(STATUS_PREFIX));
   await ok.rest.issues.update({
     owner: org,
     repo: REPO,
     issue_number: issueNumber,
-    state: "closed",
+    labels: keepLabels,
+    milestone: null,
   });
-  // Also mark as closed in D1 so it doesn't reappear on refetch
+  // Remove from D1 features table
   await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
 }
 
@@ -580,6 +586,28 @@ export async function closeMilestone(org: string, sprintNumber: number): Promise
       state: "closed",
     });
     milestoneCache.delete(cacheKey);
+  }
+}
+
+export async function reopenMilestone(org: string, sprintNumber: number): Promise<void> {
+  const ok = getOctokit();
+  const title = `Sprint ${sprintNumber}`;
+  const cacheKey = `${org}/${REPO}:${title}`;
+  const { data: milestones } = await ok.rest.issues.listMilestones({
+    owner: org,
+    repo: REPO,
+    state: "closed",
+    per_page: 100,
+  });
+  const ms = milestones.find((m) => m.title === title);
+  if (ms) {
+    await ok.rest.issues.updateMilestone({
+      owner: org,
+      repo: REPO,
+      milestone_number: ms.number,
+      state: "open",
+    });
+    milestoneCache.set(cacheKey, ms.number);
   }
 }
 

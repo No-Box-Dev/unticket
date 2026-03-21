@@ -40,7 +40,7 @@ describe("FeatureCard", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} isAdmin />);
-    await userEvent.click(screen.getByTitle("Delete"));
+    await userEvent.click(screen.getByTitle("Remove"));
     expect(onDelete).toHaveBeenCalledWith(1);
   });
 
