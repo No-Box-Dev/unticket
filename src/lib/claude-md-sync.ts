@@ -9,7 +9,7 @@ function buildPreamble(org: string): string {
 
 ### Features & Sprints
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/.gitpulse\`](https://github.com/${org}/.gitpulse) (not this repo)
-- Each feature issue has labels for status (\`status:plan\`, \`status:in_progress\`, \`status:demo\`, \`status:tested\`, \`status:production\`), effort, and priority
+- Each feature issue has labels for status (\`status:plan\`, \`status:in_progress\`, \`status:demo\`, \`status:tested\`, \`status:production\`)
 - Owners are the issue's assignees. Sprints are GitHub Milestones named "Sprint N"
 - Feature plans live in the issue body as Markdown. Tasks are GitHub sub-issues linked to the parent feature issue
 - List features: \`gh issue list --repo ${org}/.gitpulse --label feature\`
@@ -27,14 +27,14 @@ function buildPreamble(org: string): string {
 
 ### Todos
 - Personal todos are GitHub Issues in \`${org}/.gitpulse\` with the \`todo\` label
-- Labels: \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`, \`todo-repo:{name}\`
+- Labels: \`todo\`, \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`
 - Closing a todo issue marks it as done; reopening moves it back
 - List todos: \`gh issue list --repo ${org}/.gitpulse --label todo\`
 
 ### People Config
-- Team member info (name, role, teams) is stored at \`${org}/.gitpulse/config/people.json\`
-- Format: \`[{ "github": "login", "name": "Display Name", "teams": ["Team"], "role": "Role" }]\`
-- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d\``;
+- Team member info (name, role, team) is stored at \`${org}/.gitpulse/people.json\`
+- Format: \`[{ "github": "login", "name": "Display Name", "role": "Role", "team": "Team" }]\`
+- Edit directly on GitHub or via CLI: \`gh api repos/${org}/.gitpulse/contents/people.json --jq '.content' | base64 -d\``;
 }
 
 function buildSection(org: string, rules: string[]): string {
