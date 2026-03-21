@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, FastForward, Loader2 } from "lucide-react";
+import { X, Lock, Loader2 } from "lucide-react";
 import type { SprintConfig, Feature } from "@/lib/types";
 
 interface NewSprintModalProps {
@@ -33,6 +33,13 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
 
   const productionCount = sprintFeatures.filter((f) => f.status === "production").length;
   const movingCount = sprintFeatures.filter((f) => f.status !== "production").length;
+  const statusCounts: [string, number][] = [
+    ["Plan", sprintFeatures.filter((f) => f.status === "plan").length],
+    ["In Progress", sprintFeatures.filter((f) => f.status === "in_progress").length],
+    ["Demo", sprintFeatures.filter((f) => f.status === "demo").length],
+    ["Tested", sprintFeatures.filter((f) => f.status === "tested").length],
+    ["Production", productionCount],
+  ];
 
   const isDateRangeValid = !!startDate && !!endDate && startDate <= endDate;
 
@@ -58,8 +65,8 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
           <div className="flex items-center gap-2">
-            <FastForward size={18} className="text-brand" />
-            <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">New Sprint</h2>
+            <Lock size={18} className="text-brand" />
+            <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Finalize Sprint</h2>
           </div>
           <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
             <X className="w-5 h-5" />
@@ -67,19 +74,26 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
         </div>
 
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
-          {/* Explanation */}
-          <div className="rounded-lg bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] px-4 py-3 text-sm text-stone-600 dark:text-neutral-400 space-y-1">
-            {productionCount > 0 && (
-              <p>
-                <span className="font-medium text-green-600">Production</span> features ({productionCount}) will be closed
-              </p>
-            )}
-            {movingCount > 0 && (
-              <p>
-                All other features ({movingCount}) will move to Sprint {nextNumber}
-              </p>
-            )}
-            {productionCount === 0 && movingCount === 0 && (
+          {/* Sprint summary */}
+          <div className="rounded-lg bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] px-4 py-3 text-sm text-stone-600 dark:text-neutral-400 space-y-2">
+            <p className="font-medium text-stone-700 dark:text-neutral-300">Sprint {currentSprint.number} Summary</p>
+            {sprintFeatures.length > 0 ? (
+              <>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  {statusCounts.map(([label, count]) => count > 0 && (
+                    <span key={label}>{label}: <span className="font-medium text-stone-700 dark:text-neutral-300">{count}</span></span>
+                  ))}
+                </div>
+                <div className="border-t border-stone-200 dark:border-white/[0.08] pt-2 space-y-1">
+                  {productionCount > 0 && (
+                    <p><span className="font-medium text-green-600">Production</span> features ({productionCount}) will be closed</p>
+                  )}
+                  {movingCount > 0 && (
+                    <p>All other features ({movingCount}) move to Sprint {nextNumber}</p>
+                  )}
+                </div>
+              </>
+            ) : (
               <p>No features in the current sprint.</p>
             )}
           </div>
@@ -162,12 +176,12 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
               {isPending ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  Starting Sprint...
+                  Finalizing...
                 </>
               ) : (
                 <>
-                  <FastForward size={14} />
-                  Start Sprint
+                  <Lock size={14} />
+                  Finalize &amp; Start Sprint {nextNumber}
                 </>
               )}
             </button>

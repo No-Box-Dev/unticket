@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -11,7 +11,7 @@ import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, FastForward, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -61,6 +61,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const migrateMut = useMigrateFeatures();
   const isAdmin = useIsAdmin();
   const advanceSprintMut = useAdvanceSprint();
+  const revertSprintMut = useRevertSprint();
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const syncFeaturesMut = useSyncFeatures();
@@ -365,13 +366,15 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
             <RefreshCw size={12} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
             <span className="hidden sm:inline">{syncFeaturesMut.isPending ? "Syncing..." : "Sync"}</span>
           </button>
-          <button
-            onClick={() => setShowNewSprint(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
-          >
-            <FastForward size={12} />
-            <span className="hidden sm:inline">New Sprint</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowNewSprint(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
+            >
+              <Lock size={12} />
+              <span className="hidden sm:inline">Finalize Sprint</span>
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => setShowBackfill(!showBackfill)}
@@ -430,7 +433,22 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
       )}
 
       {/* Past sprint snapshot view */}
-      {activeSnapshot && <SnapshotView snapshot={activeSnapshot} />}
+      {activeSnapshot && (
+        <SnapshotView
+          snapshot={activeSnapshot}
+          isAdmin={isAdmin}
+          isLatestSnapshot={activeSnapshot.sprintNumber === (sprint.number - 1)}
+          onRevert={() => {
+            if (window.confirm(`Revert to Sprint ${activeSnapshot.sprintNumber}? This will restore the sprint config and reopen its milestone.`)) {
+              revertSprintMut.mutate(
+                { snapshot: activeSnapshot },
+                { onSuccess: () => setViewingSprint(null) },
+              );
+            }
+          }}
+          isReverting={revertSprintMut.isPending}
+        />
+      )}
 
       {/* Metrics view */}
       {!activeSnapshot && sprintView === "metrics" && (
@@ -514,7 +532,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
         />
       )}
 
-      {/* New Sprint modal */}
+      {/* Finalize Sprint modal */}
       {showNewSprint && (
         <NewSprintModal
           currentSprint={sprint}
@@ -575,6 +593,22 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
                 owner: t.owner,
                 closedAt: t.closedAt ?? new Date().toISOString(),
                 featureId: t.featureId,
+              })),
+              prsMerged: sprintMergedPRs.map((pr: any) => ({
+                number: pr.number,
+                title: pr.title,
+                repo: pr.repo ?? pr.head?.repo?.name ?? "",
+                author: pr.user?.login ?? "",
+                mergedAt: pr.merged_at,
+                url: pr.html_url,
+              })),
+              issuesClosed: sprintClosedIssues.map((issue: any) => ({
+                number: issue.number,
+                title: issue.title,
+                repo: issue.repo ?? "",
+                closedBy: issue.closed_by ?? issue.user?.login,
+                closedAt: issue.closed_at,
+                url: issue.html_url,
               })),
             };
             advanceSprintMut.mutate(
@@ -1266,7 +1300,13 @@ function BackfillForm({ sprint: _sprint, features, mergedPRs, closedIssues, allI
 
 // ─── Snapshot View ──────────────────────────────────────────────────────
 
-function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
+function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverting }: {
+  snapshot: SprintSnapshot;
+  isAdmin?: boolean;
+  isLatestSnapshot?: boolean;
+  onRevert?: () => void;
+  isReverting?: boolean;
+}) {
   const { metrics, features: snapshotFeatures } = snapshot;
   const [selectedEngineer, setSelectedEngineer] = useState<string | null>(null);
   const engineers = snapshot.engineers ?? [];
@@ -1295,15 +1335,29 @@ function SnapshotView({ snapshot }: { snapshot: SprintSnapshot }) {
           </span>
         </div>
 
-        {/* Engineer filter */}
-        {engineers.length > 0 && (
-          <PersonSelect
-            value={selectedEngineer}
-            onChange={(v) => setSelectedEngineer(typeof v === "string" ? v : null)}
-            options={engineers.map((e) => ({ value: e.login, label: e.login }))}
-            placeholder="All Engineers"
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {/* Engineer filter */}
+          {engineers.length > 0 && (
+            <PersonSelect
+              value={selectedEngineer}
+              onChange={(v) => setSelectedEngineer(typeof v === "string" ? v : null)}
+              options={engineers.map((e) => ({ value: e.login, label: e.login }))}
+              placeholder="All Engineers"
+            />
+          )}
+
+          {/* Revert button — admin only, latest snapshot only */}
+          {isAdmin && isLatestSnapshot && onRevert && (
+            <button
+              onClick={onRevert}
+              disabled={isReverting}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-xs text-red-500 hover:text-red-600 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isReverting ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+              <span>{isReverting ? "Reverting..." : "Revert Sprint"}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {snapshot.focus && <p className="text-sm text-brand">{snapshot.focus}</p>}

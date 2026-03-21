@@ -175,6 +175,24 @@ export interface SprintSnapshot {
     closedAt: string;
     featureId?: number;
   }[];
+  /** All PRs merged during this sprint */
+  prsMerged?: {
+    number: number;
+    title: string;
+    repo: string;
+    author: string;
+    mergedAt: string;
+    url?: string;
+  }[];
+  /** All issues closed during this sprint */
+  issuesClosed?: {
+    number: number;
+    title: string;
+    repo: string;
+    closedBy?: string;
+    closedAt: string;
+    url?: string;
+  }[];
   createdAt: string;
 }
 
