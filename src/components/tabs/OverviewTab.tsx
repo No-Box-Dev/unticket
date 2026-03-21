@@ -194,6 +194,14 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     return { total, done };
   }, [allTasks]);
 
+  const sprintFeatureCounts = useMemo(() => {
+    if (!features || !sprint) return { shipped: 0, total: 0 };
+    const sprintFeatures = features.filter((f) => f.sprint === sprint.number);
+    const shipped = sprintFeatures.filter((f) => f.status === "production").length;
+    const total = sprintFeatures.filter((f) => f.status !== "future").length;
+    return { shipped, total };
+  }, [features, sprint]);
+
   // Metrics
   const metrics = useMemo(() => {
     if (!mergedPRs || !closedIssues) return null;
@@ -328,6 +336,24 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     return entries.length > 0 ? entries : null;
   }, [snapshots, sprint, sprintPoints, weeks]);
+
+  // Sprint points by person
+  const pointsByPerson = useMemo(() => {
+    const byPerson = new Map<string, { done: number; total: number }>();
+    for (const t of allTasks ?? []) {
+      for (const a of t.assignees) {
+        const entry = byPerson.get(a) ?? { done: 0, total: 0 };
+        entry.total += t.points ?? 0;
+        if (t.state === "closed") entry.done += t.points ?? 0;
+        byPerson.set(a, entry);
+      }
+    }
+    const sorted = [...byPerson.entries()]
+      .filter(([, v]) => v.total > 0)
+      .sort((a, b) => b[1].total - a[1].total);
+    const max = Math.max(...sorted.map(([, v]) => v.total), 1);
+    return { sorted, max };
+  }, [allTasks]);
 
   // Features by sprint (collapsible)
   const cutoffDate = useMemo(() => {
@@ -487,7 +513,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
             <button onClick={() => nav("sprint")} className="p-5 text-left hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors rounded-r-xl cursor-pointer">
               <span className="text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider block mb-1">Features</span>
               <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 block">
-                {(features ?? []).filter((f) => f.sprint === sprint?.number && f.status === "production").length}/{(features ?? []).filter((f) => f.sprint === sprint?.number && f.status !== "future").length}
+                {sprintFeatureCounts.shipped}/{sprintFeatureCounts.total}
               </span>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mt-0.5">shipped</span>
             </button>
@@ -649,39 +675,24 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
             <span className="text-xs text-stone-400 dark:text-neutral-500">{sprintPoints.done}/{sprintPoints.total} pts done</span>
           </div>
           <div className="space-y-2">
-            {(() => {
-              const byPerson = new Map<string, { done: number; total: number }>();
-              for (const t of allTasks ?? []) {
-                for (const a of t.assignees) {
-                  const entry = byPerson.get(a) ?? { done: 0, total: 0 };
-                  entry.total += t.points ?? 0;
-                  if (t.state === "closed") entry.done += t.points ?? 0;
-                  byPerson.set(a, entry);
-                }
-              }
-              const sorted = [...byPerson.entries()]
-                .filter(([, v]) => v.total > 0)
-                .sort((a, b) => b[1].total - a[1].total);
-              const max = Math.max(...sorted.map(([, v]) => v.total), 1);
-              return sorted.map(([login, { done, total }]) => (
-                <button
-                  key={login}
-                  onClick={() => nav("engineers", { person: login })}
-                  className="flex items-center gap-2 w-full cursor-pointer group"
-                >
-                  <span className="text-xs text-stone-600 dark:text-neutral-400 w-24 truncate shrink-0 group-hover:text-brand transition-colors">
-                    {nameOf(login)}
+            {pointsByPerson.sorted.map(([login, { done, total }]) => (
+              <button
+                key={login}
+                onClick={() => nav("engineers", { person: login })}
+                className="flex items-center gap-2 w-full cursor-pointer group"
+              >
+                <span className="text-xs text-stone-600 dark:text-neutral-400 w-24 truncate shrink-0 group-hover:text-brand transition-colors">
+                  {nameOf(login)}
+                </span>
+                <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden relative">
+                  <div className="h-full bg-brand/20 rounded absolute left-0 top-0" style={{ width: `${(total / pointsByPerson.max) * 100}%` }} />
+                  <div className="h-full bg-brand rounded absolute left-0 top-0 transition-all" style={{ width: `${(done / pointsByPerson.max) * 100}%` }} />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-stone-500 dark:text-neutral-400">
+                    {done}/{total}
                   </span>
-                  <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden relative">
-                    <div className="h-full bg-brand/20 rounded absolute left-0 top-0" style={{ width: `${(total / max) * 100}%` }} />
-                    <div className="h-full bg-brand rounded absolute left-0 top-0 transition-all" style={{ width: `${(done / max) * 100}%` }} />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-stone-500 dark:text-neutral-400">
-                      {done}/{total}
-                    </span>
-                  </div>
-                </button>
-              ));
-            })()}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       )}

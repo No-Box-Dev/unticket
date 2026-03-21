@@ -36,7 +36,8 @@ describe("FeatureCard", () => {
     expect(onOpenDetail).toHaveBeenCalledWith(baseFeature);
   });
 
-  it("Delete button calls onDelete when admin", async () => {
+  it("Delete button calls onDelete when admin (after confirm)", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} isAdmin />);
     await userEvent.click(screen.getByTitle("Delete"));

@@ -36,16 +36,15 @@ export async function onRequestGet(context) {
     bindings.push(repo);
   }
 
-  // Count total
+  // Batch count + data queries
   const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as count");
-  const countResult = await context.env.DB.prepare(countQuery).bind(...bindings).first();
-  const totalCount = countResult?.count ?? 0;
+  const countStmt = context.env.DB.prepare(countQuery).bind(...bindings);
 
   query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
-  bindings.push(pageSize, (page - 1) * pageSize);
+  const dataStmt = context.env.DB.prepare(query).bind(...bindings, pageSize, (page - 1) * pageSize);
 
-  const stmt = context.env.DB.prepare(query);
-  const rows = await stmt.bind(...bindings).all();
+  const [countResult, rows] = await context.env.DB.batch([countStmt, dataStmt]);
+  const totalCount = countResult?.results?.[0]?.count ?? 0;
 
   // Parse JSON fields
   const results = rows.results.map((row) => ({

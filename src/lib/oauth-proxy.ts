@@ -18,5 +18,11 @@ export function getOAuthLoginUrl(): string {
     ? `${PROXY_URL}?redirect=${encodeURIComponent(window.location.origin)}`
     : `${window.location.origin}/api/auth/callback`;
 
-  return `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent("repo read:org")}`;
+  // Generate random state for CSRF protection
+  const stateArray = new Uint8Array(32);
+  crypto.getRandomValues(stateArray);
+  const state = [...stateArray].map((b) => b.toString(16).padStart(2, "0")).join("");
+  sessionStorage.setItem("gp_oauth_state", state);
+
+  return `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent("repo read:org")}&state=${state}`;
 }
