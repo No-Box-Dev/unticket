@@ -41,7 +41,7 @@ export async function onRequestGet(context) {
   const sort = url.searchParams.get("sort") || "updated_at";
   const sortDir = url.searchParams.get("sort_dir") === "asc" ? "ASC" : "DESC";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-  const pageSize = Math.min(1000, Math.max(1, parseInt(url.searchParams.get("page_size") || "30", 10)));
+  const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get("page_size") || "30", 10)));
 
   // Validate sort column
   const sortColumn = SORT_COLUMNS[sort] || "updated_at";
