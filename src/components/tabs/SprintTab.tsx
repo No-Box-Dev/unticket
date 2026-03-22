@@ -76,18 +76,16 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const [sprintView, setSprintView] = useState<SprintView>((navFilter?.view as SprintView) || "features");
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
 
-  // Sync sprint from URL
+  // Sync sprint from URL (only when URL explicitly has a sprint param)
   useEffect(() => {
     if (urlSprintNum != null) {
       if (sprint && urlSprintNum !== sprint.number) {
         setViewingSprint(urlSprintNum);
-      } else if (sprint && urlSprintNum === sprint.number && viewingSprint !== null) {
-        setViewingSprint(null); // reset to current sprint
+      } else if (sprint && urlSprintNum === sprint.number) {
+        setViewingSprint(null); // URL points to current sprint, reset
       }
-    } else if (viewingSprint !== null) {
-      setViewingSprint(null);
     }
-  }, [urlSprintNum, sprint, viewingSprint, setViewingSprint]);
+  }, [urlSprintNum, sprint, setViewingSprint]);
 
   // Open/close feature from URL
   useEffect(() => {
@@ -325,7 +323,9 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               value={viewingSprint ?? "current"}
               onChange={(e) => {
                 const val = e.target.value;
-                setViewingSprint(val === "current" ? null : Number(val));
+                const num = val === "current" ? null : Number(val);
+                setViewingSprint(num);
+                onUrlChange?.(null, num ?? sprint?.number ?? null);
               }}
               className="appearance-none pl-2.5 pr-7 py-1.5 text-sm font-semibold rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-700 dark:text-neutral-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand/30"
             >
