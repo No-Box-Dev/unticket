@@ -330,6 +330,7 @@ export interface SubIssue {
   html_url: string;
   points?: Points;
   roleNumber?: number;
+  closed_at?: string | null;
 }
 
 function extractPoints(labels: string[]): Points | undefined {
@@ -354,6 +355,7 @@ function toSubIssue(issue: any): SubIssue {
     assignees: (issue.assignees ?? []).map((a: any) => a.login),
     html_url: issue.html_url,
     points: extractPoints(labelNames),
+    closed_at: issue.closed_at ?? null,
   };
 }
 
