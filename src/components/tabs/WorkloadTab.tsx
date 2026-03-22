@@ -245,7 +245,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                   </div>
                 )}
 
-                {/* Name + team + features */}
+                {/* Name + team */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{eng.name}</span>
@@ -256,10 +256,12 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                       </span>
                     )}
                   </div>
+                  {/* Features as compact list with status dots */}
                   {eng.features.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                       {eng.features.map((f) => (
-                        <span key={f.id} className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", STATUS_COLORS[f.status].bg, STATUS_COLORS[f.status].text)}>
+                        <span key={f.id} className="flex items-center gap-1 text-[11px] text-stone-500 dark:text-neutral-400">
+                          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLORS[f.status].dot)} />
                           {f.title}
                         </span>
                       ))}
@@ -268,15 +270,17 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                 </div>
 
                 {/* Stats */}
-                <div className="hidden sm:flex items-center gap-4 shrink-0">
-                  <div className="text-center">
-                    <span className="text-sm font-bold text-stone-800 dark:text-neutral-200 block">{eng.donePoints}/{eng.totalPoints}</span>
-                    <span className="text-[9px] text-stone-400 dark:text-neutral-500 uppercase">Points</span>
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-bold text-stone-800 dark:text-neutral-200 block">{eng.doneTasks}/{eng.totalTasks}</span>
-                    <span className="text-[9px] text-stone-400 dark:text-neutral-500 uppercase">Tasks</span>
-                  </div>
+                <div className="hidden sm:flex items-center gap-3 shrink-0 text-xs">
+                  {eng.totalTasks > 0 && (
+                    <span className="text-stone-500 dark:text-neutral-400">
+                      <span className="font-semibold text-stone-700 dark:text-neutral-200">{eng.doneTasks}</span>/{eng.totalTasks} tasks
+                    </span>
+                  )}
+                  {eng.totalPoints > 0 && (
+                    <span className="text-stone-500 dark:text-neutral-400">
+                      <span className="font-semibold text-stone-700 dark:text-neutral-200">{eng.donePoints}</span>/{eng.totalPoints} pts
+                    </span>
+                  )}
                 </div>
 
                 {/* Chevron */}
@@ -285,13 +289,11 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                 </div>
               </button>
 
-              {/* Points progress bar */}
-              {eng.totalPoints > 0 && (
+              {/* Task progress bar */}
+              {eng.totalTasks > 0 && (
                 <div className="px-4 pb-3">
-                  <div className="relative h-4 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-visible">
-                    <div className="h-full rounded-full absolute left-0 top-0 opacity-20" style={{ width: `${(eng.totalPoints / maxPoints) * 100}%`, backgroundColor: color }} />
-                    <div className="h-full rounded-full absolute left-0 top-0 transition-all duration-500" style={{ width: `${(eng.donePoints / maxPoints) * 100}%`, backgroundColor: color }} />
-                    <div className="absolute top-0 w-0.5 h-full bg-stone-800 dark:bg-neutral-200 z-10" style={{ left: `${elapsedPct * (eng.totalPoints / maxPoints) * 100}%` }} title={`Sprint ${sprintPct}% elapsed`} />
+                  <div className="h-1.5 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${(eng.doneTasks / eng.totalTasks) * 100}%` }} />
                   </div>
                 </div>
               )}
