@@ -288,7 +288,7 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   await setSyncState(db, orgId, "members");
 }
 
-// ---------- Sync Features (.gitpulse repo issues) ----------
+// ---------- Sync Features (gitpulse repo issues) ----------
 
 export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
   const since = force ? null : (await getSyncState(db, orgId, "features"))?.lastSynced;
@@ -297,11 +297,11 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
 
   const issues = await fetchAllPages(
     token,
-    `https://api.github.com/repos/${orgLogin}/.gitpulse/issues`,
+    `https://api.github.com/repos/${orgLogin}/gitpulse/issues`,
     params
   );
 
-  // Every issue on the .gitpulse repo is a feature (filter out PRs only)
+  // Every issue on the gitpulse repo is a feature (filter out PRs only)
   const features = issues.filter((i) => !i.pull_request);
 
   console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
@@ -368,7 +368,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
   return { synced: features.length, total: issues.length };
 }
 
-// ---------- Migrate .gitpulse config ----------
+// ---------- Migrate gitpulse config ----------
 
 export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
   const existing = await db
@@ -379,7 +379,7 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
   if (existing && existing.count > 0) return;
 
   const repoRes = await fetch(
-    `https://api.github.com/repos/${orgLogin}/.gitpulse`,
+    `https://api.github.com/repos/${orgLogin}/gitpulse`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -394,7 +394,7 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
 
   for (const key of files) {
     const fileRes = await fetch(
-      `https://api.github.com/repos/${orgLogin}/.gitpulse/contents/${key}.json`,
+      `https://api.github.com/repos/${orgLogin}/gitpulse/contents/${key}.json`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

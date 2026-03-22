@@ -433,7 +433,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
           value={newRule}
           onChange={(e) => setNewRule(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), addRule())}
-          placeholder="Add a rule (e.g. When creating PRs, reference features with Part of .gitpulse#N)"
+          placeholder="Add a rule (e.g. When creating PRs, reference features with Part of gitpulse#N)"
           className="flex-1 px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[40px]"
           rows={2}
         />
