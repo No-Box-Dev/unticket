@@ -72,8 +72,15 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
     if (!orgMembers) return [];
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
 
-    // Filter out role sub-issues — only count actual tasks (same logic as sprint board)
-    const actualTasks = (allTasks ?? []).filter((t) => t.roleNumber === undefined || t.roleName !== undefined);
+    // Filter out role sub-issues and tasks closed before sprint started
+    const sprintStart = sprint?.startDate ?? "";
+    const actualTasks = (allTasks ?? []).filter((t) => {
+      // Exclude role sub-issues (same logic as sprint board)
+      if (t.roleNumber !== undefined && t.roleName === undefined) return false;
+      // Exclude tasks closed before sprint started (carried over, already done)
+      if (t.state === "closed" && t.closed_at && t.closed_at < sprintStart) return false;
+      return true;
+    });
     const tasksByPerson = new Map<string, { done: number; total: number; points: number; donePoints: number; tasks: SubIssueWithFeature[] }>();
     for (const t of actualTasks) {
       for (const a of t.assignees) {

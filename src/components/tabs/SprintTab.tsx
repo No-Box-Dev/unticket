@@ -571,7 +571,12 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
             const inRange = (dateStr: string) => dateStr >= sprint.startDate && dateStr <= sprint.endDate + "T23:59:59";
             const tasks = allTasks ?? [];
             const roles = tasks.filter((t) => t.roleName === undefined && t.roleNumber !== undefined);
-            const actualTasks = tasks.filter((t) => t.roleNumber === undefined || t.roleName !== undefined);
+            // Exclude role sub-issues and tasks closed before sprint started (carried over)
+            const actualTasks = tasks.filter((t) => {
+              if (t.roleNumber !== undefined && t.roleName === undefined) return false;
+              if (t.state === "closed" && t.closed_at && t.closed_at < sprint.startDate) return false;
+              return true;
+            });
             const doneTasks = actualTasks.filter((t) => t.state === "closed");
             const openTasks = actualTasks.filter((t) => t.state === "open");
             const donePoints = doneTasks.reduce((s, t) => s + (t.points ?? 0), 0);
