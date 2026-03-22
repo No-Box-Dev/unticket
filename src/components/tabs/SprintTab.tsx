@@ -1396,10 +1396,9 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
           { status: "tested", label: "Tested", color: "bg-cyan-500" },
           { status: "production", label: "In Production", color: "bg-green-500" },
         ];
-        const nonEmptyCols = STATUS_COLS.filter((col) => snapshotFeatures.some((f) => f.status === col.status));
         return (
-          <div className={cn("grid gap-3", nonEmptyCols.length <= 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-3 lg:grid-cols-5")}>
-            {nonEmptyCols.map((col) => {
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
+            {STATUS_COLS.map((col) => {
               const cards = snapshotFeatures.filter((f) => f.status === col.status);
               return (
                 <div key={col.status} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] min-h-[120px]">
