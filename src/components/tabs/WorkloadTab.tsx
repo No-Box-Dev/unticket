@@ -75,8 +75,10 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
     if (!orgMembers) return [];
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
 
+    // Filter out role sub-issues — only count actual tasks (same logic as sprint board)
+    const actualTasks = (allTasks ?? []).filter((t) => t.roleNumber === undefined || t.roleName !== undefined);
     const tasksByPerson = new Map<string, { done: number; total: number; points: number; donePoints: number; tasks: SubIssueWithFeature[] }>();
-    for (const t of allTasks ?? []) {
+    for (const t of actualTasks) {
       for (const a of t.assignees) {
         const entry = tasksByPerson.get(a) ?? { done: 0, total: 0, points: 0, donePoints: 0, tasks: [] };
         entry.total++;
