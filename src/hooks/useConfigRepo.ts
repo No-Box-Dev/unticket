@@ -171,6 +171,7 @@ export interface SubIssueWithFeature {
   points?: Points;
   roleNumber?: number;
   roleName?: string;
+  closed_at?: string | null;
 }
 
 export function useAllSprintSubIssues(featureIds: number[]) {
