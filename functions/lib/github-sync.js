@@ -1,5 +1,5 @@
 import { getSyncState, setSyncState } from "./db";
-import { parseFeatureMetadata, parseFeatureFromBranch } from "./feature-metadata";
+import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
 
 // Paginated GitHub API fetcher
 async function fetchAllPages(token, url, params = {}) {
@@ -138,20 +138,22 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
     );
   }
 
-  // Auto-detect feature links from branch names
-  const branchLinkStmt = db.prepare(
+  // Auto-detect feature links from branch names + PR bodies
+  const linkStmt = db.prepare(
     `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-     VALUES (?, ?, ?, ?, 'branch')
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
   );
-  const branchLinks = prs
-    .map((pr) => ({ featureNumber: parseFeatureFromBranch(pr.head?.ref), pr }))
-    .filter((x) => x.featureNumber !== null);
-  for (let i = 0; i < branchLinks.length; i += 50) {
-    const batch = branchLinks.slice(i, i + 50);
-    await db.batch(
-      batch.map((x) => branchLinkStmt.bind(orgId, x.featureNumber, repo, x.pr.number))
-    );
+  const allLinks = [];
+  for (const pr of prs) {
+    const branchNum = parseFeatureFromBranch(pr.head?.ref);
+    if (branchNum) allLinks.push(linkStmt.bind(orgId, branchNum, repo, pr.number, "branch"));
+    for (const num of parseFeaturesFromBody(pr.body)) {
+      allLinks.push(linkStmt.bind(orgId, num, repo, pr.number, "body"));
+    }
+  }
+  for (let i = 0; i < allLinks.length; i += 50) {
+    await db.batch(allLinks.slice(i, i + 50));
   }
 
   // Only advance sync timestamp if we got data or this is a fresh sync
