@@ -2,16 +2,23 @@ import { useState, useMemo } from "react";
 import { X, Lock, Loader2 } from "lucide-react";
 import type { SprintConfig, Feature } from "@/lib/types";
 
+interface SprintOption {
+  value: number;
+  label: string;
+}
+
 interface NewSprintModalProps {
   currentSprint: SprintConfig;
   features: Feature[];
-  onConfirm: (newSprint: SprintConfig) => void;
+  /** Existing sprints the user can move features to */
+  targetOptions: SprintOption[];
+  onConfirm: (newSprint: SprintConfig, isNewSprint: boolean) => void;
   onClose: () => void;
   isPending: boolean;
   failedCount?: number;
 }
 
-export function NewSprintModal({ currentSprint, features, onConfirm, onClose, isPending, failedCount }: NewSprintModalProps) {
+export function NewSprintModal({ currentSprint, features, targetOptions, onConfirm, onClose, isPending, failedCount }: NewSprintModalProps) {
   const nextNumber = currentSprint.number + 1;
 
   // Compute default dates: start = day after current end, same duration
@@ -21,6 +28,14 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
   const defaultStart = new Date(currentEnd.getTime() + 86400000); // +1 day
   const defaultEnd = new Date(defaultStart.getTime() + durationMs);
 
+  // Target sprint selector: existing options + "new sprint"
+  const NEW_SPRINT = -1;
+  const defaultTarget = targetOptions.length > 0 ? targetOptions[0].value : NEW_SPRINT;
+  const [targetSprint, setTargetSprint] = useState<number>(defaultTarget);
+  const isNewSprint = targetSprint === NEW_SPRINT;
+
+  // New sprint form fields (only used when creating new)
+  const [newNumber, setNewNumber] = useState(nextNumber);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState(toDateStr(defaultStart));
   const [endDate, setEndDate] = useState(toDateStr(defaultEnd));
@@ -41,18 +56,19 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
     ["Production", productionCount],
   ];
 
-  const isDateRangeValid = !!startDate && !!endDate && startDate <= endDate;
+  const effectiveTarget = isNewSprint ? newNumber : targetSprint;
+  const isDateRangeValid = !isNewSprint || (!!startDate && !!endDate && startDate <= endDate);
+  const isValid = isDateRangeValid && effectiveTarget > currentSprint.number;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isDateRangeValid) return;
-    onConfirm({
-      number: nextNumber,
-      name,
-      startDate,
-      endDate,
-      focus,
-    });
+    if (!isValid) return;
+    if (isNewSprint) {
+      onConfirm({ number: newNumber, name, startDate, endDate, focus }, true);
+    } else {
+      // Move to existing sprint — only the number matters, config won't be saved
+      onConfirm({ number: effectiveTarget, name: "", startDate: "", endDate: "", focus: "" }, false);
+    }
   }
 
   return (
@@ -66,7 +82,7 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
           <div className="flex items-center gap-2">
             <Lock size={18} className="text-brand" />
-            <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Finalize Sprint</h2>
+            <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Close Sprint</h2>
           </div>
           <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
             <X className="w-5 h-5" />
@@ -89,7 +105,7 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
                     <p><span className="font-medium text-green-600">Production</span> features ({productionCount}) will be closed</p>
                   )}
                   {movingCount > 0 && (
-                    <p>All other features ({movingCount}) move to Sprint {nextNumber}</p>
+                    <p>All other features ({movingCount}) move to Sprint {effectiveTarget}</p>
                   )}
                 </div>
               </>
@@ -98,66 +114,88 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
             )}
           </div>
 
-          {/* Sprint number (read-only) */}
-          <div>
-            <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint Number</label>
-            <div className="px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] text-sm text-stone-700 dark:text-neutral-300">
-              {nextNumber}
-            </div>
-          </div>
-
-          {/* Name */}
-          <div>
-            <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Sprint name..."
-              className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-            />
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Target sprint selector */}
+          {movingCount > 0 && (
             <div>
-              <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-              />
+              <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Move features to</label>
+              <select
+                value={targetSprint}
+                onChange={(e) => setTargetSprint(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand cursor-pointer"
+              >
+                {targetOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+                <option value={NEW_SPRINT}>+ New Sprint</option>
+              </select>
             </div>
-            <div>
-              <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-              />
-            </div>
-          </div>
-          {!isDateRangeValid && (startDate || endDate) && (
-            <p className="text-xs text-red-500">
-              {!startDate || !endDate
-                ? "Both start and end dates are required."
-                : "End date must be after start date."}
-            </p>
           )}
 
-          {/* Focus */}
-          <div>
-            <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Focus</label>
-            <input
-              type="text"
-              value={focus}
-              onChange={(e) => setFocus(e.target.value)}
-              placeholder="Sprint focus..."
-              className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-            />
-          </div>
+          {/* New sprint config — only when creating new */}
+          {isNewSprint && (
+            <>
+              <div>
+                <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint Number</label>
+                <input
+                  type="number"
+                  value={newNumber}
+                  onChange={(e) => setNewNumber(Number(e.target.value))}
+                  min={currentSprint.number + 1}
+                  className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Sprint name..."
+                  className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  />
+                </div>
+              </div>
+              {!isDateRangeValid && (startDate || endDate) && (
+                <p className="text-xs text-red-500">
+                  {!startDate || !endDate
+                    ? "Both start and end dates are required."
+                    : "End date must be after start date."}
+                </p>
+              )}
+
+              <div>
+                <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Focus</label>
+                <input
+                  type="text"
+                  value={focus}
+                  onChange={(e) => setFocus(e.target.value)}
+                  placeholder="Sprint focus..."
+                  className="w-full px-3 py-2 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                />
+              </div>
+            </>
+          )}
 
           {/* Failure warning */}
           {failedCount != null && failedCount > 0 && (
@@ -170,18 +208,18 @@ export function NewSprintModal({ currentSprint, features, onConfirm, onClose, is
           <div className="flex items-center gap-2 pt-2">
             <button
               type="submit"
-              disabled={isPending || !isDateRangeValid}
+              disabled={isPending || !isValid}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {isPending ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  Finalizing...
+                  Closing Sprint...
                 </>
               ) : (
                 <>
                   <Lock size={14} />
-                  Finalize &amp; Start Sprint {nextNumber}
+                  Close Sprint {currentSprint.number}
                 </>
               )}
             </button>

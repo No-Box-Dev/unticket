@@ -372,7 +372,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
             >
               <Lock size={12} />
-              <span className="hidden sm:inline">Finalize Sprint</span>
+              <span className="hidden sm:inline">Close Sprint</span>
             </button>
           )}
           {isAdmin && (
@@ -532,15 +532,18 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
         />
       )}
 
-      {/* Finalize Sprint modal */}
+      {/* Close Sprint modal */}
       {showNewSprint && (
         <NewSprintModal
           currentSprint={sprint}
           features={features ?? []}
+          targetOptions={[
+            ...futureSprints.map((num) => ({ value: num, label: `Sprint ${num}` })),
+          ]}
           isPending={advanceSprintMut.isPending}
           failedCount={advanceFailedCount}
           onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
-          onConfirm={(newSprint) => {
+          onConfirm={(newSprint, isNewSprint) => {
             setAdvanceFailedCount(0);
             const sf = (features ?? []).filter((f) => f.sprint === sprint.number && f.status !== "future");
             const inRange = (dateStr: string) => dateStr >= sprint.startDate && dateStr <= sprint.endDate + "T23:59:59";
@@ -612,7 +615,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               })),
             };
             advanceSprintMut.mutate(
-              { newSprint, oldSprintNumber: sprint.number, features: features ?? [], snapshot },
+              { newSprint, isNewSprint, oldSprintNumber: sprint.number, features: features ?? [], snapshot },
               { onSuccess: (result) => { if (result.failed.length === 0) setShowNewSprint(false); else setAdvanceFailedCount(result.failed.length); } },
             );
           }}
