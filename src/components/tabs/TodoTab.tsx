@@ -340,9 +340,12 @@ function SprintTaskCard({
   const isDone = task.state === "closed";
 
   return (
-    <div
+    <a
+      href={task.html_url}
+      target="_blank"
+      rel="noopener noreferrer"
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand cursor-pointer hover:shadow-sm transition-shadow",
         isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
       )}
     >
@@ -369,7 +372,7 @@ function SprintTaskCard({
           </span>
         )}
       </div>
-    </div>
+    </a>
   );
 }
 
