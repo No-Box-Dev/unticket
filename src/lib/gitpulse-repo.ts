@@ -30,6 +30,8 @@ config/
 plans/
   PLAN-*.md         # Implementation plans per feature (e.g. PLAN-42.md)
   TODO-*.md         # Implementation plans per todo (e.g. TODO-123.md)
+snapshots/
+  sprint-N.json     # Sprint snapshot saved when a sprint is closed
 CLAUDE.md           # This file
 \`\`\`
 
@@ -182,6 +184,42 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
   await saveFileToGitPulse(org, PEOPLE_PATHS[0], content, "Update people config");
+}
+
+// ---------- Sprint snapshots ----------
+
+export function snapshotFilePath(sprintNumber: number): string {
+  return `snapshots/sprint-${sprintNumber}.json`;
+}
+
+export async function saveSnapshotToRepo(
+  org: string,
+  snapshot: import("./types").SprintSnapshot,
+): Promise<void> {
+  const content = JSON.stringify(snapshot, null, 2);
+  await saveFileToGitPulse(org, snapshotFilePath(snapshot.sprintNumber), content, `Snapshot Sprint ${snapshot.sprintNumber}`);
+}
+
+export async function deleteSnapshotFromRepo(
+  org: string,
+  sprintNumber: number,
+): Promise<void> {
+  const ok = getOctokit();
+  const path = snapshotFilePath(sprintNumber);
+  try {
+    const { data } = await ok.rest.repos.getContent({ owner: org, repo: REPO_NAME, path });
+    if ("sha" in data) {
+      await ok.rest.repos.deleteFile({
+        owner: org,
+        repo: REPO_NAME,
+        path,
+        message: `Remove Sprint ${sprintNumber} snapshot`,
+        sha: data.sha,
+      });
+    }
+  } catch {
+    // File doesn't exist — nothing to delete
+  }
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------

@@ -47,6 +47,7 @@ import {
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
+import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/gitpulse-repo";
 import { useRef } from "react";
 import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
@@ -828,10 +829,12 @@ export function useAdvanceSprint() {
 
       // 1. Save snapshot of the old sprint before advancing
       if (snapshot) {
+        const fullSnapshot = { ...snapshot, createdAt: new Date().toISOString() };
         const existing = await fetchSprintSnapshots();
-        // Replace if same sprint number already exists, otherwise append
         const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
-        await saveSprintSnapshots([...filtered, { ...snapshot, createdAt: new Date().toISOString() }]);
+        await saveSprintSnapshots([...filtered, fullSnapshot]);
+        // Also persist to gitpulse repo as a JSON file
+        saveSnapshotToRepo(org, fullSnapshot as SprintSnapshot).catch(() => {});
       }
 
       // 2. Ensure the new milestone exists on GitHub first
@@ -906,6 +909,8 @@ export function useRevertSprint() {
       const existing = await fetchSprintSnapshots();
       const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
       await saveSprintSnapshots(filtered);
+      // Also remove from gitpulse repo
+      deleteSnapshotFromRepo(org, snapshot.sprintNumber).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
