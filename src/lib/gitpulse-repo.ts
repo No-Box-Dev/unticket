@@ -1,7 +1,7 @@
 import { getOctokit } from "./github";
 import type { Person } from "./types";
 
-const REPO_NAME = ".gitpulse";
+const REPO_NAME = "gitpulse";
 
 // ---------- Repo management ----------
 
@@ -18,7 +18,7 @@ export async function ensureGitPulseRepo(org: string): Promise<boolean> {
   }
 }
 
-const CLAUDE_MD = `# .gitpulse
+const CLAUDE_MD = `# gitpulse
 
 Central config and plans repository for [unticket.ai](https://app.unticket.ai).
 
@@ -42,8 +42,8 @@ Features are tracked as issues with the \`feature\` label.
 - Tasks: sub-issues under feature issues (with \`points:{1,2,3,5,8,13}\` labels)
 
 \`\`\`bash
-gh issue list --repo {org}/.gitpulse --label feature
-gh issue view <number> --repo {org}/.gitpulse
+gh issue list --repo {org}/gitpulse --label feature
+gh issue view <number> --repo {org}/gitpulse
 \`\`\`
 
 ## Todos (GitHub Issues in this repo)
@@ -53,7 +53,7 @@ Personal todos are issues with the \`todo\` label.
 - Closing a todo marks it done; reopening moves it back
 
 \`\`\`bash
-gh issue list --repo {org}/.gitpulse --label todo
+gh issue list --repo {org}/gitpulse --label todo
 \`\`\`
 
 ## People Config
@@ -68,11 +68,11 @@ Team member metadata at \`config/people.json\`:
 
 \`\`\`bash
 # Read
-gh api repos/{org}/.gitpulse/contents/config/people.json --jq '.content' | base64 -d
+gh api repos/{org}/gitpulse/contents/config/people.json --jq '.content' | base64 -d
 
 # Update (get SHA first)
-SHA=$(gh api repos/{org}/.gitpulse/contents/config/people.json --jq '.sha')
-cat people.json | base64 | gh api repos/{org}/.gitpulse/contents/config/people.json \\
+SHA=$(gh api repos/{org}/gitpulse/contents/config/people.json --jq '.sha')
+cat people.json | base64 | gh api repos/{org}/gitpulse/contents/config/people.json \\
   -X PUT -f message="Update people" -f content=@- -f sha="$SHA"
 \`\`\`
 
@@ -80,10 +80,10 @@ cat people.json | base64 | gh api repos/{org}/.gitpulse/contents/config/people.j
 
 \`\`\`bash
 # List all plans
-gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'
+gh api repos/{org}/gitpulse/contents/plans/ --jq '.[].name'
 
 # Read a plan
-gh api repos/{org}/.gitpulse/contents/plans/PLAN-42.md --jq '.content' | base64 -d
+gh api repos/{org}/gitpulse/contents/plans/PLAN-42.md --jq '.content' | base64 -d
 \`\`\`
 `;
 

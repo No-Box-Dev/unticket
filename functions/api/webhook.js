@@ -87,8 +87,8 @@ export async function onRequestPost(context) {
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
-      // Also upsert into features table if this is a .gitpulse repo issue
-      if (repo === ".gitpulse") {
+      // Also upsert into features table if this is a gitpulse repo issue
+      if (repo === "gitpulse") {
         await upsertFeature(db, orgId, payload.issue);
         // Re-sync pr_feature_links from metadata (atomic delete + re-insert)
         const { metadata } = parseFeatureMetadata(payload.issue.body ?? "");

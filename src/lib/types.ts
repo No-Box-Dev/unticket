@@ -75,7 +75,7 @@ export interface Todo {
   html_url: string;        // GitHub issue URL
 }
 
-// .gitpulse config repo types
+// gitpulse config repo types
 
 export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
 
