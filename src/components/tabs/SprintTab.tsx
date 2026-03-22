@@ -1387,6 +1387,48 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
 
       {snapshot.focus && <p className="text-sm text-brand">{snapshot.focus}</p>}
 
+      {/* Feature kanban board */}
+      {snapshotFeatures.length > 0 && (() => {
+        const STATUS_COLS: { status: string; label: string; color: string }[] = [
+          { status: "plan", label: "Plan", color: "bg-brand" },
+          { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+          { status: "demo", label: "Demo", color: "bg-purple-500" },
+          { status: "tested", label: "Tested", color: "bg-cyan-500" },
+          { status: "production", label: "In Production", color: "bg-green-500" },
+        ];
+        const nonEmptyCols = STATUS_COLS.filter((col) => snapshotFeatures.some((f) => f.status === col.status));
+        return (
+          <div className={cn("grid gap-3", nonEmptyCols.length <= 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-3 lg:grid-cols-5")}>
+            {nonEmptyCols.map((col) => {
+              const cards = snapshotFeatures.filter((f) => f.status === col.status);
+              return (
+                <div key={col.status} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] min-h-[120px]">
+                  <div className="flex items-center gap-2 px-3 py-2.5 border-b border-stone-100 dark:border-white/[0.06]">
+                    <span className={cn("w-2 h-2 rounded-full", col.color)} />
+                    <span className="text-xs font-semibold text-stone-600 dark:text-neutral-300">{col.label}</span>
+                    <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{cards.length}</span>
+                  </div>
+                  <div className="p-2 space-y-2">
+                    {cards.map((f, i) => (
+                      <div key={i} className={cn("rounded-lg border border-stone-200 dark:border-white/[0.06] p-2.5", f.status === "production" && "opacity-60")}>
+                        <div className="text-xs font-medium text-stone-700 dark:text-neutral-200 leading-snug">{f.title}</div>
+                        {f.owners.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {f.owners.map((o) => (
+                              <span key={o} className="text-[10px] bg-stone-100 dark:bg-white/[0.06] border border-stone-200 dark:border-white/[0.06] px-1.5 py-0.5 rounded-full text-stone-500 dark:text-neutral-400">{o}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Top-level metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {([
@@ -1528,26 +1570,6 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
         </div>
       )}
 
-      {/* Features */}
-      {snapshotFeatures.length > 0 && (
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">Features</h3>
-          <div className="space-y-2">
-            {snapshotFeatures.map((f, i) => (
-              <div key={i} className="flex items-center gap-2.5">
-                <span className={cn(
-                  "w-2.5 h-2.5 rounded-full shrink-0",
-                  f.status === "production" ? "bg-green-500" : f.status === "demo" ? "bg-amber-500" : "bg-stone-300",
-                )} />
-                <span className="text-sm text-stone-700 dark:text-neutral-300">{f.title}</span>
-                {f.owners.length > 0 && (
-                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto shrink-0">{f.owners.join(", ")}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Personal Todos Completed */}
       {snapshot.todosCompleted && snapshot.todosCompleted.length > 0 && (
