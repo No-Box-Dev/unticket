@@ -372,7 +372,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
             >
               <Lock size={12} />
-              <span className="hidden sm:inline">Finalize Sprint</span>
+              <span className="hidden sm:inline">Close Sprint</span>
             </button>
           )}
           {isAdmin && (
@@ -532,11 +532,14 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
         />
       )}
 
-      {/* Finalize Sprint modal */}
+      {/* Close Sprint modal */}
       {showNewSprint && (
         <NewSprintModal
           currentSprint={sprint}
           features={features ?? []}
+          targetOptions={[
+            ...futureSprints.map((num) => ({ value: num, label: `Sprint ${num}` })),
+          ]}
           isPending={advanceSprintMut.isPending}
           failedCount={advanceFailedCount}
           onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
