@@ -11,7 +11,7 @@ export async function saveSprint(sprint: SprintConfig) {
   await apiPut("/api/config/sprint", sprint);
 }
 
-// People (GitHub-backed via .gitpulse repo)
+// People (GitHub-backed via gitpulse repo)
 export async function fetchPeople(org: string): Promise<Person[]> {
   return fetchPeopleFromRepo(org);
 }

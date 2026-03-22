@@ -15,7 +15,7 @@ interface D1FeatureRow {
   html_url: string | null;
 }
 
-const REPO = ".gitpulse";
+const REPO = "gitpulse";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 const ROLE_LABEL = "role";

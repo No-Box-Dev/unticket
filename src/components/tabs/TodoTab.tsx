@@ -474,7 +474,7 @@ function TodoDetailModal({
   }, [org, planId]);
 
   const planUrl = org
-    ? `https://github.com/${org}/.gitpulse/blob/main/${todoPlanFilePath(planId)}`
+    ? `https://github.com/${org}/gitpulse/blob/main/${todoPlanFilePath(planId)}`
     : null;
 
   useEffect(() => {

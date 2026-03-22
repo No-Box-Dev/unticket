@@ -31,12 +31,12 @@ export function serializeFeatureMetadata(content, metadata) {
 }
 
 /**
- * Read a feature issue from the .gitpulse repo.
+ * Read a feature issue from the gitpulse repo.
  * Returns the full issue object from GitHub API.
  */
 export async function readFeatureIssue(token, orgLogin, number) {
   const res = await fetch(
-    `https://api.github.com/repos/${orgLogin}/.gitpulse/issues/${number}`,
+    `https://api.github.com/repos/${orgLogin}/gitpulse/issues/${number}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -52,11 +52,11 @@ export async function readFeatureIssue(token, orgLogin, number) {
 }
 
 /**
- * Update a feature issue body in the .gitpulse repo.
+ * Update a feature issue body in the gitpulse repo.
  */
 export async function updateFeatureBody(token, orgLogin, number, body) {
   const res = await fetch(
-    `https://api.github.com/repos/${orgLogin}/.gitpulse/issues/${number}`,
+    `https://api.github.com/repos/${orgLogin}/gitpulse/issues/${number}`,
     {
       method: "PATCH",
       headers: {
