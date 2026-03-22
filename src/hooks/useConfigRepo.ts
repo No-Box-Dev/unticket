@@ -818,13 +818,12 @@ export function useAdvanceSprint() {
   return useMutation({
     mutationFn: async (args: {
       newSprint: SprintConfig;
-      isNewSprint?: boolean;
       oldSprintNumber: number;
       features: Feature[];
       snapshot?: Omit<SprintSnapshot, "createdAt">;
       onProgress?: (done: number, total: number) => void;
     }) => {
-      const { newSprint, isNewSprint = true, oldSprintNumber, features, snapshot, onProgress } = args;
+      const { newSprint, oldSprintNumber, features, snapshot, onProgress } = args;
       const org = selectedOrg!;
 
       // 1. Save snapshot of the old sprint before advancing
@@ -869,9 +868,7 @@ export function useAdvanceSprint() {
 
       // 5. Only persist sprint config and close old milestone if all features processed
       if (failed.length === 0) {
-        if (isNewSprint) {
-          await saveSprint(newSprint);
-        }
+        await saveSprint(newSprint);
         await closeMilestone(org, oldSprintNumber);
       }
 

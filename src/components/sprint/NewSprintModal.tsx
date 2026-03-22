@@ -12,7 +12,7 @@ interface NewSprintModalProps {
   features: Feature[];
   /** Existing sprints the user can move features to */
   targetOptions: SprintOption[];
-  onConfirm: (newSprint: SprintConfig, isNewSprint: boolean) => void;
+  onConfirm: (newSprint: SprintConfig) => void;
   onClose: () => void;
   isPending: boolean;
   failedCount?: number;
@@ -64,10 +64,10 @@ export function NewSprintModal({ currentSprint, features, targetOptions, onConfi
     e.preventDefault();
     if (!isValid) return;
     if (isNewSprint) {
-      onConfirm({ number: newNumber, name, startDate, endDate, focus }, true);
+      onConfirm({ number: newNumber, name, startDate, endDate, focus });
     } else {
-      // Move to existing sprint — only the number matters, config won't be saved
-      onConfirm({ number: effectiveTarget, name: "", startDate: "", endDate: "", focus: "" }, false);
+      // Move to existing sprint — carry forward default dates so sprint config is valid
+      onConfirm({ number: effectiveTarget, name: "", startDate: toDateStr(defaultStart), endDate: toDateStr(defaultEnd), focus: "" });
     }
   }
 
