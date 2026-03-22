@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -11,7 +11,7 @@ import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -64,6 +64,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const revertSprintMut = useRevertSprint();
   const { data: snapshots } = useSprintSnapshots();
   const saveSnapshotsMut = useSaveSprintSnapshots();
+  const saveSprintMut = useSaveSprint();
   const syncFeaturesMut = useSyncFeatures();
   const updateTaskPointsMut = useUpdateTaskPoints();
   const { user } = useAuth();
@@ -366,13 +367,34 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
             <RefreshCw size={12} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
             <span className="hidden sm:inline">{syncFeaturesMut.isPending ? "Syncing..." : "Sync"}</span>
           </button>
-          {isAdmin && (
+          {isAdmin && !isViewingFutureSprint && !activeSnapshot && (
             <button
               onClick={() => setShowNewSprint(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
             >
               <Lock size={12} />
               <span className="hidden sm:inline">Close Sprint</span>
+            </button>
+          )}
+          {isAdmin && isViewingFutureSprint && viewingFutureSprint && (
+            <button
+              onClick={() => {
+                if (!window.confirm(`Set Sprint ${viewingFutureSprint} as the current sprint?`)) return;
+                const currentEnd = new Date(sprint.endDate);
+                const durationMs = new Date(sprint.endDate).getTime() - new Date(sprint.startDate).getTime();
+                const start = new Date(currentEnd.getTime() + 86400000);
+                const end = new Date(start.getTime() + durationMs);
+                const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                saveSprintMut.mutate(
+                  { number: viewingFutureSprint, name: "", startDate: fmt(start), endDate: fmt(end), focus: "" },
+                  { onSuccess: () => { setViewingSprint(null); onUrlChange?.(null, null); } },
+                );
+              }}
+              disabled={saveSprintMut.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-brand/30 text-xs text-brand hover:bg-brand/5 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {saveSprintMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+              <span className="hidden sm:inline">{saveSprintMut.isPending ? "Setting..." : "Set as Current Sprint"}</span>
             </button>
           )}
           {isAdmin && (
