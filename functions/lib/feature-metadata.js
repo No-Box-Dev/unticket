@@ -87,3 +87,30 @@ export function parseFeatureFromBranch(ref) {
   if (plain) return Number(plain[1]);
   return null;
 }
+
+/**
+ * Extract feature numbers from a PR body/description.
+ * Matches:
+ *   - Part of org/gitpulse#42
+ *   - Part of gitpulse#42
+ *   - Feature #42 / Feature: #42
+ *   - gitpulse#42 (standalone reference)
+ * Returns deduplicated array of feature numbers.
+ */
+export function parseFeaturesFromBody(body) {
+  if (!body) return [];
+  const nums = new Set();
+  // "Part of org/gitpulse#N" or "Part of gitpulse#N"
+  for (const m of body.matchAll(/part\s+of\s+(?:[\w-]+\/)?gitpulse#(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
+  // "Feature #N" or "Feature: #N"
+  for (const m of body.matchAll(/feature[:\s]+#(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
+  // Standalone "gitpulse#N"
+  for (const m of body.matchAll(/\bgitpulse#(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
+  return [...nums];
+}

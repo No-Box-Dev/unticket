@@ -1,6 +1,6 @@
 import { jsonResponse, errorResponse } from "../lib/db";
 import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
-import { parseFeatureMetadata, parseFeatureFromBranch } from "../lib/feature-metadata";
+import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -116,19 +116,41 @@ export async function onRequestPost(context) {
       // Map merged PRs: GitHub sends action=closed with merged=true
       const pr = payload.pull_request;
       await upsertPR(db, orgId, repo, pr);
-      // Auto-detect feature link from branch name
+      // Auto-detect feature links from branch name + PR body
+      const linkStmt = db.prepare(
+        `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+      );
+      const linkBatch = [];
       const featureNumber = parseFeatureFromBranch(pr.head?.ref);
       if (featureNumber) {
-        await db
-          .prepare(
-            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-             VALUES (?, ?, ?, ?, 'branch')
-             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-          )
-          .bind(orgId, featureNumber, repo, pr.number)
-          .run();
+        linkBatch.push(linkStmt.bind(orgId, featureNumber, repo, pr.number, "branch"));
       }
+      for (const num of parseFeaturesFromBody(pr.body)) {
+        linkBatch.push(linkStmt.bind(orgId, num, repo, pr.number, "body"));
+      }
+      if (linkBatch.length > 0) await db.batch(linkBatch);
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
+    }
+
+    // PR comments: detect feature links like "Part of gitpulse#42"
+    if (event === "issue_comment" && payload.issue?.pull_request && action === "created") {
+      const repo = payload.repository?.name;
+      const prNumber = payload.issue.number;
+      const commentBody = payload.comment?.body;
+      if (repo && commentBody) {
+        const featureNums = parseFeaturesFromBody(commentBody);
+        if (featureNums.length > 0) {
+          const linkStmt = db.prepare(
+            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+             VALUES (?, ?, ?, ?, 'comment')
+             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
+          );
+          await db.batch(featureNums.map((num) => linkStmt.bind(orgId, num, repo, prNumber)));
+        }
+      }
+      return jsonResponse({ ok: true, event: "pr_comment", action, linked: true });
     }
 
     if (event === "member") {
