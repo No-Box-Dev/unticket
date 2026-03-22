@@ -127,6 +127,7 @@ export interface Person {
   name: string;
   role: string;
   team?: string;
+  description?: string;
 }
 
 export interface OrgSettings {
