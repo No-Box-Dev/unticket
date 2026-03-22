@@ -141,7 +141,6 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
     return Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / Math.max(1, end.getTime() - start.getTime())));
   }, [sprint]);
 
-  const maxPoints = useMemo(() => Math.max(...engineers.map((e) => e.totalPoints), 1), [engineers]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-brand" /></div>;
