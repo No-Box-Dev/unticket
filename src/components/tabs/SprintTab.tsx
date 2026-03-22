@@ -543,7 +543,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           isPending={advanceSprintMut.isPending}
           failedCount={advanceFailedCount}
           onClose={() => { setShowNewSprint(false); setAdvanceFailedCount(0); }}
-          onConfirm={(newSprint) => {
+          onConfirm={(newSprint, isNewSprint) => {
             setAdvanceFailedCount(0);
             const sf = (features ?? []).filter((f) => f.sprint === sprint.number && f.status !== "future");
             const inRange = (dateStr: string) => dateStr >= sprint.startDate && dateStr <= sprint.endDate + "T23:59:59";
@@ -615,7 +615,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               })),
             };
             advanceSprintMut.mutate(
-              { newSprint, oldSprintNumber: sprint.number, features: features ?? [], snapshot },
+              { newSprint, isNewSprint, oldSprintNumber: sprint.number, features: features ?? [], snapshot },
               { onSuccess: (result) => { if (result.failed.length === 0) setShowNewSprint(false); else setAdvanceFailedCount(result.failed.length); } },
             );
           }}
