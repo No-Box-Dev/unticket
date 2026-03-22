@@ -65,6 +65,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         name: person?.name ?? member.login,
         role: person?.role ?? "",
         team: person?.team ?? "",
+        description: person?.description ?? "",
         myFeatures,
         myTasks,
         myRoles,
@@ -146,6 +147,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
               <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">{selected.name}</h2>
               {(selected.role || selected.team) && (
                 <p className="text-sm text-stone-400">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
+              )}
+              {selected.description && (
+                <p className="text-sm text-stone-500 dark:text-neutral-400 mt-0.5">{selected.description}</p>
               )}
             </div>
           </div>
