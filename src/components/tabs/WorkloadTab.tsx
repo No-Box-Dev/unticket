@@ -60,16 +60,13 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   const { data: people } = usePeople();
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
 
-  const sprintFeatureIds = useMemo(() => {
-    if (!features || !sprint) return [];
-    return features.filter((f) => f.sprint === sprint.number).map((f) => f.id);
-  }, [features, sprint]);
-  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
-
   const sprintFeatures = useMemo(() => {
     if (!features || !sprint) return [];
     return features.filter((f) => f.sprint === sprint.number && f.status !== "future");
   }, [features, sprint]);
+
+  const sprintFeatureIds = useMemo(() => sprintFeatures.map((f) => f.id), [sprintFeatures]);
+  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
   const engineers = useMemo((): EngineerWorkload[] => {
     if (!orgMembers) return [];
