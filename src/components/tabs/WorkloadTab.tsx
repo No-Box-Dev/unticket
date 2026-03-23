@@ -3,7 +3,7 @@ import { useActiveMembers } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, usePeople } from "@/hooks/useConfigRepo";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import type { FeatureStatus } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
@@ -66,7 +66,7 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
   }, [features, sprint]);
 
   const sprintFeatureIds = useMemo(() => sprintFeatures.map((f) => f.id), [sprintFeatures]);
-  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
+  const { data: allTasks, isLoading: tasksLoading } = useAllSprintSubIssues(sprintFeatureIds);
 
   const engineers = useMemo((): EngineerWorkload[] => {
     if (!orgMembers) return [];
@@ -226,7 +226,15 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
 
       {/* Workload per person */}
       <div className="space-y-2">
-        <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Per Person</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Per Person</h3>
+          {tasksLoading && (
+            <span className="flex items-center gap-1.5 text-[10px] text-stone-400 dark:text-neutral-500">
+              <Loader2 size={10} className="animate-spin" />
+              Loading tasks...
+            </span>
+          )}
+        </div>
         {engineers.map((eng, i) => {
           const pct = eng.totalPoints > 0 ? Math.round((eng.donePoints / eng.totalPoints) * 100) : 0;
           const taskDonePct = eng.totalTasks > 0 ? Math.round((eng.doneTasks / eng.totalTasks) * 100) : 0;
