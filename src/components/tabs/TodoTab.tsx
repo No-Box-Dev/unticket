@@ -38,6 +38,8 @@ const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
   { status: "done", label: "Done", color: "bg-green-500" },
 ];
 
+const SPRINT_FILTERS: SprintFilter[] = ["sprint", "all"];
+
 type BoardStatus = Exclude<FeatureStatus, "future">;
 const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
@@ -145,7 +147,7 @@ export function TodoTab() {
 
         {todoView === "todos" && (
           <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
-            {(["sprint", "all"] as SprintFilter[]).map((v) => (
+            {SPRINT_FILTERS.map((v) => (
               <button
                 key={v}
                 onClick={() => setSprintFilter(v)}
@@ -156,7 +158,7 @@ export function TodoTab() {
                     : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
                 )}
               >
-                {v === "sprint" ? `Sprint ${currentSprintNumber ?? ""}` : "All"}
+                {v === "sprint" ? (currentSprintNumber ? `Sprint ${currentSprintNumber}` : "This Sprint") : "All"}
               </button>
             ))}
           </div>
@@ -562,12 +564,13 @@ function MyRolesView({
   onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }) {
   const roleGroups = useMemo(() => {
-    const byRole = new Map<string, { roleName: string; featureId: number; featureTitle: string; tasks: SubIssueWithFeature[] }>();
+    const byRole = new Map<string, { key: string; roleName: string; featureId: number; featureTitle: string; tasks: SubIssueWithFeature[] }>();
     for (const task of mySprintTasks) {
       const roleKey = `${task.featureId}:${task.roleNumber ?? "none"}`;
       if (!byRole.has(roleKey)) {
         const feat = featureMap.get(task.featureId);
         byRole.set(roleKey, {
+          key: roleKey,
           roleName: task.roleName ?? "Tasks",
           featureId: task.featureId,
           featureTitle: task.featureTitle || (feat?.title ?? "Unknown"),
@@ -611,13 +614,13 @@ function MyRolesView({
       {/* Role groups */}
       <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
         <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
-          {roleGroups.map((role, i) => (
-            <div key={i} className="px-4 py-2.5">
+          {roleGroups.map((role) => (
+            <div key={role.key} className="px-4 py-2.5">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-medium text-stone-600 dark:text-neutral-300">{role.roleName}</span>
                 <button
                   onClick={() => {
-                    const f = features.find((feat) => feat.id === role.featureId);
+                    const f = featureMap.get(role.featureId);
                     if (f) onOpenDetail(f);
                   }}
                   className="text-[10px] text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
