@@ -281,10 +281,10 @@ export function useToggleSubIssue() {
       const subQueries = qc.getQueriesData<SubIssue[]>({ queryKey: subKey });
       const previousSubs: [readonly unknown[], SubIssue[]][] = [];
       for (const [qKey, data] of subQueries) {
-        if (data?.some((s) => s.id === sub.id)) {
+        if (data?.some((s) => s.number === sub.number)) {
           previousSubs.push([qKey, data]);
           qc.setQueryData<SubIssue[]>(qKey, (old) =>
-            old?.map((s) => s.id === sub.id ? { ...s, state: newState } : s) ?? [],
+            old?.map((s) => s.number === sub.number ? { ...s, state: newState } : s) ?? [],
           );
         }
       }
