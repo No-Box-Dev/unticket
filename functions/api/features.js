@@ -32,7 +32,20 @@ export async function onRequestGet(context) {
 // PUT /api/features — upsert a single feature in D1
 export async function onRequestPut(context) {
   const { orgId } = getCtx(context);
-  const issue = await context.request.json();
+  let issue;
+  try {
+    issue = await context.request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  // Validate required fields
+  if (typeof issue.number !== "number" || !Number.isFinite(issue.number)) {
+    return jsonResponse({ error: "Invalid or missing 'number' field" }, 400);
+  }
+  if (typeof issue.title !== "string" || issue.title.length === 0) {
+    return jsonResponse({ error: "Invalid or missing 'title' field" }, 400);
+  }
 
   await context.env.DB
     .prepare(
@@ -70,12 +83,14 @@ export async function onRequestPut(context) {
 export async function onRequestDelete(context) {
   const { orgId } = getCtx(context);
   const url = new URL(context.request.url);
-  const number = url.searchParams.get("number");
-  if (!number) return jsonResponse({ error: "number required" }, 400);
+  const number = parseInt(url.searchParams.get("number"), 10);
+  if (!Number.isFinite(number)) {
+    return jsonResponse({ error: "number must be a valid integer" }, 400);
+  }
 
   await context.env.DB
     .prepare("UPDATE features SET state = 'closed' WHERE org_id = ? AND number = ?")
-    .bind(orgId, parseInt(number))
+    .bind(orgId, number)
     .run();
 
   return jsonResponse({ ok: true });

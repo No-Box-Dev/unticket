@@ -82,6 +82,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const save = useCallback((next: Feature) => {
+    hasUnsavedChanges.current = false;
     onUpdate({ ...next });
   }, [onUpdate]);
 
@@ -95,6 +96,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   function update(patch: Partial<Feature>, debounce = false) {
     setDraft((d) => {
       const next = { ...d, ...patch };
+      hasUnsavedChanges.current = true;
       if (debounce) {
         saveDebounced(next);
       } else {
@@ -105,9 +107,18 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
     });
   }
 
+  const hasUnsavedChanges = useRef(false);
+
   function handleClose() {
-    clearTimeout(debounceRef.current);
-    onUpdate({ ...draft });
+    // Flush any pending debounced save, but only if there are unsaved changes
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+      if (hasUnsavedChanges.current) {
+        onUpdate({ ...draft });
+        hasUnsavedChanges.current = false;
+      }
+    }
     onClose();
   }
 

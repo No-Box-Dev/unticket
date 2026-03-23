@@ -18,7 +18,10 @@ async function importKey(hexKey) {
  * If no key is provided, returns the token as-is (graceful fallback).
  */
 export async function encryptToken(token, key) {
-  if (!key) return token;
+  if (!key) {
+    console.warn("[gitpulse] ENCRYPTION_KEY not set — token stored in plaintext. Set ENCRYPTION_KEY env var for AES-256-GCM encryption.");
+    return token;
+  }
 
   const cryptoKey = await importKey(key);
   const iv = crypto.getRandomValues(new Uint8Array(12));

@@ -73,7 +73,7 @@ export async function onRequestGet(context) {
   }
 
   if (repos) {
-    const repoList = repos.split(",").filter(Boolean);
+    const repoList = repos.split(",").filter(Boolean).slice(0, 100); // Cap at 100 to stay within D1 bind limits
     if (repoList.length > 0) {
       where += ` AND repo IN (${repoList.map(() => "?").join(",")})`;
       bindings.push(...repoList);

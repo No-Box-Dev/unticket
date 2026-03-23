@@ -24,7 +24,7 @@ export async function onRequestGet(context) {
   return jsonResponse(rows.results);
 }
 
-// POST /api/pr-links — link a PR to a feature (GitHub metadata + D1)
+// POST /api/pr-links — link a PR to a feature (D1 first, then GitHub metadata)
 export async function onRequestPost(context) {
   const { orgId, token, orgLogin } = getCtx(context);
   const { feature_number, pr_repo, pr_number } = await context.request.json();
@@ -33,31 +33,7 @@ export async function onRequestPost(context) {
     return errorResponse("feature_number, pr_repo, pr_number required", 400);
   }
 
-  // 1. Read feature issue body from GitHub
-  const issue = await readFeatureIssue(token, orgLogin, feature_number);
-  const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
-
-  // 2. Add to linkedPRs (deduplicate)
-  const linkedPRs = metadata.linkedPRs ?? [];
-  const exists = linkedPRs.some(
-    (l) => l.repo === pr_repo && l.number === pr_number
-  );
-  if (!exists) {
-    linkedPRs.push({ repo: pr_repo, number: pr_number });
-    metadata.linkedPRs = linkedPRs;
-
-    // 3. Write back to GitHub
-    const newBody = serializeFeatureMetadata(content, metadata);
-    await updateFeatureBody(token, orgLogin, feature_number, newBody);
-
-    // Also update features table in D1 with new body
-    await context.env.DB
-      .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
-      .bind(newBody, orgId, feature_number)
-      .run();
-  }
-
-  // 4. Upsert D1 cache
+  // 1. Upsert D1 cache first (atomic, no race condition)
   await context.env.DB
     .prepare(
       `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
@@ -66,6 +42,32 @@ export async function onRequestPost(context) {
     )
     .bind(orgId, feature_number, pr_repo, pr_number)
     .run();
+
+  // 2. Update GitHub issue metadata in the background (read-modify-write)
+  // This avoids blocking the response and reduces race window
+  context.waitUntil((async () => {
+    try {
+      const issue = await readFeatureIssue(token, orgLogin, feature_number);
+      const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
+
+      const linkedPRs = metadata.linkedPRs ?? [];
+      const exists = linkedPRs.some(
+        (l) => l.repo === pr_repo && l.number === pr_number
+      );
+      if (!exists) {
+        linkedPRs.push({ repo: pr_repo, number: pr_number });
+        metadata.linkedPRs = linkedPRs;
+        const newBody = serializeFeatureMetadata(content, metadata);
+        await updateFeatureBody(token, orgLogin, feature_number, newBody);
+        await context.env.DB
+          .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
+          .bind(newBody, orgId, feature_number)
+          .run();
+      }
+    } catch (e) {
+      console.error(`[gitpulse] Failed to update GitHub metadata for feature #${feature_number}:`, e);
+    }
+  })());
 
   return jsonResponse({ ok: true });
 }

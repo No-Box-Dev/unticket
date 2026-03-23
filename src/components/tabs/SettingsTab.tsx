@@ -153,7 +153,7 @@ export function SettingsTab() {
         <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">About unticket.ai</h2>
         <p className="text-xs text-stone-400 dark:text-neutral-500">
           AI-powered project management dashboard for GitHub organisations.
-          Your token is stored locally — no data is sent to any server.
+          Your token is stored locally and sent securely to our API for GitHub operations.
         </p>
       </div>
     </div>

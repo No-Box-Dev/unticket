@@ -94,8 +94,12 @@ function issueToFeature(issue: any): Feature {
   const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
 
-  // No sprint milestone → future (backlog). With sprint → use label status or default to plan.
-  const status: FeatureStatus = sprint === null ? "future" : (labelStatus ?? "plan");
+  // No sprint milestone → use label status or fall back to "future" (backlog).
+  // With sprint → use label status or default to "plan".
+  // This preserves workflow state when a feature is detached from a sprint.
+  const status: FeatureStatus = sprint === null
+    ? (labelStatus ?? "future")
+    : (labelStatus ?? "plan");
 
   const rawBody = issue.body ?? "";
   const { content, metadata } = parseMetadata(rawBody);
@@ -316,7 +320,11 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     milestone: null,
   });
   // Remove from D1 features table
-  await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
+  const deleteRes = await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
+  if (!deleteRes.ok) {
+    const body = await deleteRes.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Failed to delete feature from D1: ${(body as { error?: string }).error ?? deleteRes.statusText}`);
+  }
 }
 
 // ---------- Sub-issues ----------

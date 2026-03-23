@@ -63,7 +63,15 @@ export function computeMetric(dates: string[], weeks = 10): MetricData {
   const history = buildWeeklyBuckets(dates, weeks);
   const current = history.length > 0 ? history[history.length - 1].value : 0;
   const previous = history.length > 1 ? history[history.length - 2].value : 0;
-  return { current, previous, change: current - previous, history };
+
+  // Normalize change comparison: if the current week is partial, project its
+  // value to a full week so the comparison isn't skewed
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay() || 7; // 1=Mon .. 7=Sun
+  const projectedCurrent = dayOfWeek < 7 ? Math.round((current / dayOfWeek) * 7) : current;
+  const change = projectedCurrent - previous;
+
+  return { current, previous, change, history };
 }
 
 export function computeMetricDaily(dates: string[], days: number): MetricData {
@@ -137,7 +145,7 @@ export function computeBurndown(
       if (f.status !== "production") return true;
       // Check statusHistory for when it became production
       const prodEntry = f.statusHistory?.find((h: StatusHistoryEntry) => h.status === "production");
-      if (!prodEntry) return false; // is production but no history — assume done before sprint
+      if (!prodEntry) return true; // is production but no history (migrated data) — count as not yet done for burndown
       return new Date(prodEntry.timestamp) > dayDate;
     }).length;
     actual.push({ x: d, y: remaining });

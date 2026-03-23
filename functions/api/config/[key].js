@@ -29,7 +29,12 @@ export async function onRequestGet(context) {
     return jsonResponse(DEFAULTS[key]);
   }
 
-  return jsonResponse(JSON.parse(row.data));
+  try {
+    return jsonResponse(JSON.parse(row.data));
+  } catch {
+    console.warn(`[gitpulse] Corrupt config data for key "${key}" (org ${orgId}), returning default`);
+    return jsonResponse(DEFAULTS[key]);
+  }
 }
 
 // PUT /api/config/:key
