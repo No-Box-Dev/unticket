@@ -5,7 +5,7 @@ import { useIsAdmin } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
 import { withStatusTransition } from "@/lib/github-features";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, ListChecks, LayoutGrid, Users } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
@@ -175,7 +175,6 @@ export function TodoTab() {
           createTodoMut={createTodoMut}
           updateTodoMut={updateTodoMut}
           deleteTodoMut={deleteTodoMut}
-          selectedOrg={selectedOrg}
           onOpenDetail={setDetailTodo}
         />
       )}
@@ -196,7 +195,6 @@ export function TodoTab() {
         <MyRolesView
           mySprintTasks={mySprintTasks}
           featureMap={featureMap}
-          features={features ?? []}
           tasksLoading={tasksLoading}
           onOpenDetail={(f) => setDetailFeature(f)}
           onUpdateTaskPoints={(taskNumber, pts) => updateTaskPointsMut.mutate({ taskNumber, points: pts })}
@@ -248,7 +246,6 @@ function MyTodosView({
   createTodoMut,
   updateTodoMut,
   deleteTodoMut,
-  selectedOrg,
   onOpenDetail,
 }: {
   todos: Todo[];
@@ -258,7 +255,6 @@ function MyTodosView({
   createTodoMut: ReturnType<typeof useCreateTodoItem>;
   updateTodoMut: ReturnType<typeof useUpdateTodoItem>;
   deleteTodoMut: ReturnType<typeof useDeleteTodoItem>;
-  selectedOrg: string | null;
   onOpenDetail: (t: Todo) => void;
 }) {
   const { user } = useAuth();
@@ -551,14 +547,12 @@ function MyFeaturesView({
 function MyRolesView({
   mySprintTasks,
   featureMap,
-  features,
   tasksLoading,
   onOpenDetail,
   onUpdateTaskPoints,
 }: {
   mySprintTasks: SubIssueWithFeature[];
   featureMap: Map<number, Feature>;
-  features: Feature[];
   tasksLoading: boolean;
   onOpenDetail: (f: Feature) => void;
   onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
