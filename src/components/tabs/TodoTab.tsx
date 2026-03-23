@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { useIsAdmin } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
 import { withStatusTransition } from "@/lib/github-features";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, ListChecks, LayoutGrid, Users } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
@@ -170,6 +170,7 @@ export function TodoTab() {
         <MyTodosView
           todos={filteredTodos}
           allTodos={todos}
+          mySprintTasks={mySprintTasks}
           myFeatures={myFeatures}
           featureMap={featureMap}
           createTodoMut={createTodoMut}
@@ -238,9 +239,36 @@ export function TodoTab() {
 
 // ─── My Todos View ──────────────────────────────────────────────────────
 
+/** Map TodoStatus → BoardStatus for 5-column display */
+function todoBoardStatus(status: TodoStatus): BoardStatus {
+  if (status === "backlog") return "plan";
+  if (status === "done") return "production";
+  return "in_progress";
+}
+
+/** Map BoardStatus → TodoStatus for drag-and-drop updates */
+function boardToTodoStatus(status: BoardStatus): TodoStatus {
+  if (status === "plan") return "backlog";
+  if (status === "production" || status === "tested") return "done";
+  return "in_progress";
+}
+
+/** Classify sprint task into a board column */
+function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus): BoardStatus {
+  if (featureStatus === "production") return "production";
+  if (featureStatus === "demo") return task.state === "closed" ? "tested" : "demo";
+  if (task.state === "closed") return "tested";
+  return task.assignees.length > 0 ? "in_progress" : "plan";
+}
+
+type BoardItem =
+  | { type: "todo"; data: Todo }
+  | { type: "sprint"; data: SubIssueWithFeature };
+
 function MyTodosView({
   todos,
   allTodos,
+  mySprintTasks,
   myFeatures,
   featureMap,
   createTodoMut,
@@ -250,6 +278,7 @@ function MyTodosView({
 }: {
   todos: Todo[];
   allTodos: Todo[];
+  mySprintTasks: SubIssueWithFeature[];
   myFeatures: Feature[];
   featureMap: Map<number, Feature>;
   createTodoMut: ReturnType<typeof useCreateTodoItem>;
@@ -260,15 +289,17 @@ function MyTodosView({
   const { user } = useAuth();
   const [input, setInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
-  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
-  const dragOverCardIdRef = useRef<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<BoardStatus | null>(null);
 
   const columns = useMemo(() => {
-    const grouped: Record<TodoStatus, Todo[]> = { backlog: [], in_progress: [], done: [] };
-    for (const t of todos) grouped[t.status].push(t);
+    const grouped: Record<BoardStatus, BoardItem[]> = { plan: [], in_progress: [], demo: [], tested: [], production: [] };
+    for (const t of todos) grouped[todoBoardStatus(t.status)].push({ type: "todo", data: t });
+    for (const st of mySprintTasks) {
+      const col = classifyTask(st, featureMap.get(st.featureId)?.status);
+      grouped[col].push({ type: "sprint", data: st });
+    }
     return grouped;
-  }, [todos]);
+  }, [todos, mySprintTasks, featureMap]);
 
   function addTodo() {
     const title = input.trim();
@@ -302,36 +333,31 @@ function MyTodosView({
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent, targetStatus: TodoStatus) => {
+    (e: React.DragEvent, targetStatus: BoardStatus) => {
       e.preventDefault();
-      const todoId = parseInt(e.dataTransfer.getData("text/plain"));
       setDragOverCol(null);
-      setDragOverCardId(null);
-      dragOverCardIdRef.current = null;
+      const todoId = parseInt(e.dataTransfer.getData("text/plain"));
       if (isNaN(todoId)) return;
       const todo = allTodos.find((t) => t.id === todoId);
-      if (!todo || todo.status === targetStatus) return;
-      updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
+      if (!todo) return;
+      const newTodoStatus = boardToTodoStatus(targetStatus);
+      if (todo.status === newTodoStatus) return;
+      updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: newTodoStatus } });
     },
     [allTodos],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
+  const handleDragOver = useCallback((e: React.DragEvent, status: BoardStatus) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOverCol(status);
   }, []);
 
-  const handleCardDragOver = useCallback((cardId: string) => {
-    dragOverCardIdRef.current = cardId;
-    setDragOverCardId(cardId);
-  }, []);
-
   const handleDragLeave = useCallback(() => {
     setDragOverCol(null);
-    setDragOverCardId(null);
-    dragOverCardIdRef.current = null;
   }, []);
+
+  const doneCount = columns.tested.length + columns.production.length;
 
   return (
     <div className="space-y-4">
@@ -365,10 +391,13 @@ function MyTodosView({
         </button>
       </div>
 
-      {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {TODO_COLUMNS.map(({ status, label, color }) => {
+      {/* 5-column Kanban */}
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        {FEATURE_COLUMNS.map(({ status, label, color }) => {
           const items = columns[status];
+          const todoCount = items.filter((i) => i.type === "todo").length;
+          const sprintCount = items.filter((i) => i.type === "sprint").length;
+          const isDoneCol = status === "tested" || status === "production";
           return (
             <div
               key={status}
@@ -384,8 +413,10 @@ function MyTodosView({
               <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
                 <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
-                {status === "done" && items.length > 0 && (
+                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
+                </span>
+                {isDoneCol && doneCount > 0 && status === "production" && (
                   <button
                     onClick={clearDone}
                     className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
@@ -396,24 +427,34 @@ function MyTodosView({
               </div>
 
               {/* Cards */}
-              <div className="p-2 space-y-2 flex-1 overflow-y-auto">
-                {items.map((todo) => (
-                  <TodoCard
-                    key={todo.id}
-                    todo={todo}
-                    feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
-                    onDelete={() => handleDeleteTodo(todo.id)}
-                    onClick={() => onOpenDetail(todo)}
-                    onDragStart={handleDragStart}
-                    onCardDragOver={handleCardDragOver}
-                    isDropTarget={dragOverCardId === String(todo.id)}
-                  />
-                ))}
+              <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-260px)]">
+                {items.map((item) => {
+                  if (item.type === "sprint") {
+                    const st = item.data;
+                    return (
+                      <SprintTaskCard
+                        key={`sprint-${st.number}`}
+                        task={st}
+                        featureTitle={st.featureTitle || featureMap.get(st.featureId)?.title}
+                      />
+                    );
+                  }
+                  const todo = item.data;
+                  return (
+                    <TodoCard
+                      key={todo.id}
+                      todo={todo}
+                      feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
+                      onDelete={() => handleDeleteTodo(todo.id)}
+                      onClick={() => onOpenDetail(todo)}
+                      onDragStart={handleDragStart}
+                    />
+                  );
+                })}
                 {items.length === 0 && (
                   <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
-                    {status === "backlog" && "New todos land here"}
-                    {status === "in_progress" && "Drag items here"}
-                    {status === "done" && "Completed items"}
+                    {status === "plan" && "New todos land here"}
+                    {status !== "plan" && "Drag items here"}
                   </div>
                 )}
               </div>
@@ -645,6 +686,54 @@ function MyRolesView({
   );
 }
 
+// ─── SprintTaskCard ─────────────────────────────────────────────────────
+
+function SprintTaskCard({
+  task,
+  featureTitle,
+}: {
+  task: SubIssueWithFeature;
+  featureTitle?: string;
+}) {
+  const isDone = task.state === "closed";
+
+  return (
+    <a
+      href={task.html_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand cursor-pointer hover:shadow-sm transition-shadow",
+        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <Zap size={12} className="text-brand shrink-0" />
+          <span className={cn("text-sm block", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
+            {task.title}
+          </span>
+          {task.points && (
+            <span className="ml-auto shrink-0 text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">
+              {task.points}pt
+            </span>
+          )}
+        </div>
+        {(featureTitle || task.roleName) && (
+          <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {featureTitle && (
+              <span className="text-xs text-stone-400 dark:text-neutral-500">{featureTitle}</span>
+            )}
+            {task.roleName && (
+              <span className="text-xs text-stone-400 dark:text-neutral-500">/ {task.roleName}</span>
+            )}
+          </span>
+        )}
+      </div>
+    </a>
+  );
+}
+
 // ─── TodoCard ───────────────────────────────────────────────────────────
 
 function TodoCard({
@@ -653,16 +742,12 @@ function TodoCard({
   onDelete,
   onClick,
   onDragStart,
-  onCardDragOver,
-  isDropTarget,
 }: {
   todo: Todo;
   feature?: Feature;
   onDelete: () => void;
   onClick: () => void;
   onDragStart: (e: React.DragEvent, todo: Todo) => void;
-  onCardDragOver: (cardId: string) => void;
-  isDropTarget: boolean;
 }) {
   const isDone = todo.status === "done";
 
@@ -670,15 +755,10 @@ function TodoCard({
     <div
       draggable
       onDragStart={(e) => onDragStart(e, todo)}
-      onDragOver={(e) => {
-        e.preventDefault();
-        onCardDragOver(String(todo.id));
-      }}
       onClick={onClick}
       className={cn(
         "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised cursor-grab active:cursor-grabbing",
         isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06] hover:border-stone-300 dark:hover:border-white/[0.1]",
-        isDropTarget && "border-t-2 border-t-brand",
       )}
     >
       <div className="flex-1 min-w-0">
