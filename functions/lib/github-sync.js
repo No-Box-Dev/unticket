@@ -205,7 +205,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
         const results = await Promise.allSettled(
           batch.map(async (issue) => {
             const eventsRes = await fetch(
-              `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=10`,
+              `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -219,6 +219,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
             try {
               events = await eventsRes.json();
             } catch {
+              console.error(`[unticket.ai] Failed to parse events JSON for issue #${issue.number}`);
               return { number: issue.number, login: null };
             }
             const closedEvent = events.filter((e) => e.event === "closed").pop();
