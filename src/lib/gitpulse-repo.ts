@@ -166,7 +166,8 @@ export async function saveTodoPlanFile(
 
 // ---------- People config ----------
 
-const PEOPLE_PATHS = ["people.json", "config/people.json"];
+// Canonical path is config/people.json; people.json is legacy fallback for reads only
+const PEOPLE_PATHS = ["config/people.json", "people.json"];
 
 export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
   try {
