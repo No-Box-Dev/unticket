@@ -182,39 +182,55 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
 
   const issues = allItems.filter((i) => !i.pull_request);
 
-  // Fetch closed_by for closed issues via events API (batched to avoid N+1)
+  // Fetch closed_by for closed issues that don't already have it in D1.
+  // For incremental syncs, skip this — webhooks already capture closed_by.
+  // Only fetch events for issues missing closed_by during full syncs.
   const closedByMap = new Map();
-  const closedIssues = issues.filter((i) => i.state === "closed");
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < closedIssues.length; i += BATCH_SIZE) {
-    const batch = closedIssues.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async (issue) => {
-        const eventsRes = await fetch(
-          `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "User-Agent": "GitPulse",
-              Accept: "application/vnd.github+json",
-            },
-          }
+  if (!since) {
+    // Full sync: check which closed issues are missing closed_by in D1
+    const closedIssues = issues.filter((i) => i.state === "closed");
+    if (closedIssues.length > 0) {
+      const existingClosedBy = await db
+        .prepare(
+          `SELECT number, closed_by FROM issues WHERE org_id = ? AND repo = ? AND closed_by IS NOT NULL`
+        )
+        .bind(orgId, repo)
+        .all();
+      const knownClosedBy = new Set(existingClosedBy.results.map((r) => r.number));
+
+      const missingClosedBy = closedIssues.filter((i) => !knownClosedBy.has(i.number));
+      const BATCH_SIZE = 20;
+      for (let i = 0; i < missingClosedBy.length; i += BATCH_SIZE) {
+        const batch = missingClosedBy.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (issue) => {
+            const eventsRes = await fetch(
+              `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue.number}/events?per_page=100`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "User-Agent": "GitPulse",
+                  Accept: "application/vnd.github+json",
+                },
+              }
+            );
+            if (!eventsRes.ok) return { number: issue.number, login: null };
+            let events;
+            try {
+              events = await eventsRes.json();
+            } catch {
+              console.error(`[unticket.ai] Failed to parse events JSON for issue #${issue.number}`);
+              return { number: issue.number, login: null };
+            }
+            const closedEvent = events.filter((e) => e.event === "closed").pop();
+            return { number: issue.number, login: closedEvent?.actor?.login ?? null };
+          })
         );
-        if (!eventsRes.ok) return { number: issue.number, login: null };
-        let events;
-        try {
-          events = await eventsRes.json();
-        } catch {
-          console.error(`[unticket.ai] Failed to parse events JSON for issue #${issue.number}`);
-          return { number: issue.number, login: null };
+        for (const result of results) {
+          if (result.status === "fulfilled" && result.value.login) {
+            closedByMap.set(result.value.number, result.value.login);
+          }
         }
-        const closedEvent = events.filter((e) => e.event === "closed").pop();
-        return { number: issue.number, login: closedEvent?.actor?.login ?? null };
-      })
-    );
-    for (const result of results) {
-      if (result.status === "fulfilled" && result.value.login) {
-        closedByMap.set(result.value.number, result.value.login);
       }
     }
   }
