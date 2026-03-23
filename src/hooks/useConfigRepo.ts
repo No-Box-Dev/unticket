@@ -180,60 +180,81 @@ export function useAllSprintSubIssues(featureIds: number[]) {
     queryKey: ["allSprintSubIssues", selectedOrg, featureIds],
     queryFn: async () => {
       if (!selectedOrg || featureIds.length === 0) return [];
-      const results: SubIssueWithFeature[] = [];
-      // Batch features in groups of 10 to balance parallelism vs rate limits
-      const batches = [];
-      for (let i = 0; i < featureIds.length; i += 10) {
-        batches.push(featureIds.slice(i, i + 10));
-      }
-      for (const batch of batches) {
+
+      // Phase 1: Fetch all sub-issues + roles for all features in parallel batches
+      const featureData: { fid: number; subs: SubIssue[]; roles: PersonRole[] }[] = [];
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < featureIds.length; i += BATCH_SIZE) {
+        const batch = featureIds.slice(i, i + BATCH_SIZE);
         const batchResults = await Promise.all(
           batch.map(async (fid) => {
             try {
-              // Fetch sub-issues and roles in parallel (eliminates N+1)
               const [subs, roles] = await Promise.all([
                 fetchSubIssues(selectedOrg, fid),
                 fetchRoles(selectedOrg, fid),
               ]);
-              const roleNumbers = new Set(roles.map((r) => r.number));
-              const items: SubIssueWithFeature[] = [];
-
-              // Direct tasks (not roles) — legacy flat sub-issues
-              for (const s of subs) {
-                if (!roleNumbers.has(s.number)) {
-                  items.push({ ...s, featureId: fid, featureTitle: "" });
-                }
-              }
-
-              // Tasks under roles — fetch all role tasks in parallel
-              if (roles.length > 0) {
-                const roleTasks = await Promise.all(
-                  roles.map(async (role) => {
-                    try {
-                      const tasks = await fetchTasksForRole(selectedOrg, role.number);
-                      return tasks.map((t) => ({
-                        ...t,
-                        featureId: fid,
-                        featureTitle: "",
-                        roleNumber: role.number,
-                        roleName: role.title,
-                      }));
-                    } catch {
-                      return [];
-                    }
-                  }),
-                );
-                items.push(...roleTasks.flat());
-              }
-
-              return items;
+              return { fid, subs, roles };
             } catch {
-              return [];
+              return { fid, subs: [] as SubIssue[], roles: [] as PersonRole[] };
             }
           }),
         );
-        results.push(...batchResults.flat());
+        featureData.push(...batchResults);
       }
+
+      // Phase 2: Collect ALL roles across ALL features, then fetch their tasks in one flat batch
+      // This avoids nested parallelism (was: per-feature → per-role → fetchTasksForRole)
+      const allRoleRequests: { fid: number; role: PersonRole }[] = [];
+      for (const { fid, roles } of featureData) {
+        for (const role of roles) {
+          allRoleRequests.push({ fid, role });
+        }
+      }
+
+      const roleTaskMap = new Map<number, SubIssue[]>();
+      for (let i = 0; i < allRoleRequests.length; i += BATCH_SIZE) {
+        const batch = allRoleRequests.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async ({ role }) => {
+            try {
+              return { roleNumber: role.number, tasks: await fetchTasksForRole(selectedOrg, role.number) };
+            } catch {
+              return { roleNumber: role.number, tasks: [] as SubIssue[] };
+            }
+          }),
+        );
+        for (const { roleNumber, tasks } of results) {
+          roleTaskMap.set(roleNumber, tasks);
+        }
+      }
+
+      // Phase 3: Assemble results
+      const results: SubIssueWithFeature[] = [];
+      for (const { fid, subs, roles } of featureData) {
+        const roleNumbers = new Set(roles.map((r) => r.number));
+
+        // Direct tasks (not roles) — legacy flat sub-issues
+        for (const s of subs) {
+          if (!roleNumbers.has(s.number)) {
+            results.push({ ...s, featureId: fid, featureTitle: "" });
+          }
+        }
+
+        // Tasks under roles
+        for (const role of roles) {
+          const tasks = roleTaskMap.get(role.number) ?? [];
+          for (const t of tasks) {
+            results.push({
+              ...t,
+              featureId: fid,
+              featureTitle: "",
+              roleNumber: role.number,
+              roleName: role.title,
+            });
+          }
+        }
+      }
+
       return results;
     },
     enabled: !!selectedOrg && featureIds.length > 0,
