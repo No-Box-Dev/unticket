@@ -92,6 +92,18 @@ export function extractClosedDates(issues: { closed_at?: string | null }[]): str
   return issues.filter((i) => i.closed_at).map((i) => i.closed_at!);
 }
 
+/** Extract one date per reviewer per merged PR (for "PRs Reviewed" metric). */
+export function extractReviewedDates(prs: { merged_at?: string | null; requested_reviewers?: { login: string }[] }[]): string[] {
+  const dates: string[] = [];
+  for (const pr of prs) {
+    if (!pr.merged_at) continue;
+    for (let i = 0; i < (pr.requested_reviewers ?? []).length; i++) {
+      dates.push(pr.merged_at);
+    }
+  }
+  return dates;
+}
+
 export function extractCreatedDates(items: { created_at: string }[]): string[] {
   return items.map((i) => i.created_at);
 }
@@ -171,6 +183,7 @@ export interface Alert {
 export interface ContributorRow {
   login: string;
   prsMerged: number;
+  prsReviewed: number;
   issuesClosed: number;
   pointsDone: number;
 }
@@ -237,7 +250,7 @@ export function computeReviewLoad(
 
 /** Per-person activity stats within a date range. */
 export function computeContributorActivity(
-  mergedPRs: { user: { login: string } | null; merged_at?: string | null }[],
+  mergedPRs: { user: { login: string } | null; merged_at?: string | null; requested_reviewers?: { login: string }[] }[],
   closedIssues: { closed_by?: string | null; closed_at?: string | null }[],
   tasks: { assignees: string[]; state: string; points?: number }[],
   sprintStart: string,
@@ -245,7 +258,7 @@ export function computeContributorActivity(
 ): ContributorRow[] {
   const stats = new Map<string, ContributorRow>();
   const ensure = (login: string) => {
-    if (!stats.has(login)) stats.set(login, { login, prsMerged: 0, issuesClosed: 0, pointsDone: 0 });
+    if (!stats.has(login)) stats.set(login, { login, prsMerged: 0, prsReviewed: 0, issuesClosed: 0, pointsDone: 0 });
     return stats.get(login)!;
   };
 
@@ -253,9 +266,13 @@ export function computeContributorActivity(
   const end = new Date(sprintEnd + "T23:59:59").getTime();
 
   for (const pr of mergedPRs) {
-    if (!pr.user?.login || !pr.merged_at) continue;
+    if (!pr.merged_at) continue;
     const t = new Date(pr.merged_at).getTime();
-    if (t >= start && t <= end) ensure(pr.user.login).prsMerged++;
+    if (t < start || t > end) continue;
+    if (pr.user?.login) ensure(pr.user.login).prsMerged++;
+    for (const r of pr.requested_reviewers ?? []) {
+      if (r.login && r.login !== pr.user?.login) ensure(r.login).prsReviewed++;
+    }
   }
 
   for (const issue of closedIssues) {
