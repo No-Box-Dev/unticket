@@ -1,13 +1,27 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
-import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
+import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useIsAdmin } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap } from "lucide-react";
+import { withStatusTransition } from "@/lib/github-features";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
+import { FeatureCard } from "@/components/sprint/FeatureCard";
+import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
+import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
-import type { Todo, TodoStatus, Feature, FeatureStatus } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus, Points } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
+
+type TodoView = "todos" | "features" | "roles";
+type SprintFilter = "sprint" | "all";
+
+const VIEW_TABS: { key: TodoView; label: string; icon: typeof ListChecks }[] = [
+  { key: "todos", label: "My Todos", icon: ListChecks },
+  { key: "features", label: "My Features", icon: LayoutGrid },
+  { key: "roles", label: "My Roles", icon: Users },
+];
 
 const STATUS_DOT: Record<FeatureStatus, string> = {
   plan: "bg-brand",
@@ -18,37 +32,46 @@ const STATUS_DOT: Record<FeatureStatus, string> = {
   future: "bg-stone-300",
 };
 
-const COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
+const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
   { status: "backlog", label: "Backlog", color: "bg-stone-400" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
   { status: "done", label: "Done", color: "bg-green-500" },
 ];
 
-/** Map sprint task state to TodoStatus for display */
-function sprintTaskToTodoStatus(state: "open" | "closed"): TodoStatus {
-  return state === "closed" ? "done" : "in_progress";
-}
+type BoardStatus = Exclude<FeatureStatus, "future">;
+const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
+  { status: "plan", label: "Plan", color: "bg-brand" },
+  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+  { status: "demo", label: "Demo", color: "bg-purple-500" },
+  { status: "tested", label: "Tested", color: "bg-cyan-500" },
+  { status: "production", label: "In Production", color: "bg-green-500" },
+];
 
 export function TodoTab() {
   const { user, selectedOrg } = useAuth();
   const { data: myTodos, isLoading } = useTodos();
   const { data: features } = useFeatures();
+  const { data: sprint } = useSprint();
+  const { data: people } = usePeople();
+  const isAdmin = useIsAdmin();
   const createTodoMut = useCreateTodoItem();
   const updateTodoMut = useUpdateTodoItem();
   const deleteTodoMut = useDeleteTodoItem();
-  const [input, setInput] = useState("");
-  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
-  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
-  const dragOverCardIdRef = useRef<string | null>(null);
+  const updateFeatureMut = useUpdateFeature();
+  const deleteFeatureMut = useDeleteFeature();
+  const updateTaskPointsMut = useUpdateTaskPoints();
+
+  const [todoView, setTodoView] = useState<TodoView>("todos");
+  const [sprintFilter, setSprintFilter] = useState<SprintFilter>("sprint");
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
+  const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
 
   // Sprint tasks assigned to me
   const sprintFeatureIds = useMemo(
     () => (features ?? []).filter((f) => f.status !== "future" && f.sprint !== null).map((f) => f.id),
     [features],
   );
-  const { data: allSprintTasks } = useAllSprintSubIssues(sprintFeatureIds);
+  const { data: allSprintTasks, isLoading: tasksLoading } = useAllSprintSubIssues(sprintFeatureIds);
   const mySprintTasks = useMemo(() => {
     if (!allSprintTasks || !user) return [];
     return allSprintTasks.filter((t) => t.assignees.includes(user.login));
@@ -56,21 +79,7 @@ export function TodoTab() {
 
   const todos = useMemo(() => myTodos ?? [], [myTodos]);
 
-  // Combine personal todos + sprint tasks into columns
-  const columns = useMemo(() => {
-    const grouped: Record<TodoStatus, (Todo | (SubIssueWithFeature & { _sprintTask: true }))[]> = {
-      backlog: [],
-      in_progress: [],
-      done: [],
-    };
-    for (const t of todos) grouped[t.status].push(t);
-    // Add sprint tasks
-    for (const st of mySprintTasks) {
-      const status = sprintTaskToTodoStatus(st.state);
-      grouped[status].push({ ...st, _sprintTask: true as const });
-    }
-    return grouped;
-  }, [todos, mySprintTasks]);
+  const currentSprintNumber = sprint?.number ?? null;
 
   const myFeatures = useMemo(() => {
     if (!features || !user) return [];
@@ -82,6 +91,186 @@ export function TodoTab() {
     for (const f of features ?? []) map.set(f.id, f);
     return map;
   }, [features]);
+
+  const allPeople = useMemo(
+    () => (people ?? []).map((p) => p.github),
+    [people],
+  );
+
+  const sprintOptions = useMemo(() => [
+    ...(sprint ? [{ value: sprint.number, label: `Sprint ${sprint.number}` }] : []),
+    { value: null as number | null, label: "Backlog" },
+  ], [sprint]);
+
+  // Filtered todos for sprint filter
+  const filteredTodos = useMemo(() => {
+    if (sprintFilter === "all") return todos;
+    const sprintFeatIds = new Set(
+      (features ?? [])
+        .filter((f) => f.sprint === currentSprintNumber && f.status !== "future")
+        .map((f) => f.id),
+    );
+    return todos.filter((t) => !t.featureId || sprintFeatIds.has(t.featureId));
+  }, [todos, sprintFilter, features, currentSprintNumber]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pb-8">
+      {/* Header: view tabs + sprint filter */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+          {VIEW_TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTodoView(key)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all",
+                todoView === key
+                  ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
+                  : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+              )}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {todoView === "todos" && (
+          <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+            {(["sprint", "all"] as SprintFilter[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setSprintFilter(v)}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all",
+                  sprintFilter === v
+                    ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
+                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                )}
+              >
+                {v === "sprint" ? `Sprint ${currentSprintNumber ?? ""}` : "All"}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* View content */}
+      {todoView === "todos" && (
+        <MyTodosView
+          todos={filteredTodos}
+          allTodos={todos}
+          myFeatures={myFeatures}
+          featureMap={featureMap}
+          createTodoMut={createTodoMut}
+          updateTodoMut={updateTodoMut}
+          deleteTodoMut={deleteTodoMut}
+          selectedOrg={selectedOrg}
+          onOpenDetail={setDetailTodo}
+        />
+      )}
+
+      {todoView === "features" && (
+        <MyFeaturesView
+          myFeatures={myFeatures}
+          allPeople={allPeople}
+          updateFeatureMut={updateFeatureMut}
+          deleteFeatureMut={deleteFeatureMut}
+          onOpenDetail={setDetailFeature}
+          isAdmin={isAdmin}
+          currentSprint={currentSprintNumber ?? undefined}
+        />
+      )}
+
+      {todoView === "roles" && (
+        <MyRolesView
+          mySprintTasks={mySprintTasks}
+          featureMap={featureMap}
+          features={features ?? []}
+          tasksLoading={tasksLoading}
+          onOpenDetail={(f) => setDetailFeature(f)}
+          onUpdateTaskPoints={(taskNumber, pts) => updateTaskPointsMut.mutate({ taskNumber, points: pts })}
+        />
+      )}
+
+      {/* Todo detail modal */}
+      {detailTodo && (
+        <TodoDetailModal
+          todo={detailTodo}
+          feature={detailTodo.featureId ? featureMap.get(detailTodo.featureId) : undefined}
+          allFeatures={myFeatures}
+          org={selectedOrg}
+          onUpdate={(patch) => {
+            updateTodoMut.mutate({
+              issueNumber: detailTodo.id,
+              updates: patch,
+            });
+            setDetailTodo((prev) => prev ? { ...prev, ...patch } as Todo : prev);
+          }}
+          onClose={() => setDetailTodo(null)}
+        />
+      )}
+
+      {/* Feature detail modal */}
+      {detailFeature && (
+        <FeatureDetailModal
+          feature={detailFeature}
+          allPeople={allPeople}
+          onClose={() => setDetailFeature(null)}
+          onUpdate={(updated) => {
+            updateFeatureMut.mutate(updated);
+            setDetailFeature(updated);
+          }}
+          sprintOptions={sprintOptions}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── My Todos View ──────────────────────────────────────────────────────
+
+function MyTodosView({
+  todos,
+  allTodos,
+  myFeatures,
+  featureMap,
+  createTodoMut,
+  updateTodoMut,
+  deleteTodoMut,
+  selectedOrg,
+  onOpenDetail,
+}: {
+  todos: Todo[];
+  allTodos: Todo[];
+  myFeatures: Feature[];
+  featureMap: Map<number, Feature>;
+  createTodoMut: ReturnType<typeof useCreateTodoItem>;
+  updateTodoMut: ReturnType<typeof useUpdateTodoItem>;
+  deleteTodoMut: ReturnType<typeof useDeleteTodoItem>;
+  selectedOrg: string | null;
+  onOpenDetail: (t: Todo) => void;
+}) {
+  const { user } = useAuth();
+  const [input, setInput] = useState("");
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const dragOverCardIdRef = useRef<string | null>(null);
+
+  const columns = useMemo(() => {
+    const grouped: Record<TodoStatus, Todo[]> = { backlog: [], in_progress: [], done: [] };
+    for (const t of todos) grouped[t.status].push(t);
+    return grouped;
+  }, [todos]);
 
   function addTodo() {
     const title = input.trim();
@@ -95,21 +284,13 @@ export function TodoTab() {
     setSelectedFeatureId(null);
   }
 
-  function addFeatureTodo(feature: Feature) {
-    if (!user) return;
-    createTodoMut.mutate({
-      title: feature.title,
-      featureId: feature.id,
-    });
-  }
-
   function handleDeleteTodo(id: number) {
     if (!window.confirm("Delete this todo?")) return;
     deleteTodoMut.mutate(id);
   }
 
   function clearDone() {
-    const doneTodos = todos.filter((t) => t.status === "done");
+    const doneTodos = allTodos.filter((t) => t.status === "done");
     if (doneTodos.length === 0) return;
     if (!window.confirm(`Delete ${doneTodos.length} completed todo${doneTodos.length === 1 ? "" : "s"}?`)) return;
     for (const t of doneTodos) {
@@ -117,7 +298,6 @@ export function TodoTab() {
     }
   }
 
-  // --- Drag and drop ---
   const handleDragStart = useCallback((e: React.DragEvent, todo: Todo) => {
     e.dataTransfer.setData("text/plain", String(todo.id));
     e.dataTransfer.effectAllowed = "move";
@@ -127,21 +307,15 @@ export function TodoTab() {
     (e: React.DragEvent, targetStatus: TodoStatus) => {
       e.preventDefault();
       const todoId = parseInt(e.dataTransfer.getData("text/plain"));
-
       setDragOverCol(null);
       setDragOverCardId(null);
       dragOverCardIdRef.current = null;
-
       if (isNaN(todoId)) return;
-      const todo = todos.find((t) => t.id === todoId);
+      const todo = allTodos.find((t) => t.id === todoId);
       if (!todo || todo.status === targetStatus) return;
-
-      updateTodoMut.mutate({
-        issueNumber: todo.id,
-        updates: { status: targetStatus },
-      });
+      updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [todos],
+    [allTodos],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -161,222 +335,320 @@ export function TodoTab() {
     dragOverCardIdRef.current = null;
   }, []);
 
-  if (isLoading) {
+  return (
+    <div className="space-y-4">
+      {/* Add todo input */}
+      <div className="flex items-center gap-3">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addTodo()}
+          placeholder="Add a todo..."
+          className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+        />
+        <select
+          value={selectedFeatureId ?? ""}
+          onChange={(e) => setSelectedFeatureId(e.target.value || null)}
+          className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-600 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
+        >
+          <option value="">No feature</option>
+          {myFeatures.map((f) => (
+            <option key={f.id} value={String(f.id)}>{f.title}</option>
+          ))}
+        </select>
+        <button
+          onClick={addTodo}
+          disabled={!input.trim() || createTodoMut.isPending}
+          className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+        >
+          {createTodoMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+          Add
+        </button>
+      </div>
+
+      {/* Kanban columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {TODO_COLUMNS.map(({ status, label, color }) => {
+          const items = columns[status];
+          return (
+            <div
+              key={status}
+              onDragOver={(e) => handleDragOver(e, status)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, status)}
+              className={cn(
+                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
+                dragOverCol === status && "border-brand/50 bg-brand/5",
+              )}
+            >
+              {/* Column header */}
+              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                {status === "done" && items.length > 0 && (
+                  <button
+                    onClick={clearDone}
+                    className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Cards */}
+              <div className="p-2 space-y-2 flex-1 overflow-y-auto">
+                {items.map((todo) => (
+                  <TodoCard
+                    key={todo.id}
+                    todo={todo}
+                    feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
+                    onDelete={() => handleDeleteTodo(todo.id)}
+                    onClick={() => onOpenDetail(todo)}
+                    onDragStart={handleDragStart}
+                    onCardDragOver={handleCardDragOver}
+                    isDropTarget={dragOverCardId === String(todo.id)}
+                  />
+                ))}
+                {items.length === 0 && (
+                  <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                    {status === "backlog" && "New todos land here"}
+                    {status === "in_progress" && "Drag items here"}
+                    {status === "done" && "Completed items"}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── My Features View ───────────────────────────────────────────────────
+
+function MyFeaturesView({
+  myFeatures,
+  allPeople,
+  updateFeatureMut,
+  deleteFeatureMut,
+  onOpenDetail,
+  isAdmin,
+  currentSprint,
+}: {
+  myFeatures: Feature[];
+  allPeople: string[];
+  updateFeatureMut: ReturnType<typeof useUpdateFeature>;
+  deleteFeatureMut: ReturnType<typeof useDeleteFeature>;
+  onOpenDetail: (f: Feature) => void;
+  isAdmin: boolean;
+  currentSprint?: number;
+}) {
+  const [dragOverCol, setDragOverCol] = useState<BoardStatus | null>(null);
+
+  const featureColumns = useMemo(() => {
+    const grouped: Record<BoardStatus, Feature[]> = { plan: [], in_progress: [], demo: [], tested: [], production: [] };
+    for (const f of myFeatures) {
+      if (f.status !== "future") grouped[f.status as BoardStatus].push(f);
+    }
+    return grouped;
+  }, [myFeatures]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, feature: Feature) => {
+    e.dataTransfer.setData("text/plain", String(feature.id));
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetStatus: BoardStatus) => {
+      e.preventDefault();
+      setDragOverCol(null);
+      const featureId = parseInt(e.dataTransfer.getData("text/plain"));
+      if (isNaN(featureId)) return;
+      const feature = myFeatures.find((f) => f.id === featureId);
+      if (!feature || feature.status === targetStatus) return;
+      updateFeatureMut.mutate(withStatusTransition(feature, targetStatus));
+    },
+    [myFeatures],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent, status: BoardStatus) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverCol(status);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverCol(null);
+  }, []);
+
+  if (myFeatures.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
+      <div className="text-center py-16 text-sm text-stone-400 dark:text-neutral-500">
+        No features assigned to you
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-      {/* Main: Kanban board */}
-      <div className="space-y-4">
-        {/* Add todo input */}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTodo()}
-            placeholder="Add a todo..."
-            className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-          />
-          <select
-            value={selectedFeatureId ?? ""}
-            onChange={(e) => setSelectedFeatureId(e.target.value || null)}
-            className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-600 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
+    <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      {FEATURE_COLUMNS.map(({ status, label, color }) => {
+        const items = featureColumns[status];
+        return (
+          <div
+            key={status}
+            onDragOver={(e) => handleDragOver(e, status)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, status)}
+            className={cn(
+              "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
+              dragOverCol === status && "border-brand/50 bg-brand/5",
+            )}
           >
-            <option value="">No feature</option>
-            {myFeatures.map((f) => (
-              <option key={f.id} value={String(f.id)}>{f.title}</option>
-            ))}
-          </select>
-          <button
-            onClick={addTodo}
-            disabled={!input.trim() || createTodoMut.isPending}
-            className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-          >
-            {createTodoMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            Add
-          </button>
-        </div>
-
-        {/* Kanban columns */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {COLUMNS.map(({ status, label, color }) => {
-            const items = columns[status];
-            const todoCount = items.filter((i) => !("_sprintTask" in i)).length;
-            const sprintCount = items.filter((i) => "_sprintTask" in i).length;
-            return (
-              <div
-                key={status}
-                onDragOver={(e) => handleDragOver(e, status)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, status)}
-                className={cn(
-                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
-                  dragOverCol === status && "border-brand/50 bg-brand/5",
-                )}
-              >
-                {/* Column header */}
-                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
-                  <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
-                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-                    {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
-                  </span>
-                  {status === "done" && todoCount > 0 && (
-                    <button
-                      onClick={clearDone}
-                      className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Cards */}
-                <div className="p-2 space-y-2 flex-1 overflow-y-auto">
-                  {items.map((item) => {
-                    if ("_sprintTask" in item) {
-                      const st = item as SubIssueWithFeature & { _sprintTask: true };
-                      return (
-                        <SprintTaskCard
-                          key={`sprint-${st.number}`}
-                          task={st}
-                          featureTitle={st.featureTitle || featureMap.get(st.featureId)?.title}
-                        />
-                      );
-                    }
-                    const todo = item as Todo;
-                    return (
-                      <TodoCard
-                        key={todo.id}
-                        todo={todo}
-                        feature={todo.featureId ? featureMap.get(todo.featureId) : undefined}
-
-                        onDelete={() => handleDeleteTodo(todo.id)}
-                        onClick={() => setDetailTodo(todo)}
-                        onDragStart={handleDragStart}
-                        onCardDragOver={handleCardDragOver}
-                        isDropTarget={dragOverCardId === String(todo.id)}
-                      />
-                    );
-                  })}
-                  {items.length === 0 && (
-                    <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
-                      {status === "backlog" && "New todos land here"}
-                      {status === "in_progress" && "Drag items here"}
-                      {status === "done" && "Completed items"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Sidebar: My Features */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden h-fit">
-        <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06]">
-          <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
-            My Features{" "}
-            <span className="text-stone-400 dark:text-neutral-500 font-normal">({myFeatures.length})</span>
-          </span>
-        </div>
-        <div className="p-2 space-y-0.5 overflow-y-auto max-h-[500px]">
-          {myFeatures.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => addFeatureTodo(f)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
-            >
-              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_DOT[f.status])} />
-              <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{f.title}</span>
-              <Plus size={14} className="text-stone-300 shrink-0" />
-            </button>
-          ))}
-          {myFeatures.length === 0 && (
-            <div className="px-3 py-4 text-sm text-stone-400 dark:text-neutral-500 text-center">
-              No features assigned
+            {/* Column header */}
+            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+              <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+              <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Detail modal */}
-      {detailTodo && (
-        <TodoDetailModal
-          todo={detailTodo}
-          feature={detailTodo.featureId ? featureMap.get(detailTodo.featureId) : undefined}
-          allFeatures={myFeatures}
-          org={selectedOrg}
-          onUpdate={(patch) => {
-            updateTodoMut.mutate({
-              issueNumber: detailTodo.id,
-              updates: patch,
-            });
-            setDetailTodo((prev) => prev ? { ...prev, ...patch } as Todo : prev);
-          }}
-          onClose={() => setDetailTodo(null)}
-        />
-      )}
+            {/* Cards */}
+            <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-260px)]">
+              {items.map((feature) => (
+                <FeatureCard
+                  key={feature.id}
+                  feature={feature}
+                  allPeople={allPeople}
+                  onUpdate={(updated) => updateFeatureMut.mutate(updated)}
+                  onDelete={(id) => deleteFeatureMut.mutate(id)}
+                  onOpenDetail={onOpenDetail}
+                  mode="sprint"
+                  currentSprint={currentSprint}
+                  draggable
+                  onDragStart={handleDragStart}
+                  isAdmin={isAdmin}
+                />
+              ))}
+              {items.length === 0 && (
+                <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                  Drag features here
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// --------------- SprintTaskCard ---------------
+// ─── My Roles View ──────────────────────────────────────────────────────
 
-function SprintTaskCard({
-  task,
-  featureTitle,
+function MyRolesView({
+  mySprintTasks,
+  featureMap,
+  features,
+  tasksLoading,
+  onOpenDetail,
+  onUpdateTaskPoints,
 }: {
-  task: SubIssueWithFeature;
-  featureTitle?: string;
+  mySprintTasks: SubIssueWithFeature[];
+  featureMap: Map<number, Feature>;
+  features: Feature[];
+  tasksLoading: boolean;
+  onOpenDetail: (f: Feature) => void;
+  onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }) {
-  const isDone = task.state === "closed";
+  const roleGroups = useMemo(() => {
+    const byRole = new Map<string, { roleName: string; featureId: number; featureTitle: string; tasks: SubIssueWithFeature[] }>();
+    for (const task of mySprintTasks) {
+      const roleKey = `${task.featureId}:${task.roleNumber ?? "none"}`;
+      if (!byRole.has(roleKey)) {
+        const feat = featureMap.get(task.featureId);
+        byRole.set(roleKey, {
+          roleName: task.roleName ?? "Tasks",
+          featureId: task.featureId,
+          featureTitle: task.featureTitle || (feat?.title ?? "Unknown"),
+          tasks: [],
+        });
+      }
+      byRole.get(roleKey)!.tasks.push(task);
+    }
+    return [...byRole.values()];
+  }, [mySprintTasks, featureMap]);
+
+  if (tasksLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (roleGroups.length === 0) {
+    return (
+      <div className="text-center py-16 text-sm text-stone-400 dark:text-neutral-500">
+        No sprint tasks assigned to you
+      </div>
+    );
+  }
+
+  const allTasks = roleGroups.flatMap((r) => r.tasks);
+  const doneCount = allTasks.filter((t) => t.state === "closed").length;
+  const totalPts = allTasks.reduce((s, t) => s + (t.points ?? 0), 0);
+  const donePts = allTasks.filter((t) => t.state === "closed").reduce((s, t) => s + (t.points ?? 0), 0);
 
   return (
-    <a
-      href={task.html_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand cursor-pointer hover:shadow-sm transition-shadow",
-        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
-      )}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <Zap size={12} className="text-brand shrink-0" />
-          <span className={cn("text-sm block", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
-            {task.title}
-          </span>
-          {task.points && (
-            <span className="ml-auto shrink-0 text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">
-              {task.points}pt
-            </span>
-          )}
-        </div>
-        {(featureTitle || task.roleName) && (
-          <span className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {featureTitle && (
-              <span className="text-xs text-stone-400 dark:text-neutral-500">{featureTitle}</span>
-            )}
-            {task.roleName && (
-              <span className="text-xs text-stone-400 dark:text-neutral-500">/ {task.roleName}</span>
-            )}
-          </span>
-        )}
+    <div className="space-y-3">
+      {/* Summary */}
+      <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-neutral-400">
+        <span>{doneCount}/{allTasks.length} done</span>
+        {totalPts > 0 && <span>{donePts}/{totalPts} pts</span>}
       </div>
-    </a>
+
+      {/* Role groups */}
+      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+        <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
+          {roleGroups.map((role, i) => (
+            <div key={i} className="px-4 py-2.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs font-medium text-stone-600 dark:text-neutral-300">{role.roleName}</span>
+                <button
+                  onClick={() => {
+                    const f = features.find((feat) => feat.id === role.featureId);
+                    if (f) onOpenDetail(f);
+                  }}
+                  className="text-[10px] text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
+                >
+                  {role.featureTitle}
+                </button>
+              </div>
+              <div className="space-y-0.5 ml-1">
+                {role.tasks.map((task) => {
+                  const isDone = task.state === "closed";
+                  return (
+                    <div key={task.id} className="flex items-center gap-2 py-0.5">
+                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
+                      <a href={task.html_url} target="_blank" rel="noopener noreferrer"
+                        className={cn("text-sm hover:text-brand flex-1", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
+                        {task.title}
+                      </a>
+                      <PointsSelect value={task.points ?? undefined} onChange={(pts) => onUpdateTaskPoints(task.number, pts)} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// --------------- TodoCard ---------------
+// ─── TodoCard ───────────────────────────────────────────────────────────
 
 function TodoCard({
   todo,
@@ -438,7 +710,7 @@ function TodoCard({
   );
 }
 
-// --------------- TodoDetailModal ---------------
+// ─── TodoDetailModal ────────────────────────────────────────────────────
 
 function TodoDetailModal({
   todo,
@@ -462,7 +734,6 @@ function TodoDetailModal({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Plan files use the issue number as ID
   const planId = String(todo.id);
 
   useEffect(() => {
@@ -524,7 +795,7 @@ function TodoDetailModal({
         </div>
 
         <div className="px-5 py-4 space-y-5">
-          {/* Meta row: feature + repo selectors */}
+          {/* Meta row */}
           <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Feature</span>
@@ -546,7 +817,7 @@ function TodoDetailModal({
                 onChange={(e) => onUpdate({ status: e.target.value as TodoStatus })}
                 className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
               >
-                {COLUMNS.map((c) => (
+                {TODO_COLUMNS.map((c) => (
                   <option key={c.status} value={c.status}>{c.label}</option>
                 ))}
               </select>

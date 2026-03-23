@@ -115,12 +115,14 @@ export async function fetchTodos(org: string): Promise<Todo[]> {
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
       repo: REPO,
+      labels: TODO_LABEL,
       state: "open",
       per_page: 100,
     }),
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
       repo: REPO,
+      labels: TODO_LABEL,
       state: "closed",
       per_page: 100,
       since: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(), // last 90 days
