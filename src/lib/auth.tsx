@@ -86,6 +86,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("gp:force-logout", handler);
   }, []);
 
+  // Cross-tab logout: react when another tab removes gp_token from localStorage
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === "gp_token" && e.newValue === null && user) {
+        resetOctokit();
+        setUser(null);
+        setSelectedOrg(null);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, [user]);
+
   useEffect(() => {
     // Check for OAuth callback exchange code in URL query params
     const urlParams = new URLSearchParams(window.location.search);

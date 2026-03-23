@@ -11,7 +11,7 @@ export async function onRequestGet(context) {
   const since = url.searchParams.get("since");
   const repo = url.searchParams.get("repo");
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
-  const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get("page_size") || "5000", 10) || 5000));
+  const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "100", 10) || 100));
 
   let query = "SELECT * FROM pull_requests WHERE org_id = ?";
   const bindings = [orgId];

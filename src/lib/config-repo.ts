@@ -32,12 +32,14 @@ export async function saveSettings(settings: OrgSettings) {
   await apiPut("/api/config/settings", settings);
 }
 
-// Todos
+// Todos (legacy D1 — only used as migration source, use github-todos.ts for new code)
+/** @deprecated Use github-todos.ts fetchTodos instead */
 export async function fetchTodos(): Promise<Todo[]> {
   const data = await apiGet<Todo[]>("/api/config/todos");
   return data ?? [];
 }
 
+/** @deprecated Use github-todos.ts for todo operations */
 export async function saveTodos(todos: Todo[]) {
   await apiPut("/api/config/todos", todos);
 }

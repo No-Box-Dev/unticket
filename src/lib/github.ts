@@ -170,6 +170,7 @@ export interface SyncProgress {
 export async function triggerSyncWithProgress(
   onProgress: (status: SyncProgress) => void,
   force = false,
+  signal?: AbortSignal,
 ) {
   try {
     onProgress({ phase: "init", synced: 0, total: 0 });
@@ -189,6 +190,7 @@ export async function triggerSyncWithProgress(
     const forceParam = force ? "&force=true" : "";
 
     while (cursor && iterations < maxIterations) {
+      if (signal?.aborted) return;
       onProgress({ phase: "syncing", repo: cursor, synced, total });
       const res = await apiPost<SyncResponse>(
         `/api/sync?cursor=${encodeURIComponent(cursor)}${forceParam}`,
@@ -199,8 +201,11 @@ export async function triggerSyncWithProgress(
       iterations++;
     }
 
-    onProgress({ phase: "done", synced, total });
+    if (!signal?.aborted) {
+      onProgress({ phase: "done", synced, total });
+    }
   } catch (err) {
+    if (signal?.aborted) return;
     const msg = err instanceof Error ? err.message : "Sync failed";
     // ApiError already broadcasts; for other errors, broadcast manually
     if (!(err instanceof ApiError)) {
