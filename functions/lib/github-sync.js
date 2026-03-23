@@ -2,11 +2,13 @@ import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
 
 // Paginated GitHub API fetcher
+const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
+
 async function fetchAllPages(token, url, params = {}) {
   const all = [];
   let page = 1;
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const searchParams = new URLSearchParams({
       ...params,
       per_page: "100",
@@ -595,34 +597,3 @@ export async function removeMember(db, orgId, login) {
     .run();
 }
 
-// ---------- Full sync orchestrator (kept for backwards compat, now uses syncInit + syncRepo) ----------
-
-export async function runFullSync(db, token, orgId, orgLogin) {
-  const repoNames = await syncInit(db, token, orgId, orgLogin);
-
-  for (const repo of repoNames) {
-    await syncRepo(db, token, orgId, orgLogin, repo);
-  }
-
-  const prCount = await db
-    .prepare("SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?")
-    .bind(orgId)
-    .first();
-
-  const issueCount = await db
-    .prepare("SELECT COUNT(*) as count FROM issues WHERE org_id = ?")
-    .bind(orgId)
-    .first();
-
-  const memberCount = await db
-    .prepare("SELECT COUNT(*) as count FROM members WHERE org_id = ?")
-    .bind(orgId)
-    .first();
-
-  return {
-    repos: repoNames.length,
-    prs: prCount?.count ?? 0,
-    issues: issueCount?.count ?? 0,
-    members: memberCount?.count ?? 0,
-  };
-}

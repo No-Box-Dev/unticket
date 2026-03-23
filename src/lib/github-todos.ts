@@ -265,6 +265,7 @@ export async function fetchTodosClosedInRange(
   const issues = await ok.paginate(ok.rest.issues.listForRepo, {
     owner: org,
     repo: REPO,
+    labels: TODO_LABEL,
     state: "closed",
     since: startDate,
     per_page: 100,

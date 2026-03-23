@@ -11,7 +11,7 @@ export async function onRequestGet(context) {
   const since = url.searchParams.get("since");
   const repo = url.searchParams.get("repo");
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
-  const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get("page_size") || "5000", 10) || 5000));
+  const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "100", 10) || 100));
 
   let query = "SELECT * FROM pull_requests WHERE org_id = ?";
   const bindings = [orgId];
@@ -36,9 +36,28 @@ export async function onRequestGet(context) {
     bindings.push(repo);
   }
 
-  // Batch count + data queries
-  const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as count");
-  const countStmt = context.env.DB.prepare(countQuery).bind(...bindings);
+  // Build separate count query from the same WHERE conditions
+  let countQuery = "SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?";
+  const countBindings = [orgId];
+
+  if (state && state !== "all") {
+    countQuery += " AND state = ?";
+    countBindings.push(state);
+  }
+  if (author) {
+    countQuery += " AND author = ?";
+    countBindings.push(author);
+  }
+  if (since) {
+    countQuery += " AND updated_at >= ?";
+    countBindings.push(since);
+  }
+  if (repo) {
+    countQuery += " AND repo = ?";
+    countBindings.push(repo);
+  }
+
+  const countStmt = context.env.DB.prepare(countQuery).bind(...countBindings);
 
   query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
   const dataStmt = context.env.DB.prepare(query).bind(...bindings, pageSize, (page - 1) * pageSize);

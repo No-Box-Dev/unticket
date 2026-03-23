@@ -198,7 +198,7 @@ export async function pushClaudeMdToRepos(
         repo,
         path: FILE_PATH,
         message: "Update CLAUDE.md with unticket.ai agent rules",
-        content: btoa(unescape(encodeURIComponent(newContent))),
+        content: btoa(String.fromCodePoint(...new TextEncoder().encode(newContent))),
         ...(sha ? { sha } : {}),
       });
 

@@ -266,7 +266,7 @@ export function usePRsForFeature(featureId: number) {
   const { data: prLinks } = useLinkedPRs(featureId);
 
   return useQuery({
-    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks?.length ?? 0],
+    queryKey: ["prsForFeature", selectedOrg, featureId],
     queryFn: async () => {
       const all = await fetchAllPRs();
       // Branch-detected PRs

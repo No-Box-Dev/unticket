@@ -38,6 +38,21 @@ function isRateLimitError(err: unknown): boolean {
   return false;
 }
 
+/** Exchange a one-time auth code for a GitHub access token. */
+async function exchangeAuthCode(code: string): Promise<string> {
+  const res = await fetch("/api/auth/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Exchange failed" }));
+    throw new Error((body as { error?: string }).error ?? "Token exchange failed");
+  }
+  const data = await res.json();
+  return data.token;
+}
+
 /** Race fetchUser against a timeout so the app never hangs on a bad token. */
 function fetchUserWithTimeout(): Promise<User> {
   return Promise.race([
@@ -71,32 +86,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("gp:force-logout", handler);
   }, []);
 
+  // Cross-tab logout: react when another tab removes gp_token from localStorage
   useEffect(() => {
-    // Check for OAuth callback token in URL fragment (never sent to servers)
-    const fragment = window.location.hash.replace(/^#/, "");
-    const params = new URLSearchParams(fragment);
-    const callbackToken = params.get("token");
-    if (callbackToken) {
-      // Verify CSRF state before accepting the token
-      const returnedState = params.get("state") || "";
-      const savedState = sessionStorage.getItem("gp_oauth_state") || "";
-      sessionStorage.removeItem("gp_oauth_state");
-      if (!savedState || returnedState !== savedState) {
-        setAuthError("OAuth state mismatch — possible CSRF attack. Please try logging in again.");
-        setIsLoading(false);
-        window.history.replaceState({}, "", window.location.pathname);
-        return;
+    const handler = (e: StorageEvent) => {
+      if (e.key === "gp_token" && e.newValue === null && user) {
+        resetOctokit();
+        setUser(null);
+        setSelectedOrg(null);
       }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, [user]);
+
+  useEffect(() => {
+    // Check for OAuth callback exchange code in URL query params
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get("auth_code");
+    if (authCode) {
       window.history.replaceState({}, "", window.location.pathname);
-      localStorage.setItem("gp_token", callbackToken);
-      resetOctokit();
-      fetchUserWithTimeout()
+      // Exchange the one-time code for a token via server endpoint
+      exchangeAuthCode(authCode)
+        .then((token) => {
+          localStorage.setItem("gp_token", token);
+          resetOctokit();
+          return fetchUserWithTimeout();
+        })
         .then(setUser)
         .catch((err) => {
           if (isRateLimitError(err)) {
             setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
           } else {
-            broadcastError(err instanceof Error ? err.message : "Authentication failed");
+            const msg = err instanceof Error ? err.message : "Authentication failed";
+            setAuthError(msg);
+            broadcastError(msg);
             localStorage.removeItem("gp_token");
             resetOctokit();
           }
@@ -105,16 +128,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Dev mode: auto-inject token and org from env vars (always override)
-    const devToken = import.meta.env.VITE_DEV_TOKEN;
-    if (devToken) {
-      localStorage.setItem("gp_token", devToken);
-      resetOctokit();
+    // Legacy: handle old URL fragment format (token in hash) for in-flight OAuth flows
+    const fragment = window.location.hash.replace(/^#/, "");
+    if (fragment.includes("token=")) {
+      // Clear the fragment immediately — do not use the token from URL
+      window.history.replaceState({}, "", window.location.pathname);
+      setAuthError("Login flow has changed. Please log in again.");
+      setIsLoading(false);
+      return;
     }
-    const devOrg = import.meta.env.VITE_DEV_ORG;
-    if (devOrg) {
-      localStorage.setItem("gp_org", devOrg);
-      setSelectedOrg(devOrg);
+
+    // Dev mode: auto-inject token and org from env vars (only in dev builds)
+    if (import.meta.env.DEV) {
+      const devToken = import.meta.env.VITE_DEV_TOKEN;
+      if (devToken) {
+        localStorage.setItem("gp_token", devToken);
+        resetOctokit();
+      }
+      const devOrg = import.meta.env.VITE_DEV_ORG;
+      if (devOrg) {
+        localStorage.setItem("gp_org", devOrg);
+        setSelectedOrg(devOrg);
+      }
     }
 
     // Check for existing stored token (also migrate from old dashboard)
@@ -142,10 +177,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithToken = async (token: string) => {
-    localStorage.setItem("gp_token", token);
-    resetOctokit();
-    const userData = await fetchUserWithTimeout();
-    setUser(userData);
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      localStorage.setItem("gp_token", token);
+      resetOctokit();
+      const userData = await fetchUserWithTimeout();
+      setUser(userData);
+    } catch (err) {
+      localStorage.removeItem("gp_token");
+      resetOctokit();
+      const msg = err instanceof Error ? err.message : "Authentication failed";
+      setAuthError(msg);
+      broadcastError(msg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const loginWithOAuth = () => {
