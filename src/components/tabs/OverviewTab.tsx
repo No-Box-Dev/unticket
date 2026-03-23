@@ -7,6 +7,7 @@ import {
   computeMetricDaily,
   extractMergedDates,
   extractClosedDates,
+  extractReviewedDates,
   computeCycleTime,
   computeContributorActivity,
   computeAlerts,
@@ -206,6 +207,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const metrics = useMemo(() => {
     if (!mergedPRs || !closedIssues) return null;
     const prsMerged = compute(extractMergedDates(mergedPRs as any));
+    const prsReviewed = compute(extractReviewedDates(mergedPRs as any));
     const issuesSolved = compute(extractClosedDates(closedIssues));
     const productionFeatures = (features ?? []).filter((f) => f.status === "production");
     const productionDates = productionFeatures.flatMap((f) =>
@@ -215,7 +217,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       productionDates.length > 0
         ? compute(productionDates)
         : { current: productionFeatures.length, previous: 0, change: 0, history: [] };
-    return { prsMerged, issuesSolved, featuresShipped };
+    return { prsMerged, prsReviewed, issuesSolved, featuresShipped };
   }, [mergedPRs, closedIssues, features, weeks]);
 
   // Cycle time
@@ -285,7 +287,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       ? (() => {
           const activityMap = new Map(all.map((c) => [c.login, c]));
           return orgMembers.map((m: any) =>
-            activityMap.get(m.login) ?? { login: m.login, prsMerged: 0, issuesClosed: 0, pointsDone: 0 },
+            activityMap.get(m.login) ?? { login: m.login, prsMerged: 0, prsReviewed: 0, issuesClosed: 0, pointsDone: 0 },
           );
         })()
       : all;
@@ -543,15 +545,16 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <MetricCard title="PR Throughput" metric={metrics.prsMerged} color="#3b82f6" daily={isDaily} onClick={() => nav("prs")} />
+          <MetricCard title="PRs Reviewed" metric={metrics.prsReviewed} color="#8b5cf6" daily={isDaily} onClick={() => nav("prs")} />
           {cycleTime && (
             <button onClick={() => nav("prs")} className={card + " text-left cursor-pointer hover:border-stone-300 dark:hover:border-white/[0.12] transition-colors"}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider">PR Cycle Time</span>
-                <span className="text-2xl font-bold font-display" style={{ color: "#8b5cf6" }}>{formatCycleTime(cycleTime.median)}</span>
+                <span className="text-2xl font-bold font-display" style={{ color: "#f59e0b" }}>{formatCycleTime(cycleTime.median)}</span>
               </div>
-              {cycleTime.history.length > 0 && <BarChart data={cycleTime.history} color="#8b5cf6" daily={isDaily} />}
+              {cycleTime.history.length > 0 && <BarChart data={cycleTime.history} color="#f59e0b" daily={isDaily} />}
             </button>
           )}
           <MetricCard title="Issues Resolved" metric={metrics.issuesSolved} color="#10b981" daily={isDaily} onClick={() => nav("issues")} />
@@ -616,6 +619,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
                 <tr className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider">
                   <th className="text-left pb-2 font-semibold">Person</th>
                   <th className="text-right pb-2 font-semibold">PRs</th>
+                  <th className="text-right pb-2 font-semibold">Reviewed</th>
                   <th className="text-right pb-2 font-semibold">Issues</th>
                   <th onClick={() => nav("sprint", { view: "roles" })} className="text-right pb-2 font-semibold cursor-pointer hover:text-brand transition-colors">Roles Completed</th>
                   <th onClick={() => nav("sprint", { view: "tasks" })} className="text-right pb-2 font-semibold cursor-pointer hover:text-brand transition-colors">Tasks Completed</th>
@@ -642,6 +646,10 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
                         onClick={() => nav("prs", { person: c.login })}
                         className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
                       >{c.prsMerged}</td>
+                      <td
+                        onClick={() => nav("prs", { person: c.login })}
+                        className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
+                      >{c.prsReviewed}</td>
                       <td
                         onClick={() => nav("issues", { person: c.login })}
                         className={cn("py-1.5 text-right text-stone-600 dark:text-neutral-400", cellHover)}
