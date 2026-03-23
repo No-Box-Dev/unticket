@@ -63,15 +63,23 @@ export async function onRequestGet(context) {
   const encryptionKey = context.env.ENCRYPTION_KEY;
   const encryptedToken = await encryptToken(data.access_token, encryptionKey);
 
-  // Clean up expired pending tokens (older than 5 minutes)
-  await context.env.DB.prepare(
-    "DELETE FROM pending_tokens WHERE created_at < datetime('now', '-5 minutes')"
-  ).run();
+  try {
+    // Clean up expired pending tokens (older than 5 minutes)
+    await context.env.DB.prepare(
+      "DELETE FROM pending_tokens WHERE created_at < datetime('now', '-5 minutes')"
+    ).run();
 
-  // Store the encrypted token with the exchange code
-  await context.env.DB.prepare(
-    "INSERT INTO pending_tokens (code, encrypted_token, csrf_state, created_at) VALUES (?, ?, ?, datetime('now'))"
-  ).bind(exchangeCode, encryptedToken, stateParam).run();
+    // Store the encrypted token with the exchange code
+    await context.env.DB.prepare(
+      "INSERT INTO pending_tokens (code, encrypted_token, csrf_state, created_at) VALUES (?, ?, ?, datetime('now'))"
+    ).bind(exchangeCode, encryptedToken, stateParam).run();
+  } catch (e) {
+    console.error("[gitpulse] Failed to store exchange code in D1:", e);
+    return new Response(JSON.stringify({ error: "Authentication service temporarily unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // Redirect back with only the exchange code (token never appears in URL)
   const origin = url.origin;

@@ -171,7 +171,12 @@ export async function onRequest(context) {
       orgRow = await context.env.DB.prepare(
         "SELECT id FROM orgs WHERE github_login = ?"
       ).bind(orgLogin).first();
-      if (!orgRow) throw e;
+      if (!orgRow) {
+        return new Response(JSON.stringify({ error: "Failed to resolve organization" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
   }
 
