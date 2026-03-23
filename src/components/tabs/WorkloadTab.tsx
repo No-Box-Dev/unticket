@@ -294,11 +294,11 @@ export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) 
                 </div>
               </button>
 
-              {/* Task progress bar */}
-              {eng.totalTasks > 0 && (
+              {/* Points progress bar */}
+              {eng.totalPoints > 0 && (
                 <div className="px-4 pb-3">
                   <div className="h-1.5 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${(eng.doneTasks / eng.totalTasks) * 100}%` }} />
+                    <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${(eng.donePoints / eng.totalPoints) * 100}%` }} />
                   </div>
                 </div>
               )}
