@@ -161,10 +161,18 @@ export async function onRequest(context) {
   ).bind(orgLogin).first();
 
   if (!orgRow) {
-    const result = await context.env.DB.prepare(
-      "INSERT INTO orgs (github_login) VALUES (?) RETURNING id"
-    ).bind(orgLogin).first();
-    orgRow = result;
+    try {
+      const result = await context.env.DB.prepare(
+        "INSERT INTO orgs (github_login) VALUES (?) RETURNING id"
+      ).bind(orgLogin).first();
+      orgRow = result;
+    } catch (e) {
+      // Race condition: another request may have inserted the org concurrently
+      orgRow = await context.env.DB.prepare(
+        "SELECT id FROM orgs WHERE github_login = ?"
+      ).bind(orgLogin).first();
+      if (!orgRow) throw e;
+    }
   }
 
   // Upsert session (encrypt token before storing in D1)
@@ -177,6 +185,15 @@ export async function onRequest(context) {
        encrypted_token = excluded.encrypted_token,
        updated_at = datetime('now')`
   ).bind(orgRow.id, userLogin, encryptedToken).run();
+
+  // Probabilistic session cleanup: ~1% of requests, delete sessions older than 30 days
+  if (Math.random() < 0.01) {
+    context.waitUntil(
+      context.env.DB.prepare(
+        "DELETE FROM sessions WHERE updated_at < datetime('now', '-30 days')"
+      ).run().catch(() => {})
+    );
+  }
 
   // Set context data for downstream handlers (plaintext token for API calls)
   context.data.orgId = orgRow.id;

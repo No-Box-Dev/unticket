@@ -318,12 +318,20 @@ function MyTodosView({
     deleteTodoMut.mutate(id);
   }
 
-  function clearDone() {
+  async function clearDone() {
     const doneTodos = allTodos.filter((t) => t.status === "done");
     if (doneTodos.length === 0) return;
     if (!window.confirm(`Delete ${doneTodos.length} completed todo${doneTodos.length === 1 ? "" : "s"}?`)) return;
+    const failed: number[] = [];
     for (const t of doneTodos) {
-      deleteTodoMut.mutate(t.id);
+      try {
+        await deleteTodoMut.mutateAsync(t.id);
+      } catch {
+        failed.push(t.id);
+      }
+    }
+    if (failed.length > 0) {
+      console.error(`[gitpulse] Failed to delete ${failed.length} todo(s):`, failed);
     }
   }
 

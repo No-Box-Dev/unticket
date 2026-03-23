@@ -49,6 +49,7 @@ export function shouldNotRetry(error: unknown): boolean {
 function forceLogout() {
   localStorage.removeItem("gp_token");
   localStorage.removeItem("n1_github_token");
+  localStorage.removeItem("gp_org");
   // Dispatch event so AuthProvider can react without circular imports
   window.dispatchEvent(new CustomEvent("gp:force-logout"));
 }

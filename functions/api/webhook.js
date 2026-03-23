@@ -135,11 +135,29 @@ export async function onRequestPost(context) {
     }
 
     // PR comments: detect feature links like "Part of gitpulse#42"
-    if (event === "issue_comment" && payload.issue?.pull_request && action === "created") {
+    if (event === "issue_comment" && payload.issue?.pull_request) {
       const repo = payload.repository?.name;
       const prNumber = payload.issue.number;
+
+      if (action === "deleted") {
+        // Clean up any links that were created from this comment's source
+        if (repo) {
+          await db.prepare(
+            "DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ? AND pr_number = ? AND source = 'comment'"
+          ).bind(orgId, repo, prNumber).run();
+        }
+        return jsonResponse({ ok: true, event: "pr_comment", action, cleaned: true });
+      }
+
+      // For created or edited comments, re-sync links
       const commentBody = payload.comment?.body;
       if (repo && commentBody) {
+        if (action === "edited") {
+          // Remove old comment-sourced links for this PR, then re-add
+          await db.prepare(
+            "DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ? AND pr_number = ? AND source = 'comment'"
+          ).bind(orgId, repo, prNumber).run();
+        }
         const featureNums = parseFeaturesFromBody(commentBody);
         if (featureNums.length > 0) {
           const linkStmt = db.prepare(
@@ -155,6 +173,9 @@ export async function onRequestPost(context) {
 
     if (event === "member") {
       const member = payload.member;
+      if (!member?.login) {
+        return jsonResponse({ ok: true, skipped: "no member in payload" });
+      }
       if (action === "removed") {
         await removeMember(db, orgId, member.login);
       } else {

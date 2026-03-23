@@ -2,11 +2,13 @@ import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
 
 // Paginated GitHub API fetcher
+const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
+
 async function fetchAllPages(token, url, params = {}) {
   const all = [];
   let page = 1;
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const searchParams = new URLSearchParams({
       ...params,
       per_page: "100",

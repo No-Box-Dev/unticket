@@ -653,8 +653,8 @@ export function useTodos() {
   const { selectedOrg, user } = useAuth();
   return useQuery({
     queryKey: ["todos", selectedOrg, user?.login],
-    queryFn: () => ghFetchTodosByOwner(selectedOrg!, user!.login),
-    enabled: !!selectedOrg && !!user?.login,
+    queryFn: () => ghFetchTodosByOwner(selectedOrg!, user!.login!),
+    enabled: !!selectedOrg && !!user?.login && user.login.length > 0,
     staleTime: 2 * 60 * 1000,
   });
 }

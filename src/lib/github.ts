@@ -150,6 +150,11 @@ export async function triggerSync() {
     iterations++;
   }
 
+  if (iterations >= maxIterations && cursor) {
+    console.error(`[gitpulse] Sync exceeded max iterations (${maxIterations}). Some repos may not be synced.`);
+    throw new Error(`Sync incomplete: exceeded maximum iterations (${maxIterations})`);
+  }
+
   return { ok: true, synced: { repos: init.repos ?? 0, prs: 0, issues: 0, members: 0 } };
 }
 

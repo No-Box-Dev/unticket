@@ -132,17 +132,19 @@ describe("useAuth", () => {
     expect(screen.getByTestId("user").textContent).toBe("none");
   });
 
-  it("OAuth callback: extracts token from URL, stores, fetches user", async () => {
-    // Set up CSRF state so the callback passes verification
-    const state = "test-state-123";
-    sessionStorage.setItem("gp_oauth_state", state);
+  it("OAuth callback: exchanges auth code for token, stores, fetches user", async () => {
+    // Mock the exchange endpoint
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: "exchanged-tok-123" }),
+    }));
     Object.defineProperty(window, "location", {
       value: {
         origin: "http://localhost",
         pathname: "/",
-        search: "",
-        hash: `#token=oauth-tok-123&state=${state}`,
-        href: `http://localhost/#token=oauth-tok-123&state=${state}`,
+        search: "?auth_code=test-exchange-code",
+        hash: "",
+        href: "http://localhost/?auth_code=test-exchange-code",
       },
       writable: true,
       configurable: true,
@@ -156,7 +158,7 @@ describe("useAuth", () => {
     await waitFor(() => {
       expect(screen.getByTestId("user").textContent).toBe("oauth-user");
     });
-    expect(storage.gp_token).toBe("oauth-tok-123");
+    expect(storage.gp_token).toBe("exchanged-tok-123");
     expect(window.history.replaceState).toHaveBeenCalled();
   });
 
