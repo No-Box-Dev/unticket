@@ -1,10 +1,9 @@
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
+import { FEATURE_STATUS_ORDER } from "@/lib/types";
 import type { Feature, FeatureStatus } from "@/lib/types";
 import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
-
-const STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
 
 interface FeatureCardProps {
   feature: Feature;
@@ -42,11 +41,11 @@ export function FeatureCard({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!draggable || mode === "backlog") return;
-    const idx = STATUS_ORDER.indexOf(feature.status);
+    const idx = FEATURE_STATUS_ORDER.indexOf(feature.status);
     if (idx === -1) return;
     let targetStatus: FeatureStatus | null = null;
-    if (e.key === "ArrowRight" && idx < STATUS_ORDER.length - 1) targetStatus = STATUS_ORDER[idx + 1];
-    if (e.key === "ArrowLeft" && idx > 0) targetStatus = STATUS_ORDER[idx - 1];
+    if (e.key === "ArrowRight" && idx < FEATURE_STATUS_ORDER.length - 1) targetStatus = FEATURE_STATUS_ORDER[idx + 1];
+    if (e.key === "ArrowLeft" && idx > 0) targetStatus = FEATURE_STATUS_ORDER[idx - 1];
     if (targetStatus) {
       e.preventDefault();
       onUpdate(withStatusTransition(feature, targetStatus));
