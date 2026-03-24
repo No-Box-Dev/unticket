@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
@@ -63,6 +64,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const advanceSprintMut = useAdvanceSprint();
   const revertSprintMut = useRevertSprint();
   const { data: snapshots } = useSprintSnapshots();
+  const { confirm, dialogProps } = useConfirm();
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const saveSprintMut = useSaveSprint();
   const syncFeaturesMut = useSyncFeatures();
@@ -245,7 +247,10 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     if (detailFeature?.id === updated.id) setDetailFeature(updated);
   };
 
-  const deleteFeature = (id: number) => { deleteFeatureMut.mutate(id); };
+  const deleteFeature = async (id: number) => {
+    const ok = await confirm({ title: "Remove this feature?", message: "It will be downgraded to a regular issue.", variant: "danger", confirmLabel: "Remove" });
+    if (ok) deleteFeatureMut.mutate(id);
+  };
 
   const addFeature = (title: string) => {
     createFeatureMut.mutate({ title, status: "plan", sprint: sprint?.number ?? null });
@@ -378,8 +383,9 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           )}
           {isAdmin && isViewingFutureSprint && viewingFutureSprint && (
             <button
-              onClick={() => {
-                if (!window.confirm(`Set Sprint ${viewingFutureSprint} as the current sprint?`)) return;
+              onClick={async () => {
+                const ok = await confirm({ title: `Set Sprint ${viewingFutureSprint} as the current sprint?`, confirmLabel: "Set sprint" });
+                if (!ok) return;
                 const currentEnd = new Date(sprint.endDate);
                 const durationMs = new Date(sprint.endDate).getTime() - new Date(sprint.startDate).getTime();
                 const start = new Date(currentEnd.getTime() + 86400000);
@@ -460,13 +466,12 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           snapshot={activeSnapshot}
           isAdmin={isAdmin}
           isLatestSnapshot={activeSnapshot.sprintNumber === (sprint.number - 1)}
-          onRevert={() => {
-            if (window.confirm(`Revert to Sprint ${activeSnapshot.sprintNumber}? This will restore the sprint config and reopen its milestone.`)) {
-              revertSprintMut.mutate(
+          onRevert={async () => {
+            const ok = await confirm({ title: `Revert to Sprint ${activeSnapshot.sprintNumber}?`, message: "This will restore the sprint config and reopen its milestone.", variant: "danger", confirmLabel: "Revert" });
+            if (ok) revertSprintMut.mutate(
                 { snapshot: activeSnapshot },
                 { onSuccess: () => setViewingSprint(null) },
               );
-            }
           }}
           isReverting={revertSprintMut.isPending}
         />
@@ -648,6 +653,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           }}
         />
       )}
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }
@@ -724,6 +730,8 @@ function FeaturesView({
             const items = sortedColumns.plan;
             return (
               <div
+                role="list"
+                aria-label={`${planCol.label} column`}
                 onDragOver={(e) => onDragOver(e, planCol.status)}
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, planCol.status)}
@@ -771,6 +779,8 @@ function FeaturesView({
             return (
               <div
                 key={col.status}
+                role="list"
+                aria-label={`${col.label} column`}
                 onDragOver={(e) => onDragOver(e, col.status)}
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, col.status)}

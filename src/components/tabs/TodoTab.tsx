@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
 import { useIsAdmin } from "@/hooks/useGitHub";
@@ -287,6 +288,7 @@ function MyTodosView({
   onOpenDetail: (t: Todo) => void;
 }) {
   const { user } = useAuth();
+  const { confirm, dialogProps } = useConfirm();
   const [input, setInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<BoardStatus | null>(null);
@@ -313,15 +315,17 @@ function MyTodosView({
     setSelectedFeatureId(null);
   }
 
-  function handleDeleteTodo(id: number) {
-    if (!window.confirm("Delete this todo?")) return;
+  async function handleDeleteTodo(id: number) {
+    const ok = await confirm({ title: "Delete this todo?", variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     deleteTodoMut.mutate(id);
   }
 
   async function clearDone() {
     const doneTodos = allTodos.filter((t) => t.status === "done");
     if (doneTodos.length === 0) return;
-    if (!window.confirm(`Delete ${doneTodos.length} completed todo${doneTodos.length === 1 ? "" : "s"}?`)) return;
+    const ok = await confirm({ title: `Delete ${doneTodos.length} completed todo${doneTodos.length === 1 ? "" : "s"}?`, variant: "danger", confirmLabel: "Delete all" });
+    if (!ok) return;
     const failed: number[] = [];
     for (const t of doneTodos) {
       try {
@@ -470,6 +474,7 @@ function MyTodosView({
           );
         })}
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

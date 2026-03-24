@@ -79,6 +79,9 @@ export interface Todo {
 
 export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
 
+/** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only). */
+export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
+
 // Sprint points
 export type Points = 1 | 2 | 3 | 5 | 8 | 13;
 export const VALID_POINTS: Points[] = [1, 2, 3, 5, 8, 13];
