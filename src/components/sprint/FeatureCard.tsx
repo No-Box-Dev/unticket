@@ -1,7 +1,8 @@
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature } from "@/lib/types";
+import { FEATURE_STATUS_ORDER } from "@/lib/types";
+import type { Feature, FeatureStatus } from "@/lib/types";
 import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
@@ -38,10 +39,27 @@ export function FeatureCard({
   };
   const dotColor = STATUS_COLORS[feature.status] ?? "bg-stone-300";
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!draggable || mode === "backlog") return;
+    const idx = FEATURE_STATUS_ORDER.indexOf(feature.status);
+    if (idx === -1) return;
+    let targetStatus: FeatureStatus | null = null;
+    if (e.key === "ArrowRight" && idx < FEATURE_STATUS_ORDER.length - 1) targetStatus = FEATURE_STATUS_ORDER[idx + 1];
+    if (e.key === "ArrowLeft" && idx > 0) targetStatus = FEATURE_STATUS_ORDER[idx - 1];
+    if (targetStatus) {
+      e.preventDefault();
+      onUpdate(withStatusTransition(feature, targetStatus));
+    }
+  };
+
   return (
     <div
       draggable={draggable}
       onDragStart={(e) => onDragStart?.(e, feature)}
+      onKeyDown={handleKeyDown}
+      role="listitem"
+      aria-label={`${feature.title}, status: ${feature.status}`}
+      tabIndex={draggable ? 0 : undefined}
       className={cn(
         "group bg-white dark:bg-dark-raised rounded-lg border border-stone-200 dark:border-white/[0.06] p-3 shadow-sm hover:shadow-md transition-shadow",
         draggable && "cursor-grab active:cursor-grabbing",
@@ -92,7 +110,7 @@ export function FeatureCard({
           )}
           {isAdmin && (
             <button
-              onClick={stop(() => { if (window.confirm("Remove this feature? It will be downgraded to a regular issue.")) onDelete(feature.id); })}
+              onClick={stop(() => onDelete(feature.id))}
               className="p-1 text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Remove"
             >
