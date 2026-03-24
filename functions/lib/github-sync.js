@@ -321,8 +321,11 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     params
   );
 
-  // Every issue on the gitpulse repo is a feature (filter out PRs only)
-  const features = issues.filter((i) => !i.pull_request);
+  // Only sync issues with the "feature" label (filter out PRs, todos, roles, tasks)
+  const features = issues.filter((i) =>
+    !i.pull_request &&
+    (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
+  );
 
   console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
@@ -385,6 +388,31 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
   if (features.length > 0 || !since) {
     await setSyncState(db, orgId, "features");
   }
+  // Clean up non-feature issues that were previously synced into the features table
+  // (before the label filter was added). Only run on full syncs.
+  if (!since && features.length > 0) {
+    const featureNumbers = features.map((f) => f.number);
+    // Delete any features in D1 for this org that aren't in the current feature set
+    const existing = await db
+      .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
+      .bind(orgId)
+      .all();
+    const toDelete = existing.results
+      .filter((r) => !featureNumbers.includes(r.number))
+      .map((r) => r.number);
+    if (toDelete.length > 0) {
+      console.log(`[unticket.ai] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
+      for (let i = 0; i < toDelete.length; i += 50) {
+        const batch = toDelete.slice(i, i + 50);
+        await db.batch(
+          batch.map((num) =>
+            db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, num)
+          )
+        );
+      }
+    }
+  }
+
   return { synced: features.length, total: issues.length };
 }
 
@@ -521,9 +549,14 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
 }
 
 export async function upsertFeature(db, orgId, issue) {
+  // Only upsert if the issue has the "feature" label
+  const labels = (issue.labels ?? []).map((l) => (typeof l === "string" ? l : l.name));
+  if (!labels.includes("feature")) {
+    // Not a feature — remove from features table if it was previously tracked
+    await db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, issue.number).run();
+    return;
+  }
 
-  // If the issue is closed and not a feature deletion, skip
-  // (deleteFeature closes the issue)
   await db
     .prepare(
       `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
