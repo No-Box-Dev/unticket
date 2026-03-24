@@ -196,7 +196,7 @@ export async function onRequest(context) {
     context.waitUntil(
       context.env.DB.prepare(
         "DELETE FROM sessions WHERE updated_at < datetime('now', '-30 days')"
-      ).run().catch(() => {})
+      ).run().catch((err) => console.error("[gitpulse] Session cleanup failed:", err))
     );
   }
 

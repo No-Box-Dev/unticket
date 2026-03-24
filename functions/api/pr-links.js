@@ -27,7 +27,11 @@ export async function onRequestGet(context) {
 // POST /api/pr-links — link a PR to a feature (D1 first, then GitHub metadata)
 export async function onRequestPost(context) {
   const { orgId, token, orgLogin } = getCtx(context);
-  const { feature_number, pr_repo, pr_number } = await context.request.json();
+  let body;
+  try { body = await context.request.json(); } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+  const { feature_number, pr_repo, pr_number } = body;
 
   if (!feature_number || !pr_repo || !pr_number) {
     return errorResponse("feature_number, pr_repo, pr_number required", 400);
@@ -86,6 +90,9 @@ export async function onRequestDelete(context) {
 
   const featureNumber = parseInt(feature, 10);
   const prNum = parseInt(prNumber, 10);
+  if (!Number.isFinite(featureNumber) || !Number.isFinite(prNum)) {
+    return errorResponse("feature and pr_number must be valid integers", 400);
+  }
 
   // 1. Read feature issue body from GitHub
   const issue = await readFeatureIssue(token, orgLogin, featureNumber);
