@@ -291,8 +291,11 @@ export function computeContributorActivity(
 
   for (const task of tasks) {
     if (task.state !== "closed") continue;
+    const points = task.points ?? 0;
+    // Split points across assignees to avoid double-counting
+    const share = task.assignees.length > 0 ? points / task.assignees.length : 0;
     for (const a of task.assignees) {
-      ensure(a).pointsDone += task.points ?? 0;
+      ensure(a).pointsDone += share;
     }
   }
 

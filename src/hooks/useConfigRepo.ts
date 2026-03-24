@@ -476,14 +476,14 @@ export function useCreateRole() {
         ...(old ?? []),
         { role: optimisticRole, tasks: [], totalPoints: 0, donePoints: 0 },
       ]);
-      return { previous, key };
+      return { previous, key, tempId: id };
     },
-    onSuccess: (realRole, vars) => {
-      // Replace the optimistic placeholder with the real role from GitHub
-      const key = ["rolesWithTasks", selectedOrg, vars.featureId];
-      qc.setQueryData<RoleWithTasks[]>(key, (old) =>
+    onSuccess: (realRole, _vars, context) => {
+      // Replace the optimistic placeholder with the real role from GitHub (match by temp ID, not title)
+      if (!context) return;
+      qc.setQueryData<RoleWithTasks[]>(context.key, (old) =>
         (old ?? []).map((r) =>
-          r.role.id < 0 && r.role.title === vars.title
+          r.role.id === context.tempId
             ? { ...r, role: realRole }
             : r,
         ),
@@ -550,10 +550,11 @@ export function useCreateTask() {
           };
         }),
       );
-      return { previous, key };
+      return { previous, key, tempTaskId: taskId };
     },
-    onSuccess: (realTask, vars) => {
-      // Replace the optimistic placeholder with the real task
+    onSuccess: (realTask, vars, context) => {
+      // Replace the optimistic placeholder with the real task (match by temp ID, not title)
+      if (!context) return;
       const key = ["rolesWithTasks", selectedOrg, vars.featureId];
       qc.setQueryData<RoleWithTasks[]>(key, (old) =>
         (old ?? []).map((r) => {
@@ -561,7 +562,7 @@ export function useCreateTask() {
           return {
             ...r,
             tasks: r.tasks.map((t) =>
-              t.id < 0 && t.title === vars.title ? realTask : t,
+              t.id === context.tempTaskId ? realTask : t,
             ),
           };
         }),

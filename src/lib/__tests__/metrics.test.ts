@@ -430,6 +430,17 @@ describe("computeContributorActivity", () => {
     expect(bob.pointsDone).toBe(0);
   });
 
+  it("splits points across multiple assignees", () => {
+    const tasks = [
+      { assignees: ["alice", "bob"], state: "closed", points: 10 },
+    ];
+    const result = computeContributorActivity([], [], tasks, "2026-02-09", "2026-02-23");
+    const alice = result.find((r) => r.login === "alice")!;
+    const bob = result.find((r) => r.login === "bob")!;
+    expect(alice.pointsDone).toBe(5);
+    expect(bob.pointsDone).toBe(5);
+  });
+
   it("returns empty for no data", () => {
     expect(computeContributorActivity([], [], [], "2026-02-09", "2026-02-23")).toEqual([]);
   });
