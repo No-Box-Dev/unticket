@@ -73,5 +73,5 @@ export async function onRequestGet(context) {
     labels: JSON.parse(row.labels_json || "[]"),
   }));
 
-  return jsonResponse(results);
+  return jsonResponse({ data: results, totalCount, page, pageSize });
 }
