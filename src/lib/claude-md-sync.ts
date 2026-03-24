@@ -1,5 +1,12 @@
 import { getOctokit } from "./github";
 
+function encodeBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
 const START_MARKER = "<!-- gitpulse:start -->";
 const END_MARKER = "<!-- gitpulse:end -->";
 const FILE_PATH = "CLAUDE.md";
@@ -198,7 +205,7 @@ export async function pushClaudeMdToRepos(
         repo,
         path: FILE_PATH,
         message: "Update CLAUDE.md with unticket.ai agent rules",
-        content: btoa(String.fromCodePoint(...new TextEncoder().encode(newContent))),
+        content: encodeBase64Utf8(newContent),
         ...(sha ? { sha } : {}),
       });
 

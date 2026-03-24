@@ -219,7 +219,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
             try {
               events = await eventsRes.json();
             } catch {
-              console.error(`[unticket.ai] Failed to parse events JSON for issue #${issue.number}`);
+              console.error(`[gitpulse] Failed to parse events JSON for issue #${issue.number}`);
               return { number: issue.number, login: null };
             }
             const closedEvent = events.filter((e) => e.event === "closed").pop();
@@ -327,10 +327,10 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
   );
 
-  console.log(`[unticket.ai] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
+  console.log(`[gitpulse] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
   if (features.length === 0 && issues.length > 0) {
-    console.warn(`[unticket.ai] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
+    console.warn(`[gitpulse] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
   }
 
   const stmt = db.prepare(
@@ -401,7 +401,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
       .filter((r) => !featureNumbers.includes(r.number))
       .map((r) => r.number);
     if (toDelete.length > 0) {
-      console.log(`[unticket.ai] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
+      console.log(`[gitpulse] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
       for (let i = 0; i < toDelete.length; i += 50) {
         const batch = toDelete.slice(i, i + 50);
         await db.batch(
@@ -495,7 +495,7 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) 
     const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
     await syncPRs(db, token, orgId, orgLogin, repo, prSince);
   } catch (err) {
-    console.error(`[unticket.ai] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
+    console.error(`[gitpulse] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
     throw err;
   }
 
@@ -503,7 +503,7 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) 
     const issueSince = force ? null : (await getSyncState(db, orgId, `issues:${repo}`))?.lastSynced;
     await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
   } catch (err) {
-    console.error(`[unticket.ai] syncRepo issues failed for ${repo}:`, err?.message ?? err);
+    console.error(`[gitpulse] syncRepo issues failed for ${repo}:`, err?.message ?? err);
     throw err;
   }
 }

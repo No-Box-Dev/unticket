@@ -5,6 +5,9 @@
  * Import a hex-encoded 256-bit key as a CryptoKey for AES-GCM.
  */
 async function importKey(hexKey) {
+  if (!hexKey || typeof hexKey !== "string" || !/^[0-9a-fA-F]{64}$/.test(hexKey)) {
+    throw new Error("ENCRYPTION_KEY must be a 64-character hex string");
+  }
   const keyBytes = new Uint8Array(hexKey.match(/.{2}/g).map((b) => parseInt(b, 16)));
   return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, [
     "encrypt",
@@ -49,11 +52,14 @@ export async function decryptToken(encrypted, key) {
   if (!key) return encrypted;
   if (!encrypted.includes(":")) return encrypted;
 
-  const [ivHex, cipherHex] = encrypted.split(":");
-  const iv = new Uint8Array(ivHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
-  const cipherBytes = new Uint8Array(
-    cipherHex.match(/.{2}/g).map((b) => parseInt(b, 16)),
-  );
+  const parts = encrypted.split(":");
+  if (parts.length !== 2) return encrypted; // Not in expected format, return as-is
+  const [ivHex, cipherHex] = parts;
+  const ivMatch = ivHex.match(/.{2}/g);
+  const cipherMatch = cipherHex.match(/.{2}/g);
+  if (!ivMatch || !cipherMatch) return encrypted; // Malformed, return as-is
+  const iv = new Uint8Array(ivMatch.map((b) => parseInt(b, 16)));
+  const cipherBytes = new Uint8Array(cipherMatch.map((b) => parseInt(b, 16)));
 
   const cryptoKey = await importKey(key);
   const plainBuf = await crypto.subtle.decrypt(
