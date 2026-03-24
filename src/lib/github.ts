@@ -332,19 +332,19 @@ export async function fetchRepos() {
 }
 
 export async function fetchOpenPRs() {
-  const prs = await apiGet<ApiPR[]>("/api/prs?state=open");
+  const prs = await apiGet<ApiPR[]>("/api/prs?state=open&page_size=500");
   return prs.map(transformPR);
 }
 
 export async function fetchMergedPRs(since?: string) {
-  const params = new URLSearchParams({ state: "merged" });
+  const params = new URLSearchParams({ state: "merged", page_size: "500" });
   if (since) params.set("since", since);
   const prs = await apiGet<ApiPR[]>(`/api/prs?${params}`);
   return prs.map(transformPR);
 }
 
 export async function fetchAllPRs(since?: string) {
-  const params = new URLSearchParams({ state: "all" });
+  const params = new URLSearchParams({ state: "all", page_size: "500" });
   if (since) params.set("since", since);
   const prs = await apiGet<ApiPR[]>(`/api/prs?${params}`);
   return prs.map(transformPR);
