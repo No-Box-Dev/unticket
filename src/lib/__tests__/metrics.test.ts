@@ -495,7 +495,7 @@ describe("computeAlerts", () => {
   });
 
   it("detects large PR backlog", () => {
-    const prs = Array.from({ length: 11 }, (_, i) => ({
+    const prs = Array.from({ length: 11 }, () => ({
       created_at: "2026-02-15T10:00:00Z",
       requested_reviewers: [{ login: "a" }],
       draft: false,
