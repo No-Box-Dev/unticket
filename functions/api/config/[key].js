@@ -45,7 +45,10 @@ export async function onRequestPut(context) {
   }
 
   const { orgId } = getCtx(context);
-  const body = await context.request.json();
+  let body;
+  try { body = await context.request.json(); } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
 
   await context.env.DB
     .prepare(

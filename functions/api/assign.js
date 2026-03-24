@@ -3,7 +3,11 @@ import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 // POST /api/assign — update issue assignees on GitHub and in D1
 export async function onRequestPost(context) {
   const { orgId, orgLogin, token } = getCtx(context);
-  const { repo, issue_number, assignees } = await context.request.json();
+  let body;
+  try { body = await context.request.json(); } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+  const { repo, issue_number, assignees } = body;
 
   if (!repo || !issue_number || !Array.isArray(assignees)) {
     return errorResponse("Missing repo, issue_number, or assignees");
