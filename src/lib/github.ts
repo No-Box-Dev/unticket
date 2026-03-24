@@ -331,23 +331,48 @@ export async function fetchRepos() {
   }));
 }
 
-export async function fetchOpenPRs() {
-  const prs = await apiGet<ApiPR[]>("/api/prs?state=open&page_size=500");
-  return prs.map(transformPR);
+interface PaginatedPRResponse {
+  data: ApiPR[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
-export async function fetchMergedPRs(since?: string) {
-  const params = new URLSearchParams({ state: "merged", page_size: "500" });
-  if (since) params.set("since", since);
-  const prs = await apiGet<ApiPR[]>(`/api/prs?${params}`);
-  return prs.map(transformPR);
+async function fetchAllPRPages(baseParams: Record<string, string>) {
+  const PAGE_SIZE = 500;
+  const all: ApiPR[] = [];
+  let page = 1;
+
+  while (true) {
+    const params = new URLSearchParams({ ...baseParams, page_size: String(PAGE_SIZE), page: String(page) });
+    const res = await apiGet<PaginatedPRResponse | ApiPR[]>(`/api/prs?${params}`);
+    // Handle both old (array) and new (paginated) response formats
+    if (Array.isArray(res)) {
+      all.push(...res);
+      break;
+    }
+    all.push(...res.data);
+    if (all.length >= res.totalCount || res.data.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  return all.map(transformPR);
 }
 
-export async function fetchAllPRs(since?: string) {
-  const params = new URLSearchParams({ state: "all", page_size: "500" });
-  if (since) params.set("since", since);
-  const prs = await apiGet<ApiPR[]>(`/api/prs?${params}`);
-  return prs.map(transformPR);
+export function fetchOpenPRs() {
+  return fetchAllPRPages({ state: "open" });
+}
+
+export function fetchMergedPRs(since?: string) {
+  const params: Record<string, string> = { state: "merged" };
+  if (since) params.since = since;
+  return fetchAllPRPages(params);
+}
+
+export function fetchAllPRs(since?: string) {
+  const params: Record<string, string> = { state: "all" };
+  if (since) params.since = since;
+  return fetchAllPRPages(params);
 }
 
 export async function fetchOpenIssues() {
