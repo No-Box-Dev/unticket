@@ -158,7 +158,10 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
 
 export async function fetchFeaturesFromD1(): Promise<Feature[]> {
   const rows = await apiGet<D1FeatureRow[]>("/api/features?state=open");
-  return rows.map(d1RowToFeature);
+  // Only return issues that have the "feature" label (D1 may contain stale non-feature issues)
+  return rows
+    .filter((row) => row.labels.some((l) => l.name === "feature"))
+    .map(d1RowToFeature);
 }
 
 // ---------- Milestone cache ----------
