@@ -8,6 +8,7 @@ import {
   extractMergedDates,
   extractClosedDates,
   extractReviewedDates,
+  extractCreatedDates,
   computeCycleTime,
   computeContributorActivity,
   computeAlerts,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 
 const RANGE_OPTIONS = [
+  { label: "Sprint", weeks: 0 }, // special: uses active sprint dates
   { label: "2w", weeks: 2 },
   { label: "1m", weeks: 4 },
   { label: "3m", weeks: 13 },
@@ -138,7 +140,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
 
   const { user } = useAuth();
   const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(repoNames);
-  const { isLoading: issuesLoading } = useAllIssues(repoNames);
+  const { data: allIssues, isLoading: issuesLoading } = useAllIssues(repoNames);
   const { data: closedIssues, isLoading: closedLoading } = useClosedIssues(repoNames);
   const { data: openPRs } = useOpenPRs(repoNames);
   const { data: openIssues } = useOpenIssues(repoNames);
@@ -167,9 +169,28 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
   const isLoading = mergedLoading || issuesLoading || closedLoading;
-  const isDaily = weeks <= 2;
-  const compute = (dates: string[]) =>
-    isDaily ? computeMetricDaily(dates, weeks * 7) : computeMetric(dates, weeks);
+
+  // Sprint range mode: weeks=0 means "this sprint"
+  const isSprintRange = weeks === 0;
+  const effectiveWeeks = useMemo(() => {
+    if (!isSprintRange || !sprint) return weeks || 2;
+    const start = new Date(sprint.startDate + "T00:00:00");
+    const end = new Date(sprint.endDate + "T23:59:59");
+    return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (7 * 86400000)));
+  }, [weeks, sprint, isSprintRange]);
+
+  const sprintDateRange = useMemo(() => {
+    if (!isSprintRange || !sprint) return null;
+    return { start: sprint.startDate, end: sprint.endDate };
+  }, [isSprintRange, sprint]);
+
+  const isDaily = isSprintRange ? (effectiveWeeks <= 2) : weeks <= 2;
+  const compute = (dates: string[]) => {
+    const filteredDates = sprintDateRange
+      ? dates.filter((d) => d >= sprintDateRange.start && d <= sprintDateRange.end + "T23:59:59")
+      : dates;
+    return isDaily ? computeMetricDaily(filteredDates, effectiveWeeks * 7) : computeMetric(filteredDates, effectiveWeeks);
+  };
 
   // Sprint timing
   const sprintTiming = useMemo(() => {
@@ -208,7 +229,9 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     if (!mergedPRs || !closedIssues) return null;
     const prsMerged = compute(extractMergedDates(mergedPRs as any));
     const prsReviewed = compute(extractReviewedDates(mergedPRs as any));
-    const issuesSolved = compute(extractClosedDates(closedIssues));
+    const issuesCreated = compute(extractCreatedDates((allIssues as any[]) ?? []));
+    const issuesClosed = compute(extractClosedDates(closedIssues));
+    const issuesSolved = issuesClosed; // alias for backwards compat
     const productionFeatures = (features ?? []).filter((f) => f.status === "production");
     const productionDates = productionFeatures.flatMap((f) =>
       (f.statusHistory ?? []).filter((h) => h.status === "production").map((h) => h.timestamp),
@@ -217,14 +240,17 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       productionDates.length > 0
         ? compute(productionDates)
         : { current: productionFeatures.length, previous: 0, change: 0, history: [] };
-    return { prsMerged, prsReviewed, issuesSolved, featuresShipped };
-  }, [mergedPRs, closedIssues, features, weeks]);
+    return { prsMerged, prsReviewed, issuesCreated, issuesClosed, issuesSolved, featuresShipped };
+  }, [mergedPRs, closedIssues, allIssues, features, weeks, effectiveWeeks, sprintDateRange]);
 
   // Cycle time
   const cycleTime = useMemo(() => {
     if (!mergedPRs) return null;
-    return computeCycleTime(mergedPRs as any, isDaily ? 2 : weeks);
-  }, [mergedPRs, weeks, isDaily]);
+    const prs = sprintDateRange
+      ? (mergedPRs as any[]).filter((p: any) => p.merged_at && p.merged_at >= sprintDateRange.start && p.merged_at <= sprintDateRange.end + "T23:59:59")
+      : mergedPRs;
+    return computeCycleTime(prs as any, isDaily ? 2 : effectiveWeeks);
+  }, [mergedPRs, weeks, effectiveWeeks, isDaily, sprintDateRange]);
 
   // Alerts
   const alerts = useMemo(() => {
@@ -241,11 +267,12 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
 
   // Contributor activity
   const contributorRange = useMemo(() => {
+    if (sprintDateRange) return sprintDateRange;
     const end = new Date();
     const start = new Date();
-    start.setDate(start.getDate() - weeks * 7);
+    start.setDate(start.getDate() - effectiveWeeks * 7);
     return { start: start.toISOString().split("T")[0], end: end.toISOString().split("T")[0] };
-  }, [weeks]);
+  }, [effectiveWeeks, sprintDateRange]);
 
   const contributors = useMemo(() => {
     if (!mergedPRs || !closedIssues) return [];
@@ -311,7 +338,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   const sprintBurndown = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return null;
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - weeks * 7);
+    cutoff.setDate(cutoff.getDate() - effectiveWeeks * 7);
     const cutoffStr = cutoff.toISOString();
 
     const entries: { label: string; total: number; done: number }[] = [];
@@ -527,25 +554,33 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Key Metrics</h2>
         <div className="flex items-center gap-1">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.label}
-              onClick={() => setWeeks(opt.weeks)}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors",
-                weeks === opt.weeks
-                  ? "bg-brand text-white"
-                  : "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
+          {RANGE_OPTIONS.map((opt) => {
+            const isSprint = opt.weeks === 0;
+            const disabled = isSprint && !sprint;
+            return (
+              <button
+                key={opt.label}
+                onClick={() => !disabled && setWeeks(opt.weeks)}
+                disabled={disabled}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-full transition-colors",
+                  disabled
+                    ? "bg-stone-50 dark:bg-dark-overlay/50 text-stone-300 dark:text-neutral-600 cursor-not-allowed"
+                    : "cursor-pointer",
+                  !disabled && weeks === opt.weeks
+                    ? "bg-brand text-white"
+                    : !disabled && "bg-stone-100 dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-white/[0.1]",
+                )}
+              >
+                {isSprint && sprint ? `Sprint ${sprint.number}` : opt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           <MetricCard title="PR Throughput" metric={metrics.prsMerged} color="#3b82f6" daily={isDaily} onClick={() => nav("prs")} />
           <MetricCard title="PRs Reviewed" metric={metrics.prsReviewed} color="#8b5cf6" daily={isDaily} onClick={() => nav("prs")} />
           {cycleTime && (
@@ -557,7 +592,8 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
               {cycleTime.history.length > 0 && <BarChart data={cycleTime.history} color="#f59e0b" daily={isDaily} />}
             </button>
           )}
-          <MetricCard title="Issues Resolved" metric={metrics.issuesSolved} color="#10b981" daily={isDaily} onClick={() => nav("issues")} />
+          <MetricCard title="Issues Created" metric={metrics.issuesCreated} color="#f97316" daily={isDaily} onClick={() => nav("issues")} />
+          <MetricCard title="Issues Closed" metric={metrics.issuesClosed} color="#10b981" daily={isDaily} onClick={() => nav("issues")} />
           <MetricCard title="Features Shipped" metric={metrics.featuresShipped} color="#1B6971" daily={isDaily} onClick={() => nav("sprint")} />
         </div>
       )}
@@ -608,7 +644,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       {/* Contributor Activity */}
       <div className={card}>
         <h3 className="text-xs font-semibold text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-3">
-          Contributor Activity ({RANGE_OPTIONS.find((o) => o.weeks === weeks)?.label ?? `${weeks}w`})
+          Contributor Activity ({isSprintRange && sprint ? `Sprint ${sprint.number}` : RANGE_OPTIONS.find((o) => o.weeks === weeks)?.label ?? `${weeks}w`})
         </h3>
         {contributors.length === 0 ? (
           <span className="text-sm text-stone-400 dark:text-neutral-500">No activity this sprint</span>
