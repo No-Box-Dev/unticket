@@ -2,17 +2,17 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
-import { useIsAdmin, useAssignedIssues, useUpdateIssueState } from "@/hooks/useGitHub";
+import { useIsAdmin, useAssignedIssues, useUpdateIssueState, useReviewPRs } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
 import { withStatusTransition } from "@/lib/github-features";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users, CircleDot } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users, CircleDot, GitPullRequest } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
-import type { Todo, TodoStatus, Feature, FeatureStatus, Points, AssignedIssue } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 type TodoView = "todos" | "features" | "roles";
@@ -65,6 +65,7 @@ export function TodoTab() {
   const deleteFeatureMut = useDeleteFeature();
   const updateTaskPointsMut = useUpdateTaskPoints();
   const { data: assignedIssues } = useAssignedIssues(user?.login ?? "");
+  const { data: reviewPRs } = useReviewPRs(user?.login ?? "");
   const updateIssueStateMut = useUpdateIssueState();
 
   const [todoView, setTodoView] = useState<TodoView>("todos");
@@ -178,6 +179,7 @@ export function TodoTab() {
           myFeatures={myFeatures}
           featureMap={featureMap}
           assignedIssues={assignedIssues ?? []}
+          reviewPRs={reviewPRs ?? []}
           createTodoMut={createTodoMut}
           updateTodoMut={updateTodoMut}
           deleteTodoMut={deleteTodoMut}
@@ -255,7 +257,8 @@ function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus):
 type BoardItem =
   | { type: "todo"; data: Todo }
   | { type: "sprint"; data: SubIssueWithFeature }
-  | { type: "issue"; data: AssignedIssue };
+  | { type: "issue"; data: AssignedIssue }
+  | { type: "pr"; data: ReviewPR };
 
 function MyTodosView({
   todos,
@@ -264,6 +267,7 @@ function MyTodosView({
   myFeatures,
   featureMap,
   assignedIssues,
+  reviewPRs,
   createTodoMut,
   updateTodoMut,
   deleteTodoMut,
@@ -276,6 +280,7 @@ function MyTodosView({
   myFeatures: Feature[];
   featureMap: Map<number, Feature>;
   assignedIssues: AssignedIssue[];
+  reviewPRs: ReviewPR[];
   createTodoMut: ReturnType<typeof useCreateTodoItem>;
   updateTodoMut: ReturnType<typeof useUpdateTodoItem>;
   deleteTodoMut: ReturnType<typeof useDeleteTodoItem>;
@@ -300,8 +305,12 @@ function MyTodosView({
       const col: TodoStatus = issue.state === "closed" ? "done" : "backlog";
       grouped[col].push({ type: "issue", data: issue });
     }
+    // PRs to review → review column
+    for (const pr of reviewPRs) {
+      grouped.review.push({ type: "pr", data: pr as ReviewPR });
+    }
     return grouped;
-  }, [todos, mySprintTasks, featureMap, assignedIssues]);
+  }, [todos, mySprintTasks, featureMap, assignedIssues, reviewPRs]);
 
   function addTodo() {
     const title = input.trim();
@@ -423,6 +432,7 @@ function MyTodosView({
           const todoCount = items.filter((i) => i.type === "todo").length;
           const sprintCount = items.filter((i) => i.type === "sprint").length;
           const issueCount = items.filter((i) => i.type === "issue").length;
+          const prCount = items.filter((i) => i.type === "pr").length;
           const isDoneCol = status === "done";
           return (
             <div
@@ -440,7 +450,7 @@ function MyTodosView({
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
                 <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
                 <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{issueCount > 0 ? ` + ${issueCount}` : ""}
+                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{issueCount > 0 ? ` + ${issueCount}` : ""}{prCount > 0 ? ` + ${prCount}` : ""}
                 </span>
                 {isDoneCol && doneCount > 0 && (
                   <button
@@ -471,6 +481,15 @@ function MyTodosView({
                       <IssueCard
                         key={`issue-${issue.repo}-${issue.number}`}
                         issue={issue}
+                      />
+                    );
+                  }
+                  if (item.type === "pr") {
+                    const pr = item.data;
+                    return (
+                      <PRReviewCard
+                        key={`pr-${pr.repo}-${pr.number}`}
+                        pr={pr}
                       />
                     );
                   }
@@ -765,6 +784,29 @@ function SprintTaskCard({
             )}
           </span>
         )}
+      </div>
+    </a>
+  );
+}
+
+// ─── PRReviewCard (PRs to review) ────────────────────────────────────────
+
+function PRReviewCard({ pr }: { pr: ReviewPR }) {
+  return (
+    <a
+      href={pr.html_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-purple-500 cursor-pointer hover:shadow-sm transition-shadow border-stone-200 dark:border-white/[0.06]"
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <GitPullRequest size={12} className="text-purple-500 shrink-0" />
+          <span className="text-sm">{pr.title}</span>
+        </div>
+        <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
+          {pr.repo}#{pr.number}{pr.author ? ` by ${pr.author}` : ""}
+        </span>
       </div>
     </a>
   );

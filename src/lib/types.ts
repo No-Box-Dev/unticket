@@ -64,6 +64,19 @@ export interface NavFilter {
 
 export type TodoStatus = "backlog" | "in_progress" | "review" | "done";
 
+/** PR where the user is a requested reviewer */
+export interface ReviewPR {
+  repo: string;
+  number: number;
+  title: string;
+  state: string;
+  draft: boolean;
+  merged_at: string | null;
+  html_url: string;
+  author: string | null;
+  created_at: string;
+}
+
 /** Cross-repo issue assigned to the user (sourced from D1, not gitpulse repo) */
 export interface AssignedIssue {
   repo: string;

@@ -348,6 +348,35 @@ export function useAssignedIssues(login: string) {
   });
 }
 
+/** Open PRs where the user is a requested reviewer. */
+export function useReviewPRs(login: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["reviewPRs", selectedOrg, login],
+    queryFn: async () => {
+      const prs = await fetchOpenPRs();
+      return prs
+        .filter((pr: any) =>
+          !pr.draft &&
+          pr.requested_reviewers?.some((r: any) => r.login === login),
+        )
+        .map((pr: any) => ({
+          repo: pr.repo,
+          number: pr.number,
+          title: pr.title,
+          state: pr.state,
+          draft: pr.draft,
+          merged_at: pr.merged_at,
+          html_url: pr.html_url,
+          author: pr.user?.login ?? null,
+          created_at: pr.created_at,
+        }));
+    },
+    enabled: !!selectedOrg && !!login,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
 /** Close or reopen a cross-repo issue. */
 export function useUpdateIssueState() {
   const { selectedOrg } = useAuth();
