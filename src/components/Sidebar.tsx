@@ -15,6 +15,7 @@ import {
   CheckSquare,
   Users,
   Activity,
+  Calendar,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -39,6 +40,7 @@ const navGroups: NavGroup[] = [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "sprint", label: "Sprint Board", icon: Rocket },
       { id: "backlog", label: "Backlog", icon: Layers },
+      { id: "releases", label: "Releases", icon: Calendar },
     ],
   },
   {

@@ -54,6 +54,7 @@ export type TabId =
   | "todos"
   | "engineers"
   | "workload"
+  | "releases"
   | "settings";
 
 export interface NavFilter {
