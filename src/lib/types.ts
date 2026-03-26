@@ -133,6 +133,7 @@ export interface Feature {
   sprint: number | null;
   plan?: string;
   url?: string;
+  updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];
   linkedPRs?: LinkedPR[];
 }
