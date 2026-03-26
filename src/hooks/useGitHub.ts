@@ -266,7 +266,8 @@ export function usePRsForFeature(featureId: number) {
   const { data: prLinks } = useLinkedPRs(featureId);
 
   return useQuery({
-    queryKey: ["prsForFeature", selectedOrg, featureId],
+    // Include prLinks in the key so the query re-runs when links change
+    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks ?? []],
     queryFn: async () => {
       const all = await fetchAllPRs();
       // Branch-detected PRs
@@ -298,7 +299,7 @@ export function usePRsForFeature(featureId: number) {
 
       return result;
     },
-    enabled: !!selectedOrg && featureId > 0,
+    enabled: !!selectedOrg && featureId > 0 && prLinks !== undefined,
     staleTime: 3 * 60 * 1000,
   });
 }
