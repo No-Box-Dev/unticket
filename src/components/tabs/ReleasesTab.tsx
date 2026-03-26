@@ -147,7 +147,7 @@ export function ReleasesTab() {
         <div className="grid grid-cols-7">
           {calendarDays.map((date, i) => {
             if (!date) {
-              return <div key={`empty-${i}`} className="min-h-[80px] bg-stone-50/50 dark:bg-white/[0.01] border-b border-r border-stone-100 dark:border-white/[0.04]" />;
+              return <div key={`empty-${i}`} className="min-h-[100px] bg-stone-50/50 dark:bg-white/[0.01] border-b border-r border-stone-100 dark:border-white/[0.04]" />;
             }
 
             const key = toDateKey(date);
@@ -161,7 +161,7 @@ export function ReleasesTab() {
                 key={key}
                 onClick={() => setSelectedDate(isSelected ? null : key)}
                 className={cn(
-                  "min-h-[80px] p-1.5 border-b border-r border-stone-100 dark:border-white/[0.04] text-left transition-colors relative",
+                  "min-h-[100px] p-1.5 border-b border-r border-stone-100 dark:border-white/[0.04] text-left transition-colors relative",
                   isSelected
                     ? "bg-brand/5 dark:bg-brand/10"
                     : hasShips
@@ -178,20 +178,19 @@ export function ReleasesTab() {
                 </span>
                 {hasShips && (
                   <div className="mt-1 space-y-0.5">
-                    {shipped.slice(0, 2).map((f) => (
-                      <div
+                    {shipped.map((f) => (
+                      <a
                         key={f.id}
-                        className="flex items-center gap-1 px-1 py-0.5 bg-green-100 dark:bg-green-900/40 rounded text-[10px] text-green-700 dark:text-green-400 truncate"
+                        href={f.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-start gap-1 px-1 py-0.5 bg-green-100 dark:bg-green-900/40 rounded text-[10px] text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
                       >
-                        <Rocket size={9} className="shrink-0" />
-                        <span className="truncate">{f.title}</span>
-                      </div>
+                        <Rocket size={9} className="shrink-0 mt-0.5" />
+                        <span>{f.title}</span>
+                      </a>
                     ))}
-                    {shipped.length > 2 && (
-                      <div className="text-[10px] text-stone-400 dark:text-neutral-500 px-1">
-                        +{shipped.length - 2} more
-                      </div>
-                    )}
                   </div>
                 )}
               </button>
