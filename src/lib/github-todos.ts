@@ -14,6 +14,7 @@ const STATUS_LABELS = [
   { name: TODO_LABEL, color: "64748B", description: "Personal todo item" },
   { name: "todo-status:backlog", color: "94A3B8", description: "Todo: backlog" },
   { name: "todo-status:in_progress", color: "3B82F6", description: "Todo: in progress" },
+  { name: "todo-status:review", color: "A855F7", description: "Todo: waiting for review" },
   { name: "todo-status:done", color: "22C55E", description: "Todo: done" },
 ];
 
