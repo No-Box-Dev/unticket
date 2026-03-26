@@ -61,7 +61,7 @@ export interface NavFilter {
   view?: string;
 }
 
-export type TodoStatus = "backlog" | "in_progress" | "done";
+export type TodoStatus = "backlog" | "in_progress" | "review" | "done";
 
 export interface Todo {
   id: number;              // GitHub issue number

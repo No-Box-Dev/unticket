@@ -34,8 +34,9 @@ const STATUS_DOT: Record<FeatureStatus, string> = {
 };
 
 const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
-  { status: "backlog", label: "Backlog", color: "bg-stone-400" },
+  { status: "backlog", label: "Planned", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
+  { status: "review", label: "Waiting for Review", color: "bg-purple-500" },
   { status: "done", label: "Done", color: "bg-green-500" },
 ];
 
@@ -240,26 +241,11 @@ export function TodoTab() {
 
 // ─── My Todos View ──────────────────────────────────────────────────────
 
-/** Map TodoStatus → BoardStatus for 5-column display */
-function todoBoardStatus(status: TodoStatus): BoardStatus {
-  if (status === "backlog") return "plan";
-  if (status === "done") return "production";
-  return "in_progress";
-}
-
-/** Map BoardStatus → TodoStatus for drag-and-drop updates */
-function boardToTodoStatus(status: BoardStatus): TodoStatus {
-  if (status === "plan") return "backlog";
-  if (status === "production" || status === "tested") return "done";
-  return "in_progress";
-}
-
-/** Classify sprint task into a board column */
-function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus): BoardStatus {
-  if (featureStatus === "production") return "production";
-  if (featureStatus === "demo") return task.state === "closed" ? "tested" : "demo";
-  if (task.state === "closed") return "tested";
-  return task.assignees.length > 0 ? "in_progress" : "plan";
+/** Classify sprint task into a todo board column */
+function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus): TodoStatus {
+  if (featureStatus === "production" || task.state === "closed") return "done";
+  if (featureStatus === "demo" || featureStatus === "tested") return "review";
+  return task.assignees.length > 0 ? "in_progress" : "backlog";
 }
 
 type BoardItem =
@@ -291,11 +277,11 @@ function MyTodosView({
   const { confirm, dialogProps } = useConfirm();
   const [input, setInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState<BoardStatus | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null);
 
   const columns = useMemo(() => {
-    const grouped: Record<BoardStatus, BoardItem[]> = { plan: [], in_progress: [], demo: [], tested: [], production: [] };
-    for (const t of todos) grouped[todoBoardStatus(t.status)].push({ type: "todo", data: t });
+    const grouped: Record<TodoStatus, BoardItem[]> = { backlog: [], in_progress: [], review: [], done: [] };
+    for (const t of todos) grouped[t.status].push({ type: "todo", data: t });
     for (const st of mySprintTasks) {
       const col = classifyTask(st, featureMap.get(st.featureId)?.status);
       grouped[col].push({ type: "sprint", data: st });
@@ -345,21 +331,20 @@ function MyTodosView({
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent, targetStatus: BoardStatus) => {
+    (e: React.DragEvent, targetStatus: TodoStatus) => {
       e.preventDefault();
       setDragOverCol(null);
       const todoId = parseInt(e.dataTransfer.getData("text/plain"));
       if (isNaN(todoId)) return;
       const todo = allTodos.find((t) => t.id === todoId);
       if (!todo) return;
-      const newTodoStatus = boardToTodoStatus(targetStatus);
-      if (todo.status === newTodoStatus) return;
-      updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: newTodoStatus } });
+      if (todo.status === targetStatus) return;
+      updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
     [allTodos],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent, status: BoardStatus) => {
+  const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOverCol(status);
@@ -369,7 +354,7 @@ function MyTodosView({
     setDragOverCol(null);
   }, []);
 
-  const doneCount = columns.tested.length + columns.production.length;
+  const doneCount = columns.done.length;
 
   return (
     <div className="space-y-4">
@@ -403,13 +388,13 @@ function MyTodosView({
         </button>
       </div>
 
-      {/* 5-column Kanban */}
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        {FEATURE_COLUMNS.map(({ status, label, color }) => {
+      {/* 4-column Kanban */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {TODO_COLUMNS.map(({ status, label, color }) => {
           const items = columns[status];
           const todoCount = items.filter((i) => i.type === "todo").length;
           const sprintCount = items.filter((i) => i.type === "sprint").length;
-          const isDoneCol = status === "tested" || status === "production";
+          const isDoneCol = status === "done";
           return (
             <div
               key={status}
@@ -428,7 +413,7 @@ function MyTodosView({
                 <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
                   {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
                 </span>
-                {isDoneCol && doneCount > 0 && status === "production" && (
+                {isDoneCol && doneCount > 0 && (
                   <button
                     onClick={clearDone}
                     className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
@@ -465,8 +450,8 @@ function MyTodosView({
                 })}
                 {items.length === 0 && (
                   <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
-                    {status === "plan" && "New todos land here"}
-                    {status !== "plan" && "Drag items here"}
+                    {status === "backlog" && "New todos land here"}
+                    {status !== "backlog" && "Drag items here"}
                   </div>
                 )}
               </div>
