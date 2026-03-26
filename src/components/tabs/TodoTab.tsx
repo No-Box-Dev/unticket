@@ -2,17 +2,17 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
-import { useIsAdmin } from "@/hooks/useGitHub";
+import { useIsAdmin, useAssignedIssues, useUpdateIssueState } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
 import { withStatusTransition } from "@/lib/github-features";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users, CircleDot } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
-import type { Todo, TodoStatus, Feature, FeatureStatus, Points } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus, Points, AssignedIssue } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 type TodoView = "todos" | "features" | "roles";
@@ -64,6 +64,8 @@ export function TodoTab() {
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
   const updateTaskPointsMut = useUpdateTaskPoints();
+  const { data: assignedIssues } = useAssignedIssues(user?.login ?? "");
+  const updateIssueStateMut = useUpdateIssueState();
 
   const [todoView, setTodoView] = useState<TodoView>("todos");
   const [sprintFilter, setSprintFilter] = useState<SprintFilter>("sprint");
@@ -175,9 +177,11 @@ export function TodoTab() {
           mySprintTasks={mySprintTasks}
           myFeatures={myFeatures}
           featureMap={featureMap}
+          assignedIssues={assignedIssues ?? []}
           createTodoMut={createTodoMut}
           updateTodoMut={updateTodoMut}
           deleteTodoMut={deleteTodoMut}
+          updateIssueStateMut={updateIssueStateMut}
           onOpenDetail={setDetailTodo}
         />
       )}
@@ -250,7 +254,8 @@ function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus):
 
 type BoardItem =
   | { type: "todo"; data: Todo }
-  | { type: "sprint"; data: SubIssueWithFeature };
+  | { type: "sprint"; data: SubIssueWithFeature }
+  | { type: "issue"; data: AssignedIssue };
 
 function MyTodosView({
   todos,
@@ -258,9 +263,11 @@ function MyTodosView({
   mySprintTasks,
   myFeatures,
   featureMap,
+  assignedIssues,
   createTodoMut,
   updateTodoMut,
   deleteTodoMut,
+  updateIssueStateMut,
   onOpenDetail,
 }: {
   todos: Todo[];
@@ -268,9 +275,11 @@ function MyTodosView({
   mySprintTasks: SubIssueWithFeature[];
   myFeatures: Feature[];
   featureMap: Map<number, Feature>;
+  assignedIssues: AssignedIssue[];
   createTodoMut: ReturnType<typeof useCreateTodoItem>;
   updateTodoMut: ReturnType<typeof useUpdateTodoItem>;
   deleteTodoMut: ReturnType<typeof useDeleteTodoItem>;
+  updateIssueStateMut: ReturnType<typeof useUpdateIssueState>;
   onOpenDetail: (t: Todo) => void;
 }) {
   const { user } = useAuth();
@@ -286,8 +295,13 @@ function MyTodosView({
       const col = classifyTask(st, featureMap.get(st.featureId)?.status);
       grouped[col].push({ type: "sprint", data: st });
     }
+    // Cross-repo assigned issues: open → backlog, closed → done
+    for (const issue of assignedIssues) {
+      const col: TodoStatus = issue.state === "closed" ? "done" : "backlog";
+      grouped[col].push({ type: "issue", data: issue });
+    }
     return grouped;
-  }, [todos, mySprintTasks, featureMap]);
+  }, [todos, mySprintTasks, featureMap, assignedIssues]);
 
   function addTodo() {
     const title = input.trim();
@@ -334,14 +348,28 @@ function MyTodosView({
     (e: React.DragEvent, targetStatus: TodoStatus) => {
       e.preventDefault();
       setDragOverCol(null);
-      const todoId = parseInt(e.dataTransfer.getData("text/plain"));
+      const rawData = e.dataTransfer.getData("text/plain");
+
+      // Handle cross-repo issue drag (format: "issue:repo:number")
+      if (rawData.startsWith("issue:")) {
+        const parts = rawData.split(":");
+        const repo = parts[1];
+        const num = parseInt(parts[2]);
+        if (!repo || isNaN(num)) return;
+        const newState = targetStatus === "done" ? "closed" : "open";
+        updateIssueStateMut.mutate({ repo, issueNumber: num, state: newState });
+        return;
+      }
+
+      // Handle todo drag
+      const todoId = parseInt(rawData);
       if (isNaN(todoId)) return;
       const todo = allTodos.find((t) => t.id === todoId);
       if (!todo) return;
       if (todo.status === targetStatus) return;
       updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [allTodos],
+    [allTodos, updateIssueStateMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -394,6 +422,7 @@ function MyTodosView({
           const items = columns[status];
           const todoCount = items.filter((i) => i.type === "todo").length;
           const sprintCount = items.filter((i) => i.type === "sprint").length;
+          const issueCount = items.filter((i) => i.type === "issue").length;
           const isDoneCol = status === "done";
           return (
             <div
@@ -411,7 +440,7 @@ function MyTodosView({
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
                 <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
                 <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}
+                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{issueCount > 0 ? ` + ${issueCount}` : ""}
                 </span>
                 {isDoneCol && doneCount > 0 && (
                   <button
@@ -436,7 +465,16 @@ function MyTodosView({
                       />
                     );
                   }
-                  const todo = item.data;
+                  if (item.type === "issue") {
+                    const issue = item.data;
+                    return (
+                      <IssueCard
+                        key={`issue-${issue.repo}-${issue.number}`}
+                        issue={issue}
+                      />
+                    );
+                  }
+                  const todo = item.data as Todo;
                   return (
                     <TodoCard
                       key={todo.id}
@@ -729,6 +767,47 @@ function SprintTaskCard({
         )}
       </div>
     </a>
+  );
+}
+
+// ─── IssueCard (cross-repo assigned issues) ─────────────────────────────
+
+function IssueCard({ issue }: { issue: AssignedIssue }) {
+  const isDone = issue.state === "closed";
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", `issue:${issue.repo}:${issue.number}`);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      className={cn(
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow",
+        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <CircleDot size={12} className="text-cyan-500 shrink-0" />
+          <span className={cn("text-sm block truncate", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
+            {issue.title}
+          </span>
+          <a
+            href={issue.html_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto shrink-0 text-stone-400 hover:text-brand transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={11} />
+          </a>
+        </div>
+        <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
+          {issue.repo}#{issue.number}
+        </span>
+      </div>
+    </div>
   );
 }
 

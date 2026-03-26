@@ -64,6 +64,17 @@ export interface NavFilter {
 
 export type TodoStatus = "backlog" | "in_progress" | "review" | "done";
 
+/** Cross-repo issue assigned to the user (sourced from D1, not gitpulse repo) */
+export interface AssignedIssue {
+  repo: string;
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  html_url: string;
+  labels: { name: string; color: string }[];
+  created_at: string;
+}
+
 export interface Todo {
   id: number;              // GitHub issue number
   globalId: number;        // GitHub global issue ID

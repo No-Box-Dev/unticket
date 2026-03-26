@@ -33,6 +33,7 @@ export async function onRequestGet(context) {
 
   const state = url.searchParams.get("state");
   const assignee = url.searchParams.get("assignee");
+  const assigned = url.searchParams.get("assigned"); // "true" | "false" | null
   const since = url.searchParams.get("since");
   const closedSince = url.searchParams.get("closed_since");
   const repo = url.searchParams.get("repo");
@@ -57,6 +58,10 @@ export async function onRequestGet(context) {
   if (assignee) {
     where += " AND EXISTS (SELECT 1 FROM json_each(assignees_json) WHERE json_extract(value, '$.login') = ?)";
     bindings.push(assignee);
+  } else if (assigned === "false") {
+    where += " AND (assignees_json = '[]' OR assignees_json IS NULL)";
+  } else if (assigned === "true") {
+    where += " AND assignees_json != '[]' AND assignees_json IS NOT NULL";
   }
 
   if (closedSince) {

@@ -55,6 +55,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
   const [repoFilter, setRepoFilter] = useState<string>("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -81,6 +82,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     pageSize: PAGE_SIZE,
     repos: filteredRepos,
     assignee: assigneeFilter.length === 1 ? assigneeFilter[0] : undefined,
+    assigned: assignmentFilter === "unassigned" ? "false" : assignmentFilter === "assigned" ? "true" : undefined,
     label: labelFilter !== "all" ? labelFilter : undefined,
     sort: sortKey,
     sortDir,
@@ -97,6 +99,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     pageSize: PAGE_SIZE,
     repos: filteredRepos,
     assignee: assigneeFilter.length === 1 ? assigneeFilter[0] : undefined,
+    assigned: assignmentFilter === "unassigned" ? "false" : assignmentFilter === "assigned" ? "true" : undefined,
     label: labelFilter !== "all" ? labelFilter : undefined,
     sort: sortKey,
     sortDir,
@@ -272,6 +275,24 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Assignment filter */}
+        <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+          {(["unassigned", "assigned", "all"] as const).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => { setAssignmentFilter(opt); resetPages(); }}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize",
+                assignmentFilter === opt
+                  ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
+                  : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+
         <PersonSelect
           value={assigneeFilter.length > 0 ? assigneeFilter : null}
           onChange={(v) => {

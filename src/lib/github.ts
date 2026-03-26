@@ -394,6 +394,14 @@ export async function fetchAllIssues(since?: string) {
   return res.data.map(transformIssue);
 }
 
+export async function updateIssueState(repo: string, issueNumber: number, state: "open" | "closed") {
+  return apiPost<{ ok: boolean; state: string; closed_at: string | null }>("/api/issue-state", {
+    repo,
+    issue_number: issueNumber,
+    state,
+  });
+}
+
 /**
  * Extract a feature number from a branch name.
  * Matches patterns like: feat/42-description, feature/42, fix/42-bug, 42-some-branch
@@ -433,6 +441,7 @@ export interface IssueQueryParams {
   pageSize?: number;
   repos?: string[];
   assignee?: string;
+  assigned?: "true" | "false"; // filter by has-assignee / no-assignee
   label?: string;
   sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
@@ -446,6 +455,7 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
   if (params.pageSize) qs.set("page_size", String(params.pageSize));
   if (params.repos?.length) qs.set("repos", params.repos.join(","));
   if (params.assignee) qs.set("assignee", params.assignee);
+  if (params.assigned) qs.set("assigned", params.assigned);
   if (params.label) qs.set("label", params.label);
   if (params.sort) qs.set("sort", params.sort);
   if (params.sortDir) qs.set("sort_dir", params.sortDir);
