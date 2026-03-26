@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useFeatures, usePeople } from "@/hooks/useConfigRepo";
+import { useAllFeatures, usePeople } from "@/hooks/useConfigRepo";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { Rocket, ChevronLeft, ChevronRight, ExternalLink, Users } from "lucide-react";
@@ -24,7 +24,7 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 export function ReleasesTab() {
-  const { data: features, isLoading } = useFeatures();
+  const { data: features, isLoading } = useAllFeatures();
   const { data: people } = usePeople();
   const nameOf = (login: string) => people?.find((p) => p.github === login)?.name ?? login;
 

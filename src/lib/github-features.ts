@@ -167,6 +167,14 @@ export async function fetchFeaturesFromD1(): Promise<Feature[]> {
     .map(d1RowToFeature);
 }
 
+/** Fetch all features including closed (for releases calendar). */
+export async function fetchAllFeaturesFromD1(): Promise<Feature[]> {
+  const rows = await apiGet<D1FeatureRow[]>("/api/features?state=all");
+  return rows
+    .filter((row) => row.labels.some((l) => l.name === "feature"))
+    .map(d1RowToFeature);
+}
+
 // ---------- Milestone cache ----------
 
 const milestoneCache = new Map<string, number>();
