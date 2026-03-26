@@ -23,6 +23,7 @@ import {
 } from "@/lib/github-todos";
 import {
   fetchFeaturesFromD1,
+  fetchAllFeaturesFromD1,
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
@@ -76,6 +77,17 @@ export function useFeatures() {
     queryKey: ["features", selectedOrg],
     queryFn: fetchFeaturesFromD1,
     enabled: !!selectedOrg,
+  });
+}
+
+/** All features including closed — for releases calendar. */
+export function useAllFeatures() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["allFeatures", selectedOrg],
+    queryFn: fetchAllFeaturesFromD1,
+    enabled: !!selectedOrg,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
