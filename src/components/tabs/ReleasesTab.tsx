@@ -42,10 +42,10 @@ export function ReleasesTab() {
     for (const f of features) {
       if (f.status !== "production") continue;
       const prodEntries = (f.statusHistory ?? []).filter((h) => h.status === "production");
-      // Use statusHistory timestamp, or fall back to today for legacy features without history
+      // Use statusHistory timestamp, or fall back to updatedAt (last modified date from GitHub)
       const shippedAt = prodEntries.length > 0
         ? prodEntries[prodEntries.length - 1].timestamp
-        : new Date().toISOString();
+        : (f.updatedAt ?? new Date().toISOString());
       const key = toDateKey(new Date(shippedAt));
       const arr = map.get(key) ?? [];
       arr.push({ ...f, shippedAt });

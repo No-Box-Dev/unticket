@@ -63,13 +63,19 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
+  const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
+  const repoList = useMemo(() => {
+    return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
+  }, [repos]);
+
   // Resolve repo filter → repo names
   const filteredRepos = useMemo(() => {
     if (repoFilter !== "all") {
       return [repoFilter];
     }
-    return undefined; // no repo filter
-  }, [repoFilter]);
+    // Exclude gitpulse repos (features/todos live there, not regular issues)
+    return repoList.length > 0 ? repoList : undefined;
+  }, [repoFilter, repoList]);
 
   // Open issues query
   const {
@@ -162,10 +168,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       }
     });
   }, [qc]);
-
-  const repoList = useMemo(() => {
-    return repos?.map((r) => r.name).sort() ?? [];
-  }, [repos]);
 
   const labelList = useMemo(() => {
     return labels?.map((l) => l.name).sort() ?? [];

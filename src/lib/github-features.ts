@@ -13,6 +13,7 @@ interface D1FeatureRow {
   labels: { name: string; color: string }[];
   milestone_title: string | null;
   html_url: string | null;
+  updated_at?: string;
 }
 
 const REPO = "gitpulse";
@@ -112,6 +113,7 @@ function issueToFeature(issue: any): Feature {
     sprint,
     plan: content || undefined,
     url: issue.html_url,
+    updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
     linkedPRs: metadata.linkedPRs,
   };
@@ -153,6 +155,7 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
     assignees: row.assignees,
     milestone: row.milestone_title ? { title: row.milestone_title } : null,
     html_url: row.html_url,
+    updated_at: row.updated_at,
   });
 }
 
