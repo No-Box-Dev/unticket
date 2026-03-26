@@ -394,6 +394,14 @@ export async function fetchAllIssues(since?: string) {
   return res.data.map(transformIssue);
 }
 
+export async function updateIssueState(repo: string, issueNumber: number, state: "open" | "closed") {
+  return apiPost<{ ok: boolean; state: string; closed_at: string | null }>("/api/issue-state", {
+    repo,
+    issue_number: issueNumber,
+    state,
+  });
+}
+
 /**
  * Extract a feature number from a branch name.
  * Matches patterns like: feat/42-description, feature/42, fix/42-bug, 42-some-branch
