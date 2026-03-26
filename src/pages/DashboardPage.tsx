@@ -19,9 +19,10 @@ const IssuesTab = lazy(() => import("@/components/tabs/IssuesTab").then(m => ({ 
 const TodoTab = lazy(() => import("@/components/tabs/TodoTab").then(m => ({ default: m.TodoTab })));
 const EngineersTab = lazy(() => import("@/components/tabs/EngineersTab").then(m => ({ default: m.EngineersTab })));
 const WorkloadTab = lazy(() => import("@/components/tabs/WorkloadTab").then(m => ({ default: m.WorkloadTab })));
+const ReleasesTab = lazy(() => import("@/components/tabs/ReleasesTab").then(m => ({ default: m.ReleasesTab })));
 const SettingsTab = lazy(() => import("@/components/tabs/SettingsTab").then(m => ({ default: m.SettingsTab })));
 
-const VALID_TABS = new Set<string>(["overview", "sprint", "backlog", "prs", "issues", "todos", "engineers", "workload", "settings"]);
+const VALID_TABS = new Set<string>(["overview", "sprint", "backlog", "prs", "issues", "todos", "engineers", "workload", "releases", "settings"]);
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
@@ -93,6 +94,7 @@ export function DashboardPage() {
               {activeTab === "todos" && <TodoTab />}
               {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
               {activeTab === "workload" && <WorkloadTab repoNames={repoNames} />}
+              {activeTab === "releases" && <ReleasesTab />}
             </ErrorBoundary>
           </Suspense>
         </main>
