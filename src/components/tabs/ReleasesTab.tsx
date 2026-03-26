@@ -1,75 +1,86 @@
-import { useMemo } from "react";
-import { useFeatures, useSprint, useSprintSnapshots, usePeople } from "@/hooks/useConfigRepo";
+import { useState, useMemo } from "react";
+import { useFeatures, usePeople } from "@/hooks/useConfigRepo";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import { Rocket, Calendar, ExternalLink, Users, ChevronRight } from "lucide-react";
-import type { Feature, SprintSnapshot } from "@/lib/types";
+import { Rocket, ChevronLeft, ChevronRight, ExternalLink, Users } from "lucide-react";
+import type { Feature } from "@/lib/types";
 
-const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl";
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+interface ShippedFeature extends Feature {
+  shippedAt: string;
 }
 
-function formatRelativeDate(dateStr: string): string {
-  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-interface ReleaseGroup {
-  label: string;
-  sprintNumber: number | null;
-  date: string; // ISO date for sorting
-  features: (Feature & { shippedAt: string })[];
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 export function ReleasesTab() {
   const { data: features, isLoading } = useFeatures();
-  const { data: sprint } = useSprint();
-  const { data: snapshots } = useSprintSnapshots();
   const { data: people } = usePeople();
-
   const nameOf = (login: string) => people?.find((p) => p.github === login)?.name ?? login;
 
-  // Build release groups: features that reached production, grouped by sprint
-  const releases = useMemo(() => {
-    if (!features) return [];
+  const [viewMonth, setViewMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-    const productionFeatures = features.filter((f) => f.status === "production");
-    const groups = new Map<string, ReleaseGroup>();
+  // Build map of date → shipped features
+  const featuresByDate = useMemo(() => {
+    if (!features) return new Map<string, ShippedFeature[]>();
+    const map = new Map<string, ShippedFeature[]>();
 
-    for (const f of productionFeatures) {
-      // Find when it shipped (latest production entry in statusHistory)
+    for (const f of features) {
+      if (f.status !== "production") continue;
       const prodEntries = (f.statusHistory ?? []).filter((h) => h.status === "production");
-      const shippedAt = prodEntries.length > 0
-        ? prodEntries[prodEntries.length - 1].timestamp
-        : new Date().toISOString();
-
-      const sprintNum = f.sprint;
-      const key = sprintNum !== null ? `sprint-${sprintNum}` : "unplanned";
-      const label = sprintNum !== null ? `Sprint ${sprintNum}` : "Unplanned";
-
-      if (!groups.has(key)) {
-        // Find sprint dates from snapshots or current sprint
-        let date = shippedAt;
-        if (sprintNum !== null) {
-          const snap = (snapshots ?? []).find((s: SprintSnapshot) => s.sprintNumber === sprintNum);
-          if (snap) date = snap.endDate ?? shippedAt;
-          else if (sprint && sprint.number === sprintNum) date = sprint.endDate;
-        }
-        groups.set(key, { label, sprintNumber: sprintNum, date, features: [] });
-      }
-      groups.get(key)!.features.push({ ...f, shippedAt });
+      if (prodEntries.length === 0) continue;
+      const shippedAt = prodEntries[prodEntries.length - 1].timestamp;
+      const key = toDateKey(new Date(shippedAt));
+      const arr = map.get(key) ?? [];
+      arr.push({ ...f, shippedAt });
+      map.set(key, arr);
     }
 
-    return Array.from(groups.values())
-      .sort((a, b) => b.date.localeCompare(a.date)); // newest first
-  }, [features, sprint, snapshots]);
+    return map;
+  }, [features]);
+
+  // Calendar grid for current month
+  const calendarDays = useMemo(() => {
+    const { year, month } = viewMonth;
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Monday-based week: getDay() returns 0=Sun, we want 0=Mon
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const days: (Date | null)[] = [];
+
+    // Pad start with nulls
+    for (let i = 0; i < startOffset; i++) days.push(null);
+    // Fill days
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      days.push(new Date(year, month, d));
+    }
+    // Pad end to complete the last week
+    while (days.length % 7 !== 0) days.push(null);
+
+    return days;
+  }, [viewMonth]);
+
+  const today = new Date();
+  const totalShipped = featuresByDate.size > 0
+    ? Array.from(featuresByDate.values()).reduce((sum, arr) => sum + arr.length, 0)
+    : 0;
+
+  const selectedFeatures = selectedDate ? (featuresByDate.get(selectedDate) ?? []) : [];
 
   if (isLoading) {
     return (
@@ -79,106 +90,164 @@ export function ReleasesTab() {
     );
   }
 
-  if (releases.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <Rocket className="w-12 h-12 mx-auto text-stone-300 dark:text-neutral-600 mb-3" />
-        <p className="text-sm text-stone-400 dark:text-neutral-500">No features shipped yet</p>
-      </div>
-    );
-  }
-
-  const totalShipped = releases.reduce((sum, r) => sum + r.features.length, 0);
-
   return (
     <div className="space-y-6">
-      {/* Summary header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Releases</h2>
           <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">
-            {totalShipped} feature{totalShipped !== 1 ? "s" : ""} shipped across {releases.length} release{releases.length !== 1 ? "s" : ""}
+            {totalShipped} feature{totalShipped !== 1 ? "s" : ""} shipped
           </p>
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="relative">
-        {/* Vertical timeline line */}
-        <div className="absolute left-[19px] top-0 bottom-0 w-px bg-stone-200 dark:bg-white/[0.06]" />
+      {/* Month navigation */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setViewMonth((m) => m.month === 0 ? { year: m.year - 1, month: 11 } : { ...m, month: m.month - 1 })}
+          className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors"
+        >
+          <ChevronLeft size={16} className="text-stone-500 dark:text-neutral-400" />
+        </button>
+        <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 min-w-[140px] text-center">
+          {MONTH_NAMES[viewMonth.month]} {viewMonth.year}
+        </span>
+        <button
+          onClick={() => setViewMonth((m) => m.month === 11 ? { year: m.year + 1, month: 0 } : { ...m, month: m.month + 1 })}
+          className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors"
+        >
+          <ChevronRight size={16} className="text-stone-500 dark:text-neutral-400" />
+        </button>
+        <button
+          onClick={() => {
+            const now = new Date();
+            setViewMonth({ year: now.getFullYear(), month: now.getMonth() });
+          }}
+          className="ml-2 px-2.5 py-1 text-xs font-medium text-stone-500 dark:text-neutral-400 bg-stone-100 dark:bg-dark-overlay rounded-lg hover:bg-stone-200 dark:hover:bg-white/[0.1] transition-colors"
+        >
+          Today
+        </button>
+      </div>
 
-        <div className="space-y-6">
-          {releases.map((release) => (
-            <div key={release.label} className="relative pl-12">
-              {/* Timeline dot */}
-              <div className="absolute left-2.5 top-1 w-4 h-4 rounded-full bg-brand border-2 border-white dark:border-dark-base" />
-
-              {/* Release header */}
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">
-                  {release.label}
-                </h3>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 flex items-center gap-1">
-                  <Calendar size={12} />
-                  {formatDate(release.date)}
-                </span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500">
-                  ({formatRelativeDate(release.date)})
-                </span>
-                <span className="ml-auto text-xs font-medium text-brand">
-                  {release.features.length} feature{release.features.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              {/* Feature cards */}
-              <div className="space-y-2">
-                {release.features.map((f) => (
-                  <div
-                    key={f.id}
-                    className={cn(card, "p-4 hover:border-stone-300 dark:hover:border-white/[0.12] transition-colors")}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 bg-green-50 dark:bg-green-950 rounded-lg shrink-0 mt-0.5">
-                        <Rocket size={14} className="text-green-600 dark:text-green-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">
-                            {f.title}
-                          </span>
-                          {f.url && (
-                            <a
-                              href={f.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-stone-400 hover:text-brand transition-colors shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ExternalLink size={12} />
-                            </a>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          {f.owners.length > 0 && (
-                            <span className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500">
-                              <Users size={11} />
-                              {f.owners.map(nameOf).join(", ")}
-                            </span>
-                          )}
-                          <span className="text-xs text-stone-400 dark:text-neutral-500">
-                            Shipped {formatRelativeDate(f.shippedAt)}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronRight size={14} className="text-stone-300 dark:text-neutral-600 shrink-0 mt-1" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* Calendar grid */}
+      <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 border-b border-stone-100 dark:border-white/[0.06]">
+          {WEEKDAYS.map((day) => (
+            <div key={day} className="px-2 py-2 text-center text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider">
+              {day}
             </div>
           ))}
         </div>
+
+        {/* Day cells */}
+        <div className="grid grid-cols-7">
+          {calendarDays.map((date, i) => {
+            if (!date) {
+              return <div key={`empty-${i}`} className="min-h-[80px] bg-stone-50/50 dark:bg-white/[0.01] border-b border-r border-stone-100 dark:border-white/[0.04]" />;
+            }
+
+            const key = toDateKey(date);
+            const shipped = featuresByDate.get(key) ?? [];
+            const isToday = isSameDay(date, today);
+            const isSelected = selectedDate === key;
+            const hasShips = shipped.length > 0;
+
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedDate(isSelected ? null : key)}
+                className={cn(
+                  "min-h-[80px] p-1.5 border-b border-r border-stone-100 dark:border-white/[0.04] text-left transition-colors relative",
+                  isSelected
+                    ? "bg-brand/5 dark:bg-brand/10"
+                    : hasShips
+                      ? "hover:bg-green-50 dark:hover:bg-green-950/30"
+                      : "hover:bg-stone-50 dark:hover:bg-white/[0.02]",
+                )}
+              >
+                <span className={cn(
+                  "text-xs font-medium inline-flex items-center justify-center w-6 h-6 rounded-full",
+                  isToday && "bg-brand text-white",
+                  !isToday && "text-stone-600 dark:text-neutral-400",
+                )}>
+                  {date.getDate()}
+                </span>
+                {hasShips && (
+                  <div className="mt-1 space-y-0.5">
+                    {shipped.slice(0, 2).map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center gap-1 px-1 py-0.5 bg-green-100 dark:bg-green-900/40 rounded text-[10px] text-green-700 dark:text-green-400 truncate"
+                      >
+                        <Rocket size={9} className="shrink-0" />
+                        <span className="truncate">{f.title}</span>
+                      </div>
+                    ))}
+                    {shipped.length > 2 && (
+                      <div className="text-[10px] text-stone-400 dark:text-neutral-500 px-1">
+                        +{shipped.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Selected day detail */}
+      {selectedDate && (
+        <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200 mb-3">
+            {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+            <span className="ml-2 text-xs font-normal text-stone-400 dark:text-neutral-500">
+              {selectedFeatures.length} feature{selectedFeatures.length !== 1 ? "s" : ""} shipped
+            </span>
+          </h3>
+          {selectedFeatures.length === 0 ? (
+            <p className="text-xs text-stone-400 dark:text-neutral-500">No features shipped on this day</p>
+          ) : (
+            <div className="space-y-2">
+              {selectedFeatures.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-start gap-3 p-3 rounded-lg border border-stone-100 dark:border-white/[0.06] hover:border-stone-200 dark:hover:border-white/[0.1] transition-colors"
+                >
+                  <div className="p-1.5 bg-green-50 dark:bg-green-950 rounded-lg shrink-0 mt-0.5">
+                    <Rocket size={14} className="text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">
+                        {f.title}
+                      </span>
+                      {f.url && (
+                        <a
+                          href={f.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-stone-400 hover:text-brand transition-colors shrink-0"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                    </div>
+                    {f.owners.length > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 mt-1">
+                        <Users size={11} />
+                        {f.owners.map(nameOf).join(", ")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

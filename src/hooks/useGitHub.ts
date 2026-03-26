@@ -21,6 +21,7 @@ import {
   fetchLinkedPRs,
   linkPR,
   unlinkPR,
+  updateIssueState,
 } from "@/lib/github";
 import type { RateLimitInfo } from "@/lib/github";
 import type { IssueQueryParams } from "@/lib/github";
@@ -328,6 +329,35 @@ export function useUnlinkPR() {
     onSuccess: (_data, { featureId }) => {
       qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg, featureId] });
       qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg, featureId] });
+    },
+  });
+}
+
+/** Cross-repo issues assigned to the current user (from D1, excludes gitpulse repo). */
+export function useAssignedIssues(login: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["assignedIssues", selectedOrg, login],
+    queryFn: async () => {
+      const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
+      // Exclude issues from the gitpulse repo (those are todos/features/sprint tasks)
+      return (res.data as any[]).filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
+    },
+    enabled: !!selectedOrg && !!login,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+/** Close or reopen a cross-repo issue. */
+export function useUpdateIssueState() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { repo: string; issueNumber: number; state: "open" | "closed" }) =>
+      updateIssueState(args.repo, args.issueNumber, args.state),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["assignedIssues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["issues", selectedOrg] });
     },
   });
 }
