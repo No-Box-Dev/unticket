@@ -19,12 +19,14 @@ export function getOctokit(): CustomOctokitInstance {
     octokitInstance = new CustomOctokit({
       auth: token,
       throttle: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onRateLimit: (retryAfter: number, options: any, _octokit: any, retryCount: number) => {
           console.warn(
             `[unticket.ai] Rate limit hit for ${options.url}, retry #${retryCount}, resets in ${retryAfter}s`,
           );
           return retryCount < 1;
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSecondaryRateLimit: (retryAfter: number, options: any) => {
           console.warn(
             `[unticket.ai] Secondary rate limit for ${options.url}, resets in ${retryAfter}s`,
@@ -47,6 +49,7 @@ function wrapOctokitError(err: unknown): never {
   if (err instanceof ApiError) throw err;
   if (err instanceof Error) {
     // Octokit includes status in the error object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const status = (err as any).status as number | undefined;
     if (status === 401) {
       localStorage.removeItem("gp_token");

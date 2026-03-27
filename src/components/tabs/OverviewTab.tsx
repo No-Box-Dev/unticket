@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";

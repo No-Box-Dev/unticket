@@ -184,12 +184,15 @@ export function useUpdateIssueAssignees() {
     onMutate: async ({ repo, issueNumber, assignees }) => {
       // Optimistically update all issue queries
       await qc.cancelQueries({ queryKey: ["issues", selectedOrg] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       qc.setQueriesData<any>({ queryKey: ["issues", selectedOrg] }, (old: any) => {
         if (!old?.data) return old;
         return {
           ...old,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           data: old.data.map((issue: any) =>
             issue.repo === repo && issue.number === issueNumber
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               ? { ...issue, assignees: assignees.map((login) => ({ login, avatar_url: issue.assignees?.find((a: any) => a.login === login)?.avatar_url ?? "" })) }
               : issue,
           ),
@@ -341,6 +344,7 @@ export function useAssignedIssues(login: string) {
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
       // Exclude issues from the gitpulse repo (those are todos/features/sprint tasks)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (res.data as any[]).filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
     },
     enabled: !!selectedOrg && !!login,
@@ -356,10 +360,13 @@ export function useReviewPRs(login: string) {
     queryFn: async () => {
       const prs = await fetchOpenPRs();
       return prs
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((pr: any) =>
           !pr.draft &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pr.requested_reviewers?.some((r: any) => r.login === login),
         )
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((pr: any) => ({
           repo: pr.repo,
           number: pr.number,

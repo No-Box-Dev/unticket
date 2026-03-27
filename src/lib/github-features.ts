@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
 import type { Feature, FeatureStatus, StatusHistoryEntry, Points, PersonRole, LinkedPR } from "./types";

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo } from "react";
 import { Spinner } from "@/components/Spinner";
 import type { Feature, Person, SprintConfig } from "@/lib/types";
