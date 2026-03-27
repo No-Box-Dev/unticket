@@ -18,9 +18,9 @@ function daysAgo(date: string): number {
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
-function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: "asc" | "desc" }) {
-  if (sortKey !== col) return null;
-  return sortDir === "asc" ? (
+function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: "asc" | "desc" }) {
+  if (activeSortKey !== column) return null;
+  return activeSortDirection === "asc" ? (
     <ChevronUp className="w-3 h-3 inline ml-0.5" />
   ) : (
     <ChevronDown className="w-3 h-3 inline ml-0.5" />
@@ -360,19 +360,19 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 onClick={() => toggleSort("number")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Issue <SortIcon col="number" sortKey={sortKey} sortDir={sortDir} />
+                Issue <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("title")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Title <SortIcon col="title" sortKey={sortKey} sortDir={sortDir} />
+                Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("repo")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Repo <SortIcon col="repo" sortKey={sortKey} sortDir={sortDir} />
+                Repo <SortIcon column="repo" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
               <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
@@ -380,7 +380,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 onClick={() => toggleSort("created_at")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
-                Age <SortIcon col="created_at" sortKey={sortKey} sortDir={sortDir} />
+                Age <SortIcon column="created_at" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th className="px-3 py-2 w-8"></th>
             </tr>

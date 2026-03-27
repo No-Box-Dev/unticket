@@ -247,7 +247,8 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  const segmentsWithOffsets: Array<(typeof segments)[0] & { dashLen: number; gap: number; offset: number }> = [];
+  type SegmentWithOffset = (typeof segments)[0] & { dashLen: number; gap: number; offset: number };
+  const segmentsWithOffsets: SegmentWithOffset[] = [];
   let runningOffset = 0;
   for (const seg of segments) {
     const dashLen = (seg.value / total) * circumference;
