@@ -1,6 +1,19 @@
 import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
+interface GitHubIssue {
+  number: number;
+  id: number;
+  title: string;
+  state: string;
+  labels: ({ name?: string } | string)[];
+  assignees?: { login: string }[];
+  created_at: string;
+  closed_at: string | null;
+  html_url: string;
+  pull_request?: unknown;
+}
+
 const REPO = "gitpulse";
 const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
@@ -37,8 +50,8 @@ export async function ensureTodoLabels(org: string): Promise<void> {
     if (!existingNames.has(label.name)) {
       try {
         await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
-      } catch (err: any) {
-        if (err?.status !== 422) throw err;
+      } catch (err: unknown) {
+        if ((err as { status?: number })?.status !== 422) throw err;
       }
     }
   }
@@ -52,16 +65,16 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
 }
 
 /** Returns true if the issue should be excluded from todos (features, roles). */
-function isExcluded(issue: any): boolean {
+function isExcluded(issue: GitHubIssue): boolean {
   const labelNames = (issue.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .map((l) => (typeof l === "string" ? l : l.name))
     .filter(Boolean) as string[];
   return labelNames.some((l) => EXCLUDE_LABELS.has(l));
 }
 
-function issueToTodo(issue: any): Todo {
+function issueToTodo(issue: GitHubIssue): Todo {
   const labelNames = (issue.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .map((l) => (typeof l === "string" ? l : l.name))
     .filter(Boolean) as string[];
 
   const statusLabel = extractLabel(labelNames, STATUS_PREFIX) as TodoStatus | undefined;
@@ -99,8 +112,8 @@ async function ensureDynamicLabel(org: string, name: string, color: string, desc
   const ok = getOctokit();
   try {
     await ok.rest.issues.createLabel({ owner: org, repo: REPO, name, color, description });
-  } catch (err: any) {
-    if (err?.status !== 422) throw err; // 422 = already exists
+  } catch (err: unknown) {
+    if ((err as { status?: number })?.status !== 422) throw err; // 422 = already exists
   }
   dynamicLabelsEnsured.add(cacheKey);
 }
@@ -130,9 +143,9 @@ export async function fetchTodos(org: string): Promise<Todo[]> {
     }),
   ]);
 
-  const all = [...open, ...closed].filter((i: any) =>
+  const all = [...open, ...closed].filter((i) =>
     !i.pull_request &&
-    !isExcluded(i) &&
+    !isExcluded(i as GitHubIssue) &&
     (i.assignees?.length ?? 0) > 0
   );
   return all.map(issueToTodo);
@@ -190,11 +203,11 @@ export async function updateTodo(
   });
 
   const currentLabels = (current.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
+    .map((l) => (typeof l === "string" ? l : (l as { name?: string }).name))
     .filter(Boolean) as string[];
 
   // Rebuild labels — keep non-todo labels, rebuild status/feature
-  let newLabels = currentLabels.filter(
+  const newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
       !l.startsWith(FEATURE_PREFIX),
@@ -274,9 +287,9 @@ export async function fetchTodosClosedInRange(
 
   const endDateEnd = endDate + "T23:59:59Z";
 
-  return issues
-    .filter((i: any) => !i.pull_request && !isExcluded(i) && (i.assignees?.length ?? 0) > 0)
-    .filter((i: any) => {
+  return (issues as GitHubIssue[])
+    .filter((i) => !i.pull_request && !isExcluded(i) && (i.assignees?.length ?? 0) > 0)
+    .filter((i) => {
       if (!i.closed_at) return false;
       return i.closed_at >= startDate && i.closed_at <= endDateEnd;
     })

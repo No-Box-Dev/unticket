@@ -37,6 +37,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(false);
+  useEffect(() => { openRef.current = open; }, [open]);
 
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
@@ -58,7 +60,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const allPeople = useMemo(() => {
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
     const members = orgMembers ?? [];
-    return members.map((m: any) => {
+    return members.map((m: { login: string; avatar_url: string }) => {
       const person = peopleMap.get(m.login);
       return {
         login: m.login,
@@ -89,6 +91,10 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
+        if (!openRef.current) {
+          setQuery("");
+          setSelectedIndex(0);
+        }
         setOpen((prev) => !prev);
       }
       if (e.key === "Escape") setOpen(false);
@@ -100,8 +106,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   // Focus input when opened
   useEffect(() => {
     if (open) {
-      setQuery("");
-      setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
@@ -244,10 +248,9 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint]);
+  }, [query, features, allPeople, roles, allTasks, todos, onNavigate, dark, toggleTheme, setViewingSprint, setSearchParams]);
 
-  // Keyboard navigation
-  useEffect(() => { setSelectedIndex(0); }, [query]);
+  // selectedIndex resets in input onChange (to avoid setState in effect)
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -290,7 +293,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
             onKeyDown={handleKeyDown}
             placeholder="Search features, people, tasks, roles, todos..."
             className="flex-1 text-sm text-stone-800 dark:text-neutral-200 placeholder:text-stone-400 dark:placeholder:text-neutral-500 outline-none bg-transparent"
