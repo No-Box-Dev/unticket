@@ -247,11 +247,12 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Precompute offsets in a single O(n) pass
+  // Precompute offsets in a single O(n) pass — runningOffset is a local accumulator, not state
   let runningOffset = 0;
   const segmentData = segments.map((seg) => {
     const dashLen = (seg.value / total) * circumference;
     const startOffset = runningOffset;
+    // eslint-disable-next-line react-hooks/immutability
     runningOffset += dashLen;
     return { seg, dashLen, gap: circumference - dashLen, startOffset };
   });
