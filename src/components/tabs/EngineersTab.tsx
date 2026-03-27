@@ -318,9 +318,16 @@ function TasksView({ tasks, featureMap }: {
   tasks: SubIssueWithFeature[];
   featureMap: Map<number, Feature>;
 }) {
+  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
+  return <TasksDisplay tasks={tasks} featureMap={featureMap} />;
+}
+
+function TasksDisplay({ tasks, featureMap }: {
+  tasks: SubIssueWithFeature[];
+  featureMap: Map<number, Feature>;
+}) {
   const [expandedFeatureId, setExpandedFeatureId] = useState<number | null>(null);
 
-  // Group tasks by feature (must be before early return to satisfy rules of hooks)
   const grouped = useMemo(() => {
     const map = new Map<number, SubIssueWithFeature[]>();
     for (const t of tasks) {
@@ -330,8 +337,6 @@ function TasksView({ tasks, featureMap }: {
     }
     return [...map.entries()];
   }, [tasks]);
-
-  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
 
   return (
     <div className="space-y-1">
