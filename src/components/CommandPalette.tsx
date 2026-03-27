@@ -100,7 +100,9 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   // Focus input when opened
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -244,9 +246,10 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint]);
+  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint, setSearchParams]);
 
   // Keyboard navigation
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedIndex(0); }, [query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

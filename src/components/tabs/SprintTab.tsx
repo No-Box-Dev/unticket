@@ -96,9 +96,11 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     if (urlFeatureId) {
       if (detailFeature?.id !== urlFeatureId) {
         const f = features.find((feat) => feat.id === urlFeatureId);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (f) setDetailFeature(f);
       }
     } else if (detailFeature) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetailFeature(null);
     }
   }, [urlFeatureId, features]); // eslint-disable-line react-hooks/exhaustive-deps

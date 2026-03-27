@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useMergedPRs, useAllIssues, useClosedIssues, useActiveMembers, useOpenPRs, useOpenIssues, useSyncStatus, useTriggerSync } from "@/hooks/useGitHub";
 import { useFeatures, useSprint, useAllSprintSubIssues, useSprintSnapshots, usePeople } from "@/hooks/useConfigRepo";
@@ -185,12 +185,12 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   }, [isSprintRange, sprint]);
 
   const isDaily = isSprintRange ? (effectiveWeeks <= 2) : weeks <= 2;
-  const compute = (dates: string[]) => {
+  const compute = useCallback((dates: string[]) => {
     const filteredDates = sprintDateRange
       ? dates.filter((d) => d >= sprintDateRange.start && d <= sprintDateRange.end + "T23:59:59")
       : dates;
     return isDaily ? computeMetricDaily(filteredDates, effectiveWeeks * 7) : computeMetric(filteredDates, effectiveWeeks);
-  };
+  }, [sprintDateRange, isDaily, effectiveWeeks]);
 
   // Sprint timing
   const sprintTiming = useMemo(() => {
@@ -241,7 +241,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         ? compute(productionDates)
         : { current: productionFeatures.length, previous: 0, change: 0, history: [] };
     return { prsMerged, prsReviewed, issuesCreated, issuesClosed, issuesSolved, featuresShipped };
-  }, [mergedPRs, closedIssues, allIssues, features, weeks, effectiveWeeks, sprintDateRange]);
+  }, [mergedPRs, closedIssues, allIssues, features, weeks, effectiveWeeks, sprintDateRange, compute]);
 
   // Cycle time
   const cycleTime = useMemo(() => {
@@ -259,7 +259,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
   }, [openPRs, allTasks, sprint, orgMembers]);
 
   // Person name lookup
-  const nameOf = (login: string) => people?.find((p) => p.github === login)?.name ?? login;
+  const nameOf = useCallback((login: string) => people?.find((p) => p.github === login)?.name ?? login, [people]);
 
   // Age distribution for open PRs and open issues
   const prAgeBuckets = useMemo(() => computeAgeBuckets((openPRs as any[]) ?? []), [openPRs]);
@@ -326,7 +326,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         return { ...c, tasksDone: tasks.done, tasksTotal: tasks.total, rolesDone: roles.done, rolesTotal: roles.total };
       })
       .sort((a, b) => nameOf(a.login).localeCompare(nameOf(b.login)));
-  }, [mergedPRs, closedIssues, allTasks, contributorRange, orgMembers, people]);
+  }, [mergedPRs, closedIssues, allTasks, contributorRange, orgMembers, people, nameOf]);
 
   // Velocity trend
   const velocity = useMemo(() => {
@@ -364,7 +364,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
 
     entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     return entries.length > 0 ? entries : null;
-  }, [snapshots, sprint, sprintPoints, weeks]);
+  }, [snapshots, sprint, sprintPoints, effectiveWeeks]);
 
   // Sprint points by person
   const pointsByPerson = useMemo(() => {
@@ -446,7 +446,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     });
   };
 
-  const openAlertDrawer = (alert: { icon: string; label: string }) => {
+  const openAlertDrawer = useCallback((alert: { icon: string; label: string }) => {
     const now = Date.now();
     let items: DrawerItem[] = [];
 
@@ -482,7 +482,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
     }
 
     setDrawer({ title: alert.label, items });
-  };
+  }, [openPRs, allTasks, setDrawer]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-brand" /></div>;
