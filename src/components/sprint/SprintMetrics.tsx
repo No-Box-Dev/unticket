@@ -26,6 +26,9 @@ function getInitials(name: string): string {
 
 const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5";
 
+type DonutSegment = { value: number; color: string; label: string };
+type SegmentWithOffset = DonutSegment & { dashLen: number; gap: number; offset: number };
+
 interface SprintMetricsProps {
   sprint: SprintConfig;
   sprintFeatures: Feature[];
@@ -241,14 +244,13 @@ function StatCard({ label, value, subtitle, color }: { label: string; value: num
   );
 }
 
-function DonutChart({ segments }: { segments: { value: number; color: string; label: string }[] }) {
+function DonutChart({ segments }: { segments: DonutSegment[] }) {
   const total = segments.reduce((sum, s) => sum + s.value, 0);
   const size = 160;
   const stroke = 32;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  type SegmentWithOffset = (typeof segments)[0] & { dashLen: number; gap: number; offset: number };
   const segmentsWithOffsets: SegmentWithOffset[] = [];
   let runningOffset = 0;
   for (const seg of segments) {
