@@ -40,7 +40,6 @@ function getLabelStyle(name: string, color: string) {
 const PAGE_SIZE = 30;
 
 interface IssuesTabProps {
-  repoNames: string[];
   navFilter?: import("@/lib/types").NavFilter | null;
 }
 

@@ -90,7 +90,7 @@ export function DashboardPage() {
                 setSearchParams(params, { replace: true });
               }} />}
               {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
-              {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
+              {activeTab === "issues" && <IssuesTab navFilter={navFilter} />}
               {activeTab === "todos" && <TodoTab />}
               {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
               {activeTab === "workload" && <WorkloadTab repoNames={repoNames} />}
