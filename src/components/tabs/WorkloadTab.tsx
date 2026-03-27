@@ -53,7 +53,7 @@ interface EngineerWorkload {
   tasks: SubIssueWithFeature[];
 }
 
-export function WorkloadTab({ repoNames: _repoNames }: { repoNames: string[] }) {
+export function WorkloadTab(_: { repoNames: string[] }) {
   const { data: orgMembers, isLoading } = useActiveMembers();
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();

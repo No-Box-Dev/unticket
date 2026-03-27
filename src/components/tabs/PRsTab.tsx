@@ -17,6 +17,15 @@ function daysAgo(date: string): number {
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
 
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (sortKey !== col) return null;
+  return sortDir === "asc" ? (
+    <ChevronUp className="w-3 h-3 inline ml-0.5" />
+  ) : (
+    <ChevronDown className="w-3 h-3 inline ml-0.5" />
+  );
+}
+
 interface PRsTabProps {
   repoNames: string[];
   navFilter?: import("@/lib/types").NavFilter | null;
@@ -129,15 +138,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       setSortKey(key);
       setSortDir("desc");
     }
-  };
-
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return null;
-    return sortDir === "asc" ? (
-      <ChevronUp className="w-3 h-3 inline ml-0.5" />
-    ) : (
-      <ChevronDown className="w-3 h-3 inline ml-0.5" />
-    );
   };
 
   const syncDone = syncProgress?.phase === "done";
@@ -296,31 +296,31 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                 onClick={() => toggleSort("repo")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                PR <SortIcon col="repo" />
+                PR <SortIcon col="repo" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("title")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Title <SortIcon col="title" />
+                Title <SortIcon col="title" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("author")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Author <SortIcon col="author" />
+                Author <SortIcon col="author" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("reviewers")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Reviewers <SortIcon col="reviewers" />
+                Reviewers <SortIcon col="reviewers" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("age")}
                 className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
-                Age <SortIcon col="age" />
+                Age <SortIcon col="age" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th className="px-4 py-2.5 w-8"></th>
             </tr>

@@ -80,6 +80,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   }, [allPRsData, linkedPRs, prSearch, prRepoFilter, prCreatorFilter]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const hasUnsavedChanges = useRef(false);
 
   const save = useCallback((next: Feature) => {
     hasUnsavedChanges.current = false;
@@ -106,8 +107,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
       return next;
     });
   }
-
-  const hasUnsavedChanges = useRef(false);
 
   function handleClose() {
     // Flush any pending debounced save, but only if there are unsaved changes

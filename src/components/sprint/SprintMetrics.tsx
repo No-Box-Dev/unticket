@@ -246,21 +246,21 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
   const stroke = 32;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+
+  const segmentsWithOffsets: Array<(typeof segments)[0] & { dashLen: number; gap: number; offset: number }> = [];
+  let runningOffset = 0;
+  for (const seg of segments) {
+    const dashLen = (seg.value / total) * circumference;
+    segmentsWithOffsets.push({ ...seg, dashLen, gap: circumference - dashLen, offset: runningOffset });
+    runningOffset += dashLen;
+  }
 
   return (
     <div className="flex flex-col items-center gap-4">
       <svg width={size} height={size} className="transform -rotate-90">
-        {segments.map((seg) => {
-          const pct = seg.value / total;
-          const dashLen = pct * circumference;
-          const gap = circumference - dashLen;
-          const currentOffset = offset;
-          offset += dashLen;
-          return (
-            <circle key={seg.label} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={stroke} strokeDasharray={`${dashLen} ${gap}`} strokeDashoffset={-currentOffset} className="transition-all duration-500" />
-          );
-        })}
+        {segmentsWithOffsets.map((seg) => (
+            <circle key={seg.label} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={stroke} strokeDasharray={`${seg.dashLen} ${seg.gap}`} strokeDashoffset={-seg.offset} className="transition-all duration-500" />
+          ))}
       </svg>
       <div className="flex flex-wrap justify-center gap-3">
         {segments.map((seg) => (

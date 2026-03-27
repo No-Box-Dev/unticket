@@ -320,8 +320,6 @@ function TasksView({ tasks, featureMap }: {
 }) {
   const [expandedFeatureId, setExpandedFeatureId] = useState<number | null>(null);
 
-  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
-
   // Group tasks by feature
   const grouped = useMemo(() => {
     const map = new Map<number, SubIssueWithFeature[]>();
@@ -332,6 +330,8 @@ function TasksView({ tasks, featureMap }: {
     }
     return [...map.entries()];
   }, [tasks]);
+
+  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
 
   return (
     <div className="space-y-1">
