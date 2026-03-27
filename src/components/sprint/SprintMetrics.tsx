@@ -247,10 +247,12 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Precompute offsets to avoid mutable variable inside JSX map
-  const segmentData = segments.map((seg, i) => {
-    const startOffset = segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circumference, 0);
+  // Precompute offsets in a single O(n) pass
+  let runningOffset = 0;
+  const segmentData = segments.map((seg) => {
     const dashLen = (seg.value / total) * circumference;
+    const startOffset = runningOffset;
+    runningOffset += dashLen;
     return { seg, dashLen, gap: circumference - dashLen, startOffset };
   });
 

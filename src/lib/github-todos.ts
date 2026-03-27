@@ -195,7 +195,7 @@ export async function updateTodo(
     .filter(Boolean) as string[];
 
   // Rebuild labels — keep non-todo labels, rebuild status/feature
-  const newLabels = currentLabels.filter(
+  let newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
       !l.startsWith(FEATURE_PREFIX),
