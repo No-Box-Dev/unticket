@@ -23,8 +23,7 @@ import {
   unlinkPR,
   updateIssueState,
 } from "@/lib/github";
-import type { RateLimitInfo } from "@/lib/github";
-import type { IssueQueryParams } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PaginatedResponse } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -184,13 +183,14 @@ export function useUpdateIssueAssignees() {
     onMutate: async ({ repo, issueNumber, assignees }) => {
       // Optimistically update all issue queries
       await qc.cancelQueries({ queryKey: ["issues", selectedOrg] });
-      qc.setQueriesData<any>({ queryKey: ["issues", selectedOrg] }, (old: any) => {
+      type CachedIssue = { repo: string; number: number; assignees: { login: string; avatar_url: string }[] };
+      qc.setQueriesData<PaginatedResponse<CachedIssue>>({ queryKey: ["issues", selectedOrg] }, (old) => {
         if (!old?.data) return old;
         return {
           ...old,
-          data: old.data.map((issue: any) =>
+          data: old.data.map((issue) =>
             issue.repo === repo && issue.number === issueNumber
-              ? { ...issue, assignees: assignees.map((login) => ({ login, avatar_url: issue.assignees?.find((a: any) => a.login === login)?.avatar_url ?? "" })) }
+              ? { ...issue, assignees: assignees.map((l) => ({ login: l, avatar_url: issue.assignees?.find((a) => a.login === l)?.avatar_url ?? "" })) }
               : issue,
           ),
         };
@@ -341,7 +341,7 @@ export function useAssignedIssues(login: string) {
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
       // Exclude issues from the gitpulse repo (those are todos/features/sprint tasks)
-      return (res.data as any[]).filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
+      return res.data.filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
     },
     enabled: !!selectedOrg && !!login,
     staleTime: 2 * 60 * 1000,
@@ -356,11 +356,11 @@ export function useReviewPRs(login: string) {
     queryFn: async () => {
       const prs = await fetchOpenPRs();
       return prs
-        .filter((pr: any) =>
+        .filter((pr) =>
           !pr.draft &&
-          pr.requested_reviewers?.some((r: any) => r.login === login),
+          pr.requested_reviewers?.some((r) => r.login === login),
         )
-        .map((pr: any) => ({
+        .map((pr) => ({
           repo: pr.repo,
           number: pr.number,
           title: pr.title,

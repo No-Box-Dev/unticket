@@ -378,7 +378,7 @@ function MyTodosView({
       if (todo.status === targetStatus) return;
       updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [allTodos, updateIssueStateMut],
+    [allTodos, updateIssueStateMut, updateTodoMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -565,7 +565,7 @@ function MyFeaturesView({
       if (!feature || feature.status === targetStatus) return;
       updateFeatureMut.mutate(withStatusTransition(feature, targetStatus));
     },
-    [myFeatures],
+    [myFeatures, updateFeatureMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: BoardStatus) => {
