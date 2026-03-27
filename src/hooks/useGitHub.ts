@@ -190,7 +190,7 @@ export function useUpdateIssueAssignees() {
           ...old,
           data: old.data.map((issue) =>
             issue.repo === repo && issue.number === issueNumber
-              ? { ...issue, assignees: assignees.map((l) => ({ login: l, avatar_url: issue.assignees?.find((a) => a.login === l)?.avatar_url ?? "" })) }
+              ? { ...issue, assignees: assignees.map((login) => ({ login, avatar_url: issue.assignees?.find((a) => a.login === login)?.avatar_url ?? "" })) }
               : issue,
           ),
         };
