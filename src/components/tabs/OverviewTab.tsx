@@ -242,7 +242,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         ? compute(productionDates)
         : { current: productionFeatures.length, previous: 0, change: 0, history: [] };
     return { prsMerged, prsReviewed, issuesCreated, issuesClosed, issuesSolved, featuresShipped };
-  }, [mergedPRs, closedIssues, allIssues, features, weeks, effectiveWeeks, sprintDateRange, compute]);
+  }, [mergedPRs, closedIssues, allIssues, features, compute]);
 
   // Cycle time
   const cycleTime = useMemo(() => {
@@ -251,7 +251,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
       ? (mergedPRs as any[]).filter((p: any) => p.merged_at && p.merged_at >= sprintDateRange.start && p.merged_at <= sprintDateRange.end + "T23:59:59")
       : mergedPRs;
     return computeCycleTime(prs as any, isDaily ? 2 : effectiveWeeks);
-  }, [mergedPRs, weeks, effectiveWeeks, isDaily, sprintDateRange]);
+  }, [mergedPRs, effectiveWeeks, isDaily, sprintDateRange]);
 
   // Alerts
   const alerts = useMemo(() => {
@@ -327,7 +327,7 @@ export function OverviewTab({ repoNames, onTabChange }: OverviewTabProps) {
         return { ...c, tasksDone: tasks.done, tasksTotal: tasks.total, rolesDone: roles.done, rolesTotal: roles.total };
       })
       .sort((a, b) => nameOf(a.login).localeCompare(nameOf(b.login)));
-  }, [mergedPRs, closedIssues, allTasks, contributorRange, orgMembers, people, nameOf]);
+  }, [mergedPRs, closedIssues, allTasks, contributorRange, orgMembers, nameOf]);
 
   // Velocity trend
   const velocity = useMemo(() => {

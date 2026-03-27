@@ -19,6 +19,8 @@ function daysAgo(date: string): number {
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
+const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
+
 function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: "asc" | "desc" }) {
   if (activeSortKey !== column) return null;
   return activeSortDirection === "asc" ? (
@@ -73,7 +75,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
-  const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
   const repoList = useMemo(() => {
     return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
   }, [repos]);

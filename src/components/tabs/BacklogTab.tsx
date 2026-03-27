@@ -42,7 +42,6 @@ export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: numbe
         if (f) setDetailFeature(f);
       }
     } else if (detailFeature) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetailFeature(null);
     }
   }, [urlFeatureId, features]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -103,7 +103,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -247,7 +246,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint, setSearchParams]);
+  }, [query, features, allPeople, roles, allTasks, todos, onNavigate, dark, toggleTheme, setViewingSprint, setSearchParams]);
 
   // Keyboard navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
