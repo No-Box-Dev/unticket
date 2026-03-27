@@ -53,7 +53,7 @@ interface EngineerWorkload {
   tasks: SubIssueWithFeature[];
 }
 
-export function WorkloadTab(_: { repoNames: string[] }) {
+export function WorkloadTab() {
   const { data: orgMembers, isLoading } = useActiveMembers();
   const { data: features } = useFeatures();
   const { data: sprint } = useSprint();
@@ -120,7 +120,7 @@ export function WorkloadTab(_: { repoNames: string[] }) {
     })
     .filter((e) => e.totalPoints > 0 || e.totalTasks > 0 || e.features.length > 0)
     .sort((a, b) => b.totalPoints - a.totalPoints);
-  }, [orgMembers, people, allTasks, sprintFeatures]);
+  }, [orgMembers, people, allTasks, sprintFeatures, sprint]);
 
   const totals = useMemo(() => {
     const t = { points: 0, donePoints: 0, tasks: 0, doneTasks: 0 };
