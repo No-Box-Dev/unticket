@@ -327,7 +327,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
   );
 
-  console.log(`[gitpulse] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
+  console.warn(`[gitpulse] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
   if (features.length === 0 && issues.length > 0) {
     console.warn(`[gitpulse] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
@@ -401,7 +401,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
       .filter((r) => !featureNumbers.includes(r.number))
       .map((r) => r.number);
     if (toDelete.length > 0) {
-      console.log(`[gitpulse] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
+      console.warn(`[gitpulse] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
       for (let i = 0; i < toDelete.length; i += 50) {
         const batch = toDelete.slice(i, i + 50);
         await db.batch(

@@ -139,7 +139,7 @@ async function syncIssueToD1(data: any): Promise<void> {
 
 export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total: number }> {
   const result = await apiPost<{ ok: boolean; synced: number; total: number }>("/api/features");
-  console.log(`[unticket.ai] Feature sync: ${result.synced} features from ${result.total} issues`);
+  console.warn(`[unticket.ai] Feature sync: ${result.synced} features from ${result.total} issues`);
   return result;
 }
 
