@@ -58,7 +58,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const allPeople = useMemo(() => {
     const peopleMap = new Map((people ?? []).map((p) => [p.github, p]));
     const members = orgMembers ?? [];
-    return members.map((m: any) => {
+    return members.map((m) => {
       const person = peopleMap.get(m.login);
       return {
         login: m.login,
@@ -97,7 +97,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Focus input when opened
+  // Focus input when opened — intentionally resets state when palette opens
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -105,6 +106,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const results = useMemo((): SearchResult[] => {
     const q = query.toLowerCase().trim();
@@ -244,9 +246,10 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, sprint, onNavigate, dark, toggleTheme, setViewingSprint]);
+  }, [query, features, allPeople, roles, allTasks, todos, onNavigate, dark, toggleTheme, setViewingSprint, setSearchParams]);
 
-  // Keyboard navigation
+  // Keyboard navigation — reset selection on query change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedIndex(0); }, [query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

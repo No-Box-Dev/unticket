@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 

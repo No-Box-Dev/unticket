@@ -59,8 +59,8 @@ export function SprintMetrics({ sprint, sprintFeatures, people, allTasks, tasksL
     const endDate = sprint?.endDate ? new Date(sprint.endDate + "T23:59:59") : null;
     const overdue = endDate && now > endDate ? open : 0;
     const completionPct = total > 0 ? Math.round((closed / total) * 100) : 0;
-    const totalPoints = tasks.reduce((sum, t) => sum + ((t as any).points ?? 0), 0);
-    const donePoints = tasks.filter((t) => t.state === "closed").reduce((sum, t) => sum + ((t as any).points ?? 0), 0);
+    const totalPoints = tasks.reduce((sum, t) => sum + (t.points ?? 0), 0);
+    const donePoints = tasks.filter((t) => t.state === "closed").reduce((sum, t) => sum + (t.points ?? 0), 0);
     return { total, open, closed, overdue, completionPct, totalPoints, donePoints };
   }, [tasks, sprint]);
 
@@ -246,21 +246,20 @@ function DonutChart({ segments }: { segments: { value: number; color: string; la
   const stroke = 32;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+
+  // Precompute offsets to avoid mutable variable inside JSX map
+  const segmentData = segments.map((seg, i) => {
+    const startOffset = segments.slice(0, i).reduce((sum, s) => sum + (s.value / total) * circumference, 0);
+    const dashLen = (seg.value / total) * circumference;
+    return { seg, dashLen, gap: circumference - dashLen, startOffset };
+  });
 
   return (
     <div className="flex flex-col items-center gap-4">
       <svg width={size} height={size} className="transform -rotate-90">
-        {segments.map((seg) => {
-          const pct = seg.value / total;
-          const dashLen = pct * circumference;
-          const gap = circumference - dashLen;
-          const currentOffset = offset;
-          offset += dashLen;
-          return (
-            <circle key={seg.label} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={stroke} strokeDasharray={`${dashLen} ${gap}`} strokeDashoffset={-currentOffset} className="transition-all duration-500" />
-          );
-        })}
+        {segmentData.map(({ seg, dashLen, gap, startOffset }) => (
+            <circle key={seg.label} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={seg.color} strokeWidth={stroke} strokeDasharray={`${dashLen} ${gap}`} strokeDashoffset={-startOffset} className="transition-all duration-500" />
+        ))}
       </svg>
       <div className="flex flex-wrap justify-center gap-3">
         {segments.map((seg) => (

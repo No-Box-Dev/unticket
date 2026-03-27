@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SprintIssuesTable } from "../SprintIssuesTable";
 
-const makeIssue = (overrides: Partial<any> = {}) => ({
+type SprintIssue = { id: number; number: number; title: string; state: string; created_at: string; closed_at?: string | null; user: { login: string } | null; assignees: { login: string }[]; labels: { name: string; color: string }[]; html_url: string; repo: string };
+
+const makeIssue = (overrides: Partial<SprintIssue> = {}) => ({
   id: 1,
   number: 42,
   title: "Fix bug",

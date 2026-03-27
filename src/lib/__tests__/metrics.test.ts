@@ -70,7 +70,7 @@ describe("extractClosedDates", () => {
       { closed_at: null },
       {},
     ];
-    expect(extractClosedDates(issues as any)).toEqual(["2026-02-01T00:00:00Z"]);
+    expect(extractClosedDates(issues)).toEqual(["2026-02-01T00:00:00Z"]);
   });
 
   it("returns empty for empty input", () => {

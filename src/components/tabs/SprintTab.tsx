@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
@@ -96,7 +97,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     if (urlFeatureId) {
       if (detailFeature?.id !== urlFeatureId) {
         const f = features.find((feat) => feat.id === urlFeatureId);
-        if (f) setDetailFeature(f);
+        if (f) setDetailFeature(f); // eslint-disable-line react-hooks/set-state-in-effect
       }
     } else if (detailFeature) {
       setDetailFeature(null);

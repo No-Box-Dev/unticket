@@ -101,7 +101,7 @@ export function WorkloadTab() {
       }
     }
 
-    return orgMembers.map((m: any) => {
+    return orgMembers.map((m) => {
       const person = peopleMap.get(m.login);
       const tasks = tasksByPerson.get(m.login) ?? { done: 0, total: 0, points: 0, donePoints: 0, tasks: [] };
       const personFeatures = featuresByPerson.get(m.login) ?? [];
@@ -120,7 +120,7 @@ export function WorkloadTab() {
     })
     .filter((e) => e.totalPoints > 0 || e.totalTasks > 0 || e.features.length > 0)
     .sort((a, b) => b.totalPoints - a.totalPoints);
-  }, [orgMembers, people, allTasks, sprintFeatures]);
+  }, [orgMembers, people, allTasks, sprintFeatures, sprint?.startDate]);
 
   const totals = useMemo(() => {
     const t = { points: 0, donePoints: 0, tasks: 0, doneTasks: 0 };

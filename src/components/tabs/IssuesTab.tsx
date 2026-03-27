@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
 import { useSprint } from "@/hooks/useConfigRepo";
@@ -17,6 +18,15 @@ function daysAgo(date: string): number {
 }
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: "asc" | "desc" }) {
+  if (sortKey !== col) return null;
+  return sortDir === "asc" ? (
+    <ChevronUp className="w-3 h-3 inline ml-0.5" />
+  ) : (
+    <ChevronDown className="w-3 h-3 inline ml-0.5" />
+  );
+}
 
 const labelColors: Record<string, { bg: string; text: string }> = {
   bug: { bg: "bg-red-50", text: "text-red-700" },
@@ -63,9 +73,9 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
-  const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
   const repoList = useMemo(() => {
-    return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
+    const excluded = new Set(["gitpulse", ".gitpulse"]);
+    return repos?.map((r: any) => r.name).filter((n: string) => !excluded.has(n)).sort() ?? [];
   }, [repos]);
 
   // Resolve repo filter → repo names
@@ -127,14 +137,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     resetPages();
   };
 
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return null;
-    return sortDir === "asc" ? (
-      <ChevronUp className="w-3 h-3 inline ml-0.5" />
-    ) : (
-      <ChevronDown className="w-3 h-3 inline ml-0.5" />
-    );
-  };
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
@@ -360,19 +362,19 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 onClick={() => toggleSort("number")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Issue <SortIcon col="number" />
+                Issue <SortIcon col="number" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("title")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Title <SortIcon col="title" />
+                Title <SortIcon col="title" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("repo")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
               >
-                Repo <SortIcon col="repo" />
+                Repo <SortIcon col="repo" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
               <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
@@ -380,7 +382,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 onClick={() => toggleSort("created_at")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
-                Age <SortIcon col="created_at" />
+                Age <SortIcon col="created_at" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th className="px-3 py-2 w-8"></th>
             </tr>

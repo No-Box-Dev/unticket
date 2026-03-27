@@ -95,6 +95,7 @@ interface ConfirmState {
 }
 
 /** Hook for managing confirm dialog state. Returns { confirm, dialogProps }. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useConfirm() {
   const [state, setState] = useState<ConfirmState>({ open: false, title: "" });
 

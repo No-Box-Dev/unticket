@@ -31,7 +31,7 @@ const AUTH_TIMEOUT_MS = 10_000;
 
 function isRateLimitError(err: unknown): boolean {
   if (err instanceof Error) {
-    const status = (err as any).status as number | undefined;
+    const status = (err as Error & { status?: number }).status;
     if (status === 403 || status === 429) return true;
     if (err.message.toLowerCase().includes("rate limit")) return true;
   }
@@ -237,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

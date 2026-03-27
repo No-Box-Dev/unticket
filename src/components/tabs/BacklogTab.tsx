@@ -38,7 +38,7 @@ export function BacklogTab({ urlFeatureId, onUrlChange }: { urlFeatureId?: numbe
     if (urlFeatureId) {
       if (detailFeature?.id !== urlFeatureId) {
         const f = features.find((feat) => feat.id === urlFeatureId);
-        if (f) setDetailFeature(f);
+        if (f) setDetailFeature(f); // eslint-disable-line react-hooks/set-state-in-effect
       }
     } else if (detailFeature) {
       setDetailFeature(null);

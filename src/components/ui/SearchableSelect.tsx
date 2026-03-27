@@ -85,7 +85,7 @@ export function SearchableSelect({
 
   // Reset highlight when search changes
   useEffect(() => {
-    setHighlightIndex(-1);
+    setHighlightIndex(-1); // eslint-disable-line react-hooks/set-state-in-effect
   }, [search]);
 
   const selectedLabel = options.find((o) => o.value === value)?.label;

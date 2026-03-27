@@ -47,8 +47,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
       const myFeatures = sprintFeatures.filter((f) => f.owners.includes(member.login));
-      const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
-      const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
+      const prsMerged = allPRs?.filter((pr) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
+      const issuesSolved = closedIssues?.filter((i) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
       const myTasks = allTasks?.filter((t) => t.assignees.includes(member.login)) ?? [];
       const tasksDone = myTasks.filter((t) => t.state === "closed").length;
@@ -403,8 +403,8 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
       <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider px-2">Linked PRs</span>
       <div className="space-y-0.5 mt-1">
         {prs.map((pr) => {
-          const isMerged = pr.state === "closed" || (pr as any).merged_at;
-          const source = (pr as any).linkSource as string | undefined;
+          const isMerged = pr.state === "closed" || pr.merged_at;
+          const source = pr.linkSource;
           return (
             <a
               key={pr.id}

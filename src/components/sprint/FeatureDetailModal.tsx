@@ -116,7 +116,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
       debounceRef.current = undefined;
       if (hasUnsavedChanges.current) {
         onUpdate({ ...draft });
-        hasUnsavedChanges.current = false;
+        hasUnsavedChanges.current = false; // eslint-disable-line react-hooks/immutability
       }
     }
     onClose();
@@ -437,7 +437,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
               </button>
               {createRoleMut.isError && (
                 <span className="text-xs text-red-500 w-full">
-                  Failed to create role: {(createRoleMut.error as any)?.message ?? "Unknown error"}
+                  Failed to create role: {createRoleMut.error instanceof Error ? createRoleMut.error.message : "Unknown error"}
                 </span>
               )}
             </div>
