@@ -36,7 +36,7 @@ const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
 
 const SPRINT_FILTERS: SprintFilter[] = ["sprint", "all"];
 
-type BoardStatus = Exclude<FeatureStatus, "future" | ScopingStatus>;
+type BoardStatus = Exclude<FeatureStatus, "future" | "scoping" | ScopingStatus>;
 const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
