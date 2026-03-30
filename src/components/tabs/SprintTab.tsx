@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, ScopingStatus, SprintSnapshot, Points } from "@/lib/types";
+import { SCOPING_STATUS_ORDER } from "@/lib/types";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List, ScanSearch } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -220,7 +221,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
 
   // Scoping features — all features with scoping statuses, regardless of sprint
   const scopingFeatures = useMemo(() => {
-    const scopingStatuses = new Set(["scoping", "idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"]);
+    const scopingStatuses = new Set<FeatureStatus>(["scoping", ...SCOPING_STATUS_ORDER]);
     const q = searchQuery.toLowerCase().trim();
     return (features ?? []).filter((f) => {
       if (!scopingStatuses.has(f.status)) return false;
@@ -554,6 +555,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           onOpenDetail={openDetail}
           onAdd={addScopingFeature}
           isAdmin={isAdmin}
+          currentSprint={sprint?.number}
         />
       )}
 
@@ -897,13 +899,14 @@ interface ScopingViewProps {
   onOpenDetail: (f: Feature) => void;
   onAdd: (title: string) => void;
   isAdmin: boolean;
+  currentSprint?: number;
 }
 
 function ScopingView({
   features, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
   personPills, allPeopleNames,
   dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
-  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin, currentSprint,
 }: ScopingViewProps) {
   const columns = useMemo(() => {
     const result: Record<ScopingStatus, Feature[]> = {
@@ -971,7 +974,8 @@ function ScopingView({
                     onUpdate={onUpdate}
                     onDelete={onDelete}
                     onOpenDetail={onOpenDetail}
-                    mode="sprint"
+                    mode="scoping"
+                    currentSprint={currentSprint}
                     isAdmin={isAdmin}
                     draggable
                     onDragStart={onDragStart}
