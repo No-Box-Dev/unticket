@@ -13,7 +13,7 @@ import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
 import { STATUS_COLORS as SHARED_STATUS_COLORS } from "@/lib/types";
-import type { Todo, TodoStatus, Feature, FeatureStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus, ScopingStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 type TodoView = "todos" | "features" | "roles";
@@ -36,7 +36,7 @@ const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
 
 const SPRINT_FILTERS: SprintFilter[] = ["sprint", "all"];
 
-type BoardStatus = Exclude<FeatureStatus, "future">;
+type BoardStatus = Exclude<FeatureStatus, "future" | ScopingStatus>;
 const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
