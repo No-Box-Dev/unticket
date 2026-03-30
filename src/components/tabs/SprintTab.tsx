@@ -870,8 +870,6 @@ function FeaturesView({
 
 // ─── Scoping View ─────────────────────────────────────────────────────
 
-import type { ScopingStatus } from "@/lib/types";
-
 const SCOPING_COLUMN_DEFS: { status: ScopingStatus; label: string; color: string }[] = [
   { status: "idea", label: "Idea", color: "bg-slate-400" },
   { status: "client_scoping", label: "Client Scoping", color: "bg-pink-400" },
