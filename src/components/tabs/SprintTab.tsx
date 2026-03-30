@@ -314,8 +314,8 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     && (features?.length ?? 0) === 0;
 
   const VIEW_TABS: { key: SprintView; label: string; icon: typeof LayoutGrid }[] = [
-    { key: "features", label: "Features", icon: LayoutGrid },
     { key: "scoping", label: "Scoping", icon: ScanSearch },
+    { key: "features", label: "Features", icon: LayoutGrid },
     { key: "roles", label: "Roles", icon: Users },
     { key: "tasks", label: "Tasks", icon: ListChecks },
     { key: "metrics", label: "Metrics", icon: BarChart3 },
