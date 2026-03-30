@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
@@ -194,7 +195,7 @@ export async function updateTodo(
     .filter(Boolean) as string[];
 
   // Rebuild labels — keep non-todo labels, rebuild status/feature
-  let newLabels = currentLabels.filter(
+  const newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
       !l.startsWith(FEATURE_PREFIX),

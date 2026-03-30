@@ -83,11 +83,6 @@ export function SearchableSelect({
     o.label.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Reset highlight when search changes
-  useEffect(() => {
-    setHighlightIndex(-1);
-  }, [search]);
-
   const selectedLabel = options.find((o) => o.value === value)?.label;
 
   const selectOption = useCallback((opt: Option) => {
@@ -167,7 +162,7 @@ export function SearchableSelect({
               ref={inputRef}
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setHighlightIndex(-1); }}
               onKeyDown={handleKeyDown}
               placeholder="Search..."
               aria-controls={listboxId}
