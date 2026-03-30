@@ -11,7 +11,7 @@ import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues, useActiveMembe
 import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
+import type { Feature, FeatureStatus, ScopingStatus, SprintSnapshot, Points } from "@/lib/types";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List, ScanSearch } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -21,7 +21,7 @@ import { cn } from "@/lib/cn";
 type SprintView = "features" | "roles" | "tasks" | "metrics" | "scoping";
 type SortKey = "default" | "title";
 
-type BoardStatus = Exclude<FeatureStatus, "future">;
+type BoardStatus = Exclude<FeatureStatus, "future" | ScopingStatus>;
 const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
