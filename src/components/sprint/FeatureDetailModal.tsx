@@ -170,12 +170,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="group/title flex items-center gap-2 flex-1 min-w-0">
             <input
               value={draft.title}
               onChange={(e) => update({ title: e.target.value }, true)}
-              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none w-full rounded px-1 -mx-1 hover:bg-stone-100 dark:hover:bg-white/[0.06] focus:bg-stone-100 dark:focus:bg-white/[0.06] focus:ring-2 focus:ring-brand/30 transition-colors"
+              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent w-full rounded px-2 py-1 -mx-2 border border-transparent hover:border-stone-200 dark:hover:border-white/[0.1] focus:border-brand/40 focus:ring-2 focus:ring-brand/20 outline-none transition-all"
+              title="Click to edit title"
             />
+            <Pencil size={14} className="shrink-0 text-stone-300 dark:text-neutral-600 group-hover/title:text-stone-400 dark:group-hover/title:text-neutral-500 transition-colors" />
             {draft.url && (
               <a
                 href={draft.url}
