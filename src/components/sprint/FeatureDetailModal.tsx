@@ -174,7 +174,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
             <input
               value={draft.title}
               onChange={(e) => update({ title: e.target.value }, true)}
-              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full"
+              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none w-full rounded px-1 -mx-1 hover:bg-stone-100 dark:hover:bg-white/[0.06] focus:bg-stone-100 dark:focus:bg-white/[0.06] focus:ring-2 focus:ring-brand/30 transition-colors"
             />
             {draft.url && (
               <a
