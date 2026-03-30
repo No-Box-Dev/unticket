@@ -5,6 +5,7 @@ import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useF
 import { useIsAdmin, useAssignedIssues, useUpdateIssueState, useReviewPRs } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
+import { getOctokit } from "@/lib/github";
 import { withStatusTransition } from "@/lib/github-features";
 import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users, CircleDot, GitPullRequest } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -16,11 +17,12 @@ import { STATUS_COLORS as SHARED_STATUS_COLORS } from "@/lib/types";
 import type { Todo, TodoStatus, Feature, FeatureStatus, ScopingStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
-type TodoView = "todos" | "features" | "roles";
+type TodoView = "todos" | "issues" | "features" | "roles";
 type SprintFilter = "sprint" | "all";
 
 const VIEW_TABS: { key: TodoView; label: string; icon: typeof ListChecks }[] = [
   { key: "todos", label: "My Todos", icon: ListChecks },
+  { key: "issues", label: "My Issues", icon: CircleDot },
   { key: "features", label: "My Features", icon: LayoutGrid },
   { key: "roles", label: "My Roles", icon: Users },
 ];
@@ -66,6 +68,7 @@ export function TodoTab() {
   const [sprintFilter, setSprintFilter] = useState<SprintFilter>("sprint");
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+  const [detailIssue, setDetailIssue] = useState<AssignedIssue | null>(null);
 
   // Sprint tasks assigned to me
   const sprintFeatureIds = useMemo(
@@ -172,13 +175,19 @@ export function TodoTab() {
           mySprintTasks={mySprintTasks}
           myFeatures={myFeatures}
           featureMap={featureMap}
-          assignedIssues={(assignedIssues ?? []) as AssignedIssue[]}
           reviewPRs={reviewPRs ?? []}
           createTodoMut={createTodoMut}
           updateTodoMut={updateTodoMut}
           deleteTodoMut={deleteTodoMut}
-          updateIssueStateMut={updateIssueStateMut}
           onOpenDetail={setDetailTodo}
+        />
+      )}
+
+      {todoView === "issues" && (
+        <MyIssuesView
+          assignedIssues={(assignedIssues ?? []) as AssignedIssue[]}
+          updateIssueStateMut={updateIssueStateMut}
+          onOpenDetail={setDetailIssue}
         />
       )}
 
@@ -222,6 +231,15 @@ export function TodoTab() {
         />
       )}
 
+      {/* Issue detail modal */}
+      {detailIssue && (
+        <IssueDetailModal
+          issue={detailIssue}
+          org={selectedOrg}
+          onClose={() => setDetailIssue(null)}
+        />
+      )}
+
       {/* Feature detail modal */}
       {detailFeature && (
         <FeatureDetailModal
@@ -251,7 +269,6 @@ function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus):
 type BoardItem =
   | { type: "todo"; data: Todo }
   | { type: "sprint"; data: SubIssueWithFeature }
-  | { type: "issue"; data: AssignedIssue }
   | { type: "pr"; data: ReviewPR };
 
 function MyTodosView({
@@ -260,12 +277,10 @@ function MyTodosView({
   mySprintTasks,
   myFeatures,
   featureMap,
-  assignedIssues,
   reviewPRs,
   createTodoMut,
   updateTodoMut,
   deleteTodoMut,
-  updateIssueStateMut,
   onOpenDetail,
 }: {
   todos: Todo[];
@@ -273,12 +288,10 @@ function MyTodosView({
   mySprintTasks: SubIssueWithFeature[];
   myFeatures: Feature[];
   featureMap: Map<number, Feature>;
-  assignedIssues: AssignedIssue[];
   reviewPRs: ReviewPR[];
   createTodoMut: ReturnType<typeof useCreateTodoItem>;
   updateTodoMut: ReturnType<typeof useUpdateTodoItem>;
   deleteTodoMut: ReturnType<typeof useDeleteTodoItem>;
-  updateIssueStateMut: ReturnType<typeof useUpdateIssueState>;
   onOpenDetail: (t: Todo) => void;
 }) {
   const { user } = useAuth();
@@ -294,17 +307,12 @@ function MyTodosView({
       const col = classifyTask(st, featureMap.get(st.featureId)?.status);
       grouped[col].push({ type: "sprint", data: st });
     }
-    // Cross-repo assigned issues: open → backlog, closed → done
-    for (const issue of assignedIssues) {
-      const col: TodoStatus = issue.state === "closed" ? "done" : "backlog";
-      grouped[col].push({ type: "issue", data: issue });
-    }
     // PRs to review → review column
     for (const pr of reviewPRs) {
       grouped.review.push({ type: "pr", data: pr as ReviewPR });
     }
     return grouped;
-  }, [todos, mySprintTasks, featureMap, assignedIssues, reviewPRs]);
+  }, [todos, mySprintTasks, featureMap, reviewPRs]);
 
   function addTodo() {
     const title = input.trim();
@@ -352,19 +360,6 @@ function MyTodosView({
       e.preventDefault();
       setDragOverCol(null);
       const rawData = e.dataTransfer.getData("text/plain");
-
-      // Handle cross-repo issue drag (format: "issue:repo:number")
-      if (rawData.startsWith("issue:")) {
-        const parts = rawData.split(":");
-        const repo = parts[1];
-        const num = parseInt(parts[2]);
-        if (!repo || isNaN(num)) return;
-        const newState = targetStatus === "done" ? "closed" : "open";
-        updateIssueStateMut.mutate({ repo, issueNumber: num, state: newState });
-        return;
-      }
-
-      // Handle todo drag
       const todoId = parseInt(rawData);
       if (isNaN(todoId)) return;
       const todo = allTodos.find((t) => t.id === todoId);
@@ -372,7 +367,7 @@ function MyTodosView({
       if (todo.status === targetStatus) return;
       updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [allTodos, updateIssueStateMut, updateTodoMut],
+    [allTodos, updateTodoMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -425,7 +420,6 @@ function MyTodosView({
           const items = columns[status];
           const todoCount = items.filter((i) => i.type === "todo").length;
           const sprintCount = items.filter((i) => i.type === "sprint").length;
-          const issueCount = items.filter((i) => i.type === "issue").length;
           const prCount = items.filter((i) => i.type === "pr").length;
           const isDoneCol = status === "done";
           return (
@@ -444,7 +438,7 @@ function MyTodosView({
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
                 <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
                 <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{issueCount > 0 ? ` + ${issueCount}` : ""}{prCount > 0 ? ` + ${prCount}` : ""}
+                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{prCount > 0 ? ` + ${prCount}` : ""}
                 </span>
                 {isDoneCol && doneCount > 0 && (
                   <button
@@ -466,15 +460,6 @@ function MyTodosView({
                         key={`sprint-${st.number}`}
                         task={st}
                         featureTitle={st.featureTitle || featureMap.get(st.featureId)?.title}
-                      />
-                    );
-                  }
-                  if (item.type === "issue") {
-                    const issue = item.data;
-                    return (
-                      <IssueCard
-                        key={`issue-${issue.repo}-${issue.number}`}
-                        issue={issue}
                       />
                     );
                   }
@@ -808,18 +793,26 @@ function PRReviewCard({ pr }: { pr: ReviewPR }) {
 
 // ─── IssueCard (cross-repo assigned issues) ─────────────────────────────
 
-function IssueCard({ issue }: { issue: AssignedIssue }) {
+function IssueCard({
+  issue,
+  onClick,
+  onDragStart,
+}: {
+  issue: AssignedIssue;
+  onClick: () => void;
+  onDragStart?: (e: React.DragEvent) => void;
+}) {
   const isDone = issue.state === "closed";
+  const didDrag = useRef(false);
 
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/plain", `issue:${issue.repo}:${issue.number}`);
-        e.dataTransfer.effectAllowed = "move";
-      }}
+      draggable={!!onDragStart}
+      onDragStart={(e) => { didDrag.current = true; onDragStart?.(e); }}
+      onMouseDown={() => { didDrag.current = false; }}
+      onClick={() => { if (!didDrag.current) onClick(); }}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-pointer hover:shadow-sm transition-shadow",
         isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
       )}
     >
@@ -842,6 +835,214 @@ function IssueCard({ issue }: { issue: AssignedIssue }) {
         <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
           {issue.repo}#{issue.number}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── MyIssuesView ──────────────────────────────────────────────────────
+
+const ISSUE_COLUMNS: { status: "open" | "closed"; label: string; color: string }[] = [
+  { status: "open", label: "Open", color: "bg-cyan-500" },
+  { status: "closed", label: "Closed", color: "bg-stone-400" },
+];
+
+function MyIssuesView({
+  assignedIssues,
+  updateIssueStateMut,
+  onOpenDetail,
+}: {
+  assignedIssues: AssignedIssue[];
+  updateIssueStateMut: ReturnType<typeof useUpdateIssueState>;
+  onOpenDetail: (issue: AssignedIssue) => void;
+}) {
+  const [dragOverCol, setDragOverCol] = useState<"open" | "closed" | null>(null);
+
+  const columns = useMemo(() => {
+    const grouped: Record<"open" | "closed", AssignedIssue[]> = { open: [], closed: [] };
+    for (const issue of assignedIssues) {
+      grouped[issue.state === "closed" ? "closed" : "open"].push(issue);
+    }
+    return grouped;
+  }, [assignedIssues]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, issue: AssignedIssue) => {
+    e.dataTransfer.setData("text/plain", `issue:${issue.repo}:${issue.number}`);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetStatus: "open" | "closed") => {
+      e.preventDefault();
+      setDragOverCol(null);
+      const rawData = e.dataTransfer.getData("text/plain");
+      if (!rawData.startsWith("issue:")) return;
+      const parts = rawData.split(":");
+      const repo = parts[1];
+      const num = parseInt(parts[2]);
+      if (!repo || isNaN(num)) return;
+      const newState = targetStatus === "closed" ? "closed" : "open";
+      updateIssueStateMut.mutate({ repo, issueNumber: num, state: newState });
+    },
+    [updateIssueStateMut],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {ISSUE_COLUMNS.map(({ status, label, color }) => {
+        const items = columns[status];
+        return (
+          <div
+            key={status}
+            onDragOver={(e) => { handleDragOver(e); setDragOverCol(status); }}
+            onDragLeave={() => setDragOverCol(null)}
+            onDrop={(e) => handleDrop(e, status)}
+            className={cn(
+              "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
+              dragOverCol === status && "border-brand/50 bg-brand/5",
+            )}
+          >
+            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+              <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+              <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
+              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+            </div>
+            <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-260px)]">
+              {items.map((issue) => (
+                <IssueCard
+                  key={`${issue.repo}-${issue.number}`}
+                  issue={issue}
+                  onClick={() => onOpenDetail(issue)}
+                  onDragStart={(e) => handleDragStart(e, issue)}
+                />
+              ))}
+              {items.length === 0 && (
+                <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                  {status === "open" ? "No open issues assigned to you" : "No closed issues"}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── IssueDetailModal ──────────────────────────────────────────────────
+
+function IssueDetailModal({
+  issue,
+  org,
+  onClose,
+}: {
+  issue: AssignedIssue;
+  org: string | null;
+  onClose: () => void;
+}) {
+  const [body, setBody] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!org) { setBody(null); setLoading(false); return; }
+    setLoading(true);
+    const ok = getOctokit();
+    ok.issues.get({ owner: org, repo: issue.repo, issue_number: issue.number })
+      .then((res) => { if (!cancelled) setBody(res.data.body ?? ""); })
+      .catch(() => { if (!cancelled) setBody(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [org, issue.repo, issue.number]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
+          <div className="flex items-center gap-2 min-w-0">
+            <CircleDot size={16} className="text-cyan-500 shrink-0" />
+            <span className="text-lg font-semibold text-stone-800 dark:text-neutral-200 truncate">
+              {issue.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={issue.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
+              title="View on GitHub"
+            >
+              <ExternalLink size={16} />
+            </a>
+            <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Meta */}
+          <div className="flex items-center gap-3 flex-wrap text-xs text-stone-500 dark:text-neutral-400">
+            <span className="font-medium">{issue.repo}#{issue.number}</span>
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-[10px] font-medium",
+              issue.state === "open"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-stone-100 text-stone-600 dark:bg-white/[0.06] dark:text-neutral-400",
+            )}>
+              {issue.state}
+            </span>
+            {issue.labels.map((l) => (
+              <span
+                key={l.name}
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                style={{ backgroundColor: `#${l.color}20`, color: `#${l.color}` }}
+              >
+                {l.name}
+              </span>
+            ))}
+          </div>
+
+          {/* Body / Description */}
+          <div>
+            <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1.5">Description</span>
+            {loading && (
+              <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 flex justify-center">
+                <Spinner />
+              </div>
+            )}
+            {!loading && body && (
+              <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
+                {body}
+              </pre>
+            )}
+            {!loading && !body && (
+              <div className="rounded-lg border border-dashed border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 text-center text-sm text-stone-400 dark:text-neutral-500">
+                No description provided.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
