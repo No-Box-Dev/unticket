@@ -5,18 +5,25 @@ import { useFeatures, useSprint, useAllSprintSubIssues, usePeople } from "@/hook
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
 import type { FeatureStatus } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl";
 
 const STATUS_COLORS: Record<FeatureStatus, { bg: string; dot: string; text: string; label: string }> = {
-  plan: { bg: "bg-brand/10", dot: "bg-brand", text: "text-brand", label: "Plan" },
-  in_progress: { bg: "bg-amber-50 dark:bg-amber-900/20", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", label: "In Progress" },
-  demo: { bg: "bg-purple-50 dark:bg-purple-900/20", dot: "bg-purple-500", text: "text-purple-600 dark:text-purple-400", label: "Demo" },
-  tested: { bg: "bg-cyan-50 dark:bg-cyan-900/20", dot: "bg-cyan-500", text: "text-cyan-600 dark:text-cyan-400", label: "Tested" },
-  production: { bg: "bg-green-50 dark:bg-green-900/20", dot: "bg-green-500", text: "text-green-600 dark:text-green-400", label: "Production" },
-  future: { bg: "bg-stone-50 dark:bg-white/[0.04]", dot: "bg-stone-300", text: "text-stone-500", label: "Future" },
+  plan: { bg: "bg-brand/10", dot: "bg-brand", text: "text-brand", label: SHARED_STATUS_LABELS.plan },
+  in_progress: { bg: "bg-amber-50 dark:bg-amber-900/20", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", label: SHARED_STATUS_LABELS.in_progress },
+  demo: { bg: "bg-purple-50 dark:bg-purple-900/20", dot: "bg-purple-500", text: "text-purple-600 dark:text-purple-400", label: SHARED_STATUS_LABELS.demo },
+  tested: { bg: "bg-cyan-50 dark:bg-cyan-900/20", dot: "bg-cyan-500", text: "text-cyan-600 dark:text-cyan-400", label: SHARED_STATUS_LABELS.tested },
+  production: { bg: "bg-green-50 dark:bg-green-900/20", dot: "bg-green-500", text: "text-green-600 dark:text-green-400", label: SHARED_STATUS_LABELS.production },
+  future: { bg: "bg-stone-50 dark:bg-white/[0.04]", dot: "bg-stone-300", text: "text-stone-500", label: SHARED_STATUS_LABELS.future },
+  idea: { bg: "bg-slate-50 dark:bg-slate-900/20", dot: "bg-slate-400", text: "text-slate-600 dark:text-slate-400", label: SHARED_STATUS_LABELS.idea },
+  client_scoping: { bg: "bg-pink-50 dark:bg-pink-900/20", dot: "bg-pink-400", text: "text-pink-600 dark:text-pink-400", label: SHARED_STATUS_LABELS.client_scoping },
+  technical_scoping: { bg: "bg-indigo-50 dark:bg-indigo-900/20", dot: "bg-indigo-400", text: "text-indigo-600 dark:text-indigo-400", label: SHARED_STATUS_LABELS.technical_scoping },
+  planning: { bg: "bg-orange-50 dark:bg-orange-900/20", dot: "bg-orange-400", text: "text-orange-600 dark:text-orange-400", label: SHARED_STATUS_LABELS.planning },
+  planned: { bg: "bg-emerald-50 dark:bg-emerald-900/20", dot: "bg-emerald-400", text: "text-emerald-600 dark:text-emerald-400", label: SHARED_STATUS_LABELS.planned },
+  deferred: { bg: "bg-gray-50 dark:bg-gray-900/20", dot: "bg-gray-500", text: "text-gray-600 dark:text-gray-400", label: SHARED_STATUS_LABELS.deferred },
 };
 
 const PERSON_COLORS = [

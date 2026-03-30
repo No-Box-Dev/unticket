@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import { FEATURE_STATUS_ORDER } from "@/lib/types";
+import { FEATURE_STATUS_ORDER, STATUS_COLORS } from "@/lib/types";
 import type { Feature, FeatureStatus } from "@/lib/types";
 import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
 
@@ -33,12 +33,6 @@ export function FeatureCard({
   const hasPlan = !!feature.plan?.trim();
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
-  const STATUS_COLORS: Record<string, string> = {
-    plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
-    tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
-    idea: "bg-slate-400", client_scoping: "bg-pink-400", technical_scoping: "bg-indigo-400",
-    planning: "bg-orange-400", planned: "bg-emerald-400", deferred: "bg-gray-500",
-  };
   const dotColor = STATUS_COLORS[feature.status] ?? "bg-stone-300";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

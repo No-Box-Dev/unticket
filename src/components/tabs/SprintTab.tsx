@@ -270,6 +270,10 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     createFeatureMut.mutate({ title, status: "plan", sprint: sprint?.number ?? null });
   };
 
+  const addScopingFeature = useCallback((title: string) => {
+    createFeatureMut.mutate({ title, status: "idea", sprint: null });
+  }, [createFeatureMut]);
+
   if (sprintLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -548,9 +552,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           onUpdate={updateFeature}
           onDelete={deleteFeature}
           onOpenDetail={openDetail}
-          onAdd={(title: string) => {
-            createFeatureMut.mutate({ title, status: "idea", sprint: null });
-          }}
+          onAdd={addScopingFeature}
           isAdmin={isAdmin}
         />
       )}
@@ -869,7 +871,6 @@ function FeaturesView({
 // ─── Scoping View ─────────────────────────────────────────────────────
 
 import type { ScopingStatus } from "@/lib/types";
-import { SCOPING_STATUS_ORDER } from "@/lib/types";
 
 const SCOPING_COLUMN_DEFS: { status: ScopingStatus; label: string; color: string }[] = [
   { status: "idea", label: "Idea", color: "bg-slate-400" },
