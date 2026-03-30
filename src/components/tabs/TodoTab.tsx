@@ -12,6 +12,7 @@ import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
+import { STATUS_COLORS as SHARED_STATUS_COLORS } from "@/lib/types";
 import type { Todo, TodoStatus, Feature, FeatureStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
@@ -24,14 +25,7 @@ const VIEW_TABS: { key: TodoView; label: string; icon: typeof ListChecks }[] = [
   { key: "roles", label: "My Roles", icon: Users },
 ];
 
-const STATUS_DOT: Record<FeatureStatus, string> = {
-  plan: "bg-brand",
-  in_progress: "bg-amber-500",
-  demo: "bg-purple-500",
-  tested: "bg-cyan-500",
-  production: "bg-green-500",
-  future: "bg-stone-300",
-};
+const STATUS_DOT = SHARED_STATUS_COLORS;
 
 const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
   { status: "backlog", label: "Planned", color: "bg-brand" },
@@ -378,7 +372,7 @@ function MyTodosView({
       if (todo.status === targetStatus) return;
       updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [allTodos, updateIssueStateMut],
+    [allTodos, updateIssueStateMut, updateTodoMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
@@ -565,7 +559,7 @@ function MyFeaturesView({
       if (!feature || feature.status === targetStatus) return;
       updateFeatureMut.mutate(withStatusTransition(feature, targetStatus));
     },
-    [myFeatures],
+    [myFeatures, updateFeatureMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: BoardStatus) => {

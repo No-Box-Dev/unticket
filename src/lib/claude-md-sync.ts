@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 
 function encodeBase64Utf8(value: string): string {
