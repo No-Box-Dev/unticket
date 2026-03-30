@@ -102,14 +102,14 @@ export interface Todo {
 
 // gitpulse config repo types
 
-export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
+export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
 
 /** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only, and scoping statuses). */
 export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
 
 /** Scoping board statuses in column order. */
-export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
-export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"];
+export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
+export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "medical_scoping", "planned", "deferred"];
 
 /** Tailwind background color class for each feature status dot/indicator. */
 export const STATUS_COLORS: Record<FeatureStatus, string> = {
@@ -123,7 +123,7 @@ export const STATUS_COLORS: Record<FeatureStatus, string> = {
   idea: "bg-slate-400",
   client_scoping: "bg-pink-400",
   technical_scoping: "bg-indigo-400",
-  planning: "bg-orange-400",
+  medical_scoping: "bg-rose-400",
   planned: "bg-emerald-400",
   deferred: "bg-gray-500",
 };
@@ -140,7 +140,7 @@ export const STATUS_LABELS: Record<FeatureStatus, string> = {
   idea: "Idea",
   client_scoping: "Client Scoping",
   technical_scoping: "Technical Scoping",
-  planning: "Planning",
+  medical_scoping: "Medical Scoping",
   planned: "Planned",
   deferred: "Deferred",
 };

@@ -35,7 +35,7 @@ const FEATURE_LABELS = [
   { name: "status:idea", color: "94A3B8", description: "Idea — not yet scoped" },
   { name: "status:client_scoping", color: "F472B6", description: "Client scoping in progress" },
   { name: "status:technical_scoping", color: "818CF8", description: "Technical scoping in progress" },
-  { name: "status:planning", color: "FB923C", description: "Being planned" },
+  { name: "status:medical_scoping", color: "FB7185", description: "Medical scoping in progress" },
   { name: "status:planned", color: "34D399", description: "Scoped and planned" },
   { name: "status:deferred", color: "6B7280", description: "Deferred" },
   { name: "role", color: "6366F1", description: "Person role (sub-issue grouping)" },
