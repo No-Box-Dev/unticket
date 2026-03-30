@@ -555,6 +555,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           onOpenDetail={openDetail}
           onAdd={addScopingFeature}
           isAdmin={isAdmin}
+          currentSprint={sprint?.number}
         />
       )}
 
@@ -898,13 +899,14 @@ interface ScopingViewProps {
   onOpenDetail: (f: Feature) => void;
   onAdd: (title: string) => void;
   isAdmin: boolean;
+  currentSprint?: number;
 }
 
 function ScopingView({
   features, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
   personPills, allPeopleNames,
   dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
-  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin, currentSprint,
 }: ScopingViewProps) {
   const columns = useMemo(() => {
     const result: Record<ScopingStatus, Feature[]> = {
@@ -972,7 +974,8 @@ function ScopingView({
                     onUpdate={onUpdate}
                     onDelete={onDelete}
                     onOpenDetail={onOpenDetail}
-                    mode="sprint"
+                    mode="scoping"
+                    currentSprint={currentSprint}
                     isAdmin={isAdmin}
                     draggable
                     onDragStart={onDragStart}
