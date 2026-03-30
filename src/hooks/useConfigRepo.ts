@@ -384,7 +384,7 @@ export function useDeleteSubIssue() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { parentIssueNumber: number; subIssueNumber: number }) =>
+    mutationFn: (args: { parentIssueNumber: number; subIssueNumber: number; featureId?: number }) =>
       deleteSubIssue(selectedOrg!, args.subIssueNumber),
     onMutate: async (args) => {
       const key = ["subIssues", selectedOrg, args.parentIssueNumber];
@@ -393,6 +393,18 @@ export function useDeleteSubIssue() {
       qc.setQueryData<SubIssue[]>(key, (old) =>
         old?.filter((s) => s.number !== args.subIssueNumber) ?? [],
       );
+      // Also optimistically remove from rolesWithTasks cache
+      if (args.featureId) {
+        const rtKey = ["rolesWithTasks", selectedOrg, args.featureId];
+        qc.setQueryData<RoleWithTasks[]>(rtKey, (old) =>
+          old?.map((rw) => ({
+            ...rw,
+            tasks: rw.tasks.filter((t) => t.number !== args.subIssueNumber),
+            totalPoints: rw.tasks.filter((t) => t.number !== args.subIssueNumber).reduce((sum, t) => sum + (t.points ?? 0), 0),
+            donePoints: rw.tasks.filter((t) => t.number !== args.subIssueNumber && t.state === "closed").reduce((sum, t) => sum + (t.points ?? 0), 0),
+          })) ?? [],
+        );
+      }
       return { previous, key };
     },
     onError: (_err, _vars, context) => {
@@ -400,6 +412,11 @@ export function useDeleteSubIssue() {
     },
     onSettled: (_data, _err, args) => {
       qc.invalidateQueries({ queryKey: ["subIssues", selectedOrg, args.parentIssueNumber] });
+      if (args.featureId) {
+        qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg, args.featureId] });
+      }
+      // Also invalidate the sprint-wide sub-issues query
+      qc.invalidateQueries({ queryKey: ["allSprintSubIssues", selectedOrg] });
     },
   });
 }
