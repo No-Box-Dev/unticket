@@ -21,7 +21,7 @@ import { cn } from "@/lib/cn";
 type SprintView = "features" | "roles" | "tasks" | "metrics" | "scoping";
 type SortKey = "default" | "title";
 
-type BoardStatus = Exclude<FeatureStatus, "future" | ScopingStatus>;
+type BoardStatus = Exclude<FeatureStatus, "future" | "scoping" | ScopingStatus>;
 const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
   { status: "plan", label: "Plan", color: "bg-brand" },
   { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
@@ -220,7 +220,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
 
   // Scoping features — all features with scoping statuses, regardless of sprint
   const scopingFeatures = useMemo(() => {
-    const scopingStatuses = new Set(["idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"]);
+    const scopingStatuses = new Set(["scoping", "idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"]);
     const q = searchQuery.toLowerCase().trim();
     return (features ?? []).filter((f) => {
       if (!scopingStatuses.has(f.status)) return false;
@@ -910,8 +910,10 @@ function ScopingView({
       idea: [], client_scoping: [], technical_scoping: [], planning: [], planned: [], deferred: [],
     };
     for (const f of features) {
-      if (f.status in result) {
-        result[f.status as ScopingStatus].push(f);
+      // "scoping" is a catch-all status — default to Planning column
+      const col = f.status === "scoping" ? "planning" : f.status;
+      if (col in result) {
+        result[col as ScopingStatus].push(f);
       }
     }
     return result;
