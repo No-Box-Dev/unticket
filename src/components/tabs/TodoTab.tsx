@@ -172,7 +172,7 @@ export function TodoTab() {
           mySprintTasks={mySprintTasks}
           myFeatures={myFeatures}
           featureMap={featureMap}
-          assignedIssues={assignedIssues ?? []}
+          assignedIssues={(assignedIssues ?? []) as AssignedIssue[]}
           reviewPRs={reviewPRs ?? []}
           createTodoMut={createTodoMut}
           updateTodoMut={updateTodoMut}
