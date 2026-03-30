@@ -876,7 +876,7 @@ const SCOPING_COLUMN_DEFS: { status: ScopingStatus; label: string; color: string
   { status: "idea", label: "Idea", color: "bg-slate-400" },
   { status: "client_scoping", label: "Client Scoping", color: "bg-pink-400" },
   { status: "technical_scoping", label: "Technical Scoping", color: "bg-indigo-400" },
-  { status: "planning", label: "Planning", color: "bg-orange-400" },
+  { status: "medical_scoping", label: "Medical Scoping", color: "bg-rose-400" },
   { status: "planned", label: "Planned", color: "bg-emerald-400" },
   { status: "deferred", label: "Deferred", color: "bg-gray-500" },
 ];
@@ -910,11 +910,11 @@ function ScopingView({
 }: ScopingViewProps) {
   const columns = useMemo(() => {
     const result: Record<ScopingStatus, Feature[]> = {
-      idea: [], client_scoping: [], technical_scoping: [], planning: [], planned: [], deferred: [],
+      idea: [], client_scoping: [], technical_scoping: [], medical_scoping: [], planned: [], deferred: [],
     };
     for (const f of features) {
       // "scoping" is a catch-all status — default to Planning column
-      const col = f.status === "scoping" ? "planning" : f.status;
+      const col = f.status === "scoping" ? "idea" : f.status;
       if (col in result) {
         result[col as ScopingStatus].push(f);
       }
