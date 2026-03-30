@@ -13,12 +13,12 @@ import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus, SprintSnapshot, Points } from "@/lib/types";
 import { PointsSelect } from "@/components/sprint/PointsSelect";
-import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List } from "lucide-react";
+import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List, ScanSearch } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 
-type SprintView = "features" | "roles" | "tasks" | "metrics";
+type SprintView = "features" | "roles" | "tasks" | "metrics" | "scoping";
 type SortKey = "default" | "title";
 
 type BoardStatus = Exclude<FeatureStatus, "future">;
@@ -218,6 +218,18 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
     production: sortFeatures(sprintFeatures.filter((f) => f.status === "production"), sortBy),
   }), [sprintFeatures, sortBy]);
 
+  // Scoping features — all features with scoping statuses, regardless of sprint
+  const scopingFeatures = useMemo(() => {
+    const scopingStatuses = new Set(["idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"]);
+    const q = searchQuery.toLowerCase().trim();
+    return (features ?? []).filter((f) => {
+      if (!scopingStatuses.has(f.status)) return false;
+      if (selectedPersons.length > 0 && !f.owners.some((o) => selectedPersons.some((p) => o.toLowerCase() === p.toLowerCase()))) return false;
+      if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [features, selectedPersons, searchQuery]);
+
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, feature: Feature) => {
@@ -299,6 +311,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
 
   const VIEW_TABS: { key: SprintView; label: string; icon: typeof LayoutGrid }[] = [
     { key: "features", label: "Features", icon: LayoutGrid },
+    { key: "scoping", label: "Scoping", icon: ScanSearch },
     { key: "roles", label: "Roles", icon: Users },
     { key: "tasks", label: "Tasks", icon: ListChecks },
     { key: "metrics", label: "Metrics", icon: BarChart3 },
@@ -514,6 +527,31 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           onAdd={addFeature}
           isAdmin={isAdmin}
           singleColumn={isViewingFutureSprint}
+        />
+      )}
+
+      {/* Scoping view */}
+      {!activeSnapshot && sprintView === "scoping" && (
+        <ScopingView
+          features={scopingFeatures}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedPersons={selectedPersons}
+          setSelectedPersons={setSelectedPersons}
+          personPills={personPills}
+          allPeopleNames={allPeopleNames}
+          dragOverCol={dragOverCol}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onUpdate={updateFeature}
+          onDelete={deleteFeature}
+          onOpenDetail={openDetail}
+          onAdd={(title: string) => {
+            createFeatureMut.mutate({ title, status: "idea", sprint: null });
+          }}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -824,6 +862,130 @@ function FeaturesView({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Scoping View ─────────────────────────────────────────────────────
+
+import type { ScopingStatus } from "@/lib/types";
+import { SCOPING_STATUS_ORDER } from "@/lib/types";
+
+const SCOPING_COLUMN_DEFS: { status: ScopingStatus; label: string; color: string }[] = [
+  { status: "idea", label: "Idea", color: "bg-slate-400" },
+  { status: "client_scoping", label: "Client Scoping", color: "bg-pink-400" },
+  { status: "technical_scoping", label: "Technical Scoping", color: "bg-indigo-400" },
+  { status: "planning", label: "Planning", color: "bg-orange-400" },
+  { status: "planned", label: "Planned", color: "bg-emerald-400" },
+  { status: "deferred", label: "Deferred", color: "bg-gray-500" },
+];
+
+interface ScopingViewProps {
+  features: Feature[];
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  selectedPersons: string[];
+  setSelectedPersons: (p: string[]) => void;
+  personPills: { login: string; name: string }[];
+  allPeopleNames: string[];
+  dragOverCol: FeatureStatus | null;
+  onDragStart: (e: React.DragEvent, f: Feature) => void;
+  onDragOver: (e: React.DragEvent, s: FeatureStatus) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent, s: FeatureStatus) => void;
+  onUpdate: (f: Feature) => void;
+  onDelete: (id: number) => void;
+  onOpenDetail: (f: Feature) => void;
+  onAdd: (title: string) => void;
+  isAdmin: boolean;
+}
+
+function ScopingView({
+  features, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
+  personPills, allPeopleNames,
+  dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
+  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+}: ScopingViewProps) {
+  const columns = useMemo(() => {
+    const result: Record<ScopingStatus, Feature[]> = {
+      idea: [], client_scoping: [], technical_scoping: [], planning: [], planned: [], deferred: [],
+    };
+    for (const f of features) {
+      if (f.status in result) {
+        result[f.status as ScopingStatus].push(f);
+      }
+    }
+    return result;
+  }, [features]);
+
+  return (
+    <div className="space-y-2">
+      <AddFeatureInput onAdd={onAdd} />
+
+      {/* Search + filters row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search features..."
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm text-stone-700 dark:text-neutral-300 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+          />
+        </div>
+        <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
+          options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
+      </div>
+
+      {/* Scoping kanban columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {SCOPING_COLUMN_DEFS.map((col) => {
+          const items = columns[col.status];
+          return (
+            <div
+              key={col.status}
+              role="list"
+              aria-label={`${col.label} column`}
+              onDragOver={(e) => onDragOver(e, col.status)}
+              onDragLeave={onDragLeave}
+              onDrop={(e) => onDrop(e, col.status)}
+              className={cn(
+                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
+                dragOverCol === col.status && "border-brand/50 bg-brand/5",
+              )}
+            >
+              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                <span className={cn("w-2.5 h-2.5 rounded-full", col.color)} />
+                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                  {col.label}
+                </span>
+                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+              </div>
+              <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
+                {items.map((feature) => (
+                  <FeatureCard
+                    key={feature.id}
+                    feature={feature}
+                    allPeople={allPeopleNames}
+                    onUpdate={onUpdate}
+                    onDelete={onDelete}
+                    onOpenDetail={onOpenDetail}
+                    mode="sprint"
+                    isAdmin={isAdmin}
+                    draggable
+                    onDragStart={onDragStart}
+                  />
+                ))}
+                {items.length === 0 && (
+                  <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                    Drag features here
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

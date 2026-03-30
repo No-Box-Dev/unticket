@@ -102,10 +102,14 @@ export interface Todo {
 
 // gitpulse config repo types
 
-export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future";
+export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
 
-/** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only). */
+/** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only, and scoping statuses). */
 export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
+
+/** Scoping board statuses in column order. */
+export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
+export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "planning", "planned", "deferred"];
 
 // Sprint points
 export type Points = 1 | 2 | 3 | 5 | 8 | 13;

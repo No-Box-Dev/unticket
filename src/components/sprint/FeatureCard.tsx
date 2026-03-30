@@ -36,6 +36,8 @@ export function FeatureCard({
   const STATUS_COLORS: Record<string, string> = {
     plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
     tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
+    idea: "bg-slate-400", client_scoping: "bg-pink-400", technical_scoping: "bg-indigo-400",
+    planning: "bg-orange-400", planned: "bg-emerald-400", deferred: "bg-gray-500",
   };
   const dotColor = STATUS_COLORS[feature.status] ?? "bg-stone-300";
 
