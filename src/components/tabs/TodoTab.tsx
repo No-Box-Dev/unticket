@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
 import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
@@ -863,14 +863,16 @@ function TodoCard({
   onDragStart: (e: React.DragEvent, todo: Todo) => void;
 }) {
   const isDone = todo.status === "done";
+  const didDrag = useRef(false);
 
   return (
     <div
       draggable
-      onDragStart={(e) => onDragStart(e, todo)}
-      onClick={onClick}
+      onDragStart={(e) => { didDrag.current = true; onDragStart(e, todo); }}
+      onMouseDown={() => { didDrag.current = false; }}
+      onClick={() => { if (!didDrag.current) onClick(); }}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised cursor-grab active:cursor-grabbing",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised cursor-pointer hover:shadow-sm transition-shadow",
         isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06] hover:border-stone-300 dark:hover:border-white/[0.1]",
       )}
     >
