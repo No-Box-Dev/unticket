@@ -812,14 +812,17 @@ function IssueCard({ issue }: { issue: AssignedIssue }) {
   const isDone = issue.state === "closed";
 
   return (
-    <div
+    <a
+      href={issue.html_url}
+      target="_blank"
+      rel="noopener noreferrer"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", `issue:${issue.repo}:${issue.number}`);
         e.dataTransfer.effectAllowed = "move";
       }}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-pointer hover:shadow-sm transition-shadow",
         isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
       )}
     >
@@ -829,21 +832,13 @@ function IssueCard({ issue }: { issue: AssignedIssue }) {
           <span className={cn("text-sm block truncate", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
             {issue.title}
           </span>
-          <a
-            href={issue.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto shrink-0 text-stone-400 hover:text-brand transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink size={11} />
-          </a>
+          <ExternalLink size={11} className="ml-auto shrink-0 text-stone-400" />
         </div>
         <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
           {issue.repo}#{issue.number}
         </span>
       </div>
-    </div>
+    </a>
   );
 }
 
