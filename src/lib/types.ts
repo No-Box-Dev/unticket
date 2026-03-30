@@ -102,7 +102,7 @@ export interface Todo {
 
 // gitpulse config repo types
 
-export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
+export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "planning" | "planned" | "deferred";
 
 /** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only, and scoping statuses). */
 export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
@@ -119,6 +119,7 @@ export const STATUS_COLORS: Record<FeatureStatus, string> = {
   tested: "bg-cyan-500",
   production: "bg-green-500",
   future: "bg-stone-300",
+  scoping: "bg-orange-400",
   idea: "bg-slate-400",
   client_scoping: "bg-pink-400",
   technical_scoping: "bg-indigo-400",
@@ -135,6 +136,7 @@ export const STATUS_LABELS: Record<FeatureStatus, string> = {
   tested: "Tested",
   production: "In Production",
   future: "Future",
+  scoping: "Scoping",
   idea: "Idea",
   client_scoping: "Client Scoping",
   technical_scoping: "Technical Scoping",

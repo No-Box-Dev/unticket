@@ -18,6 +18,7 @@ const STATUS_COLORS: Record<FeatureStatus, { bg: string; dot: string; text: stri
   tested: { bg: "bg-cyan-50 dark:bg-cyan-900/20", dot: "bg-cyan-500", text: "text-cyan-600 dark:text-cyan-400", label: SHARED_STATUS_LABELS.tested },
   production: { bg: "bg-green-50 dark:bg-green-900/20", dot: "bg-green-500", text: "text-green-600 dark:text-green-400", label: SHARED_STATUS_LABELS.production },
   future: { bg: "bg-stone-50 dark:bg-white/[0.04]", dot: "bg-stone-300", text: "text-stone-500", label: SHARED_STATUS_LABELS.future },
+  scoping: { bg: "bg-orange-50 dark:bg-orange-900/20", dot: "bg-orange-400", text: "text-orange-600 dark:text-orange-400", label: SHARED_STATUS_LABELS.scoping },
   idea: { bg: "bg-slate-50 dark:bg-slate-900/20", dot: "bg-slate-400", text: "text-slate-600 dark:text-slate-400", label: SHARED_STATUS_LABELS.idea },
   client_scoping: { bg: "bg-pink-50 dark:bg-pink-900/20", dot: "bg-pink-400", text: "text-pink-600 dark:text-pink-400", label: SHARED_STATUS_LABELS.client_scoping },
   technical_scoping: { bg: "bg-indigo-50 dark:bg-indigo-900/20", dot: "bg-indigo-400", text: "text-indigo-600 dark:text-indigo-400", label: SHARED_STATUS_LABELS.technical_scoping },

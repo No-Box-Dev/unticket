@@ -31,6 +31,7 @@ const FEATURE_LABELS = [
   { name: "status:tested", color: "06B6D4", description: "Feature tested" },
   { name: "status:production", color: "22C55E", description: "Feature in production" },
   { name: "status:future", color: "A8A29E", description: "Backlog feature" },
+  { name: "status:scoping", color: "FB923C", description: "Feature in scoping pipeline" },
   { name: "status:idea", color: "94A3B8", description: "Idea — not yet scoped" },
   { name: "status:client_scoping", color: "F472B6", description: "Client scoping in progress" },
   { name: "status:technical_scoping", color: "818CF8", description: "Technical scoping in progress" },
