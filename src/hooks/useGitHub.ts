@@ -14,6 +14,7 @@ import {
   triggerSync,
   fetchPaginatedIssues,
   fetchIssueLabels,
+  fetchIssueStats,
   updateIssueAssignees,
   fetchUserOrgRole,
   fetchRateLimit,
@@ -23,7 +24,7 @@ import {
   unlinkPR,
   updateIssueState,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PaginatedResponse } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -169,6 +170,16 @@ export function useIssueLabels() {
     queryKey: ["issues", selectedOrg, "labels"],
     queryFn: fetchIssueLabels,
     enabled: !!selectedOrg,
+  });
+}
+
+export function useIssueStats(closedSince?: string, repos?: string[]) {
+  const { selectedOrg } = useAuth();
+  return useQuery<IssueStats>({
+    queryKey: ["issues", selectedOrg, "stats", closedSince, repos],
+    queryFn: () => fetchIssueStats(closedSince, repos),
+    enabled: !!selectedOrg,
+    staleTime: 2 * 60 * 1000,
   });
 }
 

@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useCallback } from "react";
-import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees } from "@/hooks/useGitHub";
+import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSprint } from "@/hooks/useConfigRepo";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, AlertTriangle, Clock, UserX } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -31,11 +31,11 @@ function SortIcon({ column, activeSortKey, activeSortDirection }: { column: Sort
 }
 
 const labelColors: Record<string, { bg: string; text: string }> = {
-  bug: { bg: "bg-red-50", text: "text-red-700" },
-  enhancement: { bg: "bg-blue-50", text: "text-blue-700" },
-  feature: { bg: "bg-blue-50", text: "text-blue-700" },
-  investigation: { bg: "bg-yellow-50", text: "text-yellow-700" },
-  documentation: { bg: "bg-accent-light", text: "text-accent" },
+  bug: { bg: "bg-red-50 dark:bg-red-500/10", text: "text-red-700 dark:text-red-400" },
+  enhancement: { bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-400" },
+  feature: { bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-400" },
+  investigation: { bg: "bg-yellow-50 dark:bg-yellow-500/10", text: "text-yellow-700 dark:text-yellow-400" },
+  documentation: { bg: "bg-accent-light dark:bg-accent/10", text: "text-accent" },
 };
 
 function getLabelStyle(name: string, color: string) {
@@ -50,6 +50,8 @@ function getLabelStyle(name: string, color: string) {
 }
 
 const PAGE_SIZE = 30;
+
+const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl";
 
 interface IssuesTabProps {
   repoNames: string[];
@@ -66,8 +68,18 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
+  const repoList = useMemo(() => {
+    return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
+  }, [repos]);
+
+  // Stats for dashboard cards + charts
+  const { data: stats } = useIssueStats(
+    sprint?.startDate,
+    repoList.length > 0 ? repoList : undefined,
+  );
+
   const [repoFilter, setRepoFilter] = useState<string>("all");
-  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");
+  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "all");
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -75,16 +87,11 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
-  const repoList = useMemo(() => {
-    return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
-  }, [repos]);
-
   // Resolve repo filter → repo names
   const filteredRepos = useMemo(() => {
     if (repoFilter !== "all") {
       return [repoFilter];
     }
-    // Exclude gitpulse repos (features/todos live there, not regular issues)
     return repoList.length > 0 ? repoList : undefined;
   }, [repoFilter, repoList]);
 
@@ -105,7 +112,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     sortDir,
   });
 
-  // Closed issues query (since sprint start, waits for sprint config)
+  // Closed issues query (since sprint start)
   const {
     data: closedData,
     isLoading: closedLoading,
@@ -185,8 +192,14 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const syncDone = syncProgress?.phase === "done";
   const syncError = syncProgress?.phase === "error";
 
+  // Compute max for repo bar chart
+  const repoMax = useMemo(() => {
+    if (!stats?.byRepo?.length) return 1;
+    return Math.max(...stats.byRepo.map((r) => r.count), 1);
+  }, [stats?.byRepo]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Sync Modal */}
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -205,7 +218,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
               )}
             </div>
             <div className="px-5 py-4 space-y-3">
-              {/* Progress bar */}
               {syncProgress && syncProgress.total > 0 && (
                 <div>
                   <div className="flex justify-between text-xs text-stone-500 dark:text-neutral-400 mb-1">
@@ -225,32 +237,24 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                   </div>
                 </div>
               )}
-
-              {/* Init phase */}
               {syncProgress?.phase === "init" && (
                 <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Initializing sync...
                 </div>
               )}
-
-              {/* Error */}
               {syncError && (
                 <div className="flex items-center gap-2 text-xs text-red-600">
                   <AlertCircle className="w-3.5 h-3.5" />
                   {syncProgress.error}
                 </div>
               )}
-
-              {/* Current repo */}
               {syncProgress?.phase === "syncing" && syncProgress.repo && (
                 <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-neutral-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-brand" />
                   <span className="font-medium">{syncProgress.repo}</span>
                 </div>
               )}
-
-              {/* Synced repo list */}
               {syncedRepos.length > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {syncedRepos.map((repo) => (
@@ -262,7 +266,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 </div>
               )}
             </div>
-
             {(syncDone || syncError) && (
               <div className="px-5 py-3 border-t border-stone-100 dark:border-white/[0.06]">
                 <button
@@ -277,185 +280,339 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Assignment filter */}
-        <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
-          {(["unassigned", "assigned", "all"] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => { setAssignmentFilter(opt); resetPages(); }}
-              className={cn(
-                "px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize",
-                assignmentFilter === opt
-                  ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
-                  : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
-              )}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-
-        <PersonSelect
-          value={assigneeFilter.length > 0 ? assigneeFilter : null}
-          onChange={(v) => {
-            setAssigneeFilter(Array.isArray(v) ? v : v ? [v] : []);
-            resetPages();
-          }}
-          options={memberLogins.map((l) => ({ value: l, label: l }))}
-          placeholder="All Assignees"
-          multi
+      {/* ──── Dashboard Stats ──── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Open Issues"
+          value={stats?.open ?? 0}
+          icon={<CircleDot className="w-4 h-4 text-green-600" />}
+          loading={!stats}
         />
-
-        <SearchableSelect
-          value={repoFilter}
-          onChange={(v) => {
-            setRepoFilter(v);
-            resetPages();
-          }}
-          options={[
-            { value: "all", label: "All Repos" },
-            ...repoList.map((r) => ({ value: r, label: r })),
-          ]}
-          placeholder="All Repos"
+        <StatCard
+          label="Unassigned"
+          value={stats?.unassigned ?? 0}
+          icon={<UserX className="w-4 h-4 text-amber-500" />}
+          accent={stats && stats.unassigned > 0 ? "amber" : undefined}
+          loading={!stats}
         />
-
-        <select
-          value={labelFilter}
-          onChange={(e) => {
-            setLabelFilter(e.target.value);
-            resetPages();
-          }}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
-        >
-          <option value="all">All Labels</option>
-          {labelList.map((l) => (
-            <option key={l} value={l}>{l}</option>
-          ))}
-        </select>
-
-        <button
-          onClick={startSync}
-          disabled={syncModalOpen}
-          className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
-            syncModalOpen && "opacity-50 cursor-not-allowed",
-          )}
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", (openFetching || closedFetching) && "animate-spin")} />
-          Sync from GitHub
-        </button>
-
-        <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-          {openTotal} open, {closedTotal} closed
-        </span>
+        <StatCard
+          label="Stale (>30d)"
+          value={stats?.stale ?? 0}
+          icon={<Clock className="w-4 h-4 text-red-500" />}
+          accent={stats && stats.stale > 0 ? "red" : undefined}
+          loading={!stats}
+        />
+        <StatCard
+          label="Closed This Sprint"
+          value={stats?.closedSprint ?? 0}
+          icon={<CircleCheck className="w-4 h-4 text-brand" />}
+          accent="brand"
+          loading={!stats}
+        />
       </div>
 
-      {/* Table */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
-              <th className="px-3 py-2 w-8"></th>
-              <th
-                onClick={() => toggleSort("number")}
-                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
-              >
-                Issue <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
-              </th>
-              <th
-                onClick={() => toggleSort("title")}
-                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
-              >
-                Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
-              </th>
-              <th
-                onClick={() => toggleSort("repo")}
-                className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
-              >
-                Repo <SortIcon column="repo" activeSortKey={sortKey} activeSortDirection={sortDir} />
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
-              <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
-              <th
-                onClick={() => toggleSort("created_at")}
-                className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
-              >
-                Age <SortIcon column="created_at" activeSortKey={sortKey} activeSortDirection={sortDir} />
-              </th>
-              <th className="px-3 py-2 w-8"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
-            {isLoading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center">
-                  <Spinner className="mx-auto" />
-                </td>
-              </tr>
-            ) : openTotal === 0 && closedTotal === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
-                  No issues found
-                </td>
-              </tr>
-            ) : (
-              <>
-                {(openData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed={false} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
-                ))}
+      {/* ──── Charts Row ──── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Issues by Repo */}
+        <div className={cn(card, "p-5 lg:col-span-2")}>
+          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Open Issues by Repo</h3>
+          {!stats?.byRepo?.length ? (
+            <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
+          ) : (
+            <div className="space-y-2">
+              {stats.byRepo.map((r) => (
+                <div key={r.repo} className="flex items-center gap-3">
+                  <span className="text-xs text-stone-600 dark:text-neutral-300 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                  <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden">
+                    <div
+                      className="h-full bg-brand/70 rounded transition-all duration-300"
+                      style={{ width: `${(r.count / repoMax) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-stone-700 dark:text-neutral-200 w-8 text-right tabular-nums">{r.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-                {/* Open pagination */}
-                {openPages > 1 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-2">
-                      <PaginationControls
-                        page={openPage}
-                        totalPages={openPages}
-                        onPageChange={setOpenPage}
-                        isFetching={openFetching}
-                      />
-                    </td>
-                  </tr>
-                )}
+        {/* Issues by Label */}
+        <div className={cn(card, "p-5")}>
+          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">By Label</h3>
+          {!stats?.byLabel?.length ? (
+            <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
+          ) : (
+            <div className="space-y-2">
+              {stats.byLabel.map((l) => {
+                const style = getLabelStyle(l.name, l.color);
+                return (
+                  <div key={l.name} className="flex items-center justify-between">
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", style.bg, style.text)}>
+                      {l.name}
+                    </span>
+                    <span className="text-xs font-medium text-stone-600 dark:text-neutral-300 tabular-nums">{l.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
-                {closedTotal > 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider bg-stone-50 dark:bg-white/[0.04] border-t-2 border-stone-200 dark:border-white/[0.06]"
-                    >
-                      Closed During Sprint
-                    </td>
-                  </tr>
-                )}
+      {/* ──── Resolution Trend ──── */}
+      {stats?.closedPerWeek && stats.closedPerWeek.length > 0 && (
+        <div className={cn(card, "p-5")}>
+          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Week</h3>
+          <MiniBarChart data={stats.closedPerWeek} />
+        </div>
+      )}
 
-                {(closedData?.data ?? []).map((issue) => (
-                  <IssueRow key={issue.id} issue={issue} closed allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
-                ))}
-
-                {/* Closed pagination */}
-                {closedPages > 1 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-2">
-                      <PaginationControls
-                        page={closedPage}
-                        totalPages={closedPages}
-                        onPageChange={setClosedPage}
-                        isFetching={closedFetching}
-                      />
-                    </td>
-                  </tr>
-                )}
-              </>
+      {/* ──── Issue List ──── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">All Issues</h3>
+          <button
+            onClick={startSync}
+            disabled={syncModalOpen}
+            className={cn(
+              "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
+              syncModalOpen && "opacity-50 cursor-not-allowed",
             )}
-          </tbody>
-        </table>
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", (openFetching || closedFetching) && "animate-spin")} />
+            Sync
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+            {(["all", "unassigned", "assigned"] as const).map((opt) => (
+              <button
+                key={opt}
+                onClick={() => { setAssignmentFilter(opt); resetPages(); }}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize",
+                  assignmentFilter === opt
+                    ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
+                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                )}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+
+          <PersonSelect
+            value={assigneeFilter.length > 0 ? assigneeFilter : null}
+            onChange={(v) => {
+              setAssigneeFilter(Array.isArray(v) ? v : v ? [v] : []);
+              resetPages();
+            }}
+            options={memberLogins.map((l) => ({ value: l, label: l }))}
+            placeholder="All Assignees"
+            multi
+          />
+
+          <SearchableSelect
+            value={repoFilter}
+            onChange={(v) => {
+              setRepoFilter(v);
+              resetPages();
+            }}
+            options={[
+              { value: "all", label: "All Repos" },
+              ...repoList.map((r) => ({ value: r, label: r })),
+            ]}
+            placeholder="All Repos"
+          />
+
+          <select
+            value={labelFilter}
+            onChange={(e) => {
+              setLabelFilter(e.target.value);
+              resetPages();
+            }}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
+          >
+            <option value="all">All Labels</option>
+            {labelList.map((l) => (
+              <option key={l} value={l}>{l}</option>
+            ))}
+          </select>
+
+          <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+            {openTotal} open, {closedTotal} closed
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className={cn(card, "overflow-hidden")}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
+                <th className="px-3 py-2 w-8"></th>
+                <th
+                  onClick={() => toggleSort("number")}
+                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                >
+                  Issue <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
+                </th>
+                <th
+                  onClick={() => toggleSort("title")}
+                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                >
+                  Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
+                </th>
+                <th
+                  onClick={() => toggleSort("repo")}
+                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                >
+                  Repo <SortIcon column="repo" activeSortKey={sortKey} activeSortDirection={sortDir} />
+                </th>
+                <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
+                <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
+                <th
+                  onClick={() => toggleSort("created_at")}
+                  className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
+                >
+                  Age <SortIcon column="created_at" activeSortKey={sortKey} activeSortDirection={sortDir} />
+                </th>
+                <th className="px-3 py-2 w-8"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center">
+                    <Spinner className="mx-auto" />
+                  </td>
+                </tr>
+              ) : openTotal === 0 && closedTotal === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
+                    No issues found
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {(openData?.data ?? []).map((issue) => (
+                    <IssueRow key={issue.id} issue={issue} closed={false} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
+                  ))}
+
+                  {openPages > 1 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-2">
+                        <PaginationControls
+                          page={openPage}
+                          totalPages={openPages}
+                          onPageChange={setOpenPage}
+                          isFetching={openFetching}
+                        />
+                      </td>
+                    </tr>
+                  )}
+
+                  {closedTotal > 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider bg-stone-50 dark:bg-white/[0.04] border-t-2 border-stone-200 dark:border-white/[0.06]"
+                      >
+                        Closed During Sprint
+                      </td>
+                    </tr>
+                  )}
+
+                  {(closedData?.data ?? []).map((issue) => (
+                    <IssueRow key={issue.id} issue={issue} closed allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
+                  ))}
+
+                  {closedPages > 1 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-2">
+                        <PaginationControls
+                          page={closedPage}
+                          totalPages={closedPages}
+                          onPageChange={setClosedPage}
+                          isFetching={closedFetching}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
+
+// ──── Stat Card ────
+
+function StatCard({ label, value, icon, accent, loading }: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  accent?: "amber" | "red" | "brand";
+  loading?: boolean;
+}) {
+  const accentBorder = accent === "amber"
+    ? "border-l-amber-400"
+    : accent === "red"
+      ? "border-l-red-400"
+      : accent === "brand"
+        ? "border-l-brand"
+        : "border-l-transparent";
+
+  return (
+    <div className={cn(
+      "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-4 border-l-[3px]",
+      accentBorder,
+    )}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-stone-500 dark:text-neutral-400">{label}</span>
+        {icon}
+      </div>
+      {loading ? (
+        <div className="h-7 w-12 bg-stone-100 dark:bg-dark-overlay rounded animate-pulse" />
+      ) : (
+        <span className="text-2xl font-bold text-stone-800 dark:text-neutral-100 tabular-nums">{value}</span>
+      )}
+    </div>
+  );
+}
+
+// ──── Mini Bar Chart (for closed per week) ────
+
+function MiniBarChart({ data }: { data: { week: string; count: number }[] }) {
+  const max = Math.max(...data.map((d) => d.count), 1);
+
+  return (
+    <div className="flex items-end gap-1.5" style={{ height: 80 }}>
+      {data.map((d) => {
+        const heightPct = d.count === 0 ? 2 : (d.count / max) * 100;
+        const weekLabel = new Date(d.week + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return (
+          <div key={d.week} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-[10px] font-medium text-stone-600 dark:text-neutral-300 tabular-nums">{d.count || ""}</span>
+            <div className="w-full flex items-end" style={{ height: 50 }}>
+              <div
+                className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
+                style={{ height: `${heightPct}%`, minHeight: 2 }}
+              />
+            </div>
+            <span className="text-[10px] text-stone-400 dark:text-neutral-500">{weekLabel}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ──── Pagination ────
 
 function PaginationControls({
   page,
@@ -490,6 +647,8 @@ function PaginationControls({
     </div>
   );
 }
+
+// ──── Issue Row ────
 
 function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: boolean; allPeople: string[]; onAssign: (assignees: string[]) => void }) {
   const age = daysAgo(issue.created_at);

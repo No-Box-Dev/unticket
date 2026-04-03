@@ -4,6 +4,7 @@
 
 - **When you add, remove, or significantly change a feature, update the `## Features` section of this file to reflect the change.** This keeps every future Claude Code session (for any team member) aware of what exists.
 - **When you add new architecture patterns (new API routes, new shared hooks, new config keys), update the `## Architecture` section.**
+- **Code review (`/review`)**: Always use the review command at `~/.claude/commands/review.md`. This runs a two-expert review (Zhipu GLM-5 + Claude) with peer discussion on critical findings. Use it before merging PRs.
 ## URLs
 
 - **Live:** https://app.unticket.ai
@@ -126,7 +127,7 @@ Features have owners, status (encoded as labels), and implementation plans (issu
 Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
 
 #### Issues (`issues` tab)
-Server-side paginated view of open + closed issues (closed since sprint start). Filters: repo (searchable), assignee, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` hook backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
+Issues dashboard (second item in sidebar, after Overview). Top section: four stat cards (open, unassigned, stale >30d, closed this sprint). Middle section: horizontal bar chart of open issues by repo, label distribution breakdown, and closed-per-week trend chart. Bottom section: full paginated table of open + closed issues (closed since sprint start). Stats powered by `meta=stats` endpoint on `/api/issues` (single D1 batch query). Filters: repo (searchable), assignee, assignment status, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` + `useIssueStats` hooks backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
 #### PRs (`prs` tab)
 Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
