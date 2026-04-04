@@ -72,14 +72,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
   }, [repos]);
 
-  // Stats for dashboard cards + charts
-  const { data: stats } = useIssueStats(
-    sprint?.startDate,
-    repoList.length > 0 ? repoList : undefined,
-  );
-
   const [repoFilter, setRepoFilter] = useState<string>("all");
-  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "all");
+  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -94,6 +88,12 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     }
     return repoList.length > 0 ? repoList : undefined;
   }, [repoFilter, repoList]);
+
+  // Stats for dashboard cards + charts (reactive to repo filter)
+  const { data: stats } = useIssueStats(
+    sprint?.startDate,
+    filteredRepos,
+  );
 
   // Open issues query
   const {

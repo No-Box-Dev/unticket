@@ -38,7 +38,7 @@ export async function onRequestGet(context) {
     let repoFilter = "";
     const repoBindings = [];
     if (reposParam) {
-      const repoList = reposParam.split(",").filter(Boolean).slice(0, 100);
+      const repoList = reposParam.split(",").filter(Boolean).slice(0, 95);
       if (repoList.length > 0) {
         repoFilter = ` AND repo IN (${repoList.map(() => "?").join(",")})`;
         repoBindings.push(...repoList);
