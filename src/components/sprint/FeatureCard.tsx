@@ -1,9 +1,9 @@
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import { FEATURE_STATUS_ORDER } from "@/lib/types";
+import { FEATURE_STATUS_ORDER, STATUS_COLORS } from "@/lib/types";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
+import { GripVertical, Archive, ArrowUpFromLine, Trash2, Rocket, ScanSearch } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -11,7 +11,7 @@ interface FeatureCardProps {
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
-  mode: "sprint" | "backlog";
+  mode: "sprint" | "backlog" | "scoping";
   currentSprint?: number;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, feature: Feature) => void;
@@ -33,10 +33,6 @@ export function FeatureCard({
   const hasPlan = !!feature.plan?.trim();
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
-  const STATUS_COLORS: Record<string, string> = {
-    plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
-    tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
-  };
   const dotColor = STATUS_COLORS[feature.status] ?? "bg-stone-300";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -91,12 +87,30 @@ export function FeatureCard({
         <div className="flex-1 min-w-0" />
         <div className="flex items-center gap-1.5">
           {mode === "sprint" && (
+            <>
+              <button
+                onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "scoping"), sprint: null }))}
+                className="p-1 text-stone-300 dark:text-neutral-600 hover:text-indigo-500 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                title="Move to Scoping"
+              >
+                <ScanSearch size={13} />
+              </button>
+              <button
+                onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }))}
+                className="p-1 text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                title="Move to Backlog"
+              >
+                <Archive size={13} />
+              </button>
+            </>
+          )}
+          {mode === "scoping" && currentSprint && (
             <button
-              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }))}
-              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
-              title="Move to Backlog"
+              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }))}
+              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+              title="Convert to Sprint Feature"
             >
-              <Archive size={13} />
+              <Rocket size={13} />
             </button>
           )}
           {mode === "backlog" && currentSprint && (

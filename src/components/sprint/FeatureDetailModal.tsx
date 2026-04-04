@@ -9,6 +9,7 @@ import { RoleSection } from "./RoleSection";
 import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask, useUpdateTaskPoints, useUpdateTaskTitle } from "@/hooks/useConfigRepo";
 import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
 import { fetchAllPRs } from "@/lib/github";
+import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
 import type { Feature } from "@/lib/types";
 
 // ---------- Component ----------
@@ -169,12 +170,14 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="group/title flex items-center gap-2 flex-1 min-w-0">
             <input
               value={draft.title}
               onChange={(e) => update({ title: e.target.value }, true)}
-              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full"
+              className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent w-full rounded px-2 py-1 -mx-2 border border-transparent hover:border-stone-200 dark:hover:border-white/[0.1] focus:border-brand/40 focus:ring-2 focus:ring-brand/20 outline-none transition-all"
+              title="Click to edit title"
             />
+            <Pencil size={14} className="shrink-0 text-stone-300 dark:text-neutral-600 group-hover/title:text-stone-400 dark:group-hover/title:text-neutral-500 transition-colors" />
             {draft.url && (
               <a
                 href={draft.url}
@@ -342,7 +345,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                   totalPoints={rPts}
                   donePoints={rDone}
                   onToggleTask={(task) => toggleSubIssueMut.mutate(task)}
-                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number })}
+                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number, featureId: feature.id })}
                   onUpdateTaskPoints={(task, points) => updateTaskPointsMut.mutate({ taskNumber: task.number, points })}
                   onUpdateTaskTitle={(task, newTitle) => updateTaskTitleMut.mutate({ taskNumber: task.number, featureId: feature.id, title: newTitle })}
                   onAddTask={(title, points) => createTaskMut.mutate({ roleNumber: role.number, featureId: feature.id, title, points, assignee: role.assignee ?? undefined })}
@@ -374,7 +377,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                       </span>
                       <button
                         type="button"
-                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number })}
+                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number, featureId: feature.id })}
                         className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <X size={13} />
@@ -587,16 +590,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
               <div className="relative pl-4 space-y-2">
                 <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200 dark:bg-white/[0.1]" />
                 {draft.statusHistory.map((entry, i) => {
-                  const STATUS_COLORS: Record<string, string> = {
-                    plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
-                    tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-400",
-                  };
-                  const STATUS_LABELS: Record<string, string> = {
-                    plan: "Plan", in_progress: "In Progress", demo: "Demo",
-                    tested: "Tested", production: "In Production", future: "Future",
-                  };
-                  const dotColor = STATUS_COLORS[entry.status] ?? "bg-stone-400";
-                  const label = STATUS_LABELS[entry.status] ?? "Future";
+                  const dotColor = SHARED_STATUS_COLORS[entry.status as keyof typeof SHARED_STATUS_COLORS] ?? "bg-stone-400";
+                  const label = SHARED_STATUS_LABELS[entry.status as keyof typeof SHARED_STATUS_LABELS] ?? "Future";
                   const date = new Date(entry.timestamp);
                   const ago = formatTimeAgo(date);
                   return (
@@ -619,10 +614,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
           <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-neutral-500 pt-1">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
-                ({ plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500", tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300" } as Record<string, string>)[draft.status] ?? "bg-stone-300"
+                SHARED_STATUS_COLORS[draft.status] ?? "bg-stone-300"
               }`}
             />
-            {({ plan: "Plan", in_progress: "In Progress", demo: "Demo", tested: "Tested", production: "In Production", future: "Future" } as Record<string, string>)[draft.status] ?? "Future"}
+            {SHARED_STATUS_LABELS[draft.status] ?? "Future"}
           </div>
         </div>
       </div>
