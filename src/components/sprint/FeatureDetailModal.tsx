@@ -345,7 +345,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                   totalPoints={rPts}
                   donePoints={rDone}
                   onToggleTask={(task) => toggleSubIssueMut.mutate(task)}
-                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number })}
+                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number, featureId: feature.id })}
                   onUpdateTaskPoints={(task, points) => updateTaskPointsMut.mutate({ taskNumber: task.number, points })}
                   onUpdateTaskTitle={(task, newTitle) => updateTaskTitleMut.mutate({ taskNumber: task.number, featureId: feature.id, title: newTitle })}
                   onAddTask={(title, points) => createTaskMut.mutate({ roleNumber: role.number, featureId: feature.id, title, points, assignee: role.assignee ?? undefined })}
@@ -377,7 +377,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                       </span>
                       <button
                         type="button"
-                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number })}
+                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number, featureId: feature.id })}
                         className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <X size={13} />
