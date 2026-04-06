@@ -89,6 +89,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [criticalRepoFilter, setCriticalRepoFilter] = useState<string>("all");
+  const [criticalSort, setCriticalSort] = useState<{ key: "repo" | "age"; dir: "asc" | "desc" }>({ key: "age", dir: "asc" });
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
@@ -348,9 +349,9 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       </div>
 
       {/* ──── Charts Row ──── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Issues by Repo */}
-        <div className={cn(card, "p-5 lg:col-span-2")}>
+        <div className={cn(card, "p-5")}>
           <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Open Issues by Repo</h3>
           {!stats?.byRepo?.length ? (
             <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
@@ -390,27 +391,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           )}
         </div>
 
-        {/* Issues by Label */}
-        <div className={cn(card, "p-5")}>
-          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">By Label</h3>
-          {!stats?.byLabel?.length ? (
-            <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
-          ) : (
-            <div className="space-y-2">
-              {stats.byLabel.map((l) => {
-                const style = getLabelStyle(l.name, l.color);
-                return (
-                  <div key={l.name} className="flex items-center justify-between">
-                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", style.bg, style.text)}>
-                      {l.name}
-                    </span>
-                    <span className="text-xs font-medium text-stone-600 dark:text-neutral-300 tabular-nums">{l.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ──── Resolution Trend ──── */}
@@ -434,6 +414,20 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         const filtered = criticalRepoFilter === "all"
           ? criticalIssues
           : criticalIssues.filter((i: any) => i.repo === criticalRepoFilter);
+        const sorted = [...filtered].sort((a, b) => {
+          if (criticalSort.key === "repo") {
+            const cmp = a.repo.localeCompare(b.repo);
+            return criticalSort.dir === "asc" ? cmp : -cmp;
+          }
+          const ageA = daysAgo(a.created_at);
+          const ageB = daysAgo(b.created_at);
+          return criticalSort.dir === "asc" ? ageA - ageB : ageB - ageA;
+        });
+        const toggleCriticalSort = (key: "repo" | "age") => {
+          setCriticalSort((prev) =>
+            prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+          );
+        };
 
         return (
           <div className={cn(card, "overflow-hidden border-l-[3px] border-l-red-500")}>
@@ -459,14 +453,24 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                   <th className="px-3 py-2 w-8"></th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Issue</th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Title</th>
-                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Repo</th>
+                  <th
+                    onClick={() => toggleCriticalSort("repo")}
+                    className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                  >
+                    Repo {criticalSort.key === "repo" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
+                  </th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
-                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 text-right">Age</th>
+                  <th
+                    onClick={() => toggleCriticalSort("age")}
+                    className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 text-right cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                  >
+                    Age {criticalSort.key === "age" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
+                  </th>
                   <th className="px-3 py-2 w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
-                {filtered.map((issue: any) => (
+                {sorted.map((issue: any) => (
                   <tr key={issue.id} className="hover:bg-red-50/50 dark:hover:bg-red-500/[0.04]">
                     <td className="px-3 py-2">
                       <Flag className="w-4 h-4 text-red-500" />
