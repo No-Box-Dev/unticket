@@ -13,6 +13,7 @@ const SORT_COLUMNS = {
 // Query params: state, assignee, repo, repos, label, since, closed_since,
 //               page, page_size, sort, sort_dir, meta
 export async function onRequestGet(context) {
+  try {
   const { orgId } = getCtx(context);
   const url = new URL(context.request.url);
 
@@ -124,7 +125,7 @@ export async function onRequestGet(context) {
   }
 
   if (repos) {
-    const repoList = repos.split(",").filter(Boolean).slice(0, 100); // Cap at 100 to stay within D1 bind limits
+    const repoList = repos.split(",").filter(Boolean).slice(0, 90); // Cap to stay within D1 bind limits (100 max per stmt)
     if (repoList.length > 0) {
       where += ` AND repo IN (${repoList.map(() => "?").join(",")})`;
       bindings.push(...repoList);
@@ -161,4 +162,11 @@ export async function onRequestGet(context) {
   }));
 
   return jsonResponse({ data, totalCount, page, pageSize });
+  } catch (err) {
+    console.error("[issues] Error:", err?.message ?? err);
+    return new Response(JSON.stringify({ error: "Internal server error", detail: err?.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
