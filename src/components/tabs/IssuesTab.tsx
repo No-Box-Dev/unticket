@@ -386,7 +386,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       {stats?.closedPerDay && stats.closedPerDay.length > 0 && (
         <div className={cn(card, "p-5")}>
           <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Day</h3>
-          <MiniBarChart data={stats.closedPerDay.map((d) => ({ week: d.day, count: d.count }))} />
+          <DailyBarChart data={stats.closedPerDay} />
         </div>
       )}
 
@@ -610,34 +610,63 @@ function StatCard({ label, value, icon, accent, loading }: {
 
 // ──── Mini Bar Chart (for closed per week) ────
 
-function MiniBarChart({ data }: { data: { week: string; count: number }[] }) {
-  const max = Math.max(...data.map((d) => d.count), 1);
+function DailyBarChart({ data }: { data: { day: string; count: number }[] }) {
+  // Fill all 28 days so there are no gaps
+  const filled = useMemo(() => {
+    const map = new Map(data.map((d) => [d.day, d.count]));
+    const days: { day: string; count: number }[] = [];
+    const now = new Date();
+    for (let i = 27; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push({ day: key, count: map.get(key) ?? 0 });
+    }
+    return days;
+  }, [data]);
+
+  const max = Math.max(...filled.map((d) => d.count), 1);
+  const barHeight = 100;
+
+  // Y-axis ticks (0, mid, max)
+  const ticks = max <= 2 ? [0, max] : [0, Math.round(max / 2), max];
 
   return (
-    <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
-      {data.map((d, i) => {
-        const heightPct = d.count === 0 ? 2 : (d.count / max) * 100;
-        const dateLabel = new Date(d.week + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        const showLabel = i % 7 === 0 || i === data.length - 1;
-        return (
-          <div key={d.week} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-            <div className="w-full flex items-end" style={{ height: 56 }}>
-              <div
-                className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
-                style={{ height: `${heightPct}%`, minHeight: 2 }}
-              />
-            </div>
-            {showLabel && (
-              <span className="text-[9px] text-stone-400 dark:text-neutral-500 whitespace-nowrap">{dateLabel}</span>
-            )}
-            {d.count > 0 && (
-              <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                {d.count} — {dateLabel}
+    <div className="flex gap-2">
+      {/* Y-axis */}
+      <div className="flex flex-col justify-between shrink-0 pr-1" style={{ height: barHeight }}>
+        {[...ticks].reverse().map((t) => (
+          <span key={t} className="text-[10px] text-stone-400 dark:text-neutral-500 tabular-nums leading-none">{t}</span>
+        ))}
+      </div>
+      {/* Bars */}
+      <div className="flex-1 flex items-end gap-[2px]" style={{ height: barHeight }}>
+        {filled.map((d, i) => {
+          const heightPct = d.count === 0 ? 0 : (d.count / max) * 100;
+          const dateLabel = new Date(d.day + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const showLabel = i % 7 === 0;
+          return (
+            <div key={d.day} className="flex-1 flex flex-col items-center group relative">
+              <div className="w-full flex items-end" style={{ height: barHeight - 16 }}>
+                <div
+                  className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
+                  style={{ height: heightPct > 0 ? `${heightPct}%` : "1px", minHeight: d.count > 0 ? 3 : 1 }}
+                />
               </div>
-            )}
-          </div>
-        );
-      })}
+              {showLabel ? (
+                <span className="text-[9px] text-stone-400 dark:text-neutral-500 whitespace-nowrap mt-1">{dateLabel}</span>
+              ) : (
+                <span className="h-[14px]" />
+              )}
+              {d.count > 0 && (
+                <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                  {d.count} — {dateLabel}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
