@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX, Flag } from "lucide-react";
@@ -110,13 +111,12 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   // Issues closed on selected day (for chart drill-down)
   const nextDay = selectedDay ? new Date(new Date(selectedDay + "T00:00:00").getTime() + 86400000).toISOString().slice(0, 10) : undefined;
-  const { data: dayDetail } = usePaginatedIssues({
+  const { data: dayDetail, isLoading: dayDetailLoading } = usePaginatedIssues({
     state: "closed",
     page: 1,
-    pageSize: 100,
-    closedSince: selectedDay ?? undefined,
-    closedBefore: nextDay,
-    repos: filteredRepos,
+    pageSize: 200,
+    closedSince: selectedDay ? selectedDay + "T00:00:00Z" : undefined,
+    closedBefore: nextDay ? nextDay + "T00:00:00Z" : undefined,
     sort: "updated_at",
     sortDir: "desc",
   }, !!selectedDay);
@@ -416,32 +416,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             selectedDay={selectedDay}
             onSelectDay={(day) => setSelectedDay(selectedDay === day ? null : day)}
           />
-          {selectedDay && dayDetail && (
-            <div className="mt-4 border-t border-stone-100 dark:border-white/[0.06] pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-stone-700 dark:text-neutral-200">
-                  {new Date(selectedDay + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} — {dayDetail.totalCount} issue{dayDetail.totalCount !== 1 ? "s" : ""} closed
-                </h4>
-                <button onClick={() => setSelectedDay(null)} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-neutral-300 cursor-pointer">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {(dayDetail.data ?? []).map((issue: any) => {
-                  const critical = isCritical(issue);
-                  return (
-                    <div key={issue.id} className={cn("flex items-center gap-3 text-xs py-1 px-2 rounded", critical && "bg-red-50/50 dark:bg-red-500/[0.04]")}>
-                      {critical ? <Flag className="w-3.5 h-3.5 text-red-500 shrink-0" /> : <CircleCheck className="w-3.5 h-3.5 text-accent shrink-0" />}
-                      <span className="text-stone-400 dark:text-neutral-500 shrink-0">#{issue.number}</span>
-                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-800 dark:text-neutral-200 hover:text-brand truncate">{issue.title}</a>
-                      <span className="text-stone-400 dark:text-neutral-500 shrink-0 ml-auto">{issue.repo}</span>
-                      <span className="text-stone-400 dark:text-neutral-500 shrink-0 w-20 text-right">{issue.closed_by ?? "—"}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {selectedDay && <DayDetailDrawer
+            day={selectedDay}
+            data={dayDetail?.data ?? []}
+            totalCount={dayDetail?.totalCount ?? 0}
+            loading={dayDetailLoading}
+            onClose={() => setSelectedDay(null)}
+          />}
         </div>
       )}
 
@@ -954,5 +935,99 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
         </a>
       </td>
     </tr>
+  );
+}
+
+// ──── Day Detail Drawer ────
+
+function DayDetailDrawer({ day, data, totalCount, loading, onClose }: {
+  day: string;
+  data: any[];
+  totalCount: number;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const dateLabel = new Date(day + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+
+  // Group by repo, sorted by count desc
+  const grouped = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const issue of data) {
+      const repo = issue.repo || "Unknown";
+      if (!map.has(repo)) map.set(repo, []);
+      map.get(repo)!.push(issue);
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [data]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div
+        className="relative w-full max-w-lg bg-white dark:bg-dark-raised shadow-xl flex flex-col animate-slide-in-right"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-white/[0.06]">
+          <div>
+            <h2 className="font-semibold text-stone-900 dark:text-neutral-100 text-sm">{dateLabel}</h2>
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{totalCount} issue{totalCount !== 1 ? "s" : ""} closed</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-stone-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer">
+            <X size={16} className="text-stone-500 dark:text-neutral-400" />
+          </button>
+        </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner className="w-5 h-5 text-brand" />
+            </div>
+          ) : data.length === 0 ? (
+            <div className="p-5 text-sm text-stone-400 dark:text-neutral-500 text-center">No issues found</div>
+          ) : (
+            <div>
+              {grouped.map(([repo, issues]) => (
+                <div key={repo}>
+                  <div className="sticky top-0 px-5 py-2 bg-stone-50 dark:bg-dark-overlay border-b border-stone-200 dark:border-white/[0.06] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-stone-600 dark:text-neutral-300">{repo}</span>
+                    <span className="text-[10px] text-stone-400 dark:text-neutral-500">{issues.length}</span>
+                  </div>
+                  <div className="divide-y divide-stone-100 dark:divide-white/[0.04]">
+                    {issues.map((issue: any) => {
+                      const critical = isCritical(issue);
+                      return (
+                        <div key={issue.id} className={cn("px-5 py-2.5 hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors", critical && "border-l-2 border-l-red-500")}>
+                          <div className="flex items-center gap-2">
+                            {critical ? <Flag className="w-3.5 h-3.5 text-red-500 shrink-0" /> : <CircleCheck className="w-3.5 h-3.5 text-accent shrink-0" />}
+                            <a
+                              href={issue.html_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-stone-800 dark:text-neutral-200 hover:text-brand transition-colors truncate flex-1"
+                            >
+                              <span className="text-stone-400 dark:text-neutral-500 mr-1.5">#{issue.number}</span>
+                              {issue.title}
+                            </a>
+                            <ExternalLink size={11} className="shrink-0 opacity-40" />
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 ml-5.5 text-[11px] text-stone-400 dark:text-neutral-500">
+                            {issue.closed_by && <span>Closed by <span className="text-stone-600 dark:text-neutral-300">{issue.closed_by}</span></span>}
+                            {(issue.assignees ?? []).length > 0 && (
+                              <span>Assigned to <span className="text-stone-600 dark:text-neutral-300">{issue.assignees.map((a: any) => a.login).join(", ")}</span></span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
