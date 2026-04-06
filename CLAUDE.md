@@ -5,6 +5,8 @@
 - **When you add, remove, or significantly change a feature, update the `## Features` section of this file to reflect the change.** This keeps every future Claude Code session (for any team member) aware of what exists.
 - **When you add new architecture patterns (new API routes, new shared hooks, new config keys), update the `## Architecture` section.**
 - **Code review (`/review-external`)**: Always use the review-external skill at `~/.claude/skills/review-external/SKILL.md`. This runs a two-expert review (Zhipu GLM-5 + Claude) with peer discussion on critical findings. Use it before merging PRs.
+- **After merging PRs**: Always check the deploy status (`gh api repos/No-Box-Dev/gitpulse/actions/runs --jq '.workflow_runs[0]'`) and verify it succeeds. If the deploy fails, fix the build immediately. Also check for automated review comments (Gemini, CodeRabbit) on the merged PR and address any issues that landed on main.
+
 ## URLs
 
 - **Live:** https://app.unticket.ai
