@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSprint } from "@/hooks/useConfigRepo";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, AlertTriangle, Clock, UserX } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
