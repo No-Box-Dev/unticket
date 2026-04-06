@@ -196,7 +196,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         qc.invalidateQueries({ queryKey: ["repos"] });
         qc.invalidateQueries({ queryKey: ["labels"] });
       }
-    });
+    }, true /* force full re-sync to pick up label changes */);
   }, [qc]);
 
   const labelList = useMemo(() => {
