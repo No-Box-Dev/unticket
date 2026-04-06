@@ -484,7 +484,7 @@ export interface IssueStats {
   unassigned: number;
   stale: number;
   closedSprint: number;
-  byRepo: { repo: string; count: number }[];
+  byRepo: { repo: string; count: number; critical: number }[];
   byLabel: { name: string; color: string; count: number }[];
   closedPerDay: { day: string; count: number }[];
 }
