@@ -460,6 +460,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Issue</th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Title</th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Repo</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 text-right">Age</th>
                   <th className="px-3 py-2 w-8"></th>
                 </tr>
@@ -473,6 +474,12 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                     <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
                     <td className="px-3 py-2 max-w-md truncate text-stone-800 dark:text-neutral-200">{issue.title}</td>
                     <td className="px-3 py-2 text-stone-500 dark:text-neutral-400">{issue.repo}</td>
+                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400">
+                      {(issue.assignees ?? []).length > 0
+                        ? (issue.assignees as any[]).map((a: any) => a.login).join(", ")
+                        : <span className="text-stone-300 dark:text-neutral-600">—</span>
+                      }
+                    </td>
                     <td className={cn(
                       "px-3 py-2 text-right tabular-nums",
                       daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
