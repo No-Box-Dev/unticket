@@ -48,7 +48,7 @@ export function DashboardPage() {
 
   const handleTabChange = useCallback((tab: TabId, filter?: NavFilter) => {
     const params: Record<string, string> = {};
-    if (tab !== "overview") params.tab = tab;
+    if (tab !== "issues") params.tab = tab;
     if (filter?.person) params.person = filter.person;
     if (filter?.view) params.view = filter.view;
     setSearchParams(params, { replace: true });
