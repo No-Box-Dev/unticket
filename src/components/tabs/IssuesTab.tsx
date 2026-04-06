@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
-import { useSprint } from "@/hooks/useConfigRepo";
+import { useSprint, useSettings } from "@/hooks/useConfigRepo";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -66,6 +66,7 @@ interface IssuesTabProps {
 export function IssuesTab({ navFilter }: IssuesTabProps) {
   const qc = useQueryClient();
   const { data: sprint, isLoading: sprintLoading } = useSprint();
+  const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
   const { data: members } = useActiveMembers();
@@ -73,9 +74,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
+  const draftRepos = useMemo(() => new Set(settings?.draftRepos ?? []), [settings]);
+
   const repoList = useMemo(() => {
-    return repos?.map((r: any) => r.name).filter((n: string) => !EXCLUDED_REPOS.has(n)).sort() ?? [];
-  }, [repos]);
+    return repos?.map((r: any) => r.name)
+      .filter((n: string) => !EXCLUDED_REPOS.has(n) && !draftRepos.has(n))
+      .sort() ?? [];
+  }, [repos, draftRepos]);
 
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");
