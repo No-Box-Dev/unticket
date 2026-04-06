@@ -486,7 +486,7 @@ export interface IssueStats {
   closedSprint: number;
   byRepo: { repo: string; count: number }[];
   byLabel: { name: string; color: string; count: number }[];
-  closedPerWeek: { week: string; count: number }[];
+  closedPerDay: { day: string; count: number }[];
 }
 
 export async function fetchIssueStats(closedSince?: string, repos?: string[]): Promise<IssueStats> {

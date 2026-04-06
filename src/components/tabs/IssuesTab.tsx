@@ -360,10 +360,10 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       </div>
 
       {/* ──── Resolution Trend ──── */}
-      {stats?.closedPerWeek && stats.closedPerWeek.length > 0 && (
+      {stats?.closedPerDay && stats.closedPerDay.length > 0 && (
         <div className={cn(card, "p-5")}>
-          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Week</h3>
-          <MiniBarChart data={stats.closedPerWeek} />
+          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Day</h3>
+          <MiniBarChart data={stats.closedPerDay.map((d) => ({ week: d.day, count: d.count }))} />
         </div>
       )}
 
@@ -591,20 +591,27 @@ function MiniBarChart({ data }: { data: { week: string; count: number }[] }) {
   const max = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <div className="flex items-end gap-1.5" style={{ height: 80 }}>
-      {data.map((d) => {
+    <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
+      {data.map((d, i) => {
         const heightPct = d.count === 0 ? 2 : (d.count / max) * 100;
-        const weekLabel = new Date(d.week + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const dateLabel = new Date(d.week + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const showLabel = i % 7 === 0 || i === data.length - 1;
         return (
-          <div key={d.week} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-[10px] font-medium text-stone-600 dark:text-neutral-300 tabular-nums">{d.count || ""}</span>
-            <div className="w-full flex items-end" style={{ height: 50 }}>
+          <div key={d.week} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+            <div className="w-full flex items-end" style={{ height: 56 }}>
               <div
                 className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
                 style={{ height: `${heightPct}%`, minHeight: 2 }}
               />
             </div>
-            <span className="text-[10px] text-stone-400 dark:text-neutral-500">{weekLabel}</span>
+            {showLabel && (
+              <span className="text-[9px] text-stone-400 dark:text-neutral-500 whitespace-nowrap">{dateLabel}</span>
+            )}
+            {d.count > 0 && (
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                {d.count} — {dateLabel}
+              </div>
+            )}
           </div>
         );
       })}
