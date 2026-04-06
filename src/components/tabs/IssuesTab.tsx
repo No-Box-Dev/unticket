@@ -88,6 +88,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [criticalRepoFilter, setCriticalRepoFilter] = useState<string>("all");
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
@@ -346,40 +347,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         />
       </div>
 
-      {/* ──── Critical Issues ──── */}
-      {(criticalData?.data ?? []).length > 0 && (
-        <div className={cn(card, "p-5 border-l-[3px] border-l-red-500")}>
-          <div className="flex items-center gap-2 mb-3">
-            <Flag className="w-4 h-4 text-red-500" />
-            <h3 className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
-              Critical Issues ({criticalData!.totalCount})
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {criticalData!.data.map((issue: any) => (
-              <div key={issue.id} className="flex items-center gap-3 text-xs">
-                <span className="text-stone-400 dark:text-neutral-500 shrink-0">#{issue.number}</span>
-                <a
-                  href={issue.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-stone-800 dark:text-neutral-200 hover:text-brand truncate"
-                >
-                  {issue.title}
-                </a>
-                <span className="text-stone-400 dark:text-neutral-500 shrink-0 ml-auto">{issue.repo}</span>
-                <span className={cn(
-                  "tabular-nums shrink-0",
-                  daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
-                )}>
-                  {daysAgo(issue.created_at)}d
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ──── Charts Row ──── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Issues by Repo */}
@@ -633,6 +600,65 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           </table>
         </div>
       </div>
+
+      {/* ──── Critical Issues ──── */}
+      {(criticalData?.data ?? []).length > 0 && (() => {
+        const criticalIssues = criticalData!.data as any[];
+        // Build repo options sorted by most critical issues
+        const repoCountMap = new Map<string, number>();
+        for (const issue of criticalIssues) {
+          repoCountMap.set(issue.repo, (repoCountMap.get(issue.repo) ?? 0) + 1);
+        }
+        const repoOptions = [...repoCountMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([repo, count]) => ({ repo, count }));
+        const filtered = criticalRepoFilter === "all"
+          ? criticalIssues
+          : criticalIssues.filter((i: any) => i.repo === criticalRepoFilter);
+
+        return (
+          <div className={cn(card, "p-5 border-l-[3px] border-l-red-500")}>
+            <div className="flex items-center gap-3 mb-4">
+              <Flag className="w-4 h-4 text-red-500" />
+              <h3 className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
+                Critical Issues ({criticalData!.totalCount})
+              </h3>
+              <select
+                value={criticalRepoFilter}
+                onChange={(e) => setCriticalRepoFilter(e.target.value)}
+                className="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-red-400"
+              >
+                <option value="all">All Repos ({criticalIssues.length})</option>
+                {repoOptions.map(({ repo, count }) => (
+                  <option key={repo} value={repo}>{repo} ({count})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              {filtered.map((issue: any) => (
+                <div key={issue.id} className="flex items-center gap-3 text-xs">
+                  <span className="text-stone-400 dark:text-neutral-500 shrink-0">#{issue.number}</span>
+                  <a
+                    href={issue.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-stone-800 dark:text-neutral-200 hover:text-brand truncate"
+                  >
+                    {issue.title}
+                  </a>
+                  <span className="text-stone-400 dark:text-neutral-500 shrink-0 ml-auto">{issue.repo}</span>
+                  <span className={cn(
+                    "tabular-nums shrink-0",
+                    daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
+                  )}>
+                    {daysAgo(issue.created_at)}d
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
