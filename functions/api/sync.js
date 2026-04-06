@@ -14,7 +14,22 @@ export async function onRequestPost(context) {
   try {
     if (!cursor) {
       // Phase 1: init (repos list, members, config migration)
-      const repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
+      let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
+
+      // Filter to core repos only (exclude draftRepos from settings)
+      const settingsRow = await context.env.DB
+        .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
+        .bind(orgId)
+        .first();
+      if (settingsRow?.data) {
+        try {
+          const settings = JSON.parse(settingsRow.data);
+          const draftSet = new Set(settings.draftRepos ?? []);
+          if (draftSet.size > 0) {
+            repoNames = repoNames.filter((n) => !draftSet.has(n));
+          }
+        } catch { /* ignore parse errors */ }
+      }
 
       if (repoNames.length === 0) {
         return jsonResponse({ done: true, repos: 0 });
@@ -31,12 +46,21 @@ export async function onRequestPost(context) {
     // Phase 2: sync one repo
     await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force);
 
-    // Find next repo
-    const repoRows = await context.env.DB
-      .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
-      .bind(orgId)
-      .all();
-    const repoNames = repoRows.results.map((r) => r.name);
+    // Find next repo (filtered by core repos)
+    const [repoRows, settingsRow2] = await context.env.DB.batch([
+      context.env.DB.prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name").bind(orgId),
+      context.env.DB.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
+    ]);
+    let repoNames = repoRows.results.map((r) => r.name);
+    if (settingsRow2.results?.[0]?.data) {
+      try {
+        const settings = JSON.parse(settingsRow2.results[0].data);
+        const draftSet = new Set(settings.draftRepos ?? []);
+        if (draftSet.size > 0) {
+          repoNames = repoNames.filter((n) => !draftSet.has(n));
+        }
+      } catch { /* ignore */ }
+    }
     const currentIdx = repoNames.indexOf(cursor);
     const nextRepo = currentIdx >= 0 && currentIdx < repoNames.length - 1
       ? repoNames[currentIdx + 1]
