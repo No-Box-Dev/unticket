@@ -325,18 +325,36 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
           ) : (
             <div className="space-y-2">
-              {stats.byRepo.map((r) => (
-                <div key={r.repo} className="flex items-center gap-3">
-                  <span className="text-xs text-stone-600 dark:text-neutral-300 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
-                  <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden">
-                    <div
-                      className="h-full bg-brand/70 rounded transition-all duration-300"
-                      style={{ width: `${(r.count / repoMax) * 100}%` }}
-                    />
+              {stats.byRepo.map((r) => {
+                const criticalPct = r.critical > 0 ? (r.critical / repoMax) * 100 : 0;
+                const normalPct = ((r.count - r.critical) / repoMax) * 100;
+                return (
+                  <div key={r.repo} className="flex items-center gap-3">
+                    <span className="text-xs text-stone-600 dark:text-neutral-300 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                    <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden flex">
+                      {r.critical > 0 && (
+                        <div
+                          className="h-full bg-red-500 transition-all duration-300"
+                          style={{ width: `${criticalPct}%` }}
+                        />
+                      )}
+                      <div
+                        className="h-full bg-brand/70 transition-all duration-300"
+                        style={{ width: `${normalPct}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs font-medium text-stone-700 dark:text-neutral-200 w-8 text-right tabular-nums">{r.count}</span>
+                      {r.critical > 0 && (
+                        <span className="flex items-center gap-0.5 text-red-500">
+                          <Flag className="w-3 h-3" />
+                          <span className="text-[10px] font-semibold tabular-nums">{r.critical}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-xs font-medium text-stone-700 dark:text-neutral-200 w-8 text-right tabular-nums">{r.count}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
