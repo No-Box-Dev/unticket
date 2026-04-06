@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSprint } from "@/hooks/useConfigRepo";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -20,6 +20,11 @@ function daysAgo(date: string): number {
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
 const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
+const CRITICAL_LABELS = new Set(["critical"]);
+
+function isCritical(issue: any): boolean {
+  return (issue.labels ?? []).some((l: any) => CRITICAL_LABELS.has(l.name?.toLowerCase()));
+}
 
 function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: "asc" | "desc" }) {
   if (activeSortKey !== column) return null;
@@ -496,7 +501,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 </tr>
               ) : (
                 <>
-                  {(openData?.data ?? []).map((issue) => (
+                  {[...(openData?.data ?? [])].sort((a, b) => (isCritical(b) ? 1 : 0) - (isCritical(a) ? 1 : 0)).map((issue) => (
                     <IssueRow key={issue.id} issue={issue} closed={false} allPeople={memberLogins} onAssign={(assignees) => updateAssignees.mutate({ repo: issue.repo, issueNumber: issue.number, assignees })} />
                   ))}
 
@@ -661,10 +666,16 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
   const age = daysAgo(issue.created_at);
 
   return (
-    <tr className={cn("hover:bg-stone-50 dark:hover:bg-white/[0.06]", closed && "text-stone-400 dark:text-neutral-500")}>
+    <tr className={cn(
+      "hover:bg-stone-50 dark:hover:bg-white/[0.06]",
+      closed && "text-stone-400 dark:text-neutral-500",
+      !closed && isCritical(issue) && "bg-red-50/50 dark:bg-red-500/[0.04]",
+    )}>
       <td className="px-3 py-2">
         {closed ? (
           <CircleCheck className="w-4 h-4 text-accent" />
+        ) : isCritical(issue) ? (
+          <Flag className="w-4 h-4 text-red-500" />
         ) : (
           <CircleDot className="w-4 h-4 text-green-600" />
         )}
