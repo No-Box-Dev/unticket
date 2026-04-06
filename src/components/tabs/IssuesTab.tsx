@@ -110,13 +110,19 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   );
 
   // Issues closed on selected day (for chart drill-down)
-  const nextDay = selectedDay ? new Date(new Date(selectedDay + "T00:00:00").getTime() + 86400000).toISOString().slice(0, 10) : undefined;
+  // Use plain date strings — SQLite string comparison handles YYYY-MM-DD vs YYYY-MM-DDTHH:MM:SSZ correctly
+  const nextDay = useMemo(() => {
+    if (!selectedDay) return undefined;
+    const [y, m, d] = selectedDay.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + 1));
+    return dt.toISOString().slice(0, 10);
+  }, [selectedDay]);
   const { data: dayDetail, isLoading: dayDetailLoading } = usePaginatedIssues({
     state: "closed",
     page: 1,
     pageSize: 200,
-    closedSince: selectedDay ? selectedDay + "T00:00:00Z" : undefined,
-    closedBefore: nextDay ? nextDay + "T00:00:00Z" : undefined,
+    closedSince: selectedDay ?? undefined,
+    closedBefore: nextDay,
     sort: "updated_at",
     sortDir: "desc",
   }, !!selectedDay);
