@@ -295,6 +295,21 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         </div>
       )}
 
+      {/* ──── Dashboard Header ──── */}
+      <div className="flex items-center justify-end">
+        <button
+          onClick={startSync}
+          disabled={syncModalOpen}
+          className={cn(
+            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
+            syncModalOpen && "opacity-50 cursor-not-allowed",
+          )}
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", (openFetching || closedFetching) && "animate-spin")} />
+          Sync from GitHub
+        </button>
+      </div>
+
       {/* ──── Dashboard Stats ──── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -687,21 +702,20 @@ function DailyBarChart({ data }: { data: { day: string; count: number }[] }) {
       <div className="flex-1 flex items-end gap-[2px]" style={{ height: barHeight }}>
         {filled.map((d, i) => {
           const heightPct = d.count === 0 ? 0 : (d.count / max) * 100;
+          const dayNum = new Date(d.day + "T00:00:00").getDate();
           const dateLabel = new Date(d.day + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          const showLabel = i % 7 === 0;
+          const showMonthLabel = i === 0 || dayNum === 1;
           return (
             <div key={d.day} className="flex-1 flex flex-col items-center group relative">
-              <div className="w-full flex items-end" style={{ height: barHeight - 16 }}>
+              <div className="w-full flex items-end" style={{ height: barHeight - 20 }}>
                 <div
                   className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
                   style={{ height: heightPct > 0 ? `${heightPct}%` : "1px", minHeight: d.count > 0 ? 3 : 1 }}
                 />
               </div>
-              {showLabel ? (
-                <span className="text-[9px] text-stone-400 dark:text-neutral-500 whitespace-nowrap mt-1">{dateLabel}</span>
-              ) : (
-                <span className="h-[14px]" />
-              )}
+              <span className="text-[8px] text-stone-400 dark:text-neutral-500 whitespace-nowrap mt-0.5 leading-tight">
+                {showMonthLabel ? dateLabel : dayNum}
+              </span>
               {d.count > 0 && (
                 <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                   {d.count} — {dateLabel}
