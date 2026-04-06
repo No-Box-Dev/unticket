@@ -63,16 +63,21 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT json_extract(value, '$.name') AS name, json_extract(value, '$.color') AS color, COUNT(*) as count FROM issues, json_each(labels_json) WHERE org_id = ? AND state = 'open' AND labels_json != '[]'${repoFilter} GROUP BY name ORDER BY count DESC LIMIT 10`).bind(orgId, ...repoBindings),
       // closed per day (last 28 days)
       context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
+      // critical open by repo
+      context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, ...repoBindings),
     ];
 
     const results = await context.env.DB.batch(queries);
+
+    // Build critical-by-repo lookup
+    const criticalByRepo = Object.fromEntries((results[7].results ?? []).map((r) => [r.repo, r.count]));
 
     return jsonResponse({
       open: results[0].results[0]?.c ?? 0,
       unassigned: results[1].results[0]?.c ?? 0,
       stale: results[2].results[0]?.c ?? 0,
       closedSprint: results[3].results[0]?.c ?? 0,
-      byRepo: results[4].results,
+      byRepo: results[4].results.map((r) => ({ ...r, critical: criticalByRepo[r.repo] ?? 0 })),
       byLabel: results[5].results,
       closedPerDay: results[6].results,
     });
