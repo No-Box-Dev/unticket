@@ -421,6 +421,77 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         </div>
       )}
 
+      {/* ──── Critical Issues ──── */}
+      {(criticalData?.data ?? []).length > 0 && (() => {
+        const criticalIssues = criticalData!.data as any[];
+        const repoCountMap = new Map<string, number>();
+        for (const issue of criticalIssues) {
+          repoCountMap.set(issue.repo, (repoCountMap.get(issue.repo) ?? 0) + 1);
+        }
+        const repoOptions = [...repoCountMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([repo, count]) => ({ repo, count }));
+        const filtered = criticalRepoFilter === "all"
+          ? criticalIssues
+          : criticalIssues.filter((i: any) => i.repo === criticalRepoFilter);
+
+        return (
+          <div className={cn(card, "overflow-hidden border-l-[3px] border-l-red-500")}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 dark:border-white/[0.06]">
+              <Flag className="w-4 h-4 text-red-500" />
+              <h3 className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
+                Critical Issues ({criticalData!.totalCount})
+              </h3>
+              <select
+                value={criticalRepoFilter}
+                onChange={(e) => setCriticalRepoFilter(e.target.value)}
+                className="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-red-400"
+              >
+                <option value="all">All Repos ({criticalIssues.length})</option>
+                {repoOptions.map(({ repo, count }) => (
+                  <option key={repo} value={repo}>{repo} ({count})</option>
+                ))}
+              </select>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
+                  <th className="px-3 py-2 w-8"></th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Issue</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Title</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Repo</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 text-right">Age</th>
+                  <th className="px-3 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
+                {filtered.map((issue: any) => (
+                  <tr key={issue.id} className="hover:bg-red-50/50 dark:hover:bg-red-500/[0.04]">
+                    <td className="px-3 py-2">
+                      <Flag className="w-4 h-4 text-red-500" />
+                    </td>
+                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
+                    <td className="px-3 py-2 max-w-md truncate text-stone-800 dark:text-neutral-200">{issue.title}</td>
+                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400">{issue.repo}</td>
+                    <td className={cn(
+                      "px-3 py-2 text-right tabular-nums",
+                      daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
+                    )}>
+                      {daysAgo(issue.created_at)}d
+                    </td>
+                    <td className="px-3 py-2">
+                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-brand">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
       {/* ──── Issue List ──── */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -601,64 +672,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         </div>
       </div>
 
-      {/* ──── Critical Issues ──── */}
-      {(criticalData?.data ?? []).length > 0 && (() => {
-        const criticalIssues = criticalData!.data as any[];
-        // Build repo options sorted by most critical issues
-        const repoCountMap = new Map<string, number>();
-        for (const issue of criticalIssues) {
-          repoCountMap.set(issue.repo, (repoCountMap.get(issue.repo) ?? 0) + 1);
-        }
-        const repoOptions = [...repoCountMap.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([repo, count]) => ({ repo, count }));
-        const filtered = criticalRepoFilter === "all"
-          ? criticalIssues
-          : criticalIssues.filter((i: any) => i.repo === criticalRepoFilter);
-
-        return (
-          <div className={cn(card, "p-5 border-l-[3px] border-l-red-500")}>
-            <div className="flex items-center gap-3 mb-4">
-              <Flag className="w-4 h-4 text-red-500" />
-              <h3 className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
-                Critical Issues ({criticalData!.totalCount})
-              </h3>
-              <select
-                value={criticalRepoFilter}
-                onChange={(e) => setCriticalRepoFilter(e.target.value)}
-                className="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-red-400"
-              >
-                <option value="all">All Repos ({criticalIssues.length})</option>
-                {repoOptions.map(({ repo, count }) => (
-                  <option key={repo} value={repo}>{repo} ({count})</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              {filtered.map((issue: any) => (
-                <div key={issue.id} className="flex items-center gap-3 text-xs">
-                  <span className="text-stone-400 dark:text-neutral-500 shrink-0">#{issue.number}</span>
-                  <a
-                    href={issue.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-stone-800 dark:text-neutral-200 hover:text-brand truncate"
-                  >
-                    {issue.title}
-                  </a>
-                  <span className="text-stone-400 dark:text-neutral-500 shrink-0 ml-auto">{issue.repo}</span>
-                  <span className={cn(
-                    "tabular-nums shrink-0",
-                    daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
-                  )}>
-                    {daysAgo(issue.created_at)}d
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
