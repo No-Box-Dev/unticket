@@ -367,7 +367,7 @@ function MyTodosView({
       if (todo.status === targetStatus) return;
       updateTodoMut.mutate({ issueNumber: todo.id, updates: { status: targetStatus } });
     },
-    [allTodos, updateIssueStateMut, updateTodoMut],
+    [allTodos, updateTodoMut],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent, status: TodoStatus) => {
