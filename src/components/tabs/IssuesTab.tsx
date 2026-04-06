@@ -90,6 +90,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [criticalRepoFilter, setCriticalRepoFilter] = useState<string>("all");
   const [criticalSort, setCriticalSort] = useState<{ key: "repo" | "age"; dir: "asc" | "desc" }>({ key: "age", dir: "asc" });
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
 
@@ -106,6 +107,19 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     sprint?.startDate,
     filteredRepos,
   );
+
+  // Issues closed on selected day (for chart drill-down)
+  const nextDay = selectedDay ? new Date(new Date(selectedDay + "T00:00:00").getTime() + 86400000).toISOString().slice(0, 10) : undefined;
+  const { data: dayDetail } = usePaginatedIssues({
+    state: "closed",
+    page: 1,
+    pageSize: 100,
+    closedSince: selectedDay ?? undefined,
+    closedBefore: nextDay,
+    repos: filteredRepos,
+    sort: "updated_at",
+    sortDir: "desc",
+  }, !!selectedDay);
 
   // Critical issues query (all open, unfiltered by repo/assignee)
   const { data: criticalData } = usePaginatedIssues({
@@ -397,7 +411,37 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       {stats?.closedPerDay && stats.closedPerDay.length > 0 && (
         <div className={cn(card, "p-5")}>
           <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Day</h3>
-          <DailyBarChart data={stats.closedPerDay} />
+          <DailyBarChart
+            data={stats.closedPerDay}
+            selectedDay={selectedDay}
+            onSelectDay={(day) => setSelectedDay(selectedDay === day ? null : day)}
+          />
+          {selectedDay && dayDetail && (
+            <div className="mt-4 border-t border-stone-100 dark:border-white/[0.06] pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-semibold text-stone-700 dark:text-neutral-200">
+                  {new Date(selectedDay + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} — {dayDetail.totalCount} issue{dayDetail.totalCount !== 1 ? "s" : ""} closed
+                </h4>
+                <button onClick={() => setSelectedDay(null)} className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-neutral-300 cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {(dayDetail.data ?? []).map((issue: any) => {
+                  const critical = isCritical(issue);
+                  return (
+                    <div key={issue.id} className={cn("flex items-center gap-3 text-xs py-1 px-2 rounded", critical && "bg-red-50/50 dark:bg-red-500/[0.04]")}>
+                      {critical ? <Flag className="w-3.5 h-3.5 text-red-500 shrink-0" /> : <CircleCheck className="w-3.5 h-3.5 text-accent shrink-0" />}
+                      <span className="text-stone-400 dark:text-neutral-500 shrink-0">#{issue.number}</span>
+                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-800 dark:text-neutral-200 hover:text-brand truncate">{issue.title}</a>
+                      <span className="text-stone-400 dark:text-neutral-500 shrink-0 ml-auto">{issue.repo}</span>
+                      <span className="text-stone-400 dark:text-neutral-500 shrink-0 w-20 text-right">{issue.closed_by ?? "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -724,23 +768,28 @@ function StatCard({ label, value, icon, accent, loading }: {
 
 // ──── Mini Bar Chart (for closed per week) ────
 
-function DailyBarChart({ data }: { data: { day: string; count: number }[] }) {
+function DailyBarChart({ data, selectedDay, onSelectDay }: {
+  data: { day: string; count: number; critical: number }[];
+  selectedDay: string | null;
+  onSelectDay: (day: string) => void;
+}) {
   // Fill all 28 days so there are no gaps
   const filled = useMemo(() => {
-    const map = new Map(data.map((d) => [d.day, d.count]));
-    const days: { day: string; count: number }[] = [];
+    const map = new Map(data.map((d) => [d.day, d]));
+    const days: { day: string; count: number; critical: number }[] = [];
     const now = new Date();
     for (let i = 27; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
-      days.push({ day: key, count: map.get(key) ?? 0 });
+      const entry = map.get(key);
+      days.push({ day: key, count: entry?.count ?? 0, critical: entry?.critical ?? 0 });
     }
     return days;
   }, [data]);
 
   const max = Math.max(...filled.map((d) => d.count), 1);
-  const barHeight = 100;
+  const barHeight = 120;
 
   // Y-axis ticks (0, mid, max)
   const ticks = max <= 2 ? [0, max] : [0, Math.round(max / 2), max];
@@ -757,23 +806,40 @@ function DailyBarChart({ data }: { data: { day: string; count: number }[] }) {
       <div className="flex-1 flex items-end gap-[2px]" style={{ height: barHeight }}>
         {filled.map((d, i) => {
           const heightPct = d.count === 0 ? 0 : (d.count / max) * 100;
+          const criticalPct = d.critical > 0 ? (d.critical / max) * 100 : 0;
+          const normalPct = heightPct - criticalPct;
           const dayNum = new Date(d.day + "T00:00:00").getDate();
           const dateLabel = new Date(d.day + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
           const showMonthLabel = i === 0 || dayNum === 1;
+          const isSelected = selectedDay === d.day;
           return (
-            <div key={d.day} className="flex-1 flex flex-col items-center group relative">
-              <div className="w-full flex items-end" style={{ height: barHeight - 20 }}>
-                <div
-                  className="w-full bg-brand/60 rounded-sm hover:bg-brand/80 transition-colors"
-                  style={{ height: heightPct > 0 ? `${heightPct}%` : "1px", minHeight: d.count > 0 ? 3 : 1 }}
-                />
+            <div
+              key={d.day}
+              className={cn("flex-1 flex flex-col items-center group relative", d.count > 0 && "cursor-pointer")}
+              onClick={() => d.count > 0 && onSelectDay(d.day)}
+            >
+              <div className="w-full flex flex-col items-stretch justify-end" style={{ height: barHeight - 20 }}>
+                {d.count > 0 ? (
+                  <div className={cn("w-full flex flex-col rounded-sm overflow-hidden transition-all", isSelected && "ring-2 ring-brand ring-offset-1")} style={{ height: `${heightPct}%`, minHeight: 3 }}>
+                    {normalPct > 0 && (
+                      <div className="w-full bg-brand/60 hover:bg-brand/80 transition-colors" style={{ flexGrow: d.count - d.critical }} />
+                    )}
+                    {criticalPct > 0 && (
+                      <div className="w-full bg-red-500 hover:bg-red-600 transition-colors" style={{ flexGrow: d.critical }} />
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full" style={{ height: "1px", minHeight: 1 }}>
+                    <div className="w-full bg-stone-200 dark:bg-dark-overlay" style={{ height: "1px" }} />
+                  </div>
+                )}
               </div>
-              <span className="text-[8px] text-stone-400 dark:text-neutral-500 whitespace-nowrap mt-0.5 leading-tight">
+              <span className={cn("text-[8px] whitespace-nowrap mt-0.5 leading-tight", isSelected ? "text-brand font-semibold" : "text-stone-400 dark:text-neutral-500")}>
                 {showMonthLabel ? dateLabel : dayNum}
               </span>
               {d.count > 0 && (
                 <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                  {d.count} — {dateLabel}
+                  {d.count}{d.critical > 0 ? ` (${d.critical} critical)` : ""} — {dateLabel}
                 </div>
               )}
             </div>
