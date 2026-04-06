@@ -31,6 +31,52 @@ export async function onRequestGet(context) {
     return jsonResponse(rows.results);
   }
 
+  if (meta === "stats") {
+    const closedSince = url.searchParams.get("closed_since") || null;
+    const reposParam = url.searchParams.get("repos") || null;
+
+    let repoFilter = "";
+    const repoBindings = [];
+    if (reposParam) {
+      const repoList = reposParam.split(",").filter(Boolean).slice(0, 95);
+      if (repoList.length > 0) {
+        repoFilter = ` AND repo IN (${repoList.map(() => "?").join(",")})`;
+        repoBindings.push(...repoList);
+      }
+    }
+
+    const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const queries = [
+      // open count
+      context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open'${repoFilter}`).bind(orgId, ...repoBindings),
+      // unassigned open count
+      context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND (assignees_json = '[]' OR assignees_json IS NULL)${repoFilter}`).bind(orgId, ...repoBindings),
+      // stale open count (created > 30d ago)
+      context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND created_at < ?${repoFilter}`).bind(orgId, staleDate, ...repoBindings),
+      // closed since sprint start
+      context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'closed'${closedSince ? " AND closed_at >= ?" : ""}${repoFilter}`).bind(orgId, ...(closedSince ? [closedSince] : []), ...repoBindings),
+      // by repo (open)
+      context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open'${repoFilter} GROUP BY repo ORDER BY count DESC LIMIT 15`).bind(orgId, ...repoBindings),
+      // by label (open)
+      context.env.DB.prepare(`SELECT json_extract(value, '$.name') AS name, json_extract(value, '$.color') AS color, COUNT(*) as count FROM issues, json_each(labels_json) WHERE org_id = ? AND state = 'open' AND labels_json != '[]'${repoFilter} GROUP BY name ORDER BY count DESC LIMIT 10`).bind(orgId, ...repoBindings),
+      // closed per week (last 8 weeks)
+      context.env.DB.prepare(`SELECT strftime('%Y-%m-%d', closed_at, 'weekday 0', '-6 days') as week, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-56 days')${repoFilter} GROUP BY week ORDER BY week`).bind(orgId, ...repoBindings),
+    ];
+
+    const results = await context.env.DB.batch(queries);
+
+    return jsonResponse({
+      open: results[0].results[0]?.c ?? 0,
+      unassigned: results[1].results[0]?.c ?? 0,
+      stale: results[2].results[0]?.c ?? 0,
+      closedSprint: results[3].results[0]?.c ?? 0,
+      byRepo: results[4].results,
+      byLabel: results[5].results,
+      closedPerWeek: results[6].results,
+    });
+  }
+
   const state = url.searchParams.get("state");
   const assignee = url.searchParams.get("assignee");
   const assigned = url.searchParams.get("assigned"); // "true" | "false" | null

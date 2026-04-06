@@ -38,6 +38,7 @@ const navGroups: NavGroup[] = [
     label: "Planning",
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard },
+      { id: "issues", label: "Issues", icon: CircleDot },
       { id: "sprint", label: "Sprint Board", icon: Rocket },
       { id: "backlog", label: "Backlog", icon: Layers },
       { id: "releases", label: "Releases", icon: Calendar },
@@ -47,7 +48,6 @@ const navGroups: NavGroup[] = [
     label: "Tracking",
     items: [
       { id: "prs", label: "Pull Requests", icon: GitPullRequest },
-      { id: "issues", label: "Issues", icon: CircleDot },
     ],
   },
   {

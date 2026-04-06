@@ -479,6 +479,23 @@ export async function fetchIssueLabels(): Promise<{ name: string; color: string 
   return apiGet<{ name: string; color: string }[]>("/api/issues?meta=labels");
 }
 
+export interface IssueStats {
+  open: number;
+  unassigned: number;
+  stale: number;
+  closedSprint: number;
+  byRepo: { repo: string; count: number }[];
+  byLabel: { name: string; color: string; count: number }[];
+  closedPerWeek: { week: string; count: number }[];
+}
+
+export async function fetchIssueStats(closedSince?: string, repos?: string[]): Promise<IssueStats> {
+  const params = new URLSearchParams({ meta: "stats" });
+  if (closedSince) params.set("closed_since", closedSince);
+  if (repos && repos.length > 0) params.set("repos", repos.join(","));
+  return apiGet<IssueStats>(`/api/issues?${params}`);
+}
+
 export async function updateIssueAssignees(
   repo: string,
   issueNumber: number,
