@@ -61,8 +61,8 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open'${repoFilter} GROUP BY repo ORDER BY count DESC LIMIT 15`).bind(orgId, ...repoBindings),
       // by label (open)
       context.env.DB.prepare(`SELECT json_extract(value, '$.name') AS name, json_extract(value, '$.color') AS color, COUNT(*) as count FROM issues, json_each(labels_json) WHERE org_id = ? AND state = 'open' AND labels_json != '[]'${repoFilter} GROUP BY name ORDER BY count DESC LIMIT 10`).bind(orgId, ...repoBindings),
-      // closed per week (last 8 weeks)
-      context.env.DB.prepare(`SELECT strftime('%Y-%m-%d', closed_at, 'weekday 0', '-6 days') as week, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-56 days')${repoFilter} GROUP BY week ORDER BY week`).bind(orgId, ...repoBindings),
+      // closed per day (last 28 days)
+      context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
     ];
 
     const results = await context.env.DB.batch(queries);
@@ -74,7 +74,7 @@ export async function onRequestGet(context) {
       closedSprint: results[3].results[0]?.c ?? 0,
       byRepo: results[4].results,
       byLabel: results[5].results,
-      closedPerWeek: results[6].results,
+      closedPerDay: results[6].results,
     });
   }
 
