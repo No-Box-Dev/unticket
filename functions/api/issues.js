@@ -65,12 +65,16 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
       // critical open by repo
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, ...repoBindings),
+      // critical closed per day (last 28 days)
+      context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days') AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
     ];
 
     const results = await context.env.DB.batch(queries);
 
     // Build critical-by-repo lookup
     const criticalByRepo = Object.fromEntries((results[7].results ?? []).map((r) => [r.repo, r.count]));
+    // Build critical-closed-per-day lookup
+    const criticalClosedMap = Object.fromEntries((results[8].results ?? []).map((r) => [r.day, r.count]));
 
     return jsonResponse({
       open: results[0].results[0]?.c ?? 0,
@@ -79,7 +83,7 @@ export async function onRequestGet(context) {
       closedSprint: results[3].results[0]?.c ?? 0,
       byRepo: results[4].results.map((r) => ({ ...r, critical: criticalByRepo[r.repo] ?? 0 })),
       byLabel: results[5].results,
-      closedPerDay: results[6].results,
+      closedPerDay: results[6].results.map((r) => ({ ...r, critical: criticalClosedMap[r.day] ?? 0 })),
     });
   }
 
@@ -88,6 +92,7 @@ export async function onRequestGet(context) {
   const assigned = url.searchParams.get("assigned"); // "true" | "false" | null
   const since = url.searchParams.get("since");
   const closedSince = url.searchParams.get("closed_since");
+  const closedBefore = url.searchParams.get("closed_before");
   const repo = url.searchParams.get("repo");
   const repos = url.searchParams.get("repos"); // comma-separated
   const label = url.searchParams.get("label");
@@ -119,7 +124,12 @@ export async function onRequestGet(context) {
   if (closedSince) {
     where += " AND closed_at >= ?";
     bindings.push(closedSince);
-  } else if (since) {
+  }
+  if (closedBefore) {
+    where += " AND closed_at < ?";
+    bindings.push(closedBefore);
+  }
+  if (!closedSince && !closedBefore && since) {
     where += " AND updated_at >= ?";
     bindings.push(since);
   }

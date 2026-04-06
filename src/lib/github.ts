@@ -449,6 +449,7 @@ export interface IssueQueryParams {
   sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
   closedSince?: string;
+  closedBefore?: string;
 }
 
 export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
@@ -463,6 +464,7 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
   if (params.sort) qs.set("sort", params.sort);
   if (params.sortDir) qs.set("sort_dir", params.sortDir);
   if (params.closedSince) qs.set("closed_since", params.closedSince);
+  if (params.closedBefore) qs.set("closed_before", params.closedBefore);
 
   const raw = await apiGet<{ data: ApiIssue[]; totalCount: number; page: number; pageSize: number }>(
     `/api/issues?${qs}`,
@@ -486,7 +488,7 @@ export interface IssueStats {
   closedSprint: number;
   byRepo: { repo: string; count: number; critical: number }[];
   byLabel: { name: string; color: string; count: number }[];
-  closedPerDay: { day: string; count: number }[];
+  closedPerDay: { day: string; count: number; critical: number }[];
 }
 
 export async function fetchIssueStats(closedSince?: string, repos?: string[]): Promise<IssueStats> {
