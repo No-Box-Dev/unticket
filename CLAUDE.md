@@ -4,7 +4,7 @@
 
 - **When you add, remove, or significantly change a feature, update the `## Features` section of this file to reflect the change.** This keeps every future Claude Code session (for any team member) aware of what exists.
 - **When you add new architecture patterns (new API routes, new shared hooks, new config keys), update the `## Architecture` section.**
-- **Code review (`/review`)**: Always use the review command at `~/.claude/commands/review.md`. This runs a two-expert review (Zhipu GLM-5 + Claude) with peer discussion on critical findings. Use it before merging PRs.
+- **Code review (`/review-external`)**: Always use the review-external skill at `~/.claude/skills/review-external/SKILL.md`. This runs a two-expert review (Zhipu GLM-5 + Claude) with peer discussion on critical findings. Use it before merging PRs.
 ## URLs
 
 - **Live:** https://app.unticket.ai
