@@ -352,7 +352,7 @@ export function useAssignedIssues(login: string) {
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
       // Exclude issues from the gitpulse repo (those are todos/features/sprint tasks)
-      return res.data.filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
+      return res.data.filter((i) => i.repo !== "gitpulse");
     },
     enabled: !!selectedOrg && !!login,
     staleTime: 2 * 60 * 1000,

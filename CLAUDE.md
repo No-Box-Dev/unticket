@@ -43,9 +43,9 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 3. Add nav item in `src/components/Sidebar.tsx` navGroups
 4. Render in `src/pages/DashboardPage.tsx`
 
-### Config System (Hybrid: D1 + GitHub Issues + .gitpulse)
+### Config System (Hybrid: D1 + GitHub Issues + gitpulse)
 
-**Features as GitHub Issues (on `{org}/.gitpulse` repo):**
+**Features as GitHub Issues (on `{org}/gitpulse` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
 - Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
@@ -53,9 +53,9 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Owners: Issue assignees
 - Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
 - Feature ID: Issue number (integer)
-- CLI: `gh issue list --repo {org}/.gitpulse --label feature`
+- CLI: `gh issue list --repo {org}/gitpulse --label feature`
 
-**Todos as GitHub Issues (on `{org}/.gitpulse` repo):**
+**Todos as GitHub Issues (on `{org}/gitpulse` repo):**
 - `src/lib/github-todos.ts` — CRUD via Octokit (`fetchTodos`, `fetchTodosByOwner`, `createTodo`, `updateTodo`, `closeTodo`, `reopenTodo`, `deleteTodo`, `fetchTodosClosedInRange`, `migrateTodos`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useTodos()`, `useCreateTodoItem()`, `useUpdateTodoItem()`, `useDeleteTodoItem()`, `useTodosClosedInRange()`, `useLegacyTodos()`, `useMigrateTodos()`
 - Label scheme: `todo` (marker), `todo-status:{backlog,in_progress,done}`, `todo-owner:{login}`, `todo-feature:{number}`
@@ -71,10 +71,10 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 - D1 `todos` key is legacy — only used for migration source
 
-**`.gitpulse` repo (features as issues + todos as issues + plan files):**
+**`gitpulse` repo (features as issues + todos as issues + plan files):**
 - `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
 - Todo plans: `plans/TODO-{todoId}.md` (e.g. `TODO-42.md` where 42 is the issue number)
-- CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
+- CLI access: `gh api repos/{org}/gitpulse/contents/plans/ --jq '.[].name'`
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
@@ -135,7 +135,7 @@ Issues dashboard (second item in sidebar, after Overview). Top section: four sta
 Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 #### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
+Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
 
 ### Other Features
 
