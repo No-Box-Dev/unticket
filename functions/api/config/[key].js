@@ -58,7 +58,10 @@ export async function onRequestPut(context) {
   }
 
   const serialized = JSON.stringify(body);
-  if (serialized.length > MAX_BODY_BYTES) {
+  // Measure UTF-8 byte length, not UTF-16 string length — multi-byte chars
+  // (emojis, CJK) would otherwise pass a code-unit check and still bust D1.
+  const byteLength = new TextEncoder().encode(serialized).byteLength;
+  if (byteLength > MAX_BODY_BYTES) {
     return errorResponse("Config payload too large (max 256KB)", 413);
   }
 
