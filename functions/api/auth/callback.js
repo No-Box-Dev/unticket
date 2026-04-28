@@ -49,11 +49,35 @@ export async function onRequestGet(context) {
     }),
   });
 
-  const data = await tokenRes.json();
+  if (!tokenRes.ok) {
+    console.error("[gitpulse oauth] token exchange returned", tokenRes.status);
+    return new Response(JSON.stringify({ error: "Authentication service temporarily unavailable" }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  let data;
+  try {
+    data = await tokenRes.json();
+  } catch (e) {
+    console.error("[gitpulse oauth] token exchange returned non-JSON:", e);
+    return new Response(JSON.stringify({ error: "Authentication service returned invalid response" }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   if (data.error) {
     return new Response(JSON.stringify({ error: data.error_description }), {
       status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!data.access_token) {
+    return new Response(JSON.stringify({ error: "OAuth response missing access token" }), {
+      status: 502,
       headers: { "Content-Type": "application/json" },
     });
   }

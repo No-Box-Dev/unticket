@@ -1,6 +1,11 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { syncInit, syncRepo } from "../lib/github-sync";
 
+// In-memory rate limit for ?force=true (one full re-sync per org per 5 min)
+// Force re-syncs hit the GitHub API hard, so deny rapid re-triggers.
+const FORCE_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+const lastForceSync = new Map();
+
 // POST /api/sync — cursor-based sync (one repo per call)
 // No cursor → run syncInit, return first repo as cursor
 // cursor=repoName → sync that repo, return next repo as cursor
@@ -10,6 +15,26 @@ export async function onRequestPost(context) {
   const url = new URL(context.request.url);
   const cursor = url.searchParams.get("cursor");
   const force = url.searchParams.get("force") === "true";
+
+  // Rate-limit ?force=true on initial call (no cursor) only.
+  // Subsequent cursor calls in the same re-sync chain pass through.
+  if (force && !cursor) {
+    const last = lastForceSync.get(orgId);
+    if (last && Date.now() - last < FORCE_SYNC_COOLDOWN_MS) {
+      const retryAfterSec = Math.ceil((FORCE_SYNC_COOLDOWN_MS - (Date.now() - last)) / 1000);
+      return new Response(
+        JSON.stringify({ error: "Force re-sync rate limited. Try again in a few minutes." }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(retryAfterSec),
+          },
+        },
+      );
+    }
+    lastForceSync.set(orgId, Date.now());
+  }
 
   try {
     if (!cursor) {
