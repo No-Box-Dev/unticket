@@ -234,6 +234,7 @@ export function TodoTab() {
       {/* Issue detail modal */}
       {detailIssue && (
         <IssueDetailModal
+          key={`${detailIssue.repo}#${detailIssue.number}`}
           issue={detailIssue}
           org={selectedOrg}
           onClose={() => setDetailIssue(null)}
@@ -946,12 +947,11 @@ function IssueDetailModal({
   onClose: () => void;
 }) {
   const [body, setBody] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!org);
 
   useEffect(() => {
+    if (!org) return;
     let cancelled = false;
-    if (!org) { setBody(null); setLoading(false); return; }
-    setLoading(true);
     const ok = getOctokit();
     ok.issues.get({ owner: org, repo: issue.repo, issue_number: issue.number })
       .then((res) => { if (!cancelled) setBody(res.data.body ?? ""); })

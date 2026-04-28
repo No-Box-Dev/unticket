@@ -195,7 +195,7 @@ export async function updateTodo(
     .filter(Boolean) as string[];
 
   // Rebuild labels — keep non-todo labels, rebuild status/feature
-  let newLabels = currentLabels.filter(
+  const newLabels = currentLabels.filter(
     (l) =>
       !l.startsWith(STATUS_PREFIX) &&
       !l.startsWith(FEATURE_PREFIX),
@@ -285,43 +285,3 @@ export async function fetchTodosClosedInRange(
     .filter((t) => login === null || t.owner === login);
 }
 
-// ---------- Migration ----------
-
-export interface LegacyTodoForMigration {
-  id: string;
-  title: string;
-  owner: string;
-  status: TodoStatus;
-  createdAt: string;
-  featureId?: string;
-}
-
-export async function migrateTodos(
-  org: string,
-  legacy: LegacyTodoForMigration[],
-  onProgress?: (done: number, total: number) => void,
-): Promise<number> {
-  await ensureTodoLabels(org);
-
-  let created = 0;
-  for (const t of legacy) {
-    const featureId = t.featureId ? parseInt(t.featureId) : undefined;
-    const todo = await createTodo(org, t.title, t.owner, {
-      featureId: featureId && !isNaN(featureId) ? featureId : undefined,
-    });
-
-    // If status is in_progress, update it
-    if (t.status === "in_progress") {
-      await updateTodo(org, todo.id, { status: "in_progress" });
-    }
-    // If done, close it
-    if (t.status === "done") {
-      await closeTodo(org, todo.id);
-    }
-
-    created++;
-    onProgress?.(created, legacy.length);
-  }
-
-  return created;
-}
