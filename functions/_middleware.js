@@ -38,13 +38,15 @@ async function validateGitHubToken(token) {
     // 403 from GitHub /user is almost always rate limiting, never an invalid
     // token (invalid tokens get 401). Treat all 403s as rate-limited to avoid
     // accidentally force-logging the user out.
-    const remaining = res.headers.get("X-RateLimit-Remaining");
     const retryAfter = res.headers.get("Retry-After");
     const isRateLimited = res.status === 429 || res.status === 403;
     if (isRateLimited) {
       const resetEpoch = res.headers.get("X-RateLimit-Reset");
       return { error: "rate_limited", resetEpoch, retryAfter };
     }
+    // Token revoked / invalid — drop any stale cache entry so a re-auth
+    // with a fresh token isn't blocked by a poisoned cache.
+    tokenCache.delete(cacheKey);
     return { error: "invalid" };
   }
 
@@ -79,10 +81,14 @@ async function verifyOrgMembership(token, tokenHash, orgLogin, userLogin) {
 
   // 204 = member, 302 = requester is not an org member, 404 = not a member
   const isMember = res.status === 204;
-  membershipCache.set(cacheKey, {
-    isMember,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  // Only cache positive results. A negative cache would lock the user out for
+  // the full TTL after they're freshly added to the org.
+  if (isMember) {
+    membershipCache.set(cacheKey, {
+      isMember: true,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+  }
   return isMember;
 }
 
