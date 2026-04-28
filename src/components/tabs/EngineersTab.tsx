@@ -175,7 +175,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
                 )}
               </div>
             </div>
-            <div className="flex items-stretch gap-4 lg:border-l lg:border-stone-200 lg:dark:border-white/[0.06] lg:pl-4">
+            <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:dark:border-white/[0.06] lg:pl-4">
               <InlineMetric label="PRs" value={selected.prsMerged} color="text-purple-500" />
               <InlineMetric label="Issues" value={selected.issuesSolved} color="text-blue-500" />
               <InlineMetric label="Features" value={selected.featuresDone} color="text-green-500" />
