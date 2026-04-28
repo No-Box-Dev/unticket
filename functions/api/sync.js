@@ -53,7 +53,9 @@ export async function onRequestPost(context) {
           if (draftSet.size > 0) {
             repoNames = repoNames.filter((n) => !draftSet.has(n));
           }
-        } catch { /* ignore parse errors */ }
+        } catch (e) {
+          console.warn(`[gitpulse] Corrupt settings JSON for org ${orgId}, syncing all repos:`, e);
+        }
       }
 
       if (repoNames.length === 0) {
@@ -84,7 +86,9 @@ export async function onRequestPost(context) {
         if (draftSet.size > 0) {
           repoNames = repoNames.filter((n) => !draftSet.has(n));
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.warn(`[gitpulse] Corrupt settings JSON for org ${orgId}, including all repos in cursor:`, e);
+      }
     }
     const currentIdx = repoNames.indexOf(cursor);
     const nextRepo = currentIdx >= 0 && currentIdx < repoNames.length - 1

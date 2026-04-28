@@ -206,7 +206,8 @@ export function useAllSprintSubIssues(featureIds: number[]) {
                 fetchRoles(selectedOrg, fid),
               ]);
               return { fid, subs, roles };
-            } catch {
+            } catch (e) {
+              console.error(`[gitpulse] Failed to fetch sub-issues/roles for feature #${fid}:`, e);
               return { fid, subs: [] as SubIssue[], roles: [] as PersonRole[] };
             }
           }),
@@ -230,7 +231,8 @@ export function useAllSprintSubIssues(featureIds: number[]) {
           batch.map(async ({ role }) => {
             try {
               return { roleNumber: role.number, tasks: await fetchTasksForRole(selectedOrg, role.number) };
-            } catch {
+            } catch (e) {
+              console.error(`[gitpulse] Failed to fetch tasks for role #${role.number}:`, e);
               return { roleNumber: role.number, tasks: [] as SubIssue[] };
             }
           }),
@@ -468,7 +470,8 @@ export function useRolesWithTasks(featureId: number) {
               .filter((t) => t.state === "closed")
               .reduce((sum, t) => sum + (t.points ?? 0), 0);
             return { role, tasks, totalPoints, donePoints };
-          } catch {
+          } catch (e) {
+            console.error(`[gitpulse] Failed to fetch tasks for role #${role.number}:`, e);
             return { role, tasks: [], totalPoints: 0, donePoints: 0 };
           }
         }),
@@ -903,7 +906,8 @@ export function useAdvanceSprint() {
       for (const f of toClose) {
         try {
           await ghDeleteFeature(org, f.id);
-        } catch {
+        } catch (e) {
+          console.error(`[gitpulse] Failed to close feature #${f.id} during sprint advance:`, e);
           failed.push(f.id);
         }
         done++;
@@ -914,7 +918,8 @@ export function useAdvanceSprint() {
       for (const f of toMove) {
         try {
           await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
-        } catch {
+        } catch (e) {
+          console.error(`[gitpulse] Failed to move feature #${f.id} to sprint ${newSprint.number}:`, e);
           failed.push(f.id);
         }
         done++;
