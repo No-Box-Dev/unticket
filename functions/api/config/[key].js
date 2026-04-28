@@ -36,17 +36,33 @@ export async function onRequestGet(context) {
   }
 }
 
-// PUT /api/config/:key
+// PUT /api/config/:key — max 256KB body
+const MAX_BODY_BYTES = 256 * 1024;
+
 export async function onRequestPut(context) {
   const key = context.params.key;
   if (!VALID_KEYS.includes(key)) {
     return errorResponse(`Invalid config key: ${key}`, 400);
   }
 
+  // Cap body size to keep config rows from blowing up D1 storage / per-row limits.
+  const contentLength = Number(context.request.headers.get("Content-Length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return errorResponse("Config payload too large (max 256KB)", 413);
+  }
+
   const { orgId } = getCtx(context);
   let body;
   try { body = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
+  }
+
+  const serialized = JSON.stringify(body);
+  // Measure UTF-8 byte length, not UTF-16 string length — multi-byte chars
+  // (emojis, CJK) would otherwise pass a code-unit check and still bust D1.
+  const byteLength = new TextEncoder().encode(serialized).byteLength;
+  if (byteLength > MAX_BODY_BYTES) {
+    return errorResponse("Config payload too large (max 256KB)", 413);
   }
 
   await context.env.DB
@@ -57,7 +73,7 @@ export async function onRequestPut(context) {
          data = excluded.data,
          updated_at = datetime('now')`
     )
-    .bind(orgId, key, JSON.stringify(body))
+    .bind(orgId, key, serialized)
     .run();
 
   return jsonResponse({ ok: true });

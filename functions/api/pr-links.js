@@ -13,12 +13,17 @@ export async function onRequestGet(context) {
   const feature = url.searchParams.get("feature");
 
   if (!feature) return errorResponse("feature query param required", 400);
+  // Number() is strict — rejects "123abc" / "1.5"; parseInt would accept them.
+  const featureNumber = Number(feature);
+  if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
+    return errorResponse("feature must be a positive integer", 400);
+  }
 
   const rows = await context.env.DB
     .prepare(
       "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
     )
-    .bind(orgId, parseInt(feature, 10))
+    .bind(orgId, featureNumber)
     .all();
 
   return jsonResponse(rows.results);
@@ -31,10 +36,16 @@ export async function onRequestPost(context) {
   try { body = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
   }
-  const { feature_number, pr_repo, pr_number } = body;
+  const { feature_number, pr_repo, pr_number } = body ?? {};
 
-  if (!feature_number || !pr_repo || !pr_number) {
-    return errorResponse("feature_number, pr_repo, pr_number required", 400);
+  if (!Number.isInteger(feature_number) || feature_number <= 0) {
+    return errorResponse("feature_number must be a positive integer", 400);
+  }
+  if (!Number.isInteger(pr_number) || pr_number <= 0) {
+    return errorResponse("pr_number must be a positive integer", 400);
+  }
+  if (typeof pr_repo !== "string" || !/^[\w.-]+$/.test(pr_repo)) {
+    return errorResponse("pr_repo must be a valid repo name", 400);
   }
 
   // 1. Upsert D1 cache first (atomic, no race condition)
@@ -88,10 +99,16 @@ export async function onRequestDelete(context) {
     return errorResponse("feature, pr_repo, pr_number required", 400);
   }
 
-  const featureNumber = parseInt(feature, 10);
-  const prNum = parseInt(prNumber, 10);
-  if (!Number.isFinite(featureNumber) || !Number.isFinite(prNum)) {
-    return errorResponse("feature and pr_number must be valid integers", 400);
+  const featureNumber = Number(feature);
+  const prNum = Number(prNumber);
+  if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
+    return errorResponse("feature must be a positive integer", 400);
+  }
+  if (!Number.isInteger(prNum) || prNum <= 0) {
+    return errorResponse("pr_number must be a positive integer", 400);
+  }
+  if (!/^[\w.-]+$/.test(prRepo)) {
+    return errorResponse("pr_repo must be a valid repo name", 400);
   }
 
   // 1. Read feature issue body from GitHub

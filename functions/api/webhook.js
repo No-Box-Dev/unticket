@@ -22,10 +22,11 @@ async function verifySignature(secret, body, signature) {
 
   const expected = `sha256=${hex}`;
 
-  // Constant-time comparison
-  if (expected.length !== signature.length) return false;
+  // Constant-time comparison — compare byte buffers, not JS string lengths
+  // (avoids UTF-16 surrogate-pair quirks if a malformed signature header is sent)
   const a = encoder.encode(expected);
   const b = encoder.encode(signature);
+  if (a.byteLength !== b.byteLength) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
     result |= a[i] ^ b[i];
@@ -187,7 +188,8 @@ export async function onRequestPost(context) {
     // Unhandled event — acknowledge it
     return jsonResponse({ ok: true, skipped: `unhandled event: ${event}` });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Webhook processing failed";
-    return errorResponse(message, 500);
+    // Don't leak internal error details to webhook senders. Log server-side only.
+    console.error("[gitpulse webhook]", event, action, e instanceof Error ? e.stack : e);
+    return errorResponse("Webhook processing failed", 500);
   }
 }
