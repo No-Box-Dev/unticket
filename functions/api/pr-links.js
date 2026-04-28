@@ -13,7 +13,8 @@ export async function onRequestGet(context) {
   const feature = url.searchParams.get("feature");
 
   if (!feature) return errorResponse("feature query param required", 400);
-  const featureNumber = parseInt(feature, 10);
+  // Number() is strict — rejects "123abc" / "1.5"; parseInt would accept them.
+  const featureNumber = Number(feature);
   if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
     return errorResponse("feature must be a positive integer", 400);
   }
@@ -98,8 +99,8 @@ export async function onRequestDelete(context) {
     return errorResponse("feature, pr_repo, pr_number required", 400);
   }
 
-  const featureNumber = parseInt(feature, 10);
-  const prNum = parseInt(prNumber, 10);
+  const featureNumber = Number(feature);
+  const prNum = Number(prNumber);
   if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
     return errorResponse("feature must be a positive integer", 400);
   }
