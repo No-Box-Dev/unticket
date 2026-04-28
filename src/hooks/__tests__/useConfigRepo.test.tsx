@@ -10,8 +10,6 @@ vi.mock("@/lib/config-repo", () => ({
   savePeople: vi.fn(),
   fetchSettings: vi.fn(),
   saveSettings: vi.fn(),
-  fetchTodos: vi.fn(),
-  saveTodos: vi.fn(),
   ensureConfigRepo: vi.fn(),
   fetchAgentRules: vi.fn(),
   saveAgentRules: vi.fn(),
@@ -49,7 +47,6 @@ vi.mock("@/lib/github-todos", () => ({
   updateTodo: vi.fn(),
   deleteTodo: vi.fn(),
   fetchTodosClosedInRange: vi.fn(),
-  migrateTodos: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({

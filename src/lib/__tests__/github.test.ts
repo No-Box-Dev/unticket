@@ -15,8 +15,6 @@ import {
   fetchOpenIssues,
   fetchClosedIssues,
   fetchOrgMembers,
-  fetchMilestones,
-  fetchRepoActivity,
 } from "../github";
 
 const mockApiGet = vi.mocked(apiGet);
@@ -215,14 +213,3 @@ describe("fetchOrgMembers", () => {
   });
 });
 
-// ---------- Static returns ----------
-
-describe("fetchMilestones / fetchRepoActivity", () => {
-  it("fetchMilestones returns []", async () => {
-    expect(await fetchMilestones()).toEqual([]);
-  });
-
-  it("fetchRepoActivity returns []", async () => {
-    expect(await fetchRepoActivity()).toEqual([]);
-  });
-});

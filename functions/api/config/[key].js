@@ -1,13 +1,12 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 
-const VALID_KEYS = ["sprint", "features", "people", "settings", "todos", "agentRules", "sprintSnapshots"];
+const VALID_KEYS = ["sprint", "features", "people", "settings", "agentRules", "sprintSnapshots"];
 
 const DEFAULTS = {
   sprint: null,
   features: [],
   people: [],
   settings: null,
-  todos: [],
   agentRules: [],
   sprintSnapshots: [],
 };

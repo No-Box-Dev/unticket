@@ -18,7 +18,6 @@ import { fetchPeopleFromRepo } from "@/lib/gitpulse-repo";
 import {
   fetchPeople,
   fetchSettings,
-  fetchTodos,
   createConfigRepo,
 } from "../config-repo";
 
@@ -55,14 +54,6 @@ describe("fetchSettings", () => {
   });
 });
 
-describe("fetchTodos", () => {
-  it("returns [] when API returns null", async () => {
-    mockApiGet.mockResolvedValue(null);
-    const result = await fetchTodos();
-    expect(result).toEqual([]);
-  });
-});
-
 describe("createConfigRepo", () => {
   it("computes next Monday correctly", async () => {
     // Wednesday 2026-02-18
@@ -85,7 +76,7 @@ describe("createConfigRepo", () => {
     vi.useRealTimers();
   });
 
-  it("seeds 4 config keys via apiPut", async () => {
+  it("seeds 3 config keys via apiPut", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-18T12:00:00Z"));
 
@@ -96,9 +87,9 @@ describe("createConfigRepo", () => {
     expect(paths).toContain("/api/config/sprint");
     expect(paths).toContain("/api/config/people");
     expect(paths).toContain("/api/config/settings");
-    expect(paths).toContain("/api/config/todos");
     expect(paths).not.toContain("/api/config/features");
-    expect(mockApiPut).toHaveBeenCalledTimes(4);
+    expect(paths).not.toContain("/api/config/todos");
+    expect(mockApiPut).toHaveBeenCalledTimes(3);
 
     vi.useRealTimers();
   });
