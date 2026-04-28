@@ -155,53 +155,33 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
       {/* Detail panel */}
       {selected && (
         <div className="space-y-4">
-          {/* Header */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5 flex items-center gap-4">
-            {selected.avatar_url ? (
-              <img src={selected.avatar_url} className="w-12 h-12 rounded-full" alt="" />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-stone-200 flex items-center justify-center text-lg font-bold text-stone-500">
-                {selected.name?.[0]?.toUpperCase() ?? "?"}
+          {/* Header with embedded metrics */}
+          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              {selected.avatar_url ? (
+                <img src={selected.avatar_url} className="w-12 h-12 rounded-full shrink-0" alt="" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-lg font-bold text-stone-500">
+                  {selected.name?.[0]?.toUpperCase() ?? "?"}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display truncate">{selected.name}</h2>
+                {(selected.role || selected.team) && (
+                  <p className="text-sm text-stone-400 truncate">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
+                )}
+                {selected.description && (
+                  <p className="text-sm text-stone-500 dark:text-neutral-400 mt-0.5 line-clamp-2">{selected.description}</p>
+                )}
               </div>
-            )}
-            <div>
-              <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display">{selected.name}</h2>
-              {(selected.role || selected.team) && (
-                <p className="text-sm text-stone-400">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
-              )}
-              {selected.description && (
-                <p className="text-sm text-stone-500 dark:text-neutral-400 mt-0.5">{selected.description}</p>
-              )}
             </div>
-          </div>
-
-          {/* Summary */}
-          <div className="bg-stone-50 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06] rounded-xl p-4">
-            <p className="text-sm text-stone-600 dark:text-neutral-300">
-              <span className="font-medium text-stone-700 dark:text-neutral-200">{selected.name}</span>
-              {" has "}
-              <span className="font-semibold">{selected.myFeatures.length}</span>
-              {" feature"}{selected.myFeatures.length !== 1 ? "s" : ""} this sprint
-              {selected.featuresDone > 0 && <>, <span className="font-semibold text-green-600">{selected.featuresDone} complete</span></>}
-              {" with "}
-              <span className="font-semibold">{selected.myTasks.length}</span>
-              {" task"}{selected.myTasks.length !== 1 ? "s" : ""}
-              {selected.tasksDone > 0 && <> (<span className="font-semibold text-green-600">{selected.tasksDone} done</span>, <span className="font-semibold text-blue-500">{selected.tasksOpen} open</span>)</>}
-              {selected.myRoles.length > 0 && <> across <span className="font-semibold">{selected.myRoles.length}</span> role{selected.myRoles.length !== 1 ? "s" : ""}</>}
-              .
-            </p>
-          </div>
-
-          {/* Metric cards */}
-          <div className="mb-1">
-            <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Last 30 days</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-            <MetricCard label="PRs Merged" value={selected.prsMerged} color="text-purple-500" />
-            <MetricCard label="Issues Solved" value={selected.issuesSolved} color="text-blue-500" />
-            <MetricCard label="Features Done" value={selected.featuresDone} color="text-green-500" />
-            <MetricCard label="Tasks Done" value={selected.tasksDone} color="text-teal-500" />
-            <MetricCard label="Tasks Open" value={selected.tasksOpen} color="text-amber-500" />
+            <div className="flex items-stretch gap-4 lg:border-l lg:border-stone-200 lg:dark:border-white/[0.06] lg:pl-4">
+              <InlineMetric label="PRs" value={selected.prsMerged} color="text-purple-500" />
+              <InlineMetric label="Issues" value={selected.issuesSolved} color="text-blue-500" />
+              <InlineMetric label="Features" value={selected.featuresDone} color="text-green-500" />
+              <InlineMetric label="Tasks done" value={selected.tasksDone} color="text-teal-500" />
+              <InlineMetric label="Tasks open" value={selected.tasksOpen} color="text-amber-500" />
+            </div>
           </div>
 
           {/* Activity feed */}
@@ -457,13 +437,13 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
   );
 }
 
-// ---------- Metric Card ----------
+// ---------- Inline Metric (embedded in header) ----------
 
-function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
+function InlineMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-4">
-      <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider">{label}</span>
-      <div className={`text-3xl font-bold font-display mt-1 ${color}`}>{value}</div>
+    <div className="flex flex-col items-start">
+      <span className={`text-xl font-bold font-display leading-none ${color}`}>{value}</span>
+      <span className="text-[10px] font-medium text-stone-400 uppercase tracking-wider mt-1">{label}</span>
     </div>
   );
 }
