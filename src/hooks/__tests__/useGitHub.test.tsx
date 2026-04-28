@@ -13,8 +13,6 @@ vi.mock("@/lib/github", () => ({
   fetchMergedPRs: vi.fn(),
   fetchAllPRs: vi.fn(),
   fetchAllIssues: vi.fn(),
-  fetchMilestones: vi.fn(),
-  fetchRepoActivity: vi.fn(),
   fetchOrgMembers: vi.fn(),
 }));
 

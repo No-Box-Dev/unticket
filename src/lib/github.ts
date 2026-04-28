@@ -53,7 +53,6 @@ function wrapOctokitError(err: unknown): never {
     const status = (err as any).status as number | undefined;
     if (status === 401) {
       localStorage.removeItem("gp_token");
-      localStorage.removeItem("n1_github_token");
       window.dispatchEvent(new CustomEvent("gp:force-logout"));
       broadcastError("Token expired or revoked", 401);
       throw new ApiError("Token expired or revoked", 401);
@@ -534,21 +533,3 @@ export async function unlinkPR(featureNumber: number, prRepo: string, prNumber: 
   }
 }
 
-// ---------- Other ----------
-
-export async function fetchMilestones(): Promise<{ id: number; title: string; due_on: string | null; state: string; repo: string }[]> {
-  return [];
-}
-
-export interface CommitResult {
-  sha: string;
-  commit: {
-    message: string;
-    author: { name: string; date: string } | null;
-  };
-  repo: string;
-}
-
-export async function fetchRepoActivity(): Promise<CommitResult[]> {
-  return [];
-}

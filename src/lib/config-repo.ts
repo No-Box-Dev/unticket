@@ -1,6 +1,6 @@
 import { apiGet, apiPut } from "./api";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./gitpulse-repo";
-import type { SprintConfig, Person, OrgSettings, Todo, SprintSnapshot } from "./types";
+import type { SprintConfig, Person, OrgSettings, SprintSnapshot } from "./types";
 
 // Sprint
 export async function fetchSprint(): Promise<SprintConfig | null> {
@@ -30,18 +30,6 @@ export async function fetchSettings(): Promise<OrgSettings | null> {
 
 export async function saveSettings(settings: OrgSettings) {
   await apiPut("/api/config/settings", settings);
-}
-
-// Todos (legacy D1 — only used as migration source, use github-todos.ts for new code)
-/** @deprecated Use github-todos.ts fetchTodos instead */
-export async function fetchTodos(): Promise<Todo[]> {
-  const data = await apiGet<Todo[]>("/api/config/todos");
-  return data ?? [];
-}
-
-/** @deprecated Use github-todos.ts for todo operations */
-export async function saveTodos(todos: Todo[]) {
-  await apiPut("/api/config/todos", todos);
 }
 
 // Agent Rules
@@ -85,7 +73,6 @@ export async function createConfigRepo(): Promise<void> {
   });
   await apiPut("/api/config/people", []);
   await apiPut("/api/config/settings", {});
-  await apiPut("/api/config/todos", []);
 }
 
 // Re-export plan helpers

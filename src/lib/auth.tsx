@@ -129,16 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Legacy: handle old URL fragment format (token in hash) for in-flight OAuth flows
-    const fragment = window.location.hash.replace(/^#/, "");
-    if (fragment.includes("token=")) {
-      // Clear the fragment immediately — do not use the token from URL
-      window.history.replaceState({}, "", window.location.pathname);
-      setAuthError("Login flow has changed. Please log in again.");
-      setIsLoading(false);
-      return;
-    }
-
     // Dev mode: auto-inject token and org from env vars (only in dev builds)
     if (import.meta.env.DEV) {
       const devToken = import.meta.env.VITE_DEV_TOKEN;
@@ -153,12 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Check for existing stored token (also migrate from old dashboard)
-    const token =
-      localStorage.getItem("gp_token") ??
-      localStorage.getItem("n1_github_token");
+    const token = localStorage.getItem("gp_token");
     if (token) {
-      localStorage.setItem("gp_token", token);
       resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
@@ -206,7 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem("gp_token");
-    localStorage.removeItem("n1_github_token");
     localStorage.removeItem("gp_org");
     resetOctokit();
     setUser(null);

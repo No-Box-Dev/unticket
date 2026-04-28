@@ -8,7 +8,6 @@ import {
   fetchMergedPRs,
   fetchAllPRs,
   fetchAllIssues,
-  fetchMilestones,
   fetchOrgMembers,
   fetchSyncStatus,
   triggerSync,
@@ -63,15 +62,6 @@ export function useOpenIssues(repos: string[]) {
   return useQuery({
     queryKey: ["issues", selectedOrg, repos],
     queryFn: fetchOpenIssues,
-    enabled: !!selectedOrg && repos.length > 0,
-  });
-}
-
-export function useMilestones(repos: string[]) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["milestones", selectedOrg, repos],
-    queryFn: fetchMilestones,
     enabled: !!selectedOrg && repos.length > 0,
   });
 }
