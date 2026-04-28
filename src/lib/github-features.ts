@@ -62,7 +62,8 @@ function parseMetadata(body: string): { content: string; metadata: FeatureMetada
   try {
     const metadata = JSON.parse(match[1]) as FeatureMetadata;
     return { content: body.slice(0, match.index!), metadata };
-  } catch {
+  } catch (e) {
+    console.warn("[gitpulse] Corrupt feature metadata block, ignoring:", e);
     return { content: body, metadata: {} };
   }
 }

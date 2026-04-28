@@ -13,7 +13,8 @@ export function parseFeatureMetadata(body) {
   try {
     const metadata = JSON.parse(match[1]);
     return { content: body.slice(0, match.index), metadata };
-  } catch {
+  } catch (e) {
+    console.warn("[gitpulse] Corrupt feature metadata block, ignoring:", e);
     return { content: body, metadata: {} };
   }
 }
