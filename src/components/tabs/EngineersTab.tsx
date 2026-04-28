@@ -3,10 +3,23 @@ import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
-import { ChevronDown, ChevronRight, GitPullRequest, GitMerge, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
 import type { Person, Feature } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 type ViewMode = "features" | "roles" | "tasks";
 
@@ -84,6 +97,36 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return engineers.find((e) => e.login === login) ?? engineers[0];
   }, [selectedLogin, engineers]);
 
+  // Build chronological activity feed for the selected engineer (last 30 days).
+  const feed = useMemo<FeedItem[]>(() => {
+    if (!selected) return [];
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
+    const cutoff = cutoffDate.getTime();
+    const items: FeedItem[] = [];
+
+    for (const pr of allPRs ?? []) {
+      const p = pr as any;
+      if (p.user?.login !== selected.login) continue;
+      if (p.merged_at && new Date(p.merged_at).getTime() >= cutoff) {
+        items.push({ kind: "pr_merged", at: p.merged_at, repo: p.repo, number: p.number, title: p.title, html_url: p.html_url });
+      } else if (!p.merged_at && p.created_at && new Date(p.created_at).getTime() >= cutoff) {
+        items.push({ kind: "pr_opened", at: p.created_at, repo: p.repo, number: p.number, title: p.title, html_url: p.html_url });
+      }
+    }
+
+    for (const issue of closedIssues ?? []) {
+      const i = issue as any;
+      if (i.closed_by !== selected.login) continue;
+      if (i.closed_at && new Date(i.closed_at).getTime() >= cutoff) {
+        items.push({ kind: "issue_closed", at: i.closed_at, repo: i.repo, number: i.number, title: i.title, html_url: i.html_url });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return items;
+  }, [selected, allPRs, closedIssues]);
+
   if (membersLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -97,44 +140,21 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 min-h-[600px]">
-      {/* Sidebar */}
-      <div className="w-full lg:w-64 lg:shrink-0 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden self-start sticky top-4">
-        <div className="px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
-          <h3 className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Engineers ({engineers.length})</h3>
-        </div>
-        <div className="divide-y divide-stone-100 dark:divide-white/[0.06] overflow-y-auto max-h-[calc(100vh-10rem)]">
-          {engineers.map((eng) => {
-            const isSelected = eng.login === selected?.login;
-            return (
-              <button
-                key={eng.login}
-                onClick={() => setSelectedLogin(eng.login)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer",
-                  isSelected ? "bg-stone-100 dark:bg-dark-overlay" : "hover:bg-stone-50 dark:hover:bg-white/[0.06]",
-                )}
-              >
-                {eng.avatar_url ? (
-                  <img src={eng.avatar_url} className="w-8 h-8 rounded-full shrink-0" alt="" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-xs font-bold text-stone-500">
-                    {eng.name?.[0]?.toUpperCase() ?? "?"}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">{eng.name}</div>
-                  <div className="text-xs text-stone-400 truncate">{eng.team || eng.role}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+    <div className="space-y-4">
+      {/* Engineer picker */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-stone-500 dark:text-neutral-400">Engineer</span>
+        <PersonSelect
+          value={selected?.login ?? null}
+          onChange={(v) => setSelectedLogin(typeof v === "string" ? v : null)}
+          options={engineers.map((e) => ({ value: e.login, label: e.name }))}
+          placeholder="Select engineer"
+        />
       </div>
 
       {/* Detail panel */}
       {selected && (
-        <div className="flex-1 space-y-4">
+        <div className="space-y-4">
           {/* Header */}
           <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5 flex items-center gap-4">
             {selected.avatar_url ? (
@@ -183,6 +203,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             <MetricCard label="Tasks Done" value={selected.tasksDone} color="text-teal-500" />
             <MetricCard label="Tasks Open" value={selected.tasksOpen} color="text-amber-500" />
           </div>
+
+          {/* Activity feed */}
+          <ActivityFeed items={feed} />
 
           {/* View selector + work items */}
           <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
@@ -443,4 +466,93 @@ function MetricCard({ label, value, color }: { label: string; value: number; col
       <div className={`text-3xl font-bold font-display mt-1 ${color}`}>{value}</div>
     </div>
   );
+}
+
+// ---------- Activity Feed ----------
+
+type FeedItem =
+  | { kind: "pr_merged" | "pr_opened"; at: string; repo: string; number: number; title: string; html_url: string }
+  | { kind: "issue_closed"; at: string; repo: string; number: number; title: string; html_url: string };
+
+function ActivityFeed({ items }: { items: FeedItem[] }) {
+  const [filter, setFilter] = useState<"all" | "prs" | "issues">("all");
+
+  const visible = useMemo(() => {
+    if (filter === "prs") return items.filter((i) => i.kind === "pr_merged" || i.kind === "pr_opened");
+    if (filter === "issues") return items.filter((i) => i.kind === "issue_closed");
+    return items;
+  }, [items, filter]);
+
+  const counts = useMemo(() => ({
+    all: items.length,
+    prs: items.filter((i) => i.kind === "pr_merged" || i.kind === "pr_opened").length,
+    issues: items.filter((i) => i.kind === "issue_closed").length,
+  }), [items]);
+
+  return (
+    <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+          </span>
+          <h3 className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Live activity</h3>
+          <span className="text-xs text-stone-400">last 30 days</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          {(["all", "prs", "issues"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                "px-2 py-1 rounded transition-colors capitalize cursor-pointer",
+                filter === f
+                  ? "bg-brand/10 text-brand"
+                  : "text-stone-500 dark:text-neutral-400 hover:bg-stone-100 dark:hover:bg-white/[0.06]",
+              )}
+            >
+              {f === "prs" ? "PRs" : f} ({counts[f]})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="p-6 text-center text-sm text-stone-400">No activity in the last 30 days.</div>
+      ) : (
+        <ol className="divide-y divide-stone-100 dark:divide-white/[0.06] max-h-[420px] overflow-y-auto">
+          {visible.map((item) => (
+            <li key={`${item.kind}:${item.repo}#${item.number}:${item.at}`}>
+              <a
+                href={item.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 dark:hover:bg-white/[0.06] group"
+              >
+                <FeedIcon kind={item.kind} />
+                <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
+                <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{item.title}</span>
+                <span className="text-xs text-stone-400 shrink-0">{labelFor(item.kind)}</span>
+                <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
+                <ExternalLink size={12} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function FeedIcon({ kind }: { kind: FeedItem["kind"] }) {
+  if (kind === "pr_merged") return <GitMerge size={14} className="text-purple-500 shrink-0" />;
+  if (kind === "pr_opened") return <GitPullRequest size={14} className="text-green-500 shrink-0" />;
+  return <CircleCheck size={14} className="text-blue-500 shrink-0" />;
+}
+
+function labelFor(kind: FeedItem["kind"]) {
+  if (kind === "pr_merged") return "merged PR";
+  if (kind === "pr_opened") return "opened PR";
+  return "closed issue";
 }
