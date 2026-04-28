@@ -234,6 +234,7 @@ export function TodoTab() {
       {/* Issue detail modal */}
       {detailIssue && (
         <IssueDetailModal
+          key={`${detailIssue.repo}#${detailIssue.number}`}
           issue={detailIssue}
           org={selectedOrg}
           onClose={() => setDetailIssue(null)}
