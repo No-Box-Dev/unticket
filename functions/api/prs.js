@@ -1,5 +1,13 @@
 import { getCtx, jsonResponse } from "../lib/db";
 
+// Explicit projection — never SELECT * so adding a column doesn't silently leak it.
+const PR_COLUMNS = [
+  "id", "repo", "number", "title", "state", "author", "author_avatar",
+  "draft", "head_ref", "base_ref", "merged_at",
+  "created_at", "updated_at", "html_url",
+  "requested_reviewers_json", "labels_json",
+].join(", ");
+
 // GET /api/prs — query cached pull requests
 // Query params: state, author, since, repo, page, page_size
 export async function onRequestGet(context) {
@@ -13,7 +21,7 @@ export async function onRequestGet(context) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "100", 10) || 100));
 
-  let query = "SELECT * FROM pull_requests WHERE org_id = ?";
+  let query = `SELECT ${PR_COLUMNS} FROM pull_requests WHERE org_id = ?`;
   const bindings = [orgId];
 
   if (state && state !== "all") {

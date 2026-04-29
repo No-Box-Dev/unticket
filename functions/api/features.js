@@ -1,6 +1,13 @@
 import { getCtx, jsonResponse } from "../lib/db";
 import { syncFeatures } from "../lib/github-sync";
 
+// Explicit projection — never SELECT * so adding a column doesn't silently leak it.
+const FEATURE_COLUMNS = [
+  "id", "number", "title", "state", "body",
+  "assignees_json", "labels_json", "milestone_title",
+  "html_url", "created_at", "updated_at",
+].join(", ");
+
 // GET /api/features — return cached features from D1
 // Query params: state (default: open)
 export async function onRequestGet(context) {
@@ -8,7 +15,7 @@ export async function onRequestGet(context) {
   const url = new URL(context.request.url);
   const state = url.searchParams.get("state") || "open";
 
-  let query = "SELECT * FROM features WHERE org_id = ?";
+  let query = `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ?`;
   const bindings = [orgId];
 
   if (state !== "all") {
