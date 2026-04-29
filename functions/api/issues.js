@@ -9,6 +9,13 @@ const SORT_COLUMNS = {
   repo: "repo",
 };
 
+// Explicit projection — never SELECT * so adding a column doesn't silently leak it.
+const ISSUE_COLUMNS = [
+  "id", "repo", "number", "title", "state", "author", "author_avatar",
+  "created_at", "updated_at", "closed_at", "html_url",
+  "assignees_json", "labels_json", "milestone_title", "closed_by",
+].join(", ");
+
 // GET /api/issues — query cached issues with pagination
 // Query params: state, assignee, repo, repos, label, since, closed_since,
 //               page, page_size, sort, sort_dir, meta
@@ -156,7 +163,7 @@ export async function onRequestGet(context) {
 
   // Run count + data queries in parallel
   const countQuery = `SELECT COUNT(*) as total FROM issues ${where}`;
-  const dataQuery = `SELECT * FROM issues ${where} ORDER BY ${sortColumn} ${sortDir} LIMIT ? OFFSET ?`;
+  const dataQuery = `SELECT ${ISSUE_COLUMNS} FROM issues ${where} ORDER BY ${sortColumn} ${sortDir} LIMIT ? OFFSET ?`;
 
   const countBindings = [...bindings];
   const dataBindings = [...bindings, pageSize, offset];
