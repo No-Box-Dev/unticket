@@ -38,7 +38,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
       const openPRs = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.state === "open")?.length ?? 0;
-      const prsInReview = allPRs?.filter((pr: any) =>
+      const reviewing = allPRs?.filter((pr: any) =>
         pr.state === "open"
         && !pr.draft
         && (pr.requested_reviewers ?? []).some((r: any) => r.login === member.login),
@@ -55,7 +55,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         team: person?.team ?? "",
         description: person?.description ?? "",
         openPRs,
-        prsInReview,
+        reviewing,
         assignedIssues,
       };
     });
@@ -111,8 +111,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   // Default landing: grid of cards. Click a card → set selectedLogin → detail view.
   if (!selectedLogin) {
     const sorted = [...engineers].sort((a, b) => {
-      const ax = a.openPRs + a.prsInReview + a.assignedIssues;
-      const bx = b.openPRs + b.prsInReview + b.assignedIssues;
+      const ax = a.openPRs + a.reviewing + a.assignedIssues;
+      const bx = b.openPRs + b.reviewing + b.assignedIssues;
       if (bx !== ax) return bx - ax;
       return a.name.localeCompare(b.name);
     });
@@ -163,7 +163,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
           </div>
           <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
             <InlineMetric label="Open PRs" value={selected.openPRs} />
-            <InlineMetric label="PRs in Review" value={selected.prsInReview} />
+            <InlineMetric label="Reviewing" value={selected.reviewing} />
             <InlineMetric label="Assigned Issues" value={selected.assignedIssues} />
           </div>
         </div>
@@ -188,7 +188,7 @@ interface EngineerSummary {
   team: string;
   description: string;
   openPRs: number;
-  prsInReview: number;
+  reviewing: number;
   assignedIssues: number;
 }
 
@@ -216,7 +216,7 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
 
       <div className="flex items-center gap-4 text-xs text-stone-500">
         <CardStat label="Open PRs" value={engineer.openPRs} />
-        <CardStat label="In Review" value={engineer.prsInReview} />
+        <CardStat label="Reviewing" value={engineer.reviewing} />
         <CardStat label="Assigned" value={engineer.assignedIssues} />
       </div>
     </button>

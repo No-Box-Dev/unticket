@@ -386,24 +386,25 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     }
   }
 
-  // Only advance sync timestamp if we got data or this is a fresh sync
+  // Always advance the sync timestamp on a full sync, even when the unticket
+  // repo is empty — otherwise stale rows from prior sync sources stick around.
   if (features.length > 0 || !since) {
     await setSyncState(db, orgId, "features");
   }
-  // Clean up non-feature issues that were previously synced into the features table
-  // (before the label filter was added). Only run on full syncs.
-  if (!since && features.length > 0) {
-    const featureNumbers = features.map((f) => f.number);
-    // Delete any features in D1 for this org that aren't in the current feature set
+  // Reconcile D1 against the unticket repo on every full sync. Drops any open
+  // rows whose issue number isn't in the current feature set — including
+  // legacy rows synced from earlier repo sources.
+  if (!since) {
+    const featureNumbers = new Set(features.map((f) => f.number));
     const existing = await db
       .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
       .bind(orgId)
       .all();
     const toDelete = existing.results
-      .filter((r) => !featureNumbers.includes(r.number))
+      .filter((r) => !featureNumbers.has(r.number))
       .map((r) => r.number);
     if (toDelete.length > 0) {
-      console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
+      console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} stale features from D1 (org=${orgLogin})`);
       for (let i = 0; i < toDelete.length; i += 50) {
         const batch = toDelete.slice(i, i + 50);
         await db.batch(
