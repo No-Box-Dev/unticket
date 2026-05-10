@@ -4,6 +4,7 @@ import { useRateLimit } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
 import type { TabId } from "@/lib/types";
+import { SyncFromGithubMenuItem } from "@/components/SyncFromGithub";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
@@ -129,6 +130,7 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
                   <ArrowLeftRight className="w-4 h-4" />
                   Switch Organisation
                 </button>
+                <SyncFromGithubMenuItem onAfterStart={() => setMenuOpen(false)} />
                 <div className="border-t border-stone-100 my-1" />
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
