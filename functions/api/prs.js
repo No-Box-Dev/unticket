@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
+import { getInactiveRepoSet } from "../lib/inactive-repos";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const PR_COLUMNS = [
@@ -11,8 +12,14 @@ const PR_COLUMNS = [
 // GET /api/prs — query cached pull requests
 // Query params: state, author, since, repo, page, page_size
 export async function onRequestGet(context) {
-  const { orgId } = getCtx(context);
+  const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
+
+  // Always exclude drafts/archived/unticket-config repos at the read layer,
+  // even if D1 still has stale rows for them. Cap low (30) — D1 has a 100-bind
+  // hard limit per stmt and these bindings stack with other filters.
+  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 30);
+  const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
 
   const state = url.searchParams.get("state");
   const author = url.searchParams.get("author");
@@ -43,6 +50,10 @@ export async function onRequestGet(context) {
     query += " AND repo = ?";
     bindings.push(repo);
   }
+  if (inactiveSql) {
+    query += inactiveSql;
+    bindings.push(...inactive);
+  }
 
   // Build separate count query from the same WHERE conditions
   let countQuery = "SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?";
@@ -63,6 +74,10 @@ export async function onRequestGet(context) {
   if (repo) {
     countQuery += " AND repo = ?";
     countBindings.push(repo);
+  }
+  if (inactiveSql) {
+    countQuery += inactiveSql;
+    countBindings.push(...inactive);
   }
 
   const countStmt = context.env.DB.prepare(countQuery).bind(...countBindings);

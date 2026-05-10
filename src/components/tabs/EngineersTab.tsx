@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
-import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
+import { usePeople, useSprint, useFeatures } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
 import type { Person, Feature } from "@/lib/types";
-import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -21,8 +20,6 @@ function formatRelative(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-type ViewMode = "features" | "roles" | "tasks";
-
 export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
   const { data: sprint } = useSprint();
@@ -32,21 +29,11 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   const { data: closedIssues } = useClosedIssues(repoNames);
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
-  const [viewMode, setViewMode] = useState<ViewMode>("features");
 
   const sprintFeatures = useMemo(() => {
     if (!features || !sprint) return [];
     return features.filter((f) => f.sprint === sprint.number);
   }, [features, sprint]);
-
-  const featureIds = useMemo(() => sprintFeatures.map((f) => f.id), [sprintFeatures]);
-  const { data: allTasks } = useAllSprintSubIssues(featureIds);
-
-  const featureMap = useMemo(() => {
-    const m = new Map<number, Feature>();
-    for (const f of sprintFeatures) m.set(f.id, f);
-    return m;
-  }, [sprintFeatures]);
 
   // Build engineer list
   const engineers = useMemo(() => {
@@ -64,14 +51,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
       const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
       const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
-      const myTasks = allTasks?.filter((t) => t.assignees.includes(member.login)) ?? [];
-      const tasksDone = myTasks.filter((t) => t.state === "closed").length;
-      const tasksOpen = myTasks.filter((t) => t.state === "open").length;
-
-      // Roles: unique role names from tasks
-      const myRoles = [...new Map(
-        myTasks.filter((t) => t.roleName).map((t) => [t.roleNumber!, { number: t.roleNumber!, name: t.roleName!, featureId: t.featureId }])
-      ).values()];
 
       return {
         login: member.login,
@@ -81,16 +60,12 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         team: person?.team ?? "",
         description: person?.description ?? "",
         myFeatures,
-        myTasks,
-        myRoles,
         prsMerged,
         issuesSolved,
         featuresDone,
-        tasksDone,
-        tasksOpen,
       };
     });
-  }, [orgMembers, people, sprintFeatures, allPRs, closedIssues, allTasks]);
+  }, [orgMembers, people, sprintFeatures, allPRs, closedIssues]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -142,8 +117,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   // Default landing: grid of cards. Click a card → set selectedLogin → detail view.
   if (!selectedLogin) {
     const sorted = [...engineers].sort((a, b) => {
-      const ax = a.prsMerged + a.issuesSolved + a.tasksDone + a.tasksOpen;
-      const bx = b.prsMerged + b.issuesSolved + b.tasksDone + b.tasksOpen;
+      const ax = a.prsMerged + a.issuesSolved + a.featuresDone;
+      const bx = b.prsMerged + b.issuesSolved + b.featuresDone;
       if (bx !== ax) return bx - ax;
       return a.name.localeCompare(b.name);
     });
@@ -196,8 +171,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             <InlineMetric label="PRs" value={selected.prsMerged} />
             <InlineMetric label="Issues" value={selected.issuesSolved} />
             <InlineMetric label="Features" value={selected.featuresDone} />
-            <InlineMetric label="Tasks done" value={selected.tasksDone} />
-            <InlineMetric label="Tasks open" value={selected.tasksOpen} />
           </div>
         </div>
 
@@ -207,38 +180,13 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         {/* Activity feed */}
         <ActivityFeed items={feed} />
 
-        {/* View selector + work items */}
+        {/* Sprint features */}
         <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-          <div className="flex items-center border-b border-stone-200">
-            {(["features", "roles", "tasks"] as const).map((mode) => {
-              const counts = { features: selected.myFeatures.length, roles: selected.myRoles.length, tasks: selected.myTasks.length };
-              return (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={cn(
-                    "px-4 py-3 text-sm font-medium capitalize transition-colors cursor-pointer",
-                    viewMode === mode
-                      ? "text-stone-900 border-b-2 border-accent"
-                      : "text-stone-500 hover:text-stone-700",
-                  )}
-                >
-                  {mode} ({counts[mode]})
-                </button>
-              );
-            })}
+          <div className="flex items-center border-b border-stone-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-stone-700">Sprint features ({selected.myFeatures.length})</h3>
           </div>
-
           <div className="p-4">
-            {viewMode === "features" && (
-              <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} />
-            )}
-            {viewMode === "roles" && (
-              <RolesView roles={selected.myRoles} tasks={selected.myTasks} featureMap={featureMap} />
-            )}
-            {viewMode === "tasks" && (
-              <TasksView tasks={selected.myTasks} featureMap={featureMap} />
-            )}
+            <FeaturesView features={selected.myFeatures} />
           </div>
         </div>
       </div>
@@ -257,12 +205,10 @@ interface EngineerSummary {
   description: string;
   prsMerged: number;
   issuesSolved: number;
-  tasksDone: number;
-  tasksOpen: number;
+  featuresDone: number;
 }
 
 function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
-  const totalTasks = engineer.tasksDone + engineer.tasksOpen;
   return (
     <button
       onClick={onSelect}
@@ -287,7 +233,7 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
       <div className="flex items-center gap-4 text-xs text-stone-500">
         <CardStat label="PRs" value={engineer.prsMerged} />
         <CardStat label="Issues" value={engineer.issuesSolved} />
-        <CardStat label="Tasks" value={`${engineer.tasksDone}/${totalTasks}`} />
+        <CardStat label="Features" value={engineer.featuresDone} />
       </div>
     </button>
   );
@@ -305,18 +251,21 @@ function CardStat({ label, value }: { label: string; value: number | string }) {
 // ---------- View Components ----------
 
 const STATUS_COLORS: Record<string, string> = {
-  plan: "bg-status-plan", in_progress: "bg-status-progress", demo: "bg-status-demo",
-  tested: "bg-status-tested", production: "bg-status-production", future: "bg-status-future",
+  todo: "bg-status-plan",
+  staging: "bg-status-progress",
+  ready: "bg-status-tested",
+  production: "bg-status-production",
+  future: "bg-status-future",
 };
 const STATUS_LABELS: Record<string, string> = {
-  plan: "Plan", in_progress: "In Progress", demo: "Demo",
-  tested: "Tested", production: "Production", future: "Future",
+  todo: "To do",
+  staging: "Testing on staging",
+  ready: "Ready for production",
+  production: "On production",
+  future: "Future",
 };
 
-function FeaturesView({ features, tasks }: {
-  features: Feature[];
-  tasks: SubIssueWithFeature[];
-}) {
+function FeaturesView({ features }: { features: Feature[] }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   if (features.length === 0) return <p className="text-sm text-stone-400">No features assigned</p>;
@@ -325,8 +274,6 @@ function FeaturesView({ features, tasks }: {
     <div className="space-y-1">
       {features.map((f) => {
         const isExpanded = expandedId === f.id;
-        const featureTasks = tasks.filter((t) => t.featureId === f.id);
-        const doneCount = featureTasks.filter((t) => t.state === "closed").length;
         return (
           <div key={f.id}>
             <button
@@ -337,108 +284,10 @@ function FeaturesView({ features, tasks }: {
               <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[f.status])} />
               <span className="text-sm text-stone-700 flex-1 truncate">{f.title}</span>
               <span className="text-xs text-stone-400">{STATUS_LABELS[f.status]}</span>
-              {featureTasks.length > 0 && (
-                <span className="text-xs text-stone-400">{doneCount}/{featureTasks.length}</span>
-              )}
-            </button>
-            {isExpanded && (
-              <FeatureDetail featureId={f.id} tasks={featureTasks} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function RolesView({ roles, tasks, featureMap }: {
-  roles: { number: number; name: string; featureId: number }[];
-  tasks: SubIssueWithFeature[];
-  featureMap: Map<number, Feature>;
-}) {
-  const [expandedRole, setExpandedRole] = useState<number | null>(null);
-
-  if (roles.length === 0) return <p className="text-sm text-stone-400">No roles assigned</p>;
-
-  return (
-    <div className="space-y-1">
-      {roles.map((role) => {
-        const isExpanded = expandedRole === role.number;
-        const roleTasks = tasks.filter((t) => t.roleNumber === role.number);
-        const doneCount = roleTasks.filter((t) => t.state === "closed").length;
-        const feature = featureMap.get(role.featureId);
-        return (
-          <div key={role.number}>
-            <button
-              onClick={() => setExpandedRole(isExpanded ? null : role.number)}
-              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
-            >
-              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
-              <span className="w-2 h-2 rounded-full bg-status-progress shrink-0" />
-              <span className="text-sm text-stone-700 flex-1 truncate">{role.name}</span>
-              {feature && <span className="text-xs text-stone-400 truncate max-w-[150px]">{feature.title}</span>}
-              {roleTasks.length > 0 && (
-                <span className="text-xs text-stone-400">{doneCount}/{roleTasks.length}</span>
-              )}
             </button>
             {isExpanded && (
               <div className="ml-7 mb-2">
-                <FeatureDetail featureId={role.featureId} tasks={roleTasks} />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function TasksView({ tasks, featureMap }: {
-  tasks: SubIssueWithFeature[];
-  featureMap: Map<number, Feature>;
-}) {
-  const [expandedFeatureId, setExpandedFeatureId] = useState<number | null>(null);
-
-  // Group tasks by feature
-  const grouped = useMemo(() => {
-    const map = new Map<number, SubIssueWithFeature[]>();
-    for (const t of tasks) {
-      const list = map.get(t.featureId) ?? [];
-      list.push(t);
-      map.set(t.featureId, list);
-    }
-    return [...map.entries()];
-  }, [tasks]);
-
-  if (tasks.length === 0) return <p className="text-sm text-stone-400">No tasks assigned</p>;
-
-  return (
-    <div className="space-y-1">
-      {grouped.map(([featureId, featureTasks]) => {
-        const feature = featureMap.get(featureId);
-        const isExpanded = expandedFeatureId === featureId;
-        const doneCount = featureTasks.filter((t) => t.state === "closed").length;
-        return (
-          <div key={featureId}>
-            <button
-              onClick={() => setExpandedFeatureId(isExpanded ? null : featureId)}
-              className="w-full flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
-            >
-              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
-              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[feature?.status ?? "plan"])} />
-              <span className="text-xs text-stone-500 shrink-0">{feature?.title ?? `Feature #${featureId}`}</span>
-              <span className="text-xs text-stone-400 ml-auto">{doneCount}/{featureTasks.length}</span>
-            </button>
-            {isExpanded && (
-              <div className="ml-7 space-y-1 mb-2">
-                {featureTasks.map((t) => (
-                  <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-status-production" : "bg-status-progress")} />
-                    <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700  ")}>{t.title}</span>
-                    {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
-                  </div>
-                ))}
-                <LinkedPRsPanel featureId={featureId} />
+                <LinkedPRsPanel featureId={f.id} />
               </div>
             )}
           </div>
@@ -449,25 +298,6 @@ function TasksView({ tasks, featureMap }: {
 }
 
 // ---------- Linked PRs Panel ----------
-
-function FeatureDetail({ featureId, tasks }: { featureId: number; tasks: SubIssueWithFeature[] }) {
-  return (
-    <div className="ml-7 mb-2 space-y-1">
-      {tasks.length > 0 && (
-        <div className="space-y-1">
-          {tasks.map((t) => (
-            <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
-              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-status-production" : "bg-status-progress")} />
-              <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700  ")}>{t.title}</span>
-              {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-      <LinkedPRsPanel featureId={featureId} />
-    </div>
-  );
-}
 
 function LinkedPRsPanel({ featureId }: { featureId: number }) {
   const { data: prs, isLoading } = usePRsForFeature(featureId);

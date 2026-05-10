@@ -1,11 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, ExternalLink, FileText, Pencil, Save, Plus, Loader2, GitPullRequest, GitMerge, Search, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
-import { RoleSection } from "./RoleSection";
-import { useSubIssues, useCreateSubIssue, useToggleSubIssue, useDeleteSubIssue, useRolesWithTasks, useCreateRole, useDeleteRole, useCreateTask, useUpdateTaskTitle } from "@/hooks/useConfigRepo";
 import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
 import { fetchAllPRs } from "@/lib/github";
 import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
@@ -25,26 +22,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const [newRoleText, setNewRoleText] = useState("");
-  const [newRoleAssignee, setNewRoleAssignee] = useState("");
-  const [newTaskText, setNewTaskText] = useState("");
   const [showLinkPR, setShowLinkPR] = useState(false);
   const [prSearch, setPrSearch] = useState("");
   const [prRepoFilter, setPrRepoFilter] = useState("");
   const [prCreatorFilter, setPrCreatorFilter] = useState("");
-
-  // Sub-issues (legacy flat tasks)
-  const { data: subIssues, isLoading: subIssuesLoading } = useSubIssues(feature.id);
-  const createSubIssueMut = useCreateSubIssue();
-  const toggleSubIssueMut = useToggleSubIssue();
-  const deleteSubIssueMut = useDeleteSubIssue();
-
-  // Roles + tasks hierarchy
-  const { data: rolesWithTasks, isLoading: rolesLoading } = useRolesWithTasks(feature.id);
-  const createRoleMut = useCreateRole();
-  const deleteRoleMut = useDeleteRole();
-  const createTaskMut = useCreateTask();
-  const updateTaskTitleMut = useUpdateTaskTitle();
 
   // Linked PRs (branch + explicit)
   const { data: linkedPRs, isLoading: prsLoading } = usePRsForFeature(feature.id);
@@ -121,39 +102,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
     onClose();
   }
 
-  // Plan is now just the issue body (no more inline ## Tasks parsing)
   const plan = draft.plan ?? "";
-
-  // Roles data
-  const roles = rolesWithTasks ?? [];
-  const roleNumbers = new Set(roles.map((r) => r.role.number));
-
-  // Legacy flat tasks (sub-issues that are NOT roles)
-  const legacyTasks = (subIssues ?? []).filter((s) => !roleNumbers.has(s.number));
-
-  // Task counts from roles
-  const allRoleTasks = roles.flatMap((r) => r.tasks);
-  const totalTaskCount = allRoleTasks.length + legacyTasks.length;
-  const doneTaskCount = allRoleTasks.filter((t) => t.state === "closed").length
-    + legacyTasks.filter((t) => t.state === "closed").length;
-
-  function addRole() {
-    const text = newRoleText.trim();
-    if (!text) return;
-    createRoleMut.mutate(
-      { featureId: feature.id, title: text, assignee: newRoleAssignee || undefined },
-      { onError: (err) => console.error("[unticket.ai] createRole failed:", err) },
-    );
-    setNewRoleText("");
-    setNewRoleAssignee("");
-  }
-
-  function addLegacyTask() {
-    const text = newTaskText.trim();
-    if (!text) return;
-    createSubIssueMut.mutate({ parentIssueNumber: feature.id, title: text });
-    setNewTaskText("");
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
@@ -200,7 +149,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                   onChange={(e) => {
                     const val = e.target.value;
                     const sprint = val === "" ? null : Number(val);
-                    const status = sprint === null ? "future" : (draft.status === "future" ? "plan" : draft.status);
+                    const status = sprint === null ? "future" : (draft.status === "future" ? "todo" : draft.status);
                     update({ sprint, status });
                   }}
                   className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
@@ -251,7 +200,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
               </div>
             </div>
 
-            {!editMode && !plan && totalTaskCount === 0 && roles.length === 0 && (
+            {!editMode && !plan && (
               <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300" />
                 No plan yet.
@@ -299,138 +248,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Roles & Tasks */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500">
-                Roles & Tasks
-                {totalTaskCount > 0 && (
-                  <span className="text-stone-400 ml-1">
-                    ({doneTaskCount}/{totalTaskCount})
-                  </span>
-                )}
-              </span>
-              {(subIssuesLoading || rolesLoading) && <Loader2 size={12} className="animate-spin text-stone-400" />}
-            </div>
-
-            {/* Progress bar */}
-            {totalTaskCount > 0 && (
-              <div className="h-1.5 bg-stone-100 rounded-full mb-3 overflow-hidden">
-                <div
-                  className="h-full bg-accent rounded-full transition-all"
-                  style={{ width: `${(doneTaskCount / totalTaskCount) * 100}%` }}
-                />
-              </div>
-            )}
-
-            {/* Role sections */}
-            <div className="space-y-2">
-              {roles.map(({ role, tasks: roleTasks }) => (
-                <RoleSection
-                  key={role.id}
-                  role={role}
-                  tasks={roleTasks}
-                  onToggleTask={(task) => toggleSubIssueMut.mutate(task)}
-                  onDeleteTask={(task) => deleteSubIssueMut.mutate({ parentIssueNumber: role.number, subIssueNumber: task.number, featureId: feature.id })}
-                  onUpdateTaskTitle={(task, newTitle) => updateTaskTitleMut.mutate({ taskNumber: task.number, featureId: feature.id, title: newTitle })}
-                  onAddTask={(title) => createTaskMut.mutate({ roleNumber: role.number, featureId: feature.id, title, assignee: role.assignee ?? undefined })}
-                  onDeleteRole={() => deleteRoleMut.mutate({ featureId: feature.id, roleNumber: role.number })}
-                  isAdding={createTaskMut.isPending}
-                />
-              ))}
-            </div>
-
-            {/* Legacy flat tasks (sub-issues without role) */}
-            {legacyTasks.length > 0 && (
-              <div className="mt-3">
-                <span className="text-[10px] text-stone-400 uppercase tracking-wider">Ungrouped Tasks</span>
-                <div className="space-y-1 mt-1">
-                  {legacyTasks.map((task) => (
-                    <div key={task.id} className="group flex items-center gap-2 py-1 px-1 rounded hover:bg-stone-50">
-                      <button
-                        type="button"
-                        onClick={() => toggleSubIssueMut.mutate(task)}
-                        className="text-stone-400 hover:text-accent cursor-pointer shrink-0"
-                      >
-                        {task.state === "closed"
-                          ? <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                          : <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                        }
-                      </button>
-                      <span className={`text-sm flex-1 ${task.state === "closed" ? "line-through text-stone-400  " : "text-stone-700  "}`}>
-                        {task.title}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => deleteSubIssueMut.mutate({ parentIssueNumber: feature.id, subIssueNumber: task.number, featureId: feature.id })}
-                        className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add ungrouped task */}
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={newTaskText}
-                    onChange={(e) => setNewTaskText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addLegacyTask()}
-                    placeholder="Add task..."
-                    className="flex-1 px-2 py-1 rounded border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
-                  />
-                  <button
-                    type="button"
-                    onClick={addLegacyTask}
-                    disabled={!newTaskText.trim() || createSubIssueMut.isPending}
-                    className="px-2 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
-                  >
-                    {createSubIssueMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Add role */}
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <input
-                type="text"
-                value={newRoleText}
-                onChange={(e) => setNewRoleText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addRole()}
-                placeholder="Add a role..."
-                className="flex-1 min-w-[120px] px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
-              />
-              <select
-                value={newRoleAssignee}
-                onChange={(e) => setNewRoleAssignee(e.target.value)}
-                className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-600 focus:outline-none focus:ring-2 focus:ring-accent/30 cursor-pointer"
-              >
-                <option value="">Assignee</option>
-                {allPeople.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                aria-label="Add role"
-                onClick={addRole}
-                disabled={!newRoleText.trim() || createRoleMut.isPending}
-                className="px-2.5 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer flex items-center gap-1"
-              >
-                {createRoleMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                Role
-              </button>
-              {createRoleMut.isError && (
-                <span className="text-xs text-red-500 w-full">
-                  Failed to create role: {(createRoleMut.error as any)?.message ?? "Unknown error"}
-                </span>
-              )}
-            </div>
           </div>
 
           {/* Linked PRs */}

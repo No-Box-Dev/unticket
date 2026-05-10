@@ -49,11 +49,10 @@ export function NewSprintModal({ currentSprint, features, targetOptions, onConfi
   const productionCount = sprintFeatures.filter((f) => f.status === "production").length;
   const movingCount = sprintFeatures.filter((f) => f.status !== "production").length;
   const statusCounts: [string, number][] = [
-    ["Plan", sprintFeatures.filter((f) => f.status === "plan").length],
-    ["In Progress", sprintFeatures.filter((f) => f.status === "in_progress").length],
-    ["Demo", sprintFeatures.filter((f) => f.status === "demo").length],
-    ["Tested", sprintFeatures.filter((f) => f.status === "tested").length],
-    ["Production", productionCount],
+    ["To do", sprintFeatures.filter((f) => f.status === "todo").length],
+    ["Testing on staging", sprintFeatures.filter((f) => f.status === "staging").length],
+    ["Ready for production", sprintFeatures.filter((f) => f.status === "ready").length],
+    ["On production", productionCount],
   ];
 
   const effectiveTarget = isNewSprint ? newNumber : targetSprint;

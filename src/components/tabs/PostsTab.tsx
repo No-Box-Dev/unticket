@@ -1,12 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePosts, useFeedActors, useFeedProjects } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
 
 export function PostsTab() {
   const posts = usePosts(50);
   const actors = useFeedActors();
   const projects = useFeedProjects();
+  const [actorFilter, setActorFilter] = useState<string>("");
+  const [projectFilter, setProjectFilter] = useState<string>("");
 
   const actorById = useMemo(() => {
     const m = new Map<string, FeedActor>();
@@ -19,6 +22,44 @@ export function PostsTab() {
     for (const p of projects.data ?? []) m.set(p.id, p);
     return m;
   }, [projects.data]);
+
+  // Restrict the dropdowns to actors/projects that actually appear in the feed.
+  const events = posts.data ?? [];
+  const visibleActorIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of events) if (e.actor_id) s.add(e.actor_id);
+    return s;
+  }, [events]);
+  const visibleProjectIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of events) if (e.project_id) s.add(e.project_id);
+    return s;
+  }, [events]);
+
+  const actorOptions = useMemo(() => {
+    const opts = (actors.data ?? [])
+      .filter((a) => visibleActorIds.has(a.id))
+      .map((a) => ({ value: a.id, label: a.name || a.github_login || a.id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: "", label: "All people" }, ...opts];
+  }, [actors.data, visibleActorIds]);
+
+  const projectOptions = useMemo(() => {
+    const opts = (projects.data ?? [])
+      .filter((p) => visibleProjectIds.has(p.id))
+      .map((p) => ({ value: p.id, label: p.slug || p.name || p.id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: "", label: "All repos" }, ...opts];
+  }, [projects.data, visibleProjectIds]);
+
+  const filteredEvents = useMemo(() => {
+    if (!actorFilter && !projectFilter) return events;
+    return events.filter((e) => {
+      if (actorFilter && e.actor_id !== actorFilter) return false;
+      if (projectFilter && e.project_id !== projectFilter) return false;
+      return true;
+    });
+  }, [events, actorFilter, projectFilter]);
 
   if (posts.isLoading || actors.isLoading || projects.isLoading) {
     return (
@@ -36,25 +77,52 @@ export function PostsTab() {
     );
   }
 
-  const events = posts.data ?? [];
-  if (events.length === 0) {
-    return (
-      <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
-        No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here.
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-2xl mx-auto space-y-3">
-      {events.map((event) => (
-        <PostCard
-          key={event.id}
-          event={event}
-          actor={event.actor_id ? actorById.get(event.actor_id) ?? null : null}
-          project={event.project_id ? projectById.get(event.project_id) ?? null : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchableSelect
+          value={actorFilter}
+          onChange={setActorFilter}
+          options={actorOptions}
+          placeholder="All people"
+          className="min-w-[160px]"
         />
-      ))}
+        <SearchableSelect
+          value={projectFilter}
+          onChange={setProjectFilter}
+          options={projectOptions}
+          placeholder="All repos"
+          className="min-w-[160px]"
+        />
+        {(actorFilter || projectFilter) && (
+          <button
+            type="button"
+            onClick={() => { setActorFilter(""); setProjectFilter(""); }}
+            className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {events.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
+          No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here.
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
+          No posts match the current filters.
+        </div>
+      ) : (
+        filteredEvents.map((event) => (
+          <PostCard
+            key={event.id}
+            event={event}
+            actor={event.actor_id ? actorById.get(event.actor_id) ?? null : null}
+            project={event.project_id ? projectById.get(event.project_id) ?? null : null}
+          />
+        ))
+      )}
     </div>
   );
 }
