@@ -8,6 +8,7 @@ import { TopNav } from "@/components/TopNav";
 import { Spinner } from "@/components/Spinner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { BootstrapOverlay } from "@/components/BootstrapOverlay";
 import type { TabId, NavFilter } from "@/lib/types";
 
 const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ default: m.SprintTab })));
@@ -54,6 +55,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-stone-50">
+      <BootstrapOverlay />
       <CommandPalette onNavigate={handleTabChange} />
       <TopNav activeTab={activeTab} onTabChange={handleTabChange} />
 

@@ -1,5 +1,7 @@
 import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
+import { filterInactive } from "./inactive-repos";
+import { getInstallationToken } from "./github-app";
 
 // Paginated GitHub API fetcher
 const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
@@ -484,6 +486,51 @@ export async function syncInit(db, token, orgId, orgLogin) {
     .all();
 
   return repoRows.results.map((r) => r.name);
+}
+
+// ---------- bootstrapInstallation: full backfill on install webhook ----------
+//
+// Fired from the `installation` webhook when a new install (or unsuspend)
+// arrives. Pulls everything we need for an empty dashboard so the user
+// never has to click Sync. Marks `orgs.bootstrapped_at` on success; the
+// dashboard polls this to switch from "setting up" to "ready".
+//
+// Pulls in dependency order: repos → members → features → per-repo issues+PRs.
+// Per-repo work uses the existing incremental syncRepo (force=true to ensure
+// a clean slate on first install). Reconciliation cron (Slice 3) catches any
+// repos added later via installation_repositories.
+export async function bootstrapInstallation(env, orgId, orgLogin, installationId) {
+  const db = env.DB;
+  const token = await getInstallationToken(env, installationId);
+
+  await syncRepos(db, token, orgId, orgLogin);
+  await syncMembers(db, token, orgId, orgLogin);
+  await syncFeatures(db, token, orgId, orgLogin);
+
+  const repoRows = await db
+    .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
+    .bind(orgId)
+    .all();
+  const repoNames = await filterInactive(
+    db,
+    orgId,
+    orgLogin,
+    repoRows.results.map((r) => r.name),
+  );
+
+  for (const repo of repoNames) {
+    try {
+      await syncRepo(db, token, orgId, orgLogin, repo, true);
+    } catch (err) {
+      // Don't abort the whole bootstrap on one bad repo — cron will retry.
+      console.error(`[unticket] bootstrap repo ${repo} failed:`, err?.message ?? err);
+    }
+  }
+
+  await db
+    .prepare("UPDATE orgs SET bootstrapped_at = datetime('now') WHERE id = ?")
+    .bind(orgId)
+    .run();
 }
 
 // ---------- syncRepo: sync PRs + issues for a single repo ----------
