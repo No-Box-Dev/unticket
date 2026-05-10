@@ -3,9 +3,8 @@ import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
-import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
-import { ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
 import type { Person, Feature } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
@@ -139,90 +138,162 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return <div className="text-center py-20 text-stone-400">No organization members found.</div>;
   }
 
+  // Default landing: grid of cards. Click a card → set selectedLogin → detail view.
+  if (!selectedLogin) {
+    const sorted = [...engineers].sort((a, b) => {
+      const ax = a.prsMerged + a.issuesSolved + a.tasksDone + a.tasksOpen;
+      const bx = b.prsMerged + b.issuesSolved + b.tasksDone + b.tasksOpen;
+      if (bx !== ax) return bx - ax;
+      return a.name.localeCompare(b.name);
+    });
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {sorted.map((eng) => (
+          <PersonCard key={eng.login} engineer={eng} onSelect={() => setSelectedLogin(eng.login)} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!selected) {
+    return <div className="text-center py-20 text-stone-400">Engineer not found.</div>;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Engineer picker */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-stone-500">Engineer</span>
-        <PersonSelect
-          value={selected?.login ?? null}
-          onChange={(v) => setSelectedLogin(typeof v === "string" ? v : null)}
-          options={engineers.map((e) => ({ value: e.login, label: e.name }))}
-          placeholder="Select engineer"
-        />
-      </div>
+      <button
+        onClick={() => setSelectedLogin(null)}
+        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        All people
+      </button>
 
-      {/* Detail panel */}
-      {selected && (
-        <div className="space-y-4">
-          {/* Header with embedded metrics */}
-          <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center gap-4">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              {selected.avatar_url ? (
-                <img src={selected.avatar_url} className="w-12 h-12 rounded-full shrink-0" alt="" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-lg font-bold text-stone-500">
-                  {selected.name?.[0]?.toUpperCase() ?? "?"}
-                </div>
-              )}
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold text-stone-900 font-display truncate">{selected.name}</h2>
-                {(selected.role || selected.team) && (
-                  <p className="text-sm text-stone-400 truncate">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
-                )}
-                {selected.description && (
-                  <p className="text-sm text-stone-500 mt-0.5 line-clamp-2">{selected.description}</p>
-                )}
+      <div className="space-y-4">
+        {/* Header with embedded metrics */}
+        <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            {selected.avatar_url ? (
+              <img src={selected.avatar_url} className="w-12 h-12 rounded-full shrink-0" alt="" />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-lg font-bold text-stone-500">
+                {selected.name?.[0]?.toUpperCase() ?? "?"}
               </div>
-            </div>
-            <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
-              <InlineMetric label="PRs" value={selected.prsMerged} color="text-purple-500" />
-              <InlineMetric label="Issues" value={selected.issuesSolved} color="text-blue-500" />
-              <InlineMetric label="Features" value={selected.featuresDone} color="text-green-500" />
-              <InlineMetric label="Tasks done" value={selected.tasksDone} color="text-teal-500" />
-              <InlineMetric label="Tasks open" value={selected.tasksOpen} color="text-amber-500" />
+            )}
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-stone-900 font-display truncate">{selected.name}</h2>
+              {(selected.role || selected.team) && (
+                <p className="text-sm text-stone-400 truncate">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
+              )}
+              {selected.description && (
+                <p className="text-sm text-stone-500 mt-0.5 line-clamp-2">{selected.description}</p>
+              )}
             </div>
           </div>
-
-          {/* Activity feed */}
-          <ActivityFeed items={feed} />
-
-          {/* View selector + work items */}
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="flex items-center border-b border-stone-200">
-              {(["features", "roles", "tasks"] as const).map((mode) => {
-                const counts = { features: selected.myFeatures.length, roles: selected.myRoles.length, tasks: selected.myTasks.length };
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={cn(
-                      "px-4 py-3 text-sm font-medium capitalize transition-colors cursor-pointer",
-                      viewMode === mode
-                        ? "text-accent border-b-2 border-accent"
-                        : "text-stone-500  hover:text-stone-700  ",
-                    )}
-                  >
-                    {mode} ({counts[mode]})
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="p-4">
-              {viewMode === "features" && (
-                <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} />
-              )}
-              {viewMode === "roles" && (
-                <RolesView roles={selected.myRoles} tasks={selected.myTasks} featureMap={featureMap} />
-              )}
-              {viewMode === "tasks" && (
-                <TasksView tasks={selected.myTasks} featureMap={featureMap} />
-              )}
-            </div>
+          <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
+            <InlineMetric label="PRs" value={selected.prsMerged} />
+            <InlineMetric label="Issues" value={selected.issuesSolved} />
+            <InlineMetric label="Features" value={selected.featuresDone} />
+            <InlineMetric label="Tasks done" value={selected.tasksDone} />
+            <InlineMetric label="Tasks open" value={selected.tasksOpen} />
           </div>
         </div>
-      )}
+
+        {/* Activity feed */}
+        <ActivityFeed items={feed} />
+
+        {/* View selector + work items */}
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="flex items-center border-b border-stone-200">
+            {(["features", "roles", "tasks"] as const).map((mode) => {
+              const counts = { features: selected.myFeatures.length, roles: selected.myRoles.length, tasks: selected.myTasks.length };
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    "px-4 py-3 text-sm font-medium capitalize transition-colors cursor-pointer",
+                    viewMode === mode
+                      ? "text-stone-900 border-b-2 border-accent"
+                      : "text-stone-500 hover:text-stone-700",
+                  )}
+                >
+                  {mode} ({counts[mode]})
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-4">
+            {viewMode === "features" && (
+              <FeaturesView features={selected.myFeatures} tasks={selected.myTasks} />
+            )}
+            {viewMode === "roles" && (
+              <RolesView roles={selected.myRoles} tasks={selected.myTasks} featureMap={featureMap} />
+            )}
+            {viewMode === "tasks" && (
+              <TasksView tasks={selected.myTasks} featureMap={featureMap} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- PersonCard (NoxLink-style grid card) ----------
+
+interface EngineerSummary {
+  login: string;
+  avatar_url: string;
+  name: string;
+  role: string;
+  team: string;
+  description: string;
+  prsMerged: number;
+  issuesSolved: number;
+  tasksDone: number;
+  tasksOpen: number;
+}
+
+function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
+  const totalTasks = engineer.tasksDone + engineer.tasksOpen;
+  return (
+    <button
+      onClick={onSelect}
+      className="bg-white border border-stone-200 rounded-xl p-4 text-left hover:border-stone-300 hover:bg-stone-50/50 transition-colors cursor-pointer flex flex-col gap-3"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        {engineer.avatar_url ? (
+          <img src={engineer.avatar_url} className="w-10 h-10 rounded-full shrink-0" alt="" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-sm font-semibold text-stone-500">
+            {engineer.name?.[0]?.toUpperCase() ?? "?"}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-stone-900 truncate">{engineer.name}</div>
+          <div className="text-xs text-stone-400 truncate">
+            {[engineer.role, engineer.team].filter(Boolean).join(" · ") || `@${engineer.login}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-stone-500">
+        <CardStat label="PRs" value={engineer.prsMerged} />
+        <CardStat label="Issues" value={engineer.issuesSolved} />
+        <CardStat label="Tasks" value={`${engineer.tasksDone}/${totalTasks}`} />
+      </div>
+    </button>
+  );
+}
+
+function CardStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
+      <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
     </div>
   );
 }
@@ -299,7 +370,7 @@ function RolesView({ roles, tasks, featureMap }: {
               className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
             >
               {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
-              <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-status-progress shrink-0" />
               <span className="text-sm text-stone-700 flex-1 truncate">{role.name}</span>
               {feature && <span className="text-xs text-stone-400 truncate max-w-[150px]">{feature.title}</span>}
               {roleTasks.length > 0 && (
@@ -416,15 +487,13 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
               className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-stone-50 group"
             >
               {isMerged
-                ? <GitMerge size={12} className="text-purple-500 shrink-0" />
-                : <GitPullRequest size={12} className="text-green-500 shrink-0" />
+                ? <GitMerge size={12} className="text-stone-400 shrink-0" />
+                : <GitPullRequest size={12} className="text-stone-400 shrink-0" />
               }
               <span className="text-xs text-stone-400 shrink-0">{pr.repo}#{pr.number}</span>
               <span className="text-xs text-stone-600 truncate flex-1">{pr.title}</span>
               {source && (
-                <span className={cn("text-[9px] px-1 py-0.5 rounded-full shrink-0",
-                  source === "branch" ? "bg-blue-50  text-blue-600  " : "bg-stone-100  text-stone-500"
-                )}>{source}</span>
+                <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 bg-stone-100 text-stone-500">{source}</span>
               )}
               <ExternalLink size={10} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
             </a>
@@ -437,10 +506,10 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
 
 // ---------- Inline Metric (embedded in header) ----------
 
-function InlineMetric({ label, value, color }: { label: string; value: number; color: string }) {
+function InlineMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col items-start">
-      <span className={`text-xl font-bold font-display leading-none ${color}`}>{value}</span>
+      <span className="text-xl font-bold font-display leading-none text-stone-800">{value}</span>
       <span className="text-[10px] font-medium text-stone-400 uppercase tracking-wider mt-1">{label}</span>
     </div>
   );
@@ -471,10 +540,7 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
     <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
         <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-          </span>
+          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-status-production" />
           <h3 className="text-sm font-semibold text-stone-700">Live activity</h3>
           <span className="text-xs text-stone-400">last 30 days</span>
         </div>
@@ -524,9 +590,9 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
 }
 
 function FeedIcon({ kind }: { kind: FeedItem["kind"] }) {
-  if (kind === "pr_merged") return <GitMerge size={14} className="text-purple-500 shrink-0" />;
-  if (kind === "pr_opened") return <GitPullRequest size={14} className="text-green-500 shrink-0" />;
-  return <CircleCheck size={14} className="text-blue-500 shrink-0" />;
+  if (kind === "pr_merged") return <GitMerge size={14} className="text-stone-400 shrink-0" />;
+  if (kind === "pr_opened") return <GitPullRequest size={14} className="text-stone-400 shrink-0" />;
+  return <CircleCheck size={14} className="text-stone-400 shrink-0" />;
 }
 
 function labelFor(kind: FeedItem["kind"]) {
