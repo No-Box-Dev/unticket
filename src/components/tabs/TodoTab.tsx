@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
-import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople } from "@/hooks/useConfigRepo";
 import { useIsAdmin, useAssignedIssues, useUpdateIssueState, useReviewPRs } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
@@ -11,10 +11,9 @@ import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, Li
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
-import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { cn } from "@/lib/cn";
 import { STATUS_COLORS as SHARED_STATUS_COLORS } from "@/lib/types";
-import type { Todo, TodoStatus, Feature, FeatureStatus, ScopingStatus, Points, AssignedIssue, ReviewPR } from "@/lib/types";
+import type { Todo, TodoStatus, Feature, FeatureStatus, ScopingStatus, AssignedIssue, ReviewPR } from "@/lib/types";
 import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
 
 type TodoView = "todos" | "issues" | "features" | "roles";
@@ -30,21 +29,21 @@ const VIEW_TABS: { key: TodoView; label: string; icon: typeof ListChecks }[] = [
 const STATUS_DOT = SHARED_STATUS_COLORS;
 
 const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
-  { status: "backlog", label: "Planned", color: "bg-brand" },
-  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
-  { status: "review", label: "Waiting for Review", color: "bg-purple-500" },
-  { status: "done", label: "Done", color: "bg-green-500" },
+  { status: "backlog", label: "Planned", color: "bg-stone-400" },
+  { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
+  { status: "review", label: "Waiting for Review", color: "bg-status-demo" },
+  { status: "done", label: "Done", color: "bg-status-production" },
 ];
 
 const SPRINT_FILTERS: SprintFilter[] = ["sprint", "all"];
 
 type BoardStatus = Exclude<FeatureStatus, "future" | "scoping" | ScopingStatus>;
 const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
-  { status: "plan", label: "Plan", color: "bg-brand" },
-  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
-  { status: "demo", label: "Demo", color: "bg-purple-500" },
-  { status: "tested", label: "Tested", color: "bg-cyan-500" },
-  { status: "production", label: "In Production", color: "bg-green-500" },
+  { status: "plan", label: "Plan", color: "bg-status-plan" },
+  { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
+  { status: "demo", label: "Demo", color: "bg-status-demo" },
+  { status: "tested", label: "Tested", color: "bg-status-tested" },
+  { status: "production", label: "In Production", color: "bg-status-production" },
 ];
 
 export function TodoTab() {
@@ -59,7 +58,6 @@ export function TodoTab() {
   const deleteTodoMut = useDeleteTodoItem();
   const updateFeatureMut = useUpdateFeature();
   const deleteFeatureMut = useDeleteFeature();
-  const updateTaskPointsMut = useUpdateTaskPoints();
   const { data: assignedIssues } = useAssignedIssues(user?.login ?? "");
   const { data: reviewPRs } = useReviewPRs(user?.login ?? "");
   const updateIssueStateMut = useUpdateIssueState();
@@ -129,7 +127,7 @@ export function TodoTab() {
     <div className="space-y-4 pb-8">
       {/* Header: view tabs + sprint filter */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+        <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
           {VIEW_TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -137,8 +135,8 @@ export function TodoTab() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all",
                 todoView === key
-                  ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
-                  : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                  ? "bg-white  text-stone-800  shadow-sm"
+                  : "text-stone-500  hover:text-stone-700  ",
               )}
             >
               <Icon size={13} />
@@ -148,7 +146,7 @@ export function TodoTab() {
         </div>
 
         {todoView === "todos" && (
-          <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+          <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
             {SPRINT_FILTERS.map((v) => (
               <button
                 key={v}
@@ -156,8 +154,8 @@ export function TodoTab() {
                 className={cn(
                   "px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all",
                   sprintFilter === v
-                    ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
-                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                    ? "bg-white  text-stone-800  shadow-sm"
+                    : "text-stone-500  hover:text-stone-700  ",
                 )}
               >
                 {v === "sprint" ? (currentSprintNumber ? `Sprint ${currentSprintNumber}` : "This Sprint") : "All"}
@@ -209,7 +207,6 @@ export function TodoTab() {
           featureMap={featureMap}
           tasksLoading={tasksLoading}
           onOpenDetail={(f) => setDetailFeature(f)}
-          onUpdateTaskPoints={(taskNumber, pts) => updateTaskPointsMut.mutate({ taskNumber, points: pts })}
         />
       )}
 
@@ -393,12 +390,12 @@ function MyTodosView({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addTodo()}
           placeholder="Add a todo..."
-          className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+          className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
         />
         <select
           value={selectedFeatureId ?? ""}
           onChange={(e) => setSelectedFeatureId(e.target.value || null)}
-          className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-600 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
+          className="px-3 py-2.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-600 focus:outline-none focus:border-accent cursor-pointer"
         >
           <option value="">No feature</option>
           {myFeatures.map((f) => (
@@ -408,7 +405,7 @@ function MyTodosView({
         <button
           onClick={addTodo}
           disabled={!input.trim() || createTodoMut.isPending}
-          className="px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+          className="px-4 py-2.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
           {createTodoMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
           Add
@@ -430,21 +427,21 @@ function MyTodosView({
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, status)}
               className={cn(
-                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
-                dragOverCol === status && "border-brand/50 bg-brand/5",
+                "rounded-xl border border-stone-200  bg-stone-50  transition-colors min-h-[200px] flex flex-col",
+                dragOverCol === status && "border-accent/50 bg-accent/5",
               )}
             >
               {/* Column header */}
-              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+              <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
-                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+                <span className="text-sm font-medium text-stone-700">{label}</span>
+                <span className="text-xs text-stone-400 ml-auto">
                   {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{prCount > 0 ? ` + ${prCount}` : ""}
                 </span>
                 {isDoneCol && doneCount > 0 && (
                   <button
                     onClick={clearDone}
-                    className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-red-500 cursor-pointer transition-colors ml-1"
+                    className="flex items-center gap-1 text-xs text-stone-400 hover:text-red-500 cursor-pointer transition-colors ml-1"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -486,7 +483,7 @@ function MyTodosView({
                   );
                 })}
                 {items.length === 0 && (
-                  <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                  <div className="text-center py-8 text-stone-300 text-xs">
                     {status === "backlog" && "New todos land here"}
                     {status !== "backlog" && "Drag items here"}
                   </div>
@@ -560,7 +557,7 @@ function MyFeaturesView({
 
   if (myFeatures.length === 0) {
     return (
-      <div className="text-center py-16 text-sm text-stone-400 dark:text-neutral-500">
+      <div className="text-center py-16 text-sm text-stone-400">
         No features assigned to you
       </div>
     );
@@ -577,15 +574,15 @@ function MyFeaturesView({
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, status)}
             className={cn(
-              "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
-              dragOverCol === status && "border-brand/50 bg-brand/5",
+              "rounded-xl border border-stone-200  bg-stone-50  transition-colors min-h-[200px] flex flex-col",
+              dragOverCol === status && "border-accent/50 bg-accent/5",
             )}
           >
             {/* Column header */}
-            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+            <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
               <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
-              <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+              <span className="text-sm font-medium text-stone-700">{label}</span>
+              <span className="text-xs text-stone-400 ml-auto">{items.length}</span>
             </div>
 
             {/* Cards */}
@@ -606,7 +603,7 @@ function MyFeaturesView({
                 />
               ))}
               {items.length === 0 && (
-                <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                <div className="text-center py-8 text-stone-300 text-xs">
                   Drag features here
                 </div>
               )}
@@ -625,13 +622,11 @@ function MyRolesView({
   featureMap,
   tasksLoading,
   onOpenDetail,
-  onUpdateTaskPoints,
 }: {
   mySprintTasks: SubIssueWithFeature[];
   featureMap: Map<number, Feature>;
   tasksLoading: boolean;
   onOpenDetail: (f: Feature) => void;
-  onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }) {
   const roleGroups = useMemo(() => {
     const byRole = new Map<string, { key: string; roleName: string; featureId: number; featureTitle: string; tasks: SubIssueWithFeature[] }>();
@@ -662,7 +657,7 @@ function MyRolesView({
 
   if (roleGroups.length === 0) {
     return (
-      <div className="text-center py-16 text-sm text-stone-400 dark:text-neutral-500">
+      <div className="text-center py-16 text-sm text-stone-400">
         No sprint tasks assigned to you
       </div>
     );
@@ -670,30 +665,27 @@ function MyRolesView({
 
   const allTasks = roleGroups.flatMap((r) => r.tasks);
   const doneCount = allTasks.filter((t) => t.state === "closed").length;
-  const totalPts = allTasks.reduce((s, t) => s + (t.points ?? 0), 0);
-  const donePts = allTasks.filter((t) => t.state === "closed").reduce((s, t) => s + (t.points ?? 0), 0);
 
   return (
     <div className="space-y-3">
       {/* Summary */}
-      <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-neutral-400">
+      <div className="flex items-center gap-3 text-xs text-stone-500">
         <span>{doneCount}/{allTasks.length} done</span>
-        {totalPts > 0 && <span>{donePts}/{totalPts} pts</span>}
       </div>
 
       {/* Role groups */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
-        <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+        <div className="divide-y divide-stone-50">
           {roleGroups.map((role) => (
             <div key={role.key} className="px-4 py-2.5">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs font-medium text-stone-600 dark:text-neutral-300">{role.roleName}</span>
+                <span className="text-xs font-medium text-stone-600">{role.roleName}</span>
                 <button
                   onClick={() => {
                     const f = featureMap.get(role.featureId);
                     if (f) onOpenDetail(f);
                   }}
-                  className="text-[10px] text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
+                  className="text-[10px] text-stone-400 hover:text-accent cursor-pointer"
                 >
                   {role.featureTitle}
                 </button>
@@ -703,12 +695,11 @@ function MyRolesView({
                   const isDone = task.state === "closed";
                   return (
                     <div key={task.id} className="flex items-center gap-2 py-0.5">
-                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
+                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-status-production" : "bg-stone-300")} />
                       <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-                        className={cn("text-sm hover:text-brand flex-1", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
+                        className={cn("text-sm hover:text-accent flex-1", isDone ? "line-through text-stone-400  " : "text-stone-700  ")}>
                         {task.title}
                       </a>
-                      <PointsSelect value={task.points ?? undefined} onChange={(pts) => onUpdateTaskPoints(task.number, pts)} />
                     </div>
                   );
                 })}
@@ -738,29 +729,24 @@ function SprintTaskCard({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-brand cursor-pointer hover:shadow-sm transition-shadow",
-        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white  border-l-[3px] border-l-accent cursor-pointer hover:shadow-sm transition-shadow",
+        isDone ? "border-stone-100  opacity-50" : "border-stone-200  ",
       )}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <Zap size={12} className="text-brand shrink-0" />
-          <span className={cn("text-sm block", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
+          <Zap size={12} className="text-accent shrink-0" />
+          <span className={cn("text-sm block", isDone && "line-through text-stone-400  ")}>
             {task.title}
           </span>
-          {task.points && (
-            <span className="ml-auto shrink-0 text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">
-              {task.points}pt
-            </span>
-          )}
         </div>
         {(featureTitle || task.roleName) && (
           <span className="flex items-center gap-2 mt-0.5 flex-wrap">
             {featureTitle && (
-              <span className="text-xs text-stone-400 dark:text-neutral-500">{featureTitle}</span>
+              <span className="text-xs text-stone-400">{featureTitle}</span>
             )}
             {task.roleName && (
-              <span className="text-xs text-stone-400 dark:text-neutral-500">/ {task.roleName}</span>
+              <span className="text-xs text-stone-400">/ {task.roleName}</span>
             )}
           </span>
         )}
@@ -777,14 +763,14 @@ function PRReviewCard({ pr }: { pr: ReviewPR }) {
       href={pr.html_url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-purple-500 cursor-pointer hover:shadow-sm transition-shadow border-stone-200 dark:border-white/[0.06]"
+      className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white border-l-[3px] border-l-status-demo cursor-pointer hover:shadow-sm transition-shadow border-stone-200"
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <GitPullRequest size={12} className="text-purple-500 shrink-0" />
+          <GitPullRequest size={12} className="text-status-demo shrink-0" />
           <span className="text-sm">{pr.title}</span>
         </div>
-        <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
+        <span className="text-xs text-stone-400 mt-0.5 block">
           {pr.repo}#{pr.number}{pr.author ? ` by ${pr.author}` : ""}
         </span>
       </div>
@@ -813,27 +799,27 @@ function IssueCard({
       onMouseDown={() => { didDrag.current = false; }}
       onClick={() => { if (!didDrag.current) onClick(); }}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised border-l-[3px] border-l-cyan-500 cursor-pointer hover:shadow-sm transition-shadow",
-        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06]",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white border-l-[3px] border-l-status-tested cursor-pointer hover:shadow-sm transition-shadow",
+        isDone ? "border-stone-100 opacity-50" : "border-stone-200",
       )}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <CircleDot size={12} className="text-cyan-500 shrink-0" />
-          <span className={cn("text-sm block truncate", isDone && "line-through text-stone-400 dark:text-neutral-500")}>
+          <CircleDot size={12} className="text-status-tested shrink-0" />
+          <span className={cn("text-sm block truncate", isDone && "line-through text-stone-400  ")}>
             {issue.title}
           </span>
           <a
             href={issue.html_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto shrink-0 text-stone-400 hover:text-brand transition-colors"
+            className="ml-auto shrink-0 text-stone-400 hover:text-accent transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             <ExternalLink size={11} />
           </a>
         </div>
-        <span className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5 block">
+        <span className="text-xs text-stone-400 mt-0.5 block">
           {issue.repo}#{issue.number}
         </span>
       </div>
@@ -844,7 +830,7 @@ function IssueCard({
 // ─── MyIssuesView ──────────────────────────────────────────────────────
 
 const ISSUE_COLUMNS: { status: "open" | "closed"; label: string; color: string }[] = [
-  { status: "open", label: "Open", color: "bg-cyan-500" },
+  { status: "open", label: "Open", color: "bg-status-tested" },
   { status: "closed", label: "Closed", color: "bg-stone-400" },
 ];
 
@@ -904,14 +890,14 @@ function MyIssuesView({
             onDragLeave={() => setDragOverCol(null)}
             onDrop={(e) => handleDrop(e, status)}
             className={cn(
-              "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] transition-colors min-h-[200px] flex flex-col",
-              dragOverCol === status && "border-brand/50 bg-brand/5",
+              "rounded-xl border border-stone-200  bg-stone-50  transition-colors min-h-[200px] flex flex-col",
+              dragOverCol === status && "border-accent/50 bg-accent/5",
             )}
           >
-            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+            <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
               <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
-              <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+              <span className="text-sm font-medium text-stone-700">{label}</span>
+              <span className="text-xs text-stone-400 ml-auto">{items.length}</span>
             </div>
             <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-260px)]">
               {items.map((issue) => (
@@ -923,7 +909,7 @@ function MyIssuesView({
                 />
               ))}
               {items.length === 0 && (
-                <div className="text-center py-8 text-stone-300 dark:text-neutral-600 text-xs">
+                <div className="text-center py-8 text-stone-300 text-xs">
                   {status === "open" ? "No open issues assigned to you" : "No closed issues"}
                 </div>
               )}
@@ -973,14 +959,14 @@ function IssueDetailModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <div className="flex items-center gap-2 min-w-0">
-            <CircleDot size={16} className="text-cyan-500 shrink-0" />
-            <span className="text-lg font-semibold text-stone-800 dark:text-neutral-200 truncate">
+            <CircleDot size={16} className="text-status-tested shrink-0" />
+            <span className="text-lg font-semibold text-stone-800 truncate">
               {issue.title}
             </span>
           </div>
@@ -989,12 +975,12 @@ function IssueDetailModal({
               href={issue.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
+              className="text-stone-400 hover:text-accent transition-colors"
               title="View on GitHub"
             >
               <ExternalLink size={16} />
             </a>
-            <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1002,14 +988,12 @@ function IssueDetailModal({
 
         <div className="px-5 py-4 space-y-4">
           {/* Meta */}
-          <div className="flex items-center gap-3 flex-wrap text-xs text-stone-500 dark:text-neutral-400">
+          <div className="flex items-center gap-3 flex-wrap text-xs text-stone-500">
             <span className="font-medium">{issue.repo}#{issue.number}</span>
             <span className={cn(
-              "px-2 py-0.5 rounded-full text-[10px] font-medium",
-              issue.state === "open"
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                : "bg-stone-100 text-stone-600 dark:bg-white/[0.06] dark:text-neutral-400",
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-100 text-stone-700",
             )}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", issue.state === "open" ? "bg-status-tested" : "bg-stone-400")} />
               {issue.state}
             </span>
             {issue.labels.map((l) => (
@@ -1025,19 +1009,19 @@ function IssueDetailModal({
 
           {/* Body / Description */}
           <div>
-            <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1.5">Description</span>
+            <span className="text-xs text-stone-500 block mb-1.5">Description</span>
             {loading && (
-              <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 flex justify-center">
+              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-8 flex justify-center">
                 <Spinner />
               </div>
             )}
             {!loading && body && (
-              <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
+              <pre className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
                 {body}
               </pre>
             )}
             {!loading && !body && (
-              <div className="rounded-lg border border-dashed border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 text-center text-sm text-stone-400 dark:text-neutral-500">
+              <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 No description provided.
               </div>
             )}
@@ -1073,15 +1057,15 @@ function TodoCard({
       onMouseDown={() => { didDrag.current = false; }}
       onClick={() => { if (!didDrag.current) onClick(); }}
       className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white dark:bg-dark-raised cursor-pointer hover:shadow-sm transition-shadow",
-        isDone ? "border-stone-100 dark:border-white/[0.06] opacity-50" : "border-stone-200 dark:border-white/[0.06] hover:border-stone-300 dark:hover:border-white/[0.1]",
+        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white  cursor-pointer hover:shadow-sm transition-shadow",
+        isDone ? "border-stone-100  opacity-50" : "border-stone-200  hover:border-stone-300  ",
       )}
     >
       <div className="flex-1 min-w-0">
         <span
           className={cn(
             "text-sm block",
-            isDone && "line-through text-stone-400 dark:text-neutral-500",
+            isDone && "line-through text-stone-400  ",
           )}
         >
           {todo.title}
@@ -1089,13 +1073,13 @@ function TodoCard({
         {feature && (
           <span className="flex items-center gap-1.5 mt-0.5">
             <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[feature.status])} />
-            <span className="text-xs text-stone-400 dark:text-neutral-500">{feature.title}</span>
+            <span className="text-xs text-stone-400">{feature.title}</span>
           </span>
         )}
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer transition-colors mt-0.5"
+        className="text-stone-300 hover:text-red-500 cursor-pointer transition-colors mt-0.5"
       >
         <X size={14} />
       </button>
@@ -1158,16 +1142,16 @@ function TodoDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="todo-detail-title"
-        className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <input
             id="todo-detail-title"
             value={todo.title}
             onChange={(e) => onUpdate({ title: e.target.value })}
-            className="text-lg font-semibold text-stone-800 dark:text-neutral-200 bg-transparent border-none outline-none focus:ring-0 w-full"
+            className="text-lg font-semibold text-stone-800 bg-transparent border-none outline-none focus:ring-0 w-full"
           />
           <div className="flex items-center gap-2 shrink-0">
             {todo.html_url && (
@@ -1175,13 +1159,13 @@ function TodoDetailModal({
                 href={todo.html_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-stone-400 dark:text-neutral-500 hover:text-brand transition-colors"
+                className="text-stone-400 hover:text-accent transition-colors"
                 title="View on GitHub"
               >
                 <ExternalLink size={16} />
               </a>
             )}
-            <button onClick={onClose} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1191,11 +1175,11 @@ function TodoDetailModal({
           {/* Meta row */}
           <div className="flex items-center gap-4 flex-wrap">
             <div>
-              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Feature</span>
+              <span className="text-xs text-stone-500 block mb-1">Feature</span>
               <select
                 value={todo.featureId ? String(todo.featureId) : ""}
                 onChange={(e) => onUpdate({ featureId: e.target.value ? parseInt(e.target.value) : null })}
-                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
               >
                 <option value="">None</option>
                 {allFeatures.map((f) => (
@@ -1204,11 +1188,11 @@ function TodoDetailModal({
               </select>
             </div>
             <div>
-              <span className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Status</span>
+              <span className="text-xs text-stone-500 block mb-1">Status</span>
               <select
                 value={todo.status}
                 onChange={(e) => onUpdate({ status: e.target.value as TodoStatus })}
-                className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-700 dark:text-neutral-300 focus:outline-none focus:border-brand cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
               >
                 {TODO_COLUMNS.map((c) => (
                   <option key={c.status} value={c.status}>{c.label}</option>
@@ -1219,7 +1203,7 @@ function TodoDetailModal({
 
           {/* Linked feature info */}
           {feature && (
-            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
+            <div className="flex items-center gap-2 text-xs text-stone-500">
               <span className={cn("w-2 h-2 rounded-full", STATUS_DOT[feature.status])} />
               Feature: {feature.title}
             </div>
@@ -1228,14 +1212,14 @@ function TodoDetailModal({
           {/* Implementation Plan */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500 dark:text-neutral-400">Implementation Plan</span>
+              <span className="text-xs text-stone-500">Implementation Plan</span>
               <div className="flex items-center gap-2">
                 {planUrl && plan !== null && (
                   <a
                     href={planUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1"
+                    className="text-xs text-stone-400 hover:text-accent flex items-center gap-1"
                     title="View on GitHub"
                   >
                     <ExternalLink size={12} />
@@ -1244,7 +1228,7 @@ function TodoDetailModal({
                 {!planLoading && !editMode && plan !== null && (
                   <button
                     onClick={() => { setEditContent(plan); setEditMode(true); setSaveError(null); }}
-                    className="text-xs text-stone-400 dark:text-neutral-500 hover:text-brand flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-stone-400 hover:text-accent flex items-center gap-1 cursor-pointer"
                   >
                     <Pencil size={12} />
                     Edit
@@ -1254,19 +1238,19 @@ function TodoDetailModal({
             </div>
 
             {planLoading && (
-              <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 flex justify-center">
+              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-8 flex justify-center">
                 <Spinner />
               </div>
             )}
 
             {!planLoading && !editMode && plan === null && (
-              <div className="rounded-lg border border-dashed border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-8 text-center text-sm text-stone-400 dark:text-neutral-500">
+              <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-400">
                 <FileText size={20} className="mx-auto mb-2 text-stone-300" />
                 No plan found.
                 <br />
                 <button
                   onClick={() => { setEditContent(""); setEditMode(true); setSaveError(null); }}
-                  className="mt-2 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 cursor-pointer"
+                  className="mt-2 px-3 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent/90 cursor-pointer"
                 >
                   Create Plan
                 </button>
@@ -1274,7 +1258,7 @@ function TodoDetailModal({
             )}
 
             {!planLoading && !editMode && plan !== null && (
-              <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
+              <pre className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap overflow-y-auto max-h-[50vh]">
                 {plan}
               </pre>
             )}
@@ -1284,7 +1268,7 @@ function TodoDetailModal({
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 dark:border-white/[0.1] bg-white dark:bg-dark-raised px-4 py-3 text-sm text-stone-700 dark:text-neutral-300 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[200px] max-h-[50vh]"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y min-h-[200px] max-h-[50vh]"
                   rows={12}
                 />
                 {saveError && (
@@ -1307,7 +1291,7 @@ function TodoDetailModal({
                       }
                     }}
                     disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                     {saving ? "Saving..." : "Save & Sync"}
@@ -1315,7 +1299,7 @@ function TodoDetailModal({
                   <button
                     onClick={() => { setEditMode(false); setSaveError(null); }}
                     disabled={saving}
-                    className="px-3 py-1.5 rounded-md border border-stone-200 dark:border-white/[0.06] text-xs text-stone-600 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-white/[0.06] disabled:opacity-50 cursor-pointer"
+                    className="px-3 py-1.5 rounded-md border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 disabled:opacity-50 cursor-pointer"
                   >
                     Cancel
                   </button>

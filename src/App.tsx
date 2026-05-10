@@ -69,7 +69,7 @@ export function App() {
             <div className="text-amber-600 text-sm font-medium">{authError}</div>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 cursor-pointer"
             >
               Retry
             </button>

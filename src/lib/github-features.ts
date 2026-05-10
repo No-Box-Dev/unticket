@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
-import type { Feature, FeatureStatus, StatusHistoryEntry, Points, PersonRole, LinkedPR } from "./types";
-import { VALID_POINTS } from "./types";
+import type { Feature, FeatureStatus, StatusHistoryEntry, PersonRole, LinkedPR } from "./types";
 
 // D1-backed row shape returned by /api/features
 interface D1FeatureRow {
@@ -21,7 +20,6 @@ const REPO = "unticket";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 const ROLE_LABEL = "role";
-const POINTS_PREFIX = "points:";
 
 const FEATURE_LABELS = [
   { name: "feature", color: "1B6971", description: "Sprint/backlog feature" },
@@ -39,12 +37,6 @@ const FEATURE_LABELS = [
   { name: "status:planned", color: "34D399", description: "Scoped and planned" },
   { name: "status:deferred", color: "6B7280", description: "Deferred" },
   { name: "role", color: "6366F1", description: "Person role (sub-issue grouping)" },
-  { name: "points:1", color: "22C55E", description: "1 sprint point" },
-  { name: "points:2", color: "84CC16", description: "2 sprint points" },
-  { name: "points:3", color: "EAB308", description: "3 sprint points" },
-  { name: "points:5", color: "F97316", description: "5 sprint points" },
-  { name: "points:8", color: "EF4444", description: "8 sprint points" },
-  { name: "points:13", color: "DC2626", description: "13 sprint points" },
 ];
 
 // ---------- Metadata (hidden in issue body) ----------
@@ -359,25 +351,11 @@ export interface SubIssue {
   state: "open" | "closed";
   assignees: string[];
   html_url: string;
-  points?: Points;
   roleNumber?: number;
   closed_at?: string | null;
 }
 
-function extractPoints(labels: string[]): Points | undefined {
-  for (const l of labels) {
-    if (l.startsWith(POINTS_PREFIX)) {
-      const n = parseInt(l.slice(POINTS_PREFIX.length));
-      if (VALID_POINTS.includes(n as Points)) return n as Points;
-    }
-  }
-  return undefined;
-}
-
 function toSubIssue(issue: any): SubIssue {
-  const labelNames = (issue.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
-    .filter(Boolean) as string[];
   return {
     id: issue.id,
     number: issue.number,
@@ -385,7 +363,6 @@ function toSubIssue(issue: any): SubIssue {
     state: issue.state as "open" | "closed",
     assignees: (issue.assignees ?? []).map((a: any) => a.login),
     html_url: issue.html_url,
-    points: extractPoints(labelNames),
     closed_at: issue.closed_at ?? null,
   };
 }
@@ -544,17 +521,13 @@ export async function createTask(
   org: string,
   roleNumber: number,
   title: string,
-  points?: Points,
   assignee?: string,
 ): Promise<SubIssue> {
   const ok = getOctokit();
-  const labels: string[] = [];
-  if (points) labels.push(`${POINTS_PREFIX}${points}`);
   const { data: issue } = await ok.rest.issues.create({
     owner: org,
     repo: REPO,
     title,
-    labels,
     ...(assignee ? { assignees: [assignee] } : {}),
   });
   await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
@@ -575,27 +548,6 @@ export async function updateTaskTitle(org: string, taskNumber: number, title: st
     title,
   });
   return toSubIssue(data);
-}
-
-export async function updateTaskPoints(org: string, taskNumber: number, points: Points | undefined): Promise<SubIssue> {
-  const ok = getOctokit();
-  // Get current labels, remove old points labels, add new one
-  const { data: issue } = await ok.rest.issues.get({
-    owner: org,
-    repo: REPO,
-    issue_number: taskNumber,
-  });
-  const currentLabels = (issue.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
-    .filter((l: string) => !l.startsWith(POINTS_PREFIX));
-  if (points) currentLabels.push(`${POINTS_PREFIX}${points}`);
-  const { data: updated } = await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: taskNumber,
-    labels: currentLabels,
-  });
-  return toSubIssue(updated);
 }
 
 // ---------- Milestone management ----------

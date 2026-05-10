@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@custom-variant dark (&:where(.dark, .dark *));
 
 @font-face {
   font-family: "Aeonik";
@@ -46,19 +45,41 @@
   --font-sans: "Arbeit", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Aeonik", ui-sans-serif, system-ui, sans-serif;
 
-  --color-brand: #FE795D;
-  --color-brand-light: #FFF1EE;
-  --color-brand-dark: #E56A50;
-  --color-accent: #9B78F4;
-  --color-accent-light: #F3EFFF;
+  /* Surfaces */
   --color-surface: #fafaf9;
   --color-border: #e7e5e4;
   --color-muted: #78716c;
 
-  /* Dark mode elevation surfaces */
-  --color-dark-base: #0d1117;
-  --color-dark-raised: #181a1f;
-  --color-dark-overlay: #252830;
+  /* Single accent */
+  --color-accent: #6d5cc8;
+  --color-accent-soft: #f1eef9;
+
+  /* Status dots (muted) */
+  --color-status-plan: #94a3b8;
+  --color-status-progress: #b89464;
+  --color-status-demo: #8b7fb8;
+  --color-status-tested: #6a9991;
+  --color-status-production: #6e9970;
+  --color-status-future: #cbd5d9;
+  --color-status-scoping: #a89984;
+  --color-status-idea: #94a3b8;
+  --color-status-client: #b08d9c;
+  --color-status-technical: #8794b3;
+  --color-status-medical: #b08e8e;
+  --color-status-planned: #6e9970;
+  --color-status-deferred: #a8a29e;
+
+  /* Severity */
+  --color-severity-low: #6e9970;
+  --color-severity-mid: #b89464;
+  --color-severity-high: #b15a5a;
+
+  /* Chart palette */
+  --color-chart-1: #6d5cc8;
+  --color-chart-2: #6a8aa3;
+  --color-chart-3: #6a9991;
+  --color-chart-4: #b89464;
+  --color-chart-5: #9d7ea8;
 
   --animate-slide-in-right: slide-in-right 0.2s ease-out;
 }

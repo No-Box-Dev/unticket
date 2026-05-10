@@ -57,7 +57,7 @@ export function FeatureCard({
       aria-label={`${feature.title}, status: ${feature.status}`}
       tabIndex={draggable ? 0 : undefined}
       className={cn(
-        "group bg-white dark:bg-dark-raised rounded-lg border border-stone-200 dark:border-white/[0.06] p-3 shadow-sm hover:shadow-md transition-shadow",
+        "group bg-white  rounded-lg border border-stone-200  p-3 shadow-sm hover:shadow-md transition-shadow",
         draggable && "cursor-grab active:cursor-grabbing",
         feature.status === "production" && "opacity-60",
         !hasPlan && "border-l-2 border-l-amber-300",
@@ -66,11 +66,11 @@ export function FeatureCard({
       {/* Row 1: grip + title */}
       <div className="flex items-start gap-2">
         {draggable && (
-          <GripVertical className="w-4 h-4 text-stone-300 dark:text-neutral-600 mt-0.5 shrink-0" />
+          <GripVertical className="w-4 h-4 text-stone-300 mt-0.5 shrink-0" />
         )}
         <button
           onClick={() => onOpenDetail(feature)}
-          className="text-sm font-medium text-stone-800 dark:text-neutral-200 text-left cursor-pointer hover:text-brand leading-snug"
+          className="text-sm font-medium text-stone-800 text-left cursor-pointer hover:text-accent leading-snug"
         >
           {feature.title}
         </button>
@@ -90,14 +90,14 @@ export function FeatureCard({
             <>
               <button
                 onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "scoping"), sprint: null }))}
-                className="p-1 text-stone-300 dark:text-neutral-600 hover:text-indigo-500 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                className="p-1 text-stone-300 hover:text-indigo-500 cursor-pointer rounded hover:bg-stone-100"
                 title="Move to Scoping"
               >
                 <ScanSearch size={13} />
               </button>
               <button
                 onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }))}
-                className="p-1 text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                className="p-1 text-stone-300 hover:text-stone-500 cursor-pointer rounded hover:bg-stone-100"
                 title="Move to Backlog"
               >
                 <Archive size={13} />
@@ -107,7 +107,7 @@ export function FeatureCard({
           {mode === "scoping" && currentSprint && (
             <button
               onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }))}
-              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+              className="p-1 text-stone-300 hover:text-accent cursor-pointer rounded hover:bg-stone-100"
               title="Convert to Sprint Feature"
             >
               <Rocket size={13} />
@@ -116,7 +116,7 @@ export function FeatureCard({
           {mode === "backlog" && currentSprint && (
             <button
               onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "plan"), sprint: currentSprint }))}
-              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-brand cursor-pointer rounded hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+              className="p-1 text-stone-300 hover:text-accent cursor-pointer rounded hover:bg-stone-100"
               title="Move to Sprint"
             >
               <ArrowUpFromLine size={13} />
@@ -125,7 +125,7 @@ export function FeatureCard({
           {isAdmin && (
             <button
               onClick={stop(() => onDelete(feature.id))}
-              className="p-1 text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 dark:hover:bg-red-950 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1 text-stone-300 hover:text-red-500 cursor-pointer rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Remove"
             >
               <Trash2 size={13} />

@@ -130,7 +130,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   if (membersLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="w-6 h-6 text-brand" />
+        <Spinner className="w-6 h-6 text-accent" />
       </div>
     );
   }
@@ -143,7 +143,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     <div className="space-y-4">
       {/* Engineer picker */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-stone-500 dark:text-neutral-400">Engineer</span>
+        <span className="text-sm text-stone-500">Engineer</span>
         <PersonSelect
           value={selected?.login ?? null}
           onChange={(v) => setSelectedLogin(typeof v === "string" ? v : null)}
@@ -156,7 +156,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
       {selected && (
         <div className="space-y-4">
           {/* Header with embedded metrics */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               {selected.avatar_url ? (
                 <img src={selected.avatar_url} className="w-12 h-12 rounded-full shrink-0" alt="" />
@@ -166,16 +166,16 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
                 </div>
               )}
               <div className="min-w-0">
-                <h2 className="text-lg font-bold text-stone-900 dark:text-neutral-100 font-display truncate">{selected.name}</h2>
+                <h2 className="text-lg font-bold text-stone-900 font-display truncate">{selected.name}</h2>
                 {(selected.role || selected.team) && (
                   <p className="text-sm text-stone-400 truncate">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
                 )}
                 {selected.description && (
-                  <p className="text-sm text-stone-500 dark:text-neutral-400 mt-0.5 line-clamp-2">{selected.description}</p>
+                  <p className="text-sm text-stone-500 mt-0.5 line-clamp-2">{selected.description}</p>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:dark:border-white/[0.06] lg:pl-4">
+            <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
               <InlineMetric label="PRs" value={selected.prsMerged} color="text-purple-500" />
               <InlineMetric label="Issues" value={selected.issuesSolved} color="text-blue-500" />
               <InlineMetric label="Features" value={selected.featuresDone} color="text-green-500" />
@@ -188,8 +188,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
           <ActivityFeed items={feed} />
 
           {/* View selector + work items */}
-          <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
-            <div className="flex items-center border-b border-stone-200 dark:border-white/[0.06]">
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="flex items-center border-b border-stone-200">
               {(["features", "roles", "tasks"] as const).map((mode) => {
                 const counts = { features: selected.myFeatures.length, roles: selected.myRoles.length, tasks: selected.myTasks.length };
                 return (
@@ -199,8 +199,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
                     className={cn(
                       "px-4 py-3 text-sm font-medium capitalize transition-colors cursor-pointer",
                       viewMode === mode
-                        ? "text-brand border-b-2 border-brand"
-                        : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200",
+                        ? "text-accent border-b-2 border-accent"
+                        : "text-stone-500  hover:text-stone-700  ",
                     )}
                   >
                     {mode} ({counts[mode]})
@@ -230,8 +230,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 // ---------- View Components ----------
 
 const STATUS_COLORS: Record<string, string> = {
-  plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500",
-  tested: "bg-cyan-500", production: "bg-green-500", future: "bg-stone-300",
+  plan: "bg-status-plan", in_progress: "bg-status-progress", demo: "bg-status-demo",
+  tested: "bg-status-tested", production: "bg-status-production", future: "bg-status-future",
 };
 const STATUS_LABELS: Record<string, string> = {
   plan: "Plan", in_progress: "In Progress", demo: "Demo",
@@ -256,11 +256,11 @@ function FeaturesView({ features, tasks }: {
           <div key={f.id}>
             <button
               onClick={() => setExpandedId(isExpanded ? null : f.id)}
-              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
             >
               {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
               <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[f.status])} />
-              <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1 truncate">{f.title}</span>
+              <span className="text-sm text-stone-700 flex-1 truncate">{f.title}</span>
               <span className="text-xs text-stone-400">{STATUS_LABELS[f.status]}</span>
               {featureTasks.length > 0 && (
                 <span className="text-xs text-stone-400">{doneCount}/{featureTasks.length}</span>
@@ -296,11 +296,11 @@ function RolesView({ roles, tasks, featureMap }: {
           <div key={role.number}>
             <button
               onClick={() => setExpandedRole(isExpanded ? null : role.number)}
-              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
             >
               {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
               <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-              <span className="text-sm text-stone-700 dark:text-neutral-300 flex-1 truncate">{role.name}</span>
+              <span className="text-sm text-stone-700 flex-1 truncate">{role.name}</span>
               {feature && <span className="text-xs text-stone-400 truncate max-w-[150px]">{feature.title}</span>}
               {roleTasks.length > 0 && (
                 <span className="text-xs text-stone-400">{doneCount}/{roleTasks.length}</span>
@@ -347,21 +347,20 @@ function TasksView({ tasks, featureMap }: {
           <div key={featureId}>
             <button
               onClick={() => setExpandedFeatureId(isExpanded ? null : featureId)}
-              className="w-full flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer text-left"
+              className="w-full flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
             >
               {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
               <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[feature?.status ?? "plan"])} />
-              <span className="text-xs text-stone-500 dark:text-neutral-400 shrink-0">{feature?.title ?? `Feature #${featureId}`}</span>
+              <span className="text-xs text-stone-500 shrink-0">{feature?.title ?? `Feature #${featureId}`}</span>
               <span className="text-xs text-stone-400 ml-auto">{doneCount}/{featureTasks.length}</span>
             </button>
             {isExpanded && (
               <div className="ml-7 space-y-1 mb-2">
                 {featureTasks.map((t) => (
                   <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-green-500" : "bg-blue-400")} />
-                    <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700 dark:text-neutral-300")}>{t.title}</span>
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-status-production" : "bg-status-progress")} />
+                    <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700  ")}>{t.title}</span>
                     {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
-                    {t.points && <span className="text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">{t.points}pt</span>}
                   </div>
                 ))}
                 <LinkedPRsPanel featureId={featureId} />
@@ -383,10 +382,9 @@ function FeatureDetail({ featureId, tasks }: { featureId: number; tasks: SubIssu
         <div className="space-y-1">
           {tasks.map((t) => (
             <div key={t.id} className="flex items-center gap-2 py-1.5 px-2">
-              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-green-500" : "bg-blue-400")} />
-              <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700 dark:text-neutral-300")}>{t.title}</span>
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.state === "closed" ? "bg-status-production" : "bg-status-progress")} />
+              <span className={cn("text-sm flex-1 truncate", t.state === "closed" ? "text-stone-400 line-through" : "text-stone-700  ")}>{t.title}</span>
               {t.roleName && <span className="text-[10px] text-stone-400">{t.roleName}</span>}
-              {t.points && <span className="text-[10px] font-medium bg-brand/10 text-brand px-1.5 py-0.5 rounded">{t.points}pt</span>}
             </div>
           ))}
         </div>
@@ -403,8 +401,8 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
   if (!prs || prs.length === 0) return null;
 
   return (
-    <div className="border-t border-stone-100 dark:border-white/[0.06] pt-2 mt-1">
-      <span className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider px-2">Linked PRs</span>
+    <div className="border-t border-stone-100 pt-2 mt-1">
+      <span className="text-[10px] text-stone-400 uppercase tracking-wider px-2">Linked PRs</span>
       <div className="space-y-0.5 mt-1">
         {prs.map((pr) => {
           const isMerged = pr.state === "closed" || (pr as any).merged_at;
@@ -415,17 +413,17 @@ function LinkedPRsPanel({ featureId }: { featureId: number }) {
               href={pr.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-stone-50 dark:hover:bg-white/[0.06] group"
+              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-stone-50 group"
             >
               {isMerged
                 ? <GitMerge size={12} className="text-purple-500 shrink-0" />
                 : <GitPullRequest size={12} className="text-green-500 shrink-0" />
               }
               <span className="text-xs text-stone-400 shrink-0">{pr.repo}#{pr.number}</span>
-              <span className="text-xs text-stone-600 dark:text-neutral-300 truncate flex-1">{pr.title}</span>
+              <span className="text-xs text-stone-600 truncate flex-1">{pr.title}</span>
               {source && (
                 <span className={cn("text-[9px] px-1 py-0.5 rounded-full shrink-0",
-                  source === "branch" ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-stone-100 dark:bg-white/[0.06] text-stone-500"
+                  source === "branch" ? "bg-blue-50  text-blue-600  " : "bg-stone-100  text-stone-500"
                 )}>{source}</span>
               )}
               <ExternalLink size={10} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
@@ -470,14 +468,14 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
   }), [items]);
 
   return (
-    <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-white/[0.06]">
+    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
           </span>
-          <h3 className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Live activity</h3>
+          <h3 className="text-sm font-semibold text-stone-700">Live activity</h3>
           <span className="text-xs text-stone-400">last 30 days</span>
         </div>
         <div className="flex items-center gap-1 text-xs">
@@ -488,8 +486,8 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
               className={cn(
                 "px-2 py-1 rounded transition-colors capitalize cursor-pointer",
                 filter === f
-                  ? "bg-brand/10 text-brand"
-                  : "text-stone-500 dark:text-neutral-400 hover:bg-stone-100 dark:hover:bg-white/[0.06]",
+                  ? "bg-accent/10 text-accent"
+                  : "text-stone-500  hover:bg-stone-100  ",
               )}
             >
               {f === "prs" ? "PRs" : f} ({counts[f]})
@@ -501,18 +499,18 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
       {visible.length === 0 ? (
         <div className="p-6 text-center text-sm text-stone-400">No activity in the last 30 days.</div>
       ) : (
-        <ol className="divide-y divide-stone-100 dark:divide-white/[0.06] max-h-[420px] overflow-y-auto">
+        <ol className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto">
           {visible.map((item) => (
             <li key={`${item.kind}:${item.repo}#${item.number}:${item.at}`}>
               <a
                 href={item.html_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 dark:hover:bg-white/[0.06] group"
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
               >
                 <FeedIcon kind={item.kind} />
                 <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
-                <span className="text-sm text-stone-700 dark:text-neutral-300 truncate flex-1">{item.title}</span>
+                <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
                 <span className="text-xs text-stone-400 shrink-0">{labelFor(item.kind)}</span>
                 <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
                 <ExternalLink size={12} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />

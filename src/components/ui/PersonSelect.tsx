@@ -107,10 +107,10 @@ export function PersonSelect({
         onClick={handleToggle}
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer",
-          "focus:outline-none focus:ring-2 focus:ring-brand/30",
+          "focus:outline-none focus:ring-2 focus:ring-accent/30",
           hasValue
-            ? "border-brand/30 bg-brand/5 text-brand dark:bg-brand/10"
-            : "border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-600 dark:text-neutral-400 hover:border-stone-300 dark:hover:border-white/[0.1]",
+            ? "border-accent/30 bg-accent/5 text-accent  "
+            : "border-stone-200  bg-white  text-stone-600  hover:border-stone-300  ",
           className,
         )}
       >
@@ -139,7 +139,7 @@ export function PersonSelect({
       {open && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[200] bg-white dark:bg-dark-overlay border border-stone-200 dark:border-white/[0.06] rounded-lg shadow-lg overflow-hidden"
+          className="fixed z-[200] bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden"
           style={{
             left: pos.left,
             width: pos.width,
@@ -160,23 +160,23 @@ export function PersonSelect({
                   className={cn(
                     "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors cursor-pointer text-left",
                     isSelected
-                      ? "bg-brand/5 text-brand"
-                      : "text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-white/[0.06]",
+                      ? "bg-accent/5 text-accent"
+                      : "text-stone-600  hover:bg-stone-50  ",
                   )}
                 >
                   {multi && (
                     <div className={cn(
                       "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
                       isSelected
-                        ? "bg-brand border-brand"
-                        : "border-stone-300 dark:border-neutral-600",
+                        ? "bg-accent border-accent"
+                        : "border-stone-300  ",
                     )}>
                       {isSelected && <Check className="w-3 h-3 text-white" />}
                     </div>
                   )}
                   <span className="truncate">{opt.label}</span>
                   {!multi && isSelected && (
-                    <Check className="w-3.5 h-3.5 ml-auto shrink-0 text-brand" />
+                    <Check className="w-3.5 h-3.5 ml-auto shrink-0 text-accent" />
                   )}
                 </button>
               );

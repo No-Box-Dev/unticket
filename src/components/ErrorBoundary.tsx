@@ -32,15 +32,15 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 mb-2">
+          <h2 className="text-lg font-semibold text-stone-800 mb-2">
             Something went wrong
           </h2>
-          <p className="text-sm text-stone-500 dark:text-neutral-400 mb-4 max-w-md">
+          <p className="text-sm text-stone-500 mb-4 max-w-md">
             {this.state.error?.message || "An unexpected error occurred while rendering this section."}
           </p>
           <button
             onClick={this.handleRetry}
-            className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 cursor-pointer"
           >
             Retry
           </button>

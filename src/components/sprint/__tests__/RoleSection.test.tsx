@@ -22,7 +22,6 @@ const mockTasks: SubIssue[] = [
     state: "open",
     assignees: ["alice"],
     html_url: "https://github.com/org/unticket/issues/20",
-    points: 3,
     roleNumber: 10,
   },
   {
@@ -32,7 +31,6 @@ const mockTasks: SubIssue[] = [
     state: "closed",
     assignees: [],
     html_url: "https://github.com/org/unticket/issues/21",
-    points: 2,
     roleNumber: 10,
   },
 ];
@@ -40,11 +38,8 @@ const mockTasks: SubIssue[] = [
 const defaultProps = {
   role: mockRole,
   tasks: mockTasks,
-  totalPoints: 5,
-  donePoints: 2,
   onToggleTask: vi.fn(),
   onDeleteTask: vi.fn(),
-  onUpdateTaskPoints: vi.fn(),
   onUpdateTaskTitle: vi.fn(),
   onAddTask: vi.fn(),
   onDeleteRole: vi.fn(),

@@ -97,8 +97,8 @@ export function ReleasesTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200 font-display">Releases</h2>
-          <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">
+          <h2 className="text-lg font-semibold text-stone-800 font-display">Releases</h2>
+          <p className="text-xs text-stone-400 mt-0.5">
             {totalShipped} feature{totalShipped !== 1 ? "s" : ""} shipped
           </p>
         </div>
@@ -108,36 +108,36 @@ export function ReleasesTab() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => setViewMonth((m) => m.month === 0 ? { year: m.year - 1, month: 11 } : { ...m, month: m.month - 1 })}
-          className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"
         >
-          <ChevronLeft size={16} className="text-stone-500 dark:text-neutral-400" />
+          <ChevronLeft size={16} className="text-stone-500" />
         </button>
-        <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200 min-w-[140px] text-center">
+        <span className="text-sm font-semibold text-stone-800 min-w-[140px] text-center">
           {MONTH_NAMES[viewMonth.month]} {viewMonth.year}
         </span>
         <button
           onClick={() => setViewMonth((m) => m.month === 11 ? { year: m.year + 1, month: 0 } : { ...m, month: m.month + 1 })}
-          className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"
         >
-          <ChevronRight size={16} className="text-stone-500 dark:text-neutral-400" />
+          <ChevronRight size={16} className="text-stone-500" />
         </button>
         <button
           onClick={() => {
             const now = new Date();
             setViewMonth({ year: now.getFullYear(), month: now.getMonth() });
           }}
-          className="ml-2 px-2.5 py-1 text-xs font-medium text-stone-500 dark:text-neutral-400 bg-stone-100 dark:bg-dark-overlay rounded-lg hover:bg-stone-200 dark:hover:bg-white/[0.1] transition-colors"
+          className="ml-2 px-2.5 py-1 text-xs font-medium text-stone-500 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
         >
           Today
         </button>
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
         {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-stone-100 dark:border-white/[0.06]">
+        <div className="grid grid-cols-7 border-b border-stone-100">
           {WEEKDAYS.map((day) => (
-            <div key={day} className="px-2 py-2 text-center text-[10px] font-semibold text-stone-400 dark:text-neutral-500 uppercase tracking-wider">
+            <div key={day} className="px-2 py-2 text-center text-[10px] font-semibold text-stone-400 uppercase tracking-wider">
               {day}
             </div>
           ))}
@@ -147,7 +147,7 @@ export function ReleasesTab() {
         <div className="grid grid-cols-7">
           {calendarDays.map((date, i) => {
             if (!date) {
-              return <div key={`empty-${i}`} className="min-h-[100px] bg-stone-50/50 dark:bg-white/[0.01] border-b border-r border-stone-100 dark:border-white/[0.04]" />;
+              return <div key={`empty-${i}`} className="min-h-[100px] bg-stone-50/50 border-b border-r border-stone-100" />;
             }
 
             const key = toDateKey(date);
@@ -161,18 +161,18 @@ export function ReleasesTab() {
                 key={key}
                 onClick={() => setSelectedDate(isSelected ? null : key)}
                 className={cn(
-                  "min-h-[100px] p-1.5 border-b border-r border-stone-100 dark:border-white/[0.04] text-left transition-colors relative",
+                  "min-h-[100px] p-1.5 border-b border-r border-stone-100  text-left transition-colors relative",
                   isSelected
-                    ? "bg-brand/5 dark:bg-brand/10"
+                    ? "bg-accent/5  "
                     : hasShips
-                      ? "hover:bg-green-50 dark:hover:bg-green-950/30"
-                      : "hover:bg-stone-50 dark:hover:bg-white/[0.02]",
+                      ? "hover:bg-green-50  "
+                      : "hover:bg-stone-50  ",
                 )}
               >
                 <span className={cn(
                   "text-xs font-medium inline-flex items-center justify-center w-6 h-6 rounded-full",
-                  isToday && "bg-brand text-white",
-                  !isToday && "text-stone-600 dark:text-neutral-400",
+                  isToday && "bg-accent text-white",
+                  !isToday && "text-stone-600  ",
                 )}>
                   {date.getDate()}
                 </span>
@@ -185,7 +185,7 @@ export function ReleasesTab() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="flex items-start gap-1 px-1 py-0.5 bg-green-100 dark:bg-green-900/40 rounded text-[10px] text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                        className="flex items-start gap-1 px-1 py-0.5 bg-green-100 rounded text-[10px] text-green-700 hover:bg-green-200 transition-colors"
                       >
                         <Rocket size={9} className="shrink-0 mt-0.5" />
                         <span>{f.title}</span>
@@ -201,28 +201,28 @@ export function ReleasesTab() {
 
       {/* Selected day detail */}
       {selectedDate && (
-        <div className="bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200 mb-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-stone-800 mb-3">
             {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-            <span className="ml-2 text-xs font-normal text-stone-400 dark:text-neutral-500">
+            <span className="ml-2 text-xs font-normal text-stone-400">
               {selectedFeatures.length} feature{selectedFeatures.length !== 1 ? "s" : ""} shipped
             </span>
           </h3>
           {selectedFeatures.length === 0 ? (
-            <p className="text-xs text-stone-400 dark:text-neutral-500">No features shipped on this day</p>
+            <p className="text-xs text-stone-400">No features shipped on this day</p>
           ) : (
             <div className="space-y-2">
               {selectedFeatures.map((f) => (
                 <div
                   key={f.id}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-stone-100 dark:border-white/[0.06] hover:border-stone-200 dark:hover:border-white/[0.1] transition-colors"
+                  className="flex items-start gap-3 p-3 rounded-lg border border-stone-100 hover:border-stone-200 transition-colors"
                 >
-                  <div className="p-1.5 bg-green-50 dark:bg-green-950 rounded-lg shrink-0 mt-0.5">
-                    <Rocket size={14} className="text-green-600 dark:text-green-400" />
+                  <div className="p-1.5 bg-green-50 rounded-lg shrink-0 mt-0.5">
+                    <Rocket size={14} className="text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-stone-800 dark:text-neutral-200 truncate">
+                      <span className="text-sm font-medium text-stone-800 truncate">
                         {f.title}
                       </span>
                       {f.url && (
@@ -230,14 +230,14 @@ export function ReleasesTab() {
                           href={f.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-stone-400 hover:text-brand transition-colors shrink-0"
+                          className="text-stone-400 hover:text-accent transition-colors shrink-0"
                         >
                           <ExternalLink size={12} />
                         </a>
                       )}
                     </div>
                     {f.owners.length > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 mt-1">
+                      <span className="flex items-center gap-1 text-xs text-stone-400 mt-1">
                         <Users size={11} />
                         {f.owners.map(nameOf).join(", ")}
                       </span>
