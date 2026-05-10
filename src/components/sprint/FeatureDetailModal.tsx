@@ -6,7 +6,10 @@ import { AssignDropdown } from "./AssignDropdown";
 import { usePRsForFeature, useLinkPR, useUnlinkPR } from "@/hooks/useGitHub";
 import { fetchAllPRs } from "@/lib/github";
 import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
-import type { Feature } from "@/lib/types";
+import { withStatusTransition } from "@/lib/github-features";
+import type { Feature, FeatureStatus } from "@/lib/types";
+
+const STATUS_OPTIONS: FeatureStatus[] = ["todo", "staging", "ready", "production", "future"];
 
 // ---------- Component ----------
 
@@ -15,10 +18,9 @@ interface FeatureDetailModalProps {
   allPeople: string[];
   onClose: () => void;
   onUpdate: (updated: Feature) => void;
-  sprintOptions?: { value: number | null; label: string }[];
 }
 
-export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, sprintOptions }: FeatureDetailModalProps) {
+export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -142,25 +144,21 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate, spri
           {/* Meta row */}
           <div className="flex items-center gap-4 flex-wrap">
             <div>
-              <span className="text-xs text-stone-500 block mb-1">Sprint</span>
-              {sprintOptions ? (
-                <select
-                  value={draft.sprint ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const sprint = val === "" ? null : Number(val);
-                    const status = sprint === null ? "future" : (draft.status === "future" ? "todo" : draft.status);
-                    update({ sprint, status });
-                  }}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
-                >
-                  {sprintOptions.map((opt) => (
-                    <option key={opt.value ?? "backlog"} value={opt.value ?? ""}>{opt.label}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-sm text-stone-700">{draft.sprint ?? "Backlog"}</span>
-              )}
+              <span className="text-xs text-stone-500 block mb-1">Status</span>
+              <select
+                value={draft.status}
+                onChange={(e) => {
+                  const next = withStatusTransition(draft, e.target.value as FeatureStatus);
+                  setDraft(next);
+                  hasUnsavedChanges.current = true;
+                  save(next);
+                }}
+                className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{SHARED_STATUS_LABELS[s]}</option>
+                ))}
+              </select>
             </div>
             <div>
               <span className="text-xs text-stone-500 block mb-1">Owners</span>

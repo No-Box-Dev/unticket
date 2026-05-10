@@ -121,7 +121,7 @@ export async function onRequestPost(context) {
 
   try {
     // Record into the events log first (additive — failure here must not
-    // break the existing sprint-board upserts below). owner_id matches
+    // break the feature/PR/issue upserts below). owner_id matches
     // NoxLink's text convention (org github_login).
     try {
       const stored = await storeEvent(db, event, deliveryId, payload, orgLogin);

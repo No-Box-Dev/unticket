@@ -15,10 +15,10 @@ const FILE_PATH = "CLAUDE.md";
 function buildPreamble(org: string): string {
   return `This organisation uses [unticket.ai](https://app.unticket.ai) for project management.
 
-### Features & Sprints
+### Features
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/unticket\`](https://github.com/${org}/unticket) (not this repo)
 - Each feature issue has labels for status (\`status:todo\`, \`status:staging\`, \`status:ready\`, \`status:production\`, \`status:future\`)
-- Owners are the issue's assignees. Sprints are GitHub Milestones named "Sprint N"
+- Owners are the issue's assignees
 - Feature plans live in the issue body as Markdown
 - List features: \`gh issue list --repo ${org}/unticket --label feature\`
 - View a feature: \`gh issue view <number> --repo ${org}/unticket\`

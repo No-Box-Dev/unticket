@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
-import { usePeople, useSprint, useFeatures } from "@/hooks/useConfigRepo";
+import { usePeople, useFeatures } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
@@ -22,7 +22,6 @@ function formatRelative(iso: string): string {
 
 export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
-  const { data: sprint } = useSprint();
   const { data: features } = useFeatures();
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
   const { data: allPRs } = useAllPRs(repoNames);
@@ -30,10 +29,10 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
 
-  const sprintFeatures = useMemo(() => {
-    if (!features || !sprint) return [];
-    return features.filter((f) => f.sprint === sprint.number);
-  }, [features, sprint]);
+  const activeFeatures = useMemo(() => {
+    if (!features) return [];
+    return features.filter((f) => f.status !== "future");
+  }, [features]);
 
   // Build engineer list
   const engineers = useMemo(() => {
@@ -47,7 +46,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
-      const myFeatures = sprintFeatures.filter((f) => f.owners.includes(member.login));
+      const myFeatures = activeFeatures.filter((f) => f.owners.includes(member.login));
       const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
       const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
@@ -65,7 +64,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         featuresDone,
       };
     });
-  }, [orgMembers, people, sprintFeatures, allPRs, closedIssues]);
+  }, [orgMembers, people, activeFeatures, allPRs, closedIssues]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -180,10 +179,10 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         {/* Activity feed */}
         <ActivityFeed items={feed} />
 
-        {/* Sprint features */}
+        {/* Active features */}
         <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
           <div className="flex items-center border-b border-stone-200 px-4 py-3">
-            <h3 className="text-sm font-semibold text-stone-700">Sprint features ({selected.myFeatures.length})</h3>
+            <h3 className="text-sm font-semibold text-stone-700">Active features ({selected.myFeatures.length})</h3>
           </div>
           <div className="p-4">
             <FeaturesView features={selected.myFeatures} />

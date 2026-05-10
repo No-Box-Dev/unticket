@@ -75,7 +75,7 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND (assignees_json = '[]' OR assignees_json IS NULL)${repoFilter}`).bind(orgId, ...repoBindings),
       // stale open count (created > 30d ago)
       context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND created_at < ?${repoFilter}`).bind(orgId, staleDate, ...repoBindings),
-      // closed since sprint start
+      // closed (optionally since a date)
       context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'closed'${closedSince ? " AND closed_at >= ?" : ""}${repoFilter}`).bind(orgId, ...(closedSince ? [closedSince] : []), ...repoBindings),
       // by repo (open)
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open'${repoFilter} GROUP BY repo ORDER BY count DESC LIMIT 15`).bind(orgId, ...repoBindings),
@@ -100,7 +100,7 @@ export async function onRequestGet(context) {
       open: results[0].results[0]?.c ?? 0,
       unassigned: results[1].results[0]?.c ?? 0,
       stale: results[2].results[0]?.c ?? 0,
-      closedSprint: results[3].results[0]?.c ?? 0,
+      closedRecent: results[3].results[0]?.c ?? 0,
       byRepo: results[4].results.map((r) => ({ ...r, critical: criticalByRepo[r.repo] ?? 0 })),
       byLabel: results[5].results,
       closedPerDay: results[6].results.map((r) => ({ ...r, critical: criticalClosedMap[r.day] ?? 0 })),

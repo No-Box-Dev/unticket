@@ -87,7 +87,7 @@ export interface AssignedIssue {
 
 export type FeatureStatus = "todo" | "staging" | "ready" | "production" | "future";
 
-/** Ordered feature statuses for the sprint kanban (excludes "future" which is backlog-only). */
+/** Ordered feature statuses for the kanban board (excludes "future" which is hidden from the board). */
 export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["todo", "staging", "ready", "production"];
 
 /** Tailwind background color class for each feature status dot/indicator (muted palette). */
@@ -108,14 +108,6 @@ export const STATUS_LABELS: Record<FeatureStatus, string> = {
   future: "Future",
 };
 
-export interface SprintConfig {
-  number: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-  focus: string;
-}
-
 export interface StatusHistoryEntry {
   status: FeatureStatus;
   timestamp: string; // ISO 8601
@@ -131,7 +123,6 @@ export interface Feature {
   title: string;
   owners: string[];
   status: FeatureStatus;
-  sprint: number | null;
   plan?: string;
   url?: string;
   updatedAt?: string;
@@ -151,58 +142,6 @@ export interface OrgSettings {
   draftRepos?: string[];
   excludedMembers?: string[];
   unticketRepo?: string;
-}
-
-// Sprint snapshots
-export interface SprintSnapshot {
-  sprintNumber: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-  focus: string;
-  metrics: {
-    prsMerged: number;
-    issuesCreated: number;
-    issuesClosed: number;
-    featuresCompleted: number;
-    featuresCarriedOver: number;
-    tasksDone: number;
-    tasksOpen: number;
-    rolesCompleted: number;
-    totalRoles: number;
-  };
-  features: {
-    title: string;
-    status: FeatureStatus;
-    owners: string[];
-  }[];
-  /** Per-engineer breakdown saved at sprint close */
-  engineers?: {
-    login: string;
-    tasksDone: number;
-    tasksOpen: number;
-    prsMerged: number;
-    issuesClosed: number;
-  }[];
-  /** All PRs merged during this sprint */
-  prsMerged?: {
-    number: number;
-    title: string;
-    repo: string;
-    author: string;
-    mergedAt: string;
-    url?: string;
-  }[];
-  /** All issues closed during this sprint */
-  issuesClosed?: {
-    number: number;
-    title: string;
-    repo: string;
-    closedBy?: string;
-    closedAt: string;
-    url?: string;
-  }[];
-  createdAt: string;
 }
 
 // Extended issue info with repo context

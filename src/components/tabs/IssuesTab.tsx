@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
-import { useSprint, useSettings } from "@/hooks/useConfigRepo";
+import { useSettings } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -65,9 +65,17 @@ interface IssuesTabProps {
   navFilter?: import("@/lib/types").NavFilter | null;
 }
 
+const RECENT_WINDOW_DAYS = 30;
+
+function recentClosedSince(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - RECENT_WINDOW_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
 export function IssuesTab({ navFilter }: IssuesTabProps) {
   const qc = useQueryClient();
-  const { data: sprint, isLoading: sprintLoading } = useSprint();
+  const closedSince = useMemo(() => recentClosedSince(), []);
   const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
@@ -111,7 +119,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   // Stats for dashboard cards + charts (reactive to repo filter)
   const { data: stats } = useIssueStats(
-    sprint?.startDate,
+    closedSince,
     filteredRepos,
   );
 
@@ -160,7 +168,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     sortDir,
   });
 
-  // Closed issues query (since sprint start)
+  // Closed issues query (recent window)
   const {
     data: closedData,
     isLoading: closedLoading,
@@ -175,8 +183,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
     label: labelFilter !== "all" ? labelFilter : undefined,
     sort: sortKey,
     sortDir,
-    closedSince: sprint?.startDate,
-  }, !!sprint?.startDate);
+    closedSince,
+  });
 
   const resetPages = () => {
     setOpenPage(1);
@@ -235,7 +243,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const openPages = Math.ceil(openTotal / PAGE_SIZE);
   const closedPages = Math.ceil(closedTotal / PAGE_SIZE);
 
-  const isLoading = openLoading || closedLoading || sprintLoading;
+  const isLoading = openLoading || closedLoading;
 
   const syncDone = syncProgress?.phase === "done";
   const syncError = syncProgress?.phase === "error";
@@ -366,8 +374,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           loading={!stats}
         />
         <StatCard
-          label="Closed This Sprint"
-          value={stats?.closedSprint ?? 0}
+          label="Closed (30d)"
+          value={stats?.closedRecent ?? 0}
           icon={<CircleCheck className="w-4 h-4 text-accent" />}
           accent="accent"
           loading={!stats}
@@ -692,7 +700,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                         colSpan={8}
                         className="px-4 py-2 text-xs font-medium text-stone-400 uppercase tracking-wider bg-stone-50 border-t-2 border-stone-200"
                       >
-                        Closed During Sprint
+                        Closed Recently (30d)
                       </td>
                     </tr>
                   )}

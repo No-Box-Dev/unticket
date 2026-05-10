@@ -12,7 +12,6 @@ interface D1FeatureRow {
   body: string;
   assignees: { login: string }[];
   labels: { name: string; color: string }[];
-  milestone_title: string | null;
   html_url: string | null;
   updated_at?: string;
 }
@@ -21,7 +20,7 @@ const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 
 const FEATURE_LABELS = [
-  { name: "feature", color: "1B6971", description: "Sprint/backlog feature" },
+  { name: "feature", color: "1B6971", description: "Backlog feature" },
   { name: "status:todo", color: "94A3B8", description: "To do" },
   { name: "status:staging", color: "B89464", description: "Testing on staging" },
   { name: "status:ready", color: "6A9991", description: "Ready for production" },
@@ -71,9 +70,7 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
   return labels.find((l) => l.startsWith(prefix))?.slice(prefix.length);
 }
 
-function buildLabels(f: {
-  status: FeatureStatus;
-}): string[] {
+function buildLabels(f: { status: FeatureStatus }): string[] {
   return [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
 }
 
@@ -83,14 +80,7 @@ function issueToFeature(issue: any): Feature {
     .filter(Boolean) as string[];
 
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
-  const sprintMatch = issue.milestone?.title?.match(/^Sprint (\d+)$/);
-  const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
-
-  // No sprint milestone → use label status or fall back to "future" (backlog).
-  // With sprint → use label status or default to "todo".
-  const status: FeatureStatus = sprint === null
-    ? (labelStatus ?? "future")
-    : (labelStatus ?? "todo");
+  const status: FeatureStatus = labelStatus ?? "todo";
 
   const rawBody = issue.body ?? "";
   const { content, metadata } = parseMetadata(rawBody);
@@ -100,7 +90,6 @@ function issueToFeature(issue: any): Feature {
     title: issue.title,
     owners: (issue.assignees ?? []).map((a: any) => a.login),
     status,
-    sprint,
     plan: content || undefined,
     url: issue.html_url,
     updatedAt: issue.updated_at,
@@ -120,7 +109,6 @@ async function syncIssueToD1(data: any): Promise<void> {
     body: data.body ?? "",
     assignees: (data.assignees ?? []).map((a: any) => ({ login: a.login })),
     labels: (data.labels ?? []).map((l: any) => ({ name: l.name, color: l.color })),
-    milestone_title: data.milestone?.title ?? null,
     html_url: data.html_url,
     created_at: data.created_at,
     updated_at: data.updated_at,
@@ -136,14 +124,12 @@ export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total:
 // ---------- D1-backed fetch (no GitHub API calls) ----------
 
 function d1RowToFeature(row: D1FeatureRow): Feature {
-  // Adapt D1 row to the shape issueToFeature expects
   return issueToFeature({
     number: row.number,
     title: row.title,
     body: row.body,
     labels: row.labels,
     assignees: row.assignees,
-    milestone: row.milestone_title ? { title: row.milestone_title } : null,
     html_url: row.html_url,
     updated_at: row.updated_at,
   });
@@ -151,42 +137,9 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
 
 export async function fetchFeaturesFromD1(): Promise<Feature[]> {
   const rows = await apiGet<D1FeatureRow[]>("/api/features?state=open");
-  // Only return issues that have the "feature" label (D1 may contain stale non-feature issues)
   return rows
     .filter((row) => row.labels.some((l) => l.name === "feature"))
     .map(d1RowToFeature);
-}
-
-// ---------- Milestone cache ----------
-
-const milestoneCache = new Map<string, number>();
-
-export async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
-  const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
-  if (milestoneCache.has(cacheKey)) return milestoneCache.get(cacheKey)!;
-
-  const ok = getOctokit();
-  const { data: milestones } = await ok.rest.issues.listMilestones({
-    owner: org,
-    repo: getUnticketRepoName(),
-    state: "all",
-    per_page: 100,
-  });
-
-  const existing = milestones.find((m) => m.title === title);
-  if (existing) {
-    milestoneCache.set(cacheKey, existing.number);
-    return existing.number;
-  }
-
-  const { data: created } = await ok.rest.issues.createMilestone({
-    owner: org,
-    repo: getUnticketRepoName(),
-    title,
-  });
-  milestoneCache.set(cacheKey, created.number);
-  return created.number;
 }
 
 // ---------- Label setup ----------
@@ -238,18 +191,12 @@ export async function createFeature(
   title: string,
   opts: {
     status: FeatureStatus;
-    sprint: number | null;
     owners?: string[];
     plan?: string;
   },
 ): Promise<Feature> {
   const ok = getOctokit();
   const labels = buildLabels({ ...opts });
-
-  let milestone: number | undefined;
-  if (opts.sprint !== null) {
-    milestone = await findOrCreateMilestone(org, opts.sprint);
-  }
 
   const initialMetadata: FeatureMetadata = {
     statusHistory: [{ status: opts.status, timestamp: new Date().toISOString() }],
@@ -261,7 +208,6 @@ export async function createFeature(
     repo: getUnticketRepoName(),
     title,
     labels,
-    milestone,
     ...(opts.owners?.length ? { assignees: opts.owners } : {}),
     body,
   });
@@ -272,13 +218,6 @@ export async function createFeature(
 
 export async function updateFeature(org: string, updated: Feature): Promise<Feature> {
   const ok = getOctokit();
-
-  let milestone: number | null | undefined;
-  if (updated.sprint !== null) {
-    milestone = await findOrCreateMilestone(org, updated.sprint);
-  } else {
-    milestone = null;
-  }
 
   const metadata: FeatureMetadata = {
     statusHistory: updated.statusHistory,
@@ -294,7 +233,6 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
     body,
     assignees: updated.owners,
     labels: buildLabels(updated),
-    milestone,
   });
 
   await syncIssueToD1(data);
@@ -303,7 +241,7 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 
 export async function deleteFeature(org: string, issueNumber: number): Promise<void> {
   const ok = getOctokit();
-  // Downgrade to regular issue: remove feature + status labels, clear milestone
+  // Close the GitHub issue and strip feature/status labels.
   const { data: issue } = await ok.rest.issues.get({ owner: org, repo: getUnticketRepoName(), issue_number: issueNumber });
   const keepLabels = (issue.labels ?? [])
     .map((l: any) => (typeof l === "string" ? l : l.name))
@@ -313,7 +251,7 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     repo: getUnticketRepoName(),
     issue_number: issueNumber,
     labels: keepLabels,
-    milestone: null,
+    state: "closed",
   });
   // Remove from D1 features table
   const deleteRes = await apiFetch(`/api/features?number=${issueNumber}`, { method: "DELETE" });
@@ -322,50 +260,3 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
     throw new Error(`Failed to delete feature from D1: ${(body as { error?: string }).error ?? deleteRes.statusText}`);
   }
 }
-
-// ---------- Milestone management ----------
-
-export async function closeMilestone(org: string, sprintNumber: number): Promise<void> {
-  const ok = getOctokit();
-  const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
-  const { data: milestones } = await ok.rest.issues.listMilestones({
-    owner: org,
-    repo: getUnticketRepoName(),
-    state: "open",
-    per_page: 100,
-  });
-  const ms = milestones.find((m) => m.title === title);
-  if (ms) {
-    await ok.rest.issues.updateMilestone({
-      owner: org,
-      repo: getUnticketRepoName(),
-      milestone_number: ms.number,
-      state: "closed",
-    });
-    milestoneCache.delete(cacheKey);
-  }
-}
-
-export async function reopenMilestone(org: string, sprintNumber: number): Promise<void> {
-  const ok = getOctokit();
-  const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
-  const { data: milestones } = await ok.rest.issues.listMilestones({
-    owner: org,
-    repo: getUnticketRepoName(),
-    state: "closed",
-    per_page: 100,
-  });
-  const ms = milestones.find((m) => m.title === title);
-  if (ms) {
-    await ok.rest.issues.updateMilestone({
-      owner: org,
-      repo: getUnticketRepoName(),
-      milestone_number: ms.number,
-      state: "open",
-    });
-    milestoneCache.set(cacheKey, ms.number);
-  }
-}
-

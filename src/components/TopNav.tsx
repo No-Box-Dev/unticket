@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRateLimit } from "@/hooks/useGitHub";
-import { useSidebar } from "@/lib/sidebar";
 import { cn } from "@/lib/cn";
 import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
 import type { TabId } from "@/lib/types";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
-  { id: "sprint", label: "Sprint" },
+  { id: "sprint", label: "Features" },
   { id: "posts", label: "Feed" },
   { id: "prs", label: "PR" },
   { id: "issues", label: "Issues" },
@@ -23,7 +22,6 @@ interface TopNavProps {
 export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   const { user, setSelectedOrg, logout } = useAuth();
   const { data: rateLimit } = useRateLimit();
-  const { setViewingSprint } = useSidebar();
   const isRateLimited = rateLimit && rateLimit.remaining < rateLimit.limit * 0.2;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -37,7 +35,6 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   }, []);
 
   const handleNav = (id: TabId) => {
-    if (id === "sprint") setViewingSprint(null);
     onTabChange(id);
   };
 
