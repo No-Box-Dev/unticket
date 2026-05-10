@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
+import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
 import type { Person, Feature } from "@/lib/types";
@@ -199,6 +200,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             <InlineMetric label="Tasks open" value={selected.tasksOpen} />
           </div>
         </div>
+
+        {/* Voice & per-repo notes (narrator config) */}
+        <ActorVoiceCard githubLogin={selected.login} />
 
         {/* Activity feed */}
         <ActivityFeed items={feed} />
