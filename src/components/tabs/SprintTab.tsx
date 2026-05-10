@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useTodosClosedInRange } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -67,7 +67,6 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: allIssues } = useAllIssues(repoNames);
-  const { data: completedTodos } = useTodosClosedInRange(sprint?.startDate, sprint?.endDate);
   const { viewingSprint, setViewingSprint } = useSidebar();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
@@ -489,12 +488,6 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
               },
               features: sf.map((f) => ({ title: f.title, status: f.status, owners: f.owners })),
               engineers: Array.from(engineerMap.entries()).map(([login, data]) => ({ login, ...data })),
-              todosCompleted: (completedTodos ?? []).map((t) => ({
-                title: t.title,
-                owner: t.owner,
-                closedAt: t.closedAt ?? new Date().toISOString(),
-                featureId: t.featureId,
-              })),
               prsMerged: sprintMergedPRs.map((pr: any) => ({
                 number: pr.number,
                 title: pr.title,
@@ -900,25 +893,6 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
         </div>
       )}
 
-      {/* Personal Todos Completed */}
-      {snapshot.todosCompleted && snapshot.todosCompleted.length > 0 && (
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">
-            Personal Todos Completed ({snapshot.todosCompleted.length})
-          </h3>
-          <div className="space-y-2">
-            {snapshot.todosCompleted.map((t, i) => (
-              <div key={i} className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-status-production" />
-                <span className="text-sm text-stone-700">{t.title}</span>
-                <span className="text-xs text-stone-400 ml-auto shrink-0">
-                  {t.owner} · {formatDate(t.closedAt)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

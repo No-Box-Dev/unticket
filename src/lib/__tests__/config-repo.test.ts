@@ -6,9 +6,6 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/unticket-repo", () => ({
-  fetchTodoPlanFile: vi.fn(),
-  todoPlanFilePath: vi.fn(),
-  saveTodoPlanFile: vi.fn(),
   fetchPeopleFromRepo: vi.fn(),
   savePeopleToRepo: vi.fn(),
 }));

@@ -55,25 +55,15 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Feature ID: Issue number (integer)
 - CLI: `gh issue list --repo {org}/.unticket --label feature`
 
-**Todos as GitHub Issues (on `{org}/.unticket` repo):**
-- `src/lib/github-todos.ts` — CRUD via Octokit (`fetchTodos`, `fetchTodosByOwner`, `createTodo`, `updateTodo`, `closeTodo`, `reopenTodo`, `deleteTodo`, `fetchTodosClosedInRange`, `migrateTodos`)
-- Hooks: `src/hooks/useConfigRepo.ts` — `useTodos()`, `useCreateTodoItem()`, `useUpdateTodoItem()`, `useDeleteTodoItem()`, `useTodosClosedInRange()`, `useLegacyTodos()`, `useMigrateTodos()`
-- Label scheme: `todo` (marker), `todo-status:{backlog,in_progress,done}`, `todo-owner:{login}`, `todo-feature:{number}`
-- Status derived from labels + issue state (closed → done)
-- Drag-and-drop updates labels and opens/closes the GitHub issue
-- Sprint snapshots capture `todosCompleted` when advancing sprints
-- Migration: `useMigrateTodos()` converts D1 todos → GitHub issues, `useLegacyTodos()` reads old D1 data
-
 **D1 config (sprint, people, settings):**
 - API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
 - API helpers: `src/lib/config-repo.ts` — `fetch<X>()` / `save<X>()` using `apiGet`/`apiPut`
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
-- D1 `todos` key is legacy — only used for migration source
 
-**`.unticket` repo (features as issues + todos as issues + plan files):**
-- `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
-- Todo plans: `plans/TODO-{todoId}.md` (e.g. `TODO-42.md` where 42 is the issue number)
+**`.unticket` repo (features as issues + plan files):**
+- `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`
+- Feature plans: `plans/PLAN-{featureId}.md` (e.g. `PLAN-42.md`)
 - CLI access: `gh api repos/{org}/.unticket/contents/plans/ --jq '.[].name'`
 
 ### API Routes (Cloudflare Pages Functions)
@@ -101,7 +91,7 @@ Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verifi
 TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, `useOpenIssues`, `useMilestones`, `useClosedIssues`, `useMergedPRs`, `useAllPRs`, `useAllIssues`, `useOrgMembers`, `useSyncStatus`, `useTriggerSync`, `usePaginatedIssues`, `useIssueLabels`, `useUpdateIssueAssignees`.
 
 ### Shared UI Components
-- `src/components/ui/SearchableSelect.tsx` — Reusable portal-based searchable single-select dropdown. Props: `value`, `onChange`, `options: {value, label}[]`, `placeholder`, `className`. Includes ARIA attributes, keyboard navigation (Escape/Arrow/Enter), auto-flip positioning, scroll/resize repositioning. Used for repo dropdowns in Issues, PRs, and Todos tabs.
+- `src/components/ui/SearchableSelect.tsx` — Reusable portal-based searchable single-select dropdown. Props: `value`, `onChange`, `options: {value, label}[]`, `placeholder`, `className`. Includes ARIA attributes, keyboard navigation (Escape/Arrow/Enter), auto-flip positioning, scroll/resize repositioning. Used for repo dropdowns in Issues and PRs tabs.
 
 ### Auth
 - `useAuth()` returns `user` (with `login`, `avatar_url`, `name`), `selectedOrg`, `isLoading`, `authMode` (`"oauth" | "pat"`), `loginWithToken()`, `loginWithOAuth()`, `logout()`, `setSelectedOrg()`
@@ -117,13 +107,7 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 Dashboard landing page with sprint health banner, key metrics (PR throughput, cycle time, issues resolved, features shipped), attention alerts, open PR/issue age distributions, contributor activity table, sprint velocity trend, sprint burndown chart (ideal vs actual feature completion line chart using `computeBurndown`), and features-by-sprint breakdown. Range selector (2w–All). Clickable elements navigate to relevant tabs.
 
 #### Sprint Board (`sprint` tab)
-Sprint config + feature cards backed by GitHub Issues (label: `feature`). Four view modes (ClickUp-style tab switcher):
-- **Features view**: Kanban board with Plan/In Progress/Demo/Tested/In Production columns, drag-and-drop, search/filter by person, sort by title. Future sprints show single Plan column at full width.
-- **Roles view**: Cards grouped by person (assignee), showing tasks under each feature with progress bars and point totals.
-- **Tasks view**: Flat table of all tasks across features with columns: task, feature, role, assignee, points. Split into open/completed sections.
-- **Metrics view**: Sprint metrics dashboard (points, features, people breakdown).
-Sprint selector dropdown in sidebar (under Sprint Board nav item) allows switching to past sprint snapshots. `viewingSprint` state shared between sidebar and SprintTab via Zustand store.
-Features have owners, status (encoded as labels), and implementation plans (issue body with Markdown). Detail modal shows plan as Markdown, a sprint selector (move between sprints/backlog), and a **role/task hierarchy**: Features → Person Roles (sub-issues with `role` label) → Tasks (sub-issues of roles with `points:X` labels, editable inline). Points roll up: Task → Role → Feature. Sprint points use numeric values (1,2,3,5,8,13) on individual tasks.
+Sprint config + feature cards backed by GitHub Issues (label: `feature`). Kanban board with To do / Testing on staging / Ready for production / On production columns, drag-and-drop, search/filter by person, sort by title. Future sprints show a single column at full width. Sprint selector dropdown in sidebar (under Sprint Board nav item) allows switching to past sprint snapshots. `viewingSprint` state shared between sidebar and SprintTab via Zustand store. Features have owners, status (encoded as labels), and implementation plans (issue body with Markdown). Detail modal shows plan as Markdown and a sprint selector (move between sprints/backlog).
 
 #### Backlog (`backlog` tab)
 Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
@@ -133,9 +117,6 @@ Issues dashboard (second item in sidebar, after Overview). Top section: four sta
 
 #### PRs (`prs` tab)
 Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
-
-#### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.unticket` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
 
 ### Other Features
 

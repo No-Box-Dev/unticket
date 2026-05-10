@@ -49,19 +49,15 @@ export type TabId =
   | "sprint"
   | "prs"
   | "issues"
-  | "todos"
   | "posts"
   | "repos"
   | "engineers"
-  | "releases"
   | "settings";
 
 export interface NavFilter {
   person?: string;
   view?: string;
 }
-
-export type TodoStatus = "backlog" | "in_progress" | "review" | "done";
 
 /** PR where the user is a requested reviewer */
 export interface ReviewPR {
@@ -87,18 +83,6 @@ export interface AssignedIssue {
   created_at: string;
 }
 
-export interface Todo {
-  id: number;              // GitHub issue number
-  globalId: number;        // GitHub global issue ID
-  title: string;
-  owner: string;           // GitHub login
-  status: TodoStatus;      // derived from labels
-  createdAt: string;       // from GitHub created_at
-  closedAt?: string;       // from GitHub closed_at (when done)
-  featureId?: number;      // linked feature issue number
-  html_url: string;        // GitHub issue URL
-}
-
 // unticket config repo types
 
 export type FeatureStatus = "todo" | "staging" | "ready" | "production" | "future";
@@ -113,14 +97,6 @@ export const STATUS_COLORS: Record<FeatureStatus, string> = {
   ready: "bg-status-tested",
   production: "bg-status-production",
   future: "bg-status-future",
-};
-
-/** Status type for personal todos (kanban). */
-export const TODO_STATUS_DOTS: Record<TodoStatus, string> = {
-  backlog: "bg-stone-400",
-  in_progress: "bg-status-progress",
-  review: "bg-status-demo",
-  done: "bg-status-production",
 };
 
 /** Human-readable display label for each feature status. */
@@ -207,13 +183,6 @@ export interface SprintSnapshot {
     tasksOpen: number;
     prsMerged: number;
     issuesClosed: number;
-  }[];
-  /** Personal todos completed during this sprint */
-  todosCompleted?: {
-    title: string;
-    owner: string;
-    closedAt: string;
-    featureId?: number;
   }[];
   /** All PRs merged during this sprint */
   prsMerged?: {

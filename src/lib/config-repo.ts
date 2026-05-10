@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from "./api";
-import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
+import { fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
 import type { SprintConfig, Person, OrgSettings, SprintSnapshot } from "./types";
 
 // Sprint
@@ -74,6 +74,3 @@ export async function createConfigRepo(): Promise<void> {
   await apiPut("/api/config/people", []);
   await apiPut("/api/config/settings", {});
 }
-
-// Re-export plan helpers
-export { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile };
