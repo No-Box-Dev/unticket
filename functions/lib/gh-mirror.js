@@ -27,9 +27,10 @@ export async function upsertInstallation(db, installation) {
   if (!installation?.id || !installation?.account?.login) return;
   const accountLogin = installation.account.login;
   const accountType = installation.account.type ?? "Organization";
-  // owner_id = github_login (NoxLink convention); stable across renames is
-  // not strictly true but the rename event re-fires installation and we
-  // re-upsert by installation_id PK.
+  const now = Math.floor(Date.now() / 1000);
+  // installed_at is set on INSERT only — never overwritten on conflict.
+  // Re-fires from new_permissions_accepted/unsuspend would otherwise reset
+  // the original install date.
   await db.prepare(
     `INSERT INTO installations (installation_id, owner_id, account_login, account_type, installed_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -43,7 +44,7 @@ export async function upsertInstallation(db, installation) {
     accountLogin,
     accountLogin,
     accountType,
-    Math.floor(Date.now() / 1000),
-    Math.floor(Date.now() / 1000),
+    now,
+    now,
   ).run();
 }

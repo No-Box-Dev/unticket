@@ -70,7 +70,17 @@ export async function onRequestPost(context) {
     return await handleInstallationEvent(context.env.DB, payload, deliveryId);
   }
   if (event === "installation_repositories") {
-    // We don't track per-repo installation scope yet; ack so GitHub stops retrying.
+    // We don't track per-repo installation scope yet; ack so GitHub stops
+    // retrying, but still log the event for audit (owner derived from the
+    // installation account, not payload.organization, which is absent).
+    const accountLogin = payload.installation?.account?.login;
+    if (accountLogin) {
+      try {
+        await storeEvent(context.env.DB, event, deliveryId, payload, accountLogin);
+      } catch (err) {
+        console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
+      }
+    }
     return jsonResponse({ ok: true, event, action: payload.action });
   }
 
