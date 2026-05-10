@@ -22,7 +22,7 @@ async function importKey(hexKey) {
  */
 export async function encryptToken(token, key) {
   if (!key) {
-    console.warn("[gitpulse] ENCRYPTION_KEY not set — token stored in plaintext. Set ENCRYPTION_KEY env var for AES-256-GCM encryption.");
+    console.warn("[unticket] ENCRYPTION_KEY not set — token stored in plaintext. Set ENCRYPTION_KEY env var for AES-256-GCM encryption.");
     return token;
   }
 

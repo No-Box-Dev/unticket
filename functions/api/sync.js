@@ -54,7 +54,7 @@ export async function onRequestPost(context) {
             repoNames = repoNames.filter((n) => !draftSet.has(n));
           }
         } catch (e) {
-          console.warn(`[gitpulse] Corrupt settings JSON for org ${orgId}, syncing all repos:`, e);
+          console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, syncing all repos:`, e);
         }
       }
 
@@ -87,7 +87,7 @@ export async function onRequestPost(context) {
           repoNames = repoNames.filter((n) => !draftSet.has(n));
         }
       } catch (e) {
-        console.warn(`[gitpulse] Corrupt settings JSON for org ${orgId}, including all repos in cursor:`, e);
+        console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, including all repos in cursor:`, e);
       }
     }
     const currentIdx = repoNames.indexOf(cursor);

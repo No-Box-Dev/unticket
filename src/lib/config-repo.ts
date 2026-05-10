@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from "./api";
-import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./gitpulse-repo";
+import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
 import type { SprintConfig, Person, OrgSettings, SprintSnapshot } from "./types";
 
 // Sprint
@@ -11,7 +11,7 @@ export async function saveSprint(sprint: SprintConfig) {
   await apiPut("/api/config/sprint", sprint);
 }
 
-// People (GitHub-backed via gitpulse repo)
+// People (GitHub-backed via unticket repo)
 export async function fetchPeople(org: string): Promise<Person[]> {
   return fetchPeopleFromRepo(org);
 }

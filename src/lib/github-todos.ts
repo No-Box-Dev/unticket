@@ -2,7 +2,7 @@
 import { getOctokit } from "./github";
 import type { Todo, TodoStatus } from "./types";
 
-const REPO = "gitpulse";
+const REPO = "unticket";
 const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
 const FEATURE_PREFIX = "todo-feature:";

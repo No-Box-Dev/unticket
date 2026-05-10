@@ -11,7 +11,7 @@ const mockRole: PersonRole = {
   title: "Frontend Developer",
   assignee: "alice",
   state: "open",
-  html_url: "https://github.com/org/gitpulse/issues/10",
+  html_url: "https://github.com/org/unticket/issues/10",
 };
 
 const mockTasks: SubIssue[] = [
@@ -21,7 +21,7 @@ const mockTasks: SubIssue[] = [
     title: "Build login page",
     state: "open",
     assignees: ["alice"],
-    html_url: "https://github.com/org/gitpulse/issues/20",
+    html_url: "https://github.com/org/unticket/issues/20",
     points: 3,
     roleNumber: 10,
   },
@@ -31,7 +31,7 @@ const mockTasks: SubIssue[] = [
     title: "Add validation",
     state: "closed",
     assignees: [],
-    html_url: "https://github.com/org/gitpulse/issues/21",
+    html_url: "https://github.com/org/unticket/issues/21",
     points: 2,
     roleNumber: 10,
   },

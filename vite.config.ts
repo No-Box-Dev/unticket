@@ -74,7 +74,7 @@ function oauthDevProxy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), oauthDevProxy()],
-  base: process.env.GITHUB_PAGES === "true" ? "/gitpulse/" : "/",
+  base: process.env.GITHUB_PAGES === "true" ? "/unticket/" : "/",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

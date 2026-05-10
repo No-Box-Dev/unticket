@@ -77,7 +77,7 @@ export interface ReviewPR {
   created_at: string;
 }
 
-/** Cross-repo issue assigned to the user (sourced from D1, not gitpulse repo) */
+/** Cross-repo issue assigned to the user (sourced from D1, not unticket repo) */
 export interface AssignedIssue {
   repo: string;
   number: number;
@@ -100,7 +100,7 @@ export interface Todo {
   html_url: string;        // GitHub issue URL
 }
 
-// gitpulse config repo types
+// unticket config repo types
 
 export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
 

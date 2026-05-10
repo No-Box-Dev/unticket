@@ -153,7 +153,7 @@ export async function triggerSync() {
   }
 
   if (iterations >= maxIterations && cursor) {
-    console.error(`[gitpulse] Sync exceeded max iterations (${maxIterations}). Remaining cursor: ${cursor}`);
+    console.error(`[unticket] Sync exceeded max iterations (${maxIterations}). Remaining cursor: ${cursor}`);
     // Return partial success with remaining cursor so callers can resume
     return { ok: false, synced: { repos: init.repos ?? 0, prs: 0, issues: 0, members: 0 }, remainingCursor: cursor };
   }

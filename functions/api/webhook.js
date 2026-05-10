@@ -88,8 +88,8 @@ export async function onRequestPost(context) {
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
-      // Also upsert into features table if this is a gitpulse repo issue
-      if (repo === "gitpulse") {
+      // Also upsert into features table if this is a unticket repo issue
+      if (repo === "unticket") {
         await upsertFeature(db, orgId, payload.issue);
         // Re-sync pr_feature_links from metadata (atomic delete + re-insert)
         const { metadata } = parseFeatureMetadata(payload.issue.body ?? "");
@@ -135,7 +135,7 @@ export async function onRequestPost(context) {
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
     }
 
-    // PR comments: detect feature links like "Part of gitpulse#42"
+    // PR comments: detect feature links like "Part of unticket#42"
     if (event === "issue_comment" && payload.issue?.pull_request) {
       const repo = payload.repository?.name;
       const prNumber = payload.issue.number;
@@ -189,7 +189,7 @@ export async function onRequestPost(context) {
     return jsonResponse({ ok: true, skipped: `unhandled event: ${event}` });
   } catch (e) {
     // Don't leak internal error details to webhook senders. Log server-side only.
-    console.error("[gitpulse webhook]", event, action, e instanceof Error ? e.stack : e);
+    console.error("[unticket webhook]", event, action, e instanceof Error ? e.stack : e);
     return errorResponse("Webhook processing failed", 500);
   }
 }

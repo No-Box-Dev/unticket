@@ -5,7 +5,7 @@ vi.mock("@/lib/api", () => ({
   apiPut: vi.fn(),
 }));
 
-vi.mock("@/lib/gitpulse-repo", () => ({
+vi.mock("@/lib/unticket-repo", () => ({
   fetchTodoPlanFile: vi.fn(),
   todoPlanFilePath: vi.fn(),
   saveTodoPlanFile: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@/lib/gitpulse-repo", () => ({
 }));
 
 import { apiGet, apiPut } from "@/lib/api";
-import { fetchPeopleFromRepo } from "@/lib/gitpulse-repo";
+import { fetchPeopleFromRepo } from "@/lib/unticket-repo";
 import {
   fetchPeople,
   fetchSettings,
