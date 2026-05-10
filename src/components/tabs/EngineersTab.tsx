@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
 import { usePeople, useSprint, useFeatures, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
+import { useActiveMembers, useAllPRs, useClosedIssues, useOpenPRs, useOpenIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
@@ -29,6 +29,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
+  const { data: openPRs } = useOpenPRs(repoNames);
+  const { data: openIssues } = useOpenIssues(repoNames);
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
   const [viewMode, setViewMode] = useState<ViewMode>("features");
@@ -62,6 +64,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
       const myFeatures = sprintFeatures.filter((f) => f.owners.includes(member.login));
       const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
       const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
+      const prsOpen = openPRs?.filter((pr: any) => pr.user?.login === member.login)?.length ?? 0;
+      const issuesOpen = openIssues?.filter((i: any) => Array.isArray(i.assignees) ? i.assignees.some((a: any) => (a?.login ?? a) === member.login) : i.assignee?.login === member.login)?.length ?? 0;
       const featuresDone = myFeatures.filter((f) => f.status === "production").length;
       const myTasks = allTasks?.filter((t) => t.assignees.includes(member.login)) ?? [];
       const tasksDone = myTasks.filter((t) => t.state === "closed").length;
@@ -84,12 +88,14 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         myRoles,
         prsMerged,
         issuesSolved,
+        prsOpen,
+        issuesOpen,
         featuresDone,
         tasksDone,
         tasksOpen,
       };
     });
-  }, [orgMembers, people, sprintFeatures, allPRs, closedIssues, allTasks]);
+  }, [orgMembers, people, sprintFeatures, allPRs, closedIssues, openPRs, openIssues, allTasks]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -192,8 +198,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             </div>
           </div>
           <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
-            <InlineMetric label="PRs" value={selected.prsMerged} />
-            <InlineMetric label="Issues" value={selected.issuesSolved} />
+            <InlineMetric label="Open PRs" value={selected.prsOpen} />
+            <InlineMetric label="Open Issues" value={selected.issuesOpen} />
             <InlineMetric label="Features" value={selected.featuresDone} />
             <InlineMetric label="Tasks done" value={selected.tasksDone} />
             <InlineMetric label="Tasks open" value={selected.tasksOpen} />
@@ -253,6 +259,8 @@ interface EngineerSummary {
   description: string;
   prsMerged: number;
   issuesSolved: number;
+  prsOpen: number;
+  issuesOpen: number;
   tasksDone: number;
   tasksOpen: number;
 }
@@ -281,8 +289,8 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
       </div>
 
       <div className="flex items-center gap-4 text-xs text-stone-500">
-        <CardStat label="PRs" value={engineer.prsMerged} />
-        <CardStat label="Issues" value={engineer.issuesSolved} />
+        <CardStat label="Open PRs" value={engineer.prsOpen} />
+        <CardStat label="Open Issues" value={engineer.issuesOpen} />
         <CardStat label="Tasks" value={`${engineer.tasksDone}/${totalTasks}`} />
       </div>
     </button>
