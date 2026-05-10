@@ -26,6 +26,7 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "todos", label: "Todos", keywords: "todos tasks personal kanban" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
+  { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
   { id: "releases", label: "Releases", keywords: "releases history snapshots past sprints" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];

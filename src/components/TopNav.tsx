@@ -13,6 +13,7 @@ const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "todos", label: "Todos" },
   { id: "prs", label: "PR" },
   { id: "issues", label: "Issues" },
+  { id: "repos", label: "Repos" },
   { id: "releases", label: "Releases" },
 ];
 

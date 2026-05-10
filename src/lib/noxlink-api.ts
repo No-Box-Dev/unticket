@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPut, apiDelete } from "./api";
+import { apiGet, apiPatch, apiPost, apiPut, apiDelete } from "./api";
 
 export interface FeedActor {
   id: string;
@@ -56,6 +56,21 @@ export const patchActor = (id: string, fields: Partial<Pick<FeedActor, "name" | 
 
 export const fetchProjects = () =>
   apiGet<{ projects: FeedProject[] }>("/api/projects").then((r) => r.projects);
+
+export interface BackfillResult {
+  ok: boolean;
+  found: number;
+  queued: number;
+  skipped: number;
+  days: number;
+  message?: string;
+}
+
+export const backfillProjectPrs = (id: string, days = 3) =>
+  apiPost<BackfillResult>(
+    `/api/projects/${encodeURIComponent(id)}/backfill-prs`,
+    { days },
+  );
 
 export interface EventQuery {
   type?: string;

@@ -9,6 +9,7 @@ import {
   fetchNotes,
   putNote,
   deleteNote,
+  backfillProjectPrs,
   type FeedActor,
   type EventQuery,
 } from "@/lib/noxlink-api";
@@ -101,6 +102,20 @@ export function useDeleteNote() {
       deleteNote(actorId, projectId),
     onSuccess: (_data, { actorId }) => {
       qc.invalidateQueries({ queryKey: ["noxlink", "notes", selectedOrg, actorId] });
+    },
+  });
+}
+
+export function useBackfillProjectPrs() {
+  const qc = useQueryClient();
+  const { selectedOrg } = useAuth();
+  return useMutation({
+    mutationFn: ({ id, days }: { id: string; days?: number }) =>
+      backfillProjectPrs(id, days),
+    onSuccess: () => {
+      // Posts will appear out-of-band via narrateEvent. Invalidate so the
+      // Feed picks them up on next refetch.
+      qc.invalidateQueries({ queryKey: ["noxlink", "events", selectedOrg] });
     },
   });
 }
