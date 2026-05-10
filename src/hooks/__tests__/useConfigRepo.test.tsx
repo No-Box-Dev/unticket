@@ -38,7 +38,6 @@ vi.mock("@/lib/github-features", () => ({
   deleteRole: vi.fn(),
   fetchTasksForRole: vi.fn(),
   createTask: vi.fn(),
-  updateTaskPoints: vi.fn(),
 }));
 
 vi.mock("@/lib/github-todos", () => ({

@@ -46,14 +46,11 @@ export interface IssueInfo {
 }
 
 export type TabId =
-  | "overview"
   | "sprint"
-  | "backlog"
   | "prs"
   | "issues"
   | "todos"
   | "engineers"
-  | "workload"
   | "releases"
   | "settings";
 
@@ -111,21 +108,29 @@ export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "de
 export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
 export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "medical_scoping", "planned", "deferred"];
 
-/** Tailwind background color class for each feature status dot/indicator. */
+/** Tailwind background color class for each feature status dot/indicator (muted palette). */
 export const STATUS_COLORS: Record<FeatureStatus, string> = {
-  plan: "bg-brand",
-  in_progress: "bg-amber-500",
-  demo: "bg-purple-500",
-  tested: "bg-cyan-500",
-  production: "bg-green-500",
-  future: "bg-stone-300",
-  scoping: "bg-orange-400",
-  idea: "bg-slate-400",
-  client_scoping: "bg-pink-400",
-  technical_scoping: "bg-indigo-400",
-  medical_scoping: "bg-rose-400",
-  planned: "bg-emerald-400",
-  deferred: "bg-gray-500",
+  plan: "bg-status-plan",
+  in_progress: "bg-status-progress",
+  demo: "bg-status-demo",
+  tested: "bg-status-tested",
+  production: "bg-status-production",
+  future: "bg-status-future",
+  scoping: "bg-status-scoping",
+  idea: "bg-status-idea",
+  client_scoping: "bg-status-client",
+  technical_scoping: "bg-status-technical",
+  medical_scoping: "bg-status-medical",
+  planned: "bg-status-planned",
+  deferred: "bg-status-deferred",
+};
+
+/** Status type for personal todos (kanban). */
+export const TODO_STATUS_DOTS: Record<TodoStatus, string> = {
+  backlog: "bg-stone-400",
+  in_progress: "bg-status-progress",
+  review: "bg-status-demo",
+  done: "bg-status-production",
 };
 
 /** Human-readable display label for each feature status. */
@@ -144,10 +149,6 @@ export const STATUS_LABELS: Record<FeatureStatus, string> = {
   planned: "Planned",
   deferred: "Deferred",
 };
-
-// Sprint points
-export type Points = 1 | 2 | 3 | 5 | 8 | 13;
-export const VALID_POINTS: Points[] = [1, 2, 3, 5, 8, 13];
 
 export interface PersonRole {
   id: number;        // GitHub global issue ID
@@ -217,8 +218,6 @@ export interface SprintSnapshot {
     featuresCarriedOver: number;
     tasksDone: number;
     tasksOpen: number;
-    totalPoints: number;
-    donePoints: number;
     rolesCompleted: number;
     totalRoles: number;
   };
@@ -232,7 +231,6 @@ export interface SprintSnapshot {
     login: string;
     tasksDone: number;
     tasksOpen: number;
-    points: number;
     prsMerged: number;
     issuesClosed: number;
   }[];

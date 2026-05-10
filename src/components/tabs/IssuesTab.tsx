@@ -37,11 +37,11 @@ function SortIcon({ column, activeSortKey, activeSortDirection }: { column: Sort
 }
 
 const labelColors: Record<string, { bg: string; text: string }> = {
-  bug: { bg: "bg-red-50 dark:bg-red-500/10", text: "text-red-700 dark:text-red-400" },
-  enhancement: { bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-400" },
-  feature: { bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-400" },
-  investigation: { bg: "bg-yellow-50 dark:bg-yellow-500/10", text: "text-yellow-700 dark:text-yellow-400" },
-  documentation: { bg: "bg-accent-light dark:bg-accent/10", text: "text-accent" },
+  bug: { bg: "bg-red-50  ", text: "text-red-700  " },
+  enhancement: { bg: "bg-blue-50  ", text: "text-blue-700  " },
+  feature: { bg: "bg-blue-50  ", text: "text-blue-700  " },
+  investigation: { bg: "bg-yellow-50  ", text: "text-yellow-700  " },
+  documentation: { bg: "bg-accent-light  ", text: "text-accent" },
 };
 
 function getLabelStyle(name: string, color: string) {
@@ -57,7 +57,7 @@ function getLabelStyle(name: string, color: string) {
 
 const PAGE_SIZE = 30;
 
-const card = "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl";
+const card = "bg-white  border border-stone-200  rounded-xl";
 
 interface IssuesTabProps {
   repoNames: string[];
@@ -245,15 +245,15 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       {/* Sync Modal */}
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div role="dialog" aria-modal="true" className="bg-white dark:bg-dark-raised rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-white/[0.06]">
-              <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+              <h3 className="text-sm font-semibold text-stone-800">
                 {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}
               </h3>
               {(syncDone || syncError) && (
                 <button
                   onClick={() => setSyncModalOpen(false)}
-                  className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer"
+                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -262,15 +262,15 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             <div className="px-5 py-4 space-y-3">
               {syncProgress && syncProgress.total > 0 && (
                 <div>
-                  <div className="flex justify-between text-xs text-stone-500 dark:text-neutral-400 mb-1">
+                  <div className="flex justify-between text-xs text-stone-500 mb-1">
                     <span>{syncDone ? "All repos synced" : `Syncing repo ${Math.min(syncedRepos.length + 1, syncProgress.total)} of ${syncProgress.total}`}</span>
                     <span>{Math.round(((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100)}%</span>
                   </div>
-                  <div className="h-2 bg-stone-100 dark:bg-dark-overlay rounded-full overflow-hidden">
+                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
                     <div
                       className={cn(
                         "h-full rounded-full transition-all duration-300",
-                        syncError ? "bg-red-500" : "bg-brand",
+                        syncError ? "bg-red-500" : "bg-accent",
                       )}
                       style={{
                         width: `${((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100}%`,
@@ -280,7 +280,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 </div>
               )}
               {syncProgress?.phase === "init" && (
-                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
+                <div className="flex items-center gap-2 text-xs text-stone-500">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Initializing sync...
                 </div>
@@ -292,15 +292,15 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 </div>
               )}
               {syncProgress?.phase === "syncing" && syncProgress.repo && (
-                <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-neutral-400">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-brand" />
+                <div className="flex items-center gap-2 text-xs text-stone-600">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
                   <span className="font-medium">{syncProgress.repo}</span>
                 </div>
               )}
               {syncedRepos.length > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {syncedRepos.map((repo) => (
-                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
+                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
                       <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       {repo}
                     </div>
@@ -309,10 +309,10 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
               )}
             </div>
             {(syncDone || syncError) && (
-              <div className="px-5 py-3 border-t border-stone-100 dark:border-white/[0.06]">
+              <div className="px-5 py-3 border-t border-stone-100">
                 <button
                   onClick={() => setSyncModalOpen(false)}
-                  className="w-full px-4 py-2 text-xs font-medium text-white bg-brand rounded-lg hover:bg-brand/90 cursor-pointer"
+                  className="w-full px-4 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 cursor-pointer"
                 >
                   Close
                 </button>
@@ -328,7 +328,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           onClick={startSync}
           disabled={syncModalOpen}
           className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
+            "flex items-center gap-1.5 text-xs text-stone-500  hover:text-accent cursor-pointer",
             syncModalOpen && "opacity-50 cursor-not-allowed",
           )}
         >
@@ -362,8 +362,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         <StatCard
           label="Closed This Sprint"
           value={stats?.closedSprint ?? 0}
-          icon={<CircleCheck className="w-4 h-4 text-brand" />}
-          accent="brand"
+          icon={<CircleCheck className="w-4 h-4 text-accent" />}
+          accent="accent"
           loading={!stats}
         />
       </div>
@@ -372,9 +372,9 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       <div className="grid grid-cols-1 gap-4">
         {/* Issues by Repo */}
         <div className={cn(card, "p-5")}>
-          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Open Issues by Repo</h3>
+          <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open Issues by Repo</h3>
           {!stats?.byRepo?.length ? (
-            <p className="text-xs text-stone-400 dark:text-neutral-500">No data</p>
+            <p className="text-xs text-stone-400">No data</p>
           ) : (
             <div className="space-y-2">
               {stats.byRepo.map((r) => {
@@ -382,8 +382,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 const normalPct = ((r.count - r.critical) / repoMax) * 100;
                 return (
                   <div key={r.repo} className="flex items-center gap-3">
-                    <span className="text-xs text-stone-600 dark:text-neutral-300 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
-                    <div className="flex-1 h-5 bg-stone-100 dark:bg-dark-overlay rounded overflow-hidden flex">
+                    <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                    <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                       {r.critical > 0 && (
                         <div
                           className="h-full bg-red-500 transition-all duration-300"
@@ -391,12 +391,12 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                         />
                       )}
                       <div
-                        className="h-full bg-brand/70 transition-all duration-300"
+                        className="h-full bg-accent/70 transition-all duration-300"
                         style={{ width: `${normalPct}%` }}
                       />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-xs font-medium text-stone-700 dark:text-neutral-200 w-8 text-right tabular-nums">{r.count}</span>
+                      <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums">{r.count}</span>
                       {r.critical > 0 && (
                         <span className="flex items-center gap-0.5 text-red-500">
                           <Flag className="w-3 h-3" />
@@ -416,7 +416,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       {/* ──── Resolution Trend ──── */}
       {stats?.closedPerDay && stats.closedPerDay.length > 0 && (
         <div className={cn(card, "p-5")}>
-          <h3 className="text-xs font-medium text-stone-500 dark:text-neutral-400 uppercase tracking-wider mb-4">Issues Closed Per Day</h3>
+          <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Issues Closed Per Day</h3>
           <DailyBarChart
             data={stats.closedPerDay}
             selectedDay={selectedDay}
@@ -462,15 +462,15 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
         return (
           <div className={cn(card, "overflow-hidden border-l-[3px] border-l-red-500")}>
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 dark:border-white/[0.06]">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-100">
               <Flag className="w-4 h-4 text-red-500" />
-              <h3 className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
+              <h3 className="text-xs font-medium text-red-600 uppercase tracking-wider">
                 Critical Issues ({criticalData!.totalCount})
               </h3>
               <select
                 value={criticalRepoFilter}
                 onChange={(e) => setCriticalRepoFilter(e.target.value)}
-                className="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-red-400"
+                className="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-red-400"
               >
                 <option value="all">All Repos ({criticalIssues.length})</option>
                 {repoOptions.map(({ repo, count }) => (
@@ -480,49 +480,49 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             </div>
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
+                <tr className="border-b border-stone-100 text-left">
                   <th className="px-3 py-2 w-8"></th>
-                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Issue</th>
-                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Title</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500">Issue</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500">Title</th>
                   <th
                     onClick={() => toggleCriticalSort("repo")}
-                    className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                    className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                   >
                     Repo {criticalSort.key === "repo" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
                   </th>
-                  <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
+                  <th className="px-3 py-2 text-xs font-medium text-stone-500">Assignees</th>
                   <th
                     onClick={() => toggleCriticalSort("age")}
-                    className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 text-right cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                    className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
                   >
                     Age {criticalSort.key === "age" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
                   </th>
                   <th className="px-3 py-2 w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
+              <tbody className="divide-y divide-stone-50">
                 {sorted.map((issue: any) => (
-                  <tr key={issue.id} className="hover:bg-red-50/50 dark:hover:bg-red-500/[0.04]">
+                  <tr key={issue.id} className="hover:bg-red-50/50">
                     <td className="px-3 py-2">
                       <Flag className="w-4 h-4 text-red-500" />
                     </td>
-                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
-                    <td className="px-3 py-2 max-w-md truncate text-stone-800 dark:text-neutral-200">{issue.title}</td>
-                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400">{issue.repo}</td>
-                    <td className="px-3 py-2 text-stone-500 dark:text-neutral-400">
+                    <td className="px-3 py-2 text-stone-500 whitespace-nowrap">#{issue.number}</td>
+                    <td className="px-3 py-2 max-w-md truncate text-stone-800">{issue.title}</td>
+                    <td className="px-3 py-2 text-stone-500">{issue.repo}</td>
+                    <td className="px-3 py-2 text-stone-500">
                       {(issue.assignees ?? []).length > 0
                         ? (issue.assignees as any[]).map((a: any) => a.login).join(", ")
-                        : <span className="text-stone-300 dark:text-neutral-600">—</span>
+                        : <span className="text-stone-300">—</span>
                       }
                     </td>
                     <td className={cn(
                       "px-3 py-2 text-right tabular-nums",
-                      daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400 dark:text-neutral-500",
+                      daysAgo(issue.created_at) > 7 ? "text-red-500 font-medium" : "text-stone-400  ",
                     )}>
                       {daysAgo(issue.created_at)}d
                     </td>
                     <td className="px-3 py-2">
-                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-brand">
+                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-accent">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </td>
@@ -537,12 +537,12 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       {/* ──── Issue List ──── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">All Issues</h3>
+          <h3 className="text-sm font-semibold text-stone-800">All Issues</h3>
           <button
             onClick={startSync}
             disabled={syncModalOpen}
             className={cn(
-              "flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-brand cursor-pointer",
+              "flex items-center gap-1.5 text-xs text-stone-500  hover:text-accent cursor-pointer",
               syncModalOpen && "opacity-50 cursor-not-allowed",
             )}
           >
@@ -553,7 +553,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-3">
-          <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+          <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
             {(["all", "unassigned", "assigned"] as const).map((opt) => (
               <button
                 key={opt}
@@ -561,8 +561,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 className={cn(
                   "px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize",
                   assignmentFilter === opt
-                    ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
-                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                    ? "bg-white  text-stone-800  shadow-sm"
+                    : "text-stone-500  hover:text-stone-700  ",
                 )}
               >
                 {opt}
@@ -600,7 +600,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
               setLabelFilter(e.target.value);
               resetPages();
             }}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] text-stone-600 dark:text-neutral-400 cursor-pointer focus:outline-none focus:border-brand"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-200 text-stone-600 cursor-pointer focus:outline-none focus:border-accent"
           >
             <option value="all">All Labels</option>
             {labelList.map((l) => (
@@ -608,7 +608,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             ))}
           </select>
 
-          <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+          <span className="text-xs text-stone-400 ml-auto">
             {openTotal} open, {closedTotal} closed
           </span>
         </div>
@@ -617,28 +617,28 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         <div className={cn(card, "overflow-hidden")}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-stone-100 dark:border-white/[0.06] text-left">
+              <tr className="border-b border-stone-100 text-left">
                 <th className="px-3 py-2 w-8"></th>
                 <th
                   onClick={() => toggleSort("number")}
-                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                  className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                 >
                   Issue <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
                 </th>
                 <th
                   onClick={() => toggleSort("title")}
-                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                  className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                 >
                   Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
                 </th>
                 <th
                   onClick={() => toggleSort("repo")}
-                  className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300"
+                  className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                 >
                   Repo <SortIcon column="repo" activeSortKey={sortKey} activeSortDirection={sortDir} />
                 </th>
-                <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Labels</th>
-                <th className="px-3 py-2 text-xs font-medium text-stone-500 dark:text-neutral-400">Assignees</th>
+                <th className="px-3 py-2 text-xs font-medium text-stone-500">Labels</th>
+                <th className="px-3 py-2 text-xs font-medium text-stone-500">Assignees</th>
                 <th
                   onClick={() => toggleSort("created_at")}
                   className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
@@ -648,7 +648,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 <th className="px-3 py-2 w-8"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-50 dark:divide-white/[0.06]">
+            <tbody className="divide-y divide-stone-50">
               {isLoading ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center">
@@ -657,7 +657,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 </tr>
               ) : openTotal === 0 && closedTotal === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-stone-400 dark:text-neutral-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-stone-400">
                     No issues found
                   </td>
                 </tr>
@@ -684,7 +684,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                     <tr>
                       <td
                         colSpan={8}
-                        className="px-4 py-2 text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider bg-stone-50 dark:bg-white/[0.04] border-t-2 border-stone-200 dark:border-white/[0.06]"
+                        className="px-4 py-2 text-xs font-medium text-stone-400 uppercase tracking-wider bg-stone-50 border-t-2 border-stone-200"
                       >
                         Closed During Sprint
                       </td>
@@ -724,30 +724,30 @@ function StatCard({ label, value, icon, accent, loading }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  accent?: "amber" | "red" | "brand";
+  accent?: "amber" | "red" | "accent";
   loading?: boolean;
 }) {
   const accentBorder = accent === "amber"
     ? "border-l-amber-400"
     : accent === "red"
       ? "border-l-red-400"
-      : accent === "brand"
-        ? "border-l-brand"
+      : accent === "accent"
+        ? "border-l-accent"
         : "border-l-transparent";
 
   return (
     <div className={cn(
-      "bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-xl p-4 border-l-[3px]",
+      "bg-white  border border-stone-200  rounded-xl p-4 border-l-[3px]",
       accentBorder,
     )}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-stone-500 dark:text-neutral-400">{label}</span>
+        <span className="text-xs font-medium text-stone-500">{label}</span>
         {icon}
       </div>
       {loading ? (
-        <div className="h-7 w-12 bg-stone-100 dark:bg-dark-overlay rounded animate-pulse" />
+        <div className="h-7 w-12 bg-stone-100 rounded animate-pulse" />
       ) : (
-        <span className="text-2xl font-bold text-stone-800 dark:text-neutral-100 tabular-nums">{value}</span>
+        <span className="text-2xl font-bold text-stone-800 tabular-nums">{value}</span>
       )}
     </div>
   );
@@ -786,7 +786,7 @@ function DailyBarChart({ data, selectedDay, onSelectDay }: {
       {/* Y-axis */}
       <div className="flex flex-col justify-between shrink-0 pr-1" style={{ height: barHeight }}>
         {[...ticks].reverse().map((t) => (
-          <span key={t} className="text-[10px] text-stone-400 dark:text-neutral-500 tabular-nums leading-none">{t}</span>
+          <span key={t} className="text-[10px] text-stone-400 tabular-nums leading-none">{t}</span>
         ))}
       </div>
       {/* Bars */}
@@ -807,9 +807,9 @@ function DailyBarChart({ data, selectedDay, onSelectDay }: {
             >
               <div className="w-full flex flex-col items-stretch justify-end" style={{ height: barHeight - 20 }}>
                 {d.count > 0 ? (
-                  <div className={cn("w-full flex flex-col rounded-sm overflow-hidden transition-all", isSelected && "ring-2 ring-brand ring-offset-1")} style={{ height: `${heightPct}%`, minHeight: 3 }}>
+                  <div className={cn("w-full flex flex-col rounded-sm overflow-hidden transition-all", isSelected && "ring-2 ring-accent ring-offset-1")} style={{ height: `${heightPct}%`, minHeight: 3 }}>
                     {normalPct > 0 && (
-                      <div className="w-full bg-brand/60 hover:bg-brand/80 transition-colors" style={{ flexGrow: d.count - d.critical }} />
+                      <div className="w-full bg-accent/60 hover:bg-accent/80 transition-colors" style={{ flexGrow: d.count - d.critical }} />
                     )}
                     {criticalPct > 0 && (
                       <div className="w-full bg-red-500 hover:bg-red-600 transition-colors" style={{ flexGrow: d.critical }} />
@@ -817,15 +817,15 @@ function DailyBarChart({ data, selectedDay, onSelectDay }: {
                   </div>
                 ) : (
                   <div className="w-full" style={{ height: "1px", minHeight: 1 }}>
-                    <div className="w-full bg-stone-200 dark:bg-dark-overlay" style={{ height: "1px" }} />
+                    <div className="w-full bg-stone-200" style={{ height: "1px" }} />
                   </div>
                 )}
               </div>
-              <span className={cn("text-[8px] whitespace-nowrap mt-0.5 leading-tight", isSelected ? "text-brand font-semibold" : "text-stone-400 dark:text-neutral-500")}>
+              <span className={cn("text-[8px] whitespace-nowrap mt-0.5 leading-tight", isSelected ? "text-accent font-semibold" : "text-stone-400  ")}>
                 {showMonthLabel ? dateLabel : dayNum}
               </span>
               {d.count > 0 && (
-                <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 dark:bg-neutral-700 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-stone-800 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                   {d.count}{d.critical > 0 ? ` (${d.critical} critical)` : ""} — {dateLabel}
                 </div>
               )}
@@ -855,17 +855,17 @@ function PaginationControls({
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
-        className="p-1 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        className="p-1 text-stone-400 hover:text-stone-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-      <span className={cn("text-xs text-stone-500 dark:text-neutral-400 tabular-nums", isFetching && "opacity-50")}>
+      <span className={cn("text-xs text-stone-500  tabular-nums", isFetching && "opacity-50")}>
         Page {page} of {totalPages}
       </span>
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages}
-        className="p-1 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        className="p-1 text-stone-400 hover:text-stone-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -880,9 +880,9 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
 
   return (
     <tr className={cn(
-      "hover:bg-stone-50 dark:hover:bg-white/[0.06]",
-      closed && "text-stone-400 dark:text-neutral-500",
-      !closed && isCritical(issue) && "bg-red-50/50 dark:bg-red-500/[0.04]",
+      "hover:bg-stone-50  ",
+      closed && "text-stone-400  ",
+      !closed && isCritical(issue) && "bg-red-50/50  ",
     )}>
       <td className="px-3 py-2">
         {closed ? (
@@ -893,9 +893,9 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
           <CircleDot className="w-4 h-4 text-green-600" />
         )}
       </td>
-      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 whitespace-nowrap">#{issue.number}</td>
+      <td className="px-3 py-2 text-stone-500 whitespace-nowrap">#{issue.number}</td>
       <td className="px-3 py-2 max-w-md truncate">{issue.title}</td>
-      <td className="px-3 py-2 text-stone-500 dark:text-neutral-400 text-xs">{issue.repo || "—"}</td>
+      <td className="px-3 py-2 text-stone-500 text-xs">{issue.repo || "—"}</td>
       <td className="px-3 py-2">
         <div className="flex gap-1 flex-wrap">
           {(issue.labels ?? []).slice(0, 3).map((l: any) => {
@@ -925,7 +925,7 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
       <td
         className={cn(
           "px-3 py-2 text-right tabular-nums",
-          age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400 dark:text-neutral-500",
+          age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400  ",
         )}
       >
         {age}d
@@ -935,7 +935,7 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
           href={issue.html_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-stone-300 hover:text-brand"
+          className="text-stone-300 hover:text-accent"
         >
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
@@ -970,57 +970,57 @@ function DayDetailDrawer({ day, data, totalCount, loading, onClose }: {
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
       <div
-        className="relative w-full max-w-lg bg-white dark:bg-dark-raised shadow-xl flex flex-col animate-slide-in-right"
+        className="relative w-full max-w-lg bg-white shadow-xl flex flex-col animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
           <div>
-            <h2 className="font-semibold text-stone-900 dark:text-neutral-100 text-sm">{dateLabel}</h2>
-            <span className="text-xs text-stone-400 dark:text-neutral-500">{totalCount} issue{totalCount !== 1 ? "s" : ""} closed</span>
+            <h2 className="font-semibold text-stone-900 text-sm">{dateLabel}</h2>
+            <span className="text-xs text-stone-400">{totalCount} issue{totalCount !== 1 ? "s" : ""} closed</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-stone-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer">
-            <X size={16} className="text-stone-500 dark:text-neutral-400" />
+          <button onClick={onClose} className="p-1 rounded hover:bg-stone-100 transition-colors cursor-pointer">
+            <X size={16} className="text-stone-500" />
           </button>
         </div>
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner className="w-5 h-5 text-brand" />
+              <Spinner className="w-5 h-5 text-accent" />
             </div>
           ) : data.length === 0 ? (
-            <div className="p-5 text-sm text-stone-400 dark:text-neutral-500 text-center">No issues found</div>
+            <div className="p-5 text-sm text-stone-400 text-center">No issues found</div>
           ) : (
             <div>
               {grouped.map(([repo, issues]) => (
                 <div key={repo}>
-                  <div className="sticky top-0 px-5 py-2 bg-stone-50 dark:bg-dark-overlay border-b border-stone-200 dark:border-white/[0.06] flex items-center justify-between">
-                    <span className="text-xs font-semibold text-stone-600 dark:text-neutral-300">{repo}</span>
-                    <span className="text-[10px] text-stone-400 dark:text-neutral-500">{issues.length}</span>
+                  <div className="sticky top-0 px-5 py-2 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-stone-600">{repo}</span>
+                    <span className="text-[10px] text-stone-400">{issues.length}</span>
                   </div>
-                  <div className="divide-y divide-stone-100 dark:divide-white/[0.04]">
+                  <div className="divide-y divide-stone-100">
                     {issues.map((issue: any) => {
                       const critical = isCritical(issue);
                       return (
-                        <div key={issue.id} className={cn("px-5 py-2.5 hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-colors", critical && "border-l-2 border-l-red-500")}>
+                        <div key={issue.id} className={cn("px-5 py-2.5 hover:bg-stone-50  transition-colors", critical && "border-l-2 border-l-red-500")}>
                           <div className="flex items-center gap-2">
                             {critical ? <Flag className="w-3.5 h-3.5 text-red-500 shrink-0" /> : <CircleCheck className="w-3.5 h-3.5 text-accent shrink-0" />}
                             <a
                               href={issue.html_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm text-stone-800 dark:text-neutral-200 hover:text-brand transition-colors truncate flex-1"
+                              className="text-sm text-stone-800 hover:text-accent transition-colors truncate flex-1"
                             >
-                              <span className="text-stone-400 dark:text-neutral-500 mr-1.5">#{issue.number}</span>
+                              <span className="text-stone-400 mr-1.5">#{issue.number}</span>
                               {issue.title}
                             </a>
                             <ExternalLink size={11} className="shrink-0 opacity-40" />
                           </div>
-                          <div className="flex items-center gap-3 mt-1 ml-5.5 text-[11px] text-stone-400 dark:text-neutral-500">
-                            {issue.closed_by && <span>Closed by <span className="text-stone-600 dark:text-neutral-300">{issue.closed_by}</span></span>}
+                          <div className="flex items-center gap-3 mt-1 ml-5.5 text-[11px] text-stone-400">
+                            {issue.closed_by && <span>Closed by <span className="text-stone-600">{issue.closed_by}</span></span>}
                             {(issue.assignees ?? []).length > 0 && (
-                              <span>Assigned to <span className="text-stone-600 dark:text-neutral-300">{issue.assignees.map((a: any) => a.login).join(", ")}</span></span>
+                              <span>Assigned to <span className="text-stone-600">{issue.assignees.map((a: any) => a.login).join(", ")}</span></span>
                             )}
                           </div>
                         </div>

@@ -43,14 +43,13 @@ import {
   deleteRole as ghDeleteRole,
   fetchTasksForRole,
   createTask as ghCreateTask,
-  updateTaskPoints as ghUpdateTaskPoints,
   updateTaskTitle as ghUpdateTaskTitle,
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
 import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/unticket-repo";
 import { useRef } from "react";
-import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, PersonRole } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -180,7 +179,6 @@ export interface SubIssueWithFeature {
   state: "open" | "closed";
   assignees: string[];
   html_url: string;
-  points?: Points;
   roleNumber?: number;
   roleName?: string;
   closed_at?: string | null;
@@ -340,10 +338,7 @@ export function useToggleSubIssue() {
               const tasks = r.tasks.map((t) =>
                 t.id === sub.id ? { ...t, state: newState as "open" | "closed" } : t,
               );
-              const donePoints = tasks
-                .filter((t) => t.state === "closed")
-                .reduce((sum, t) => sum + (t.points ?? 0), 0);
-              return { ...r, tasks, donePoints };
+              return { ...r, tasks };
             }),
           );
         }
@@ -402,8 +397,6 @@ export function useDeleteSubIssue() {
           old?.map((rw) => ({
             ...rw,
             tasks: rw.tasks.filter((t) => t.number !== args.subIssueNumber),
-            totalPoints: rw.tasks.filter((t) => t.number !== args.subIssueNumber).reduce((sum, t) => sum + (t.points ?? 0), 0),
-            donePoints: rw.tasks.filter((t) => t.number !== args.subIssueNumber && t.state === "closed").reduce((sum, t) => sum + (t.points ?? 0), 0),
           })) ?? [],
         );
       }
@@ -450,8 +443,6 @@ export function useTasksForRole(roleNumber: number) {
 export interface RoleWithTasks {
   role: PersonRole;
   tasks: SubIssue[];
-  totalPoints: number;
-  donePoints: number;
 }
 
 export function useRolesWithTasks(featureId: number) {
@@ -465,14 +456,10 @@ export function useRolesWithTasks(featureId: number) {
         roles.map(async (role) => {
           try {
             const tasks = await fetchTasksForRole(selectedOrg, role.number);
-            const totalPoints = tasks.reduce((sum, t) => sum + (t.points ?? 0), 0);
-            const donePoints = tasks
-              .filter((t) => t.state === "closed")
-              .reduce((sum, t) => sum + (t.points ?? 0), 0);
-            return { role, tasks, totalPoints, donePoints };
+            return { role, tasks };
           } catch (e) {
             console.error(`[unticket] Failed to fetch tasks for role #${role.number}:`, e);
-            return { role, tasks: [], totalPoints: 0, donePoints: 0 };
+            return { role, tasks: [] };
           }
         }),
       );
@@ -506,7 +493,7 @@ export function useCreateRole() {
       };
       qc.setQueryData<RoleWithTasks[]>(key, (old) => [
         ...(old ?? []),
-        { role: optimisticRole, tasks: [], totalPoints: 0, donePoints: 0 },
+        { role: optimisticRole, tasks: [] },
       ]);
       return { previous, key, tempId: id };
     },
@@ -554,8 +541,8 @@ export function useCreateTask() {
   const qc = useQueryClient();
   const tempIdRef = useRef(-1000);
   return useMutation({
-    mutationFn: (args: { roleNumber: number; featureId: number; title: string; points?: Points; assignee?: string }) =>
-      ghCreateTask(selectedOrg!, args.roleNumber, args.title, args.points, args.assignee),
+    mutationFn: (args: { roleNumber: number; featureId: number; title: string; assignee?: string }) =>
+      ghCreateTask(selectedOrg!, args.roleNumber, args.title, args.assignee),
     onMutate: async (args) => {
       const key = ["rolesWithTasks", selectedOrg, args.featureId];
       await qc.cancelQueries({ queryKey: key });
@@ -568,18 +555,12 @@ export function useCreateTask() {
         state: "open",
         assignees: args.assignee ? [args.assignee] : [],
         html_url: "",
-        points: args.points,
         roleNumber: args.roleNumber,
       };
       qc.setQueryData<RoleWithTasks[]>(key, (old) =>
         (old ?? []).map((r) => {
           if (r.role.number !== args.roleNumber) return r;
-          const tasks = [...r.tasks, optimisticTask];
-          return {
-            ...r,
-            tasks,
-            totalPoints: r.totalPoints + (args.points ?? 0),
-          };
+          return { ...r, tasks: [...r.tasks, optimisticTask] };
         }),
       );
       return { previous, key, tempTaskId: taskId };
@@ -602,19 +583,6 @@ export function useCreateTask() {
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(context.key, context.previous);
-    },
-  });
-}
-
-export function useUpdateTaskPoints() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { taskNumber: number; points: Points | undefined }) =>
-      ghUpdateTaskPoints(selectedOrg!, args.taskNumber, args.points),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["roleTasks", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["rolesWithTasks", selectedOrg] });
     },
   });
 }

@@ -47,24 +47,24 @@ export function ConfirmDialog({
       aria-label={title}
     >
       <div
-        className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] shadow-xl p-5 max-w-sm w-full mx-4 space-y-4"
+        className="bg-white rounded-xl border border-stone-200 shadow-xl p-5 max-w-sm w-full mx-4 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
           {variant === "danger" && (
-            <div className="p-2 bg-red-50 dark:bg-red-950 rounded-lg shrink-0">
+            <div className="p-2 bg-red-50 rounded-lg shrink-0">
               <AlertTriangle className="w-5 h-5 text-red-500" />
             </div>
           )}
           <div>
-            <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">{title}</h3>
-            {message && <p className="text-xs text-stone-500 dark:text-neutral-400 mt-1">{message}</p>}
+            <h3 className="text-sm font-semibold text-stone-900">{title}</h3>
+            {message && <p className="text-xs text-stone-500 mt-1">{message}</p>}
           </div>
         </div>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-neutral-400 bg-stone-100 dark:bg-neutral-800 rounded-lg hover:bg-stone-200 dark:hover:bg-neutral-700 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
           >
             {cancelLabel}
           </button>
