@@ -11,8 +11,8 @@ export async function onRequestGet(context) {
     });
   }
 
-  const clientId = context.env.GITHUB_CLIENT_ID;
-  const clientSecret = context.env.GITHUB_CLIENT_SECRET;
+  const clientId = context.env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = context.env.GITHUB_APP_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     return new Response(JSON.stringify({ error: "OAuth not configured" }), {

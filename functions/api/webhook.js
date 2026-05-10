@@ -62,6 +62,15 @@ export async function onRequestPost(context) {
     return jsonResponse({ ok: true, message: "pong" });
   }
 
+  // App lifecycle events arrive without an organization payload — handle them up front.
+  if (event === "installation") {
+    return await handleInstallationEvent(context.env.DB, payload);
+  }
+  if (event === "installation_repositories") {
+    // We don't track per-repo installation scope yet; ack so GitHub stops retrying.
+    return jsonResponse({ ok: true, event, action: payload.action });
+  }
+
   // Look up org
   const orgLogin = payload.organization?.login;
   if (!orgLogin) {
@@ -192,4 +201,37 @@ export async function onRequestPost(context) {
     console.error("[unticket webhook]", event, action, e instanceof Error ? e.stack : e);
     return errorResponse("Webhook processing failed", 500);
   }
+}
+
+async function handleInstallationEvent(db, payload) {
+  const action = payload.action;
+  const installationId = payload.installation?.id;
+  const accountLogin = payload.installation?.account?.login;
+  if (!installationId || !accountLogin) {
+    return jsonResponse({ ok: true, event: "installation", skipped: "missing installation/account" });
+  }
+
+  if (action === "created" || action === "new_permissions_accepted" || action === "unsuspend") {
+    await db.batch([
+      db.prepare(
+        `INSERT INTO orgs (github_login, installation_id) VALUES (?, ?)
+         ON CONFLICT(github_login) DO UPDATE SET installation_id = excluded.installation_id`
+      ).bind(accountLogin, installationId),
+      db.prepare(
+        `UPDATE orgs SET installation_id = NULL
+         WHERE installation_id = ? AND github_login != ?`
+      ).bind(installationId, accountLogin),
+    ]);
+    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
+  }
+
+  if (action === "deleted" || action === "suspend") {
+    await db
+      .prepare("UPDATE orgs SET installation_id = NULL WHERE installation_id = ?")
+      .bind(installationId)
+      .run();
+    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
+  }
+
+  return jsonResponse({ ok: true, event: "installation", skipped: `unhandled action: ${action}` });
 }
