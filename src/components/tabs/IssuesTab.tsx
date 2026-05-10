@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSprint, useSettings } from "@/hooks/useConfigRepo";
+import { useFeedProjects } from "@/hooks/useNoxlink";
 import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Check, X, Loader2, AlertCircle, Clock, UserX, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -76,12 +77,17 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
   const draftRepos = useMemo(() => new Set(settings?.draftRepos ?? []), [settings]);
+  const { data: feedProjects } = useFeedProjects();
+  const archivedRepos = useMemo(
+    () => new Set((feedProjects ?? []).filter((p) => p.archived && p.repo).map((p) => p.repo!)),
+    [feedProjects],
+  );
 
   const repoList = useMemo(() => {
     return repos?.map((r: any) => r.name)
-      .filter((n: string) => !EXCLUDED_REPOS.has(n) && !draftRepos.has(n))
+      .filter((n: string) => !EXCLUDED_REPOS.has(n) && !draftRepos.has(n) && !archivedRepos.has(n))
       .sort() ?? [];
-  }, [repos, draftRepos]);
+  }, [repos, draftRepos, archivedRepos]);
 
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");

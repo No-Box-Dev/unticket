@@ -21,6 +21,8 @@ export interface FeedProject {
   repo: string | null;
   description: string | null;
   narrator_enabled: 0 | 1;
+  archived: 0 | 1;
+  archived_at: string | null;
   updated_at: string | null;
 }
 
@@ -70,6 +72,17 @@ export const backfillProjectPrs = (id: string, days = 3) =>
   apiPost<BackfillResult>(
     `/api/projects/${encodeURIComponent(id)}/backfill-prs`,
     { days },
+  );
+
+export const archiveProject = (id: string) =>
+  apiPost<{ ok: true; id: string; archived: boolean }>(
+    `/api/projects/${encodeURIComponent(id)}/archive`,
+    {},
+  );
+
+export const unarchiveProject = (id: string) =>
+  apiDelete<{ ok: true; id: string; archived: boolean }>(
+    `/api/projects/${encodeURIComponent(id)}/archive`,
   );
 
 export interface EventQuery {
