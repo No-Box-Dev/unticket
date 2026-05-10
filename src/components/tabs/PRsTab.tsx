@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useCallback } from "react";
 import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
+import { useFeedProjects } from "@/hooks/useNoxlink";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -37,8 +38,17 @@ type PRView = "open" | "merged";
 export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const qc = useQueryClient();
   const [view, setView] = useState<PRView>("open");
-  const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(repoNames);
-  const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(repoNames);
+  const { data: feedProjects } = useFeedProjects();
+  const archivedRepos = useMemo(
+    () => new Set((feedProjects ?? []).filter((p) => p.archived && p.repo).map((p) => p.repo!)),
+    [feedProjects],
+  );
+  const activeRepoNames = useMemo(
+    () => repoNames.filter((n) => !archivedRepos.has(n)),
+    [repoNames, archivedRepos],
+  );
+  const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(activeRepoNames);
+  const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(activeRepoNames);
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
@@ -101,6 +111,9 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
 
   const filtered = useMemo(() => {
     let list = prs ?? [];
+    if (archivedRepos.size > 0) {
+      list = list.filter((pr: any) => !archivedRepos.has(pr.head.repo?.name));
+    }
     if (personFilter.length > 0) {
       list = list.filter((pr: any) => personFilter.includes(pr.user?.login));
     }
@@ -108,7 +121,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       list = list.filter((pr: any) => pr.head.repo?.name === repoFilter);
     }
     return list;
-  }, [prs, personFilter, repoFilter]);
+  }, [prs, personFilter, repoFilter, archivedRepos]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];

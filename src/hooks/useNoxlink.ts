@@ -10,6 +10,8 @@ import {
   putNote,
   deleteNote,
   backfillProjectPrs,
+  archiveProject,
+  unarchiveProject,
   type FeedActor,
   type EventQuery,
 } from "@/lib/noxlink-api";
@@ -116,6 +118,18 @@ export function useBackfillProjectPrs() {
       // Posts will appear out-of-band via narrateEvent. Invalidate so the
       // Feed picks them up on next refetch.
       qc.invalidateQueries({ queryKey: ["noxlink", "events", selectedOrg] });
+    },
+  });
+}
+
+export function useSetProjectArchived() {
+  const qc = useQueryClient();
+  const { selectedOrg } = useAuth();
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      archived ? archiveProject(id) : unarchiveProject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["noxlink", "projects", selectedOrg] });
     },
   });
 }

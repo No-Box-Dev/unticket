@@ -23,28 +23,56 @@ export async function upsertGhUser(db, user) {
   ).run();
 }
 
-export async function upsertInstallation(db, installation) {
+export async function upsertInstallation(db, installation, reposJson = null) {
   if (!installation?.id || !installation?.account?.login) return;
   const accountLogin = installation.account.login;
   const accountType = installation.account.type ?? "Organization";
   const now = Math.floor(Date.now() / 1000);
   // installed_at is set on INSERT only — never overwritten on conflict.
   // Re-fires from new_permissions_accepted/unsuspend would otherwise reset
-  // the original install date.
+  // the original install date. repos_json is updated only when caller
+  // passes it (COALESCE preserves the existing list otherwise).
   await db.prepare(
-    `INSERT INTO installations (installation_id, owner_id, account_login, account_type, installed_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO installations (installation_id, owner_id, account_login, account_type, repos_json, installed_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(installation_id) DO UPDATE SET
        owner_id = excluded.owner_id,
        account_login = excluded.account_login,
        account_type = excluded.account_type,
+       repos_json = COALESCE(excluded.repos_json, installations.repos_json),
        updated_at = excluded.updated_at`
   ).bind(
     installation.id,
     accountLogin,
     accountLogin,
     accountType,
+    reposJson,
     now,
     now,
   ).run();
+}
+
+/** Replace the repos_json list for an installation (idempotent). */
+export async function setInstallationRepos(db, installationId, fullNames) {
+  if (!installationId) return;
+  const list = Array.isArray(fullNames) ? fullNames.filter((n) => typeof n === "string" && n.includes("/")) : [];
+  const now = Math.floor(Date.now() / 1000);
+  await db.prepare(
+    `UPDATE installations SET repos_json = ?, updated_at = ? WHERE installation_id = ?`
+  ).bind(JSON.stringify(list), now, installationId).run();
+}
+
+/** Read the current repos_json list for an installation (returns []). */
+export async function getInstallationRepos(db, installationId) {
+  if (!installationId) return [];
+  const row = await db.prepare(
+    "SELECT repos_json FROM installations WHERE installation_id = ?"
+  ).bind(installationId).first();
+  if (!row?.repos_json) return [];
+  try {
+    const arr = JSON.parse(row.repos_json);
+    return Array.isArray(arr) ? arr.filter((n) => typeof n === "string") : [];
+  } catch {
+    return [];
+  }
 }
