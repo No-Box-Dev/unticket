@@ -1,6 +1,8 @@
 import { jsonResponse, errorResponse } from "../lib/db";
 import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
+import { storeEvent } from "../lib/events";
+import { upsertInstallation } from "../lib/gh-mirror";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -50,6 +52,7 @@ export async function onRequestPost(context) {
   }
 
   const event = context.request.headers.get("X-GitHub-Event");
+  const deliveryId = context.request.headers.get("X-GitHub-Delivery");
   let payload;
   try {
     payload = JSON.parse(body);
@@ -64,10 +67,20 @@ export async function onRequestPost(context) {
 
   // App lifecycle events arrive without an organization payload — handle them up front.
   if (event === "installation") {
-    return await handleInstallationEvent(context.env.DB, payload);
+    return await handleInstallationEvent(context.env.DB, payload, deliveryId);
   }
   if (event === "installation_repositories") {
-    // We don't track per-repo installation scope yet; ack so GitHub stops retrying.
+    // We don't track per-repo installation scope yet; ack so GitHub stops
+    // retrying, but still log the event for audit (owner derived from the
+    // installation account, not payload.organization, which is absent).
+    const accountLogin = payload.installation?.account?.login;
+    if (accountLogin) {
+      try {
+        await storeEvent(context.env.DB, event, deliveryId, payload, accountLogin);
+      } catch (err) {
+        console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
+      }
+    }
     return jsonResponse({ ok: true, event, action: payload.action });
   }
 
@@ -91,6 +104,15 @@ export async function onRequestPost(context) {
   const action = payload.action;
 
   try {
+    // Record into the events log first (additive — failure here must not
+    // break the existing sprint-board upserts below). owner_id matches
+    // NoxLink's text convention (org github_login).
+    try {
+      await storeEvent(db, event, deliveryId, payload, orgLogin);
+    } catch (err) {
+      console.error("[unticket webhook] storeEvent failed:", err);
+    }
+
     if (event === "issues") {
       const repo = payload.repository?.name;
       if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
@@ -203,7 +225,7 @@ export async function onRequestPost(context) {
   }
 }
 
-async function handleInstallationEvent(db, payload) {
+async function handleInstallationEvent(db, payload, deliveryId) {
   const action = payload.action;
   const installationId = payload.installation?.id;
   const accountLogin = payload.installation?.account?.login;
@@ -222,6 +244,12 @@ async function handleInstallationEvent(db, payload) {
          WHERE installation_id = ? AND github_login != ?`
       ).bind(installationId, accountLogin),
     ]);
+    try {
+      await upsertInstallation(db, payload.installation);
+      await storeEvent(db, "installation", deliveryId, payload, accountLogin);
+    } catch (err) {
+      console.error("[unticket webhook] installations sync failed:", err);
+    }
     return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
   }
 
@@ -230,6 +258,11 @@ async function handleInstallationEvent(db, payload) {
       .prepare("UPDATE orgs SET installation_id = NULL WHERE installation_id = ?")
       .bind(installationId)
       .run();
+    try {
+      await storeEvent(db, "installation", deliveryId, payload, accountLogin);
+    } catch (err) {
+      console.error("[unticket webhook] installation event log failed:", err);
+    }
     return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
   }
 
