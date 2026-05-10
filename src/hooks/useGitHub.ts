@@ -17,10 +17,6 @@ import {
   updateIssueAssignees,
   fetchUserOrgRole,
   fetchRateLimit,
-  parseFeatureFromBranch,
-  fetchLinkedPRs,
-  linkPR,
-  unlinkPR,
   updateIssueState,
 } from "@/lib/github";
 import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats } from "@/lib/github";
@@ -244,92 +240,7 @@ export function useTriggerSync() {
       qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });
-    },
-  });
-}
-
-/** Linked PRs for D1 cache — returns source info for each link. */
-export function useLinkedPRs(featureId: number) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["prLinks", selectedOrg, featureId],
-    queryFn: () => fetchLinkedPRs(featureId),
-    enabled: !!selectedOrg && featureId > 0,
-    staleTime: 3 * 60 * 1000,
-  });
-}
-
-/** PRs linked to a feature — merges branch-detected + explicit links, deduped by repo+number. */
-export function usePRsForFeature(featureId: number) {
-  const { selectedOrg } = useAuth();
-  const { data: prLinks } = useLinkedPRs(featureId);
-
-  return useQuery({
-    // Include prLinks in the key so the query re-runs when links change
-    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks ?? []],
-    queryFn: async () => {
-      const all = await fetchAllPRs();
-      // Branch-detected PRs
-      const branchPRs = all.filter((pr) => parseFeatureFromBranch(pr.head.ref) === featureId);
-      // Explicitly linked PRs from D1
-      const explicitPRs = (prLinks ?? [])
-        .map((link) => all.find((pr) => pr.repo === link.pr_repo && pr.number === link.pr_number))
-        .filter(Boolean) as typeof all;
-
-      // Deduplicate by repo+number
-      const seen = new Set<string>();
-      const result: (typeof all[0] & { linkSource?: string })[] = [];
-
-      for (const pr of branchPRs) {
-        const key = `${pr.repo}:${pr.number}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          result.push({ ...pr, linkSource: "branch" });
-        }
-      }
-      for (const pr of explicitPRs) {
-        const key = `${pr.repo}:${pr.number}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          const link = prLinks?.find((l) => l.pr_repo === pr.repo && l.pr_number === pr.number);
-          result.push({ ...pr, linkSource: link?.source ?? "manual" });
-        }
-      }
-
-      return result;
-    },
-    enabled: !!selectedOrg && featureId > 0 && prLinks !== undefined,
-    staleTime: 3 * 60 * 1000,
-  });
-}
-
-/** Link a PR to a feature. */
-export function useLinkPR() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ featureId, prRepo, prNumber }: { featureId: number; prRepo: string; prNumber: number }) =>
-      linkPR(featureId, prRepo, prNumber),
-    onSuccess: (_data, { featureId }) => {
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg, featureId] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg, featureId] });
-    },
-  });
-}
-
-/** Unlink a PR from a feature. */
-export function useUnlinkPR() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ featureId, prRepo, prNumber }: { featureId: number; prRepo: string; prNumber: number }) =>
-      unlinkPR(featureId, prRepo, prNumber),
-    onSuccess: (_data, { featureId }) => {
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg, featureId] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg, featureId] });
     },
   });
 }
