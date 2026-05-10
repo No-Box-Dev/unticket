@@ -31,7 +31,7 @@ export async function onRequestGet(context) {
   try {
     return jsonResponse(JSON.parse(row.data));
   } catch {
-    console.warn(`[gitpulse] Corrupt config data for key "${key}" (org ${orgId}), returning default`);
+    console.warn(`[unticket] Corrupt config data for key "${key}" (org ${orgId}), returning default`);
     return jsonResponse(DEFAULTS[key]);
   }
 }

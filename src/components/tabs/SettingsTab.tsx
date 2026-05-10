@@ -105,44 +105,20 @@ export function SettingsTab() {
       {/* Agent Integration */}
       <AgentIntegrationSection org={selectedOrg!} repos={repos as any} />
 
-      {/* Webhooks */}
+      {/* GitHub App installation */}
       <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">Webhooks</h2>
+        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">GitHub App</h2>
         <p className="text-xs text-stone-400 dark:text-neutral-500">
-          Set up a GitHub webhook for real-time updates. Go to your org's webhook
-          settings and add a new webhook with these values:
+          Unticket runs as a GitHub App. Installing it on <span className="font-medium">{selectedOrg}</span> grants
+          per-repo permissions and registers the webhook automatically — no manual setup.
         </p>
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs font-medium text-stone-500 dark:text-neutral-400">Payload URL</label>
-            <div className="mt-0.5 flex items-center gap-2">
-              <code className="text-xs bg-stone-100 dark:bg-dark-overlay px-2 py-1 rounded text-stone-700 dark:text-neutral-300 flex-1 select-all">
-                {`${window.location.origin}/api/webhook`}
-              </code>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-stone-500 dark:text-neutral-400">Content type</label>
-            <div className="mt-0.5">
-              <code className="text-xs bg-stone-100 dark:bg-dark-overlay px-2 py-1 rounded text-stone-700 dark:text-neutral-300 select-all">
-                application/json
-              </code>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-stone-500 dark:text-neutral-400">Events</label>
-            <p className="text-xs text-stone-400 dark:text-neutral-500 mt-0.5">
-              Select "Let me select individual events" → check Issues, Pull requests, and Members.
-            </p>
-          </div>
-        </div>
         <a
-          href={`https://github.com/organizations/${selectedOrg}/settings/hooks/new`}
+          href="https://github.com/apps/unticket/installations/new"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block text-xs text-blue-600 hover:text-blue-800 hover:underline"
         >
-          Open {selectedOrg} webhook settings →
+          Install or manage Unticket on GitHub →
         </a>
       </div>
 
@@ -434,7 +410,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
           value={newRule}
           onChange={(e) => setNewRule(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), addRule())}
-          placeholder="Add a rule (e.g. When creating PRs, reference features with Part of gitpulse#N)"
+          placeholder="Add a rule (e.g. When creating PRs, reference features with Part of unticket#N)"
           className="flex-1 px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[40px]"
           rows={2}
         />

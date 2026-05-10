@@ -103,7 +103,7 @@ export async function onRequestDelete(context) {
   return jsonResponse({ ok: true });
 }
 
-// POST /api/features — sync features from gitpulse repo
+// POST /api/features — sync features from unticket repo
 export async function onRequestPost(context) {
   const { orgId, token, orgLogin } = getCtx(context);
   const result = await syncFeatures(context.env.DB, token, orgId, orgLogin);

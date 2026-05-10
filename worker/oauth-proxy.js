@@ -97,6 +97,6 @@ export default {
       });
     }
 
-    return new Response("GitPulse OAuth Proxy", { status: 200 });
+    return new Response("Unticket OAuth Proxy", { status: 200 });
   },
 };

@@ -18,7 +18,7 @@ async function fetchAllPages(token, url, params = {}) {
     const res = await fetch(`${url}?${searchParams}`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
         Accept: "application/vnd.github+json",
       },
     });
@@ -209,7 +209,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
-                  "User-Agent": "GitPulse",
+                  "User-Agent": "Unticket",
                   Accept: "application/vnd.github+json",
                 },
               }
@@ -219,7 +219,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
             try {
               events = await eventsRes.json();
             } catch {
-              console.error(`[gitpulse] Failed to parse events JSON for issue #${issue.number}`);
+              console.error(`[unticket] Failed to parse events JSON for issue #${issue.number}`);
               return { number: issue.number, login: null };
             }
             const closedEvent = events.filter((e) => e.event === "closed").pop();
@@ -308,7 +308,7 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   await setSyncState(db, orgId, "members");
 }
 
-// ---------- Sync Features (gitpulse repo issues) ----------
+// ---------- Sync Features (unticket repo issues) ----------
 
 export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
   const since = force ? null : (await getSyncState(db, orgId, "features"))?.lastSynced;
@@ -317,7 +317,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
 
   const issues = await fetchAllPages(
     token,
-    `https://api.github.com/repos/${orgLogin}/gitpulse/issues`,
+    `https://api.github.com/repos/${orgLogin}/unticket/issues`,
     params
   );
 
@@ -327,10 +327,10 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
   );
 
-  console.log(`[gitpulse] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
+  console.log(`[unticket] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
   if (features.length === 0 && issues.length > 0) {
-    console.warn(`[gitpulse] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
+    console.warn(`[unticket] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
   }
 
   const stmt = db.prepare(
@@ -401,7 +401,7 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
       .filter((r) => !featureNumbers.includes(r.number))
       .map((r) => r.number);
     if (toDelete.length > 0) {
-      console.log(`[gitpulse] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
+      console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
       for (let i = 0; i < toDelete.length; i += 50) {
         const batch = toDelete.slice(i, i + 50);
         await db.batch(
@@ -416,9 +416,9 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
   return { synced: features.length, total: issues.length };
 }
 
-// ---------- Migrate gitpulse config ----------
+// ---------- Migrate unticket config ----------
 
-export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
+export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
   const existing = await db
     .prepare("SELECT COUNT(*) as count FROM config WHERE org_id = ?")
     .bind(orgId)
@@ -427,11 +427,11 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
   if (existing && existing.count > 0) return;
 
   const repoRes = await fetch(
-    `https://api.github.com/repos/${orgLogin}/gitpulse`,
+    `https://api.github.com/repos/${orgLogin}/unticket`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
       },
     }
   );
@@ -442,11 +442,11 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
 
   for (const key of files) {
     const fileRes = await fetch(
-      `https://api.github.com/repos/${orgLogin}/gitpulse/contents/${key}.json`,
+      `https://api.github.com/repos/${orgLogin}/unticket/contents/${key}.json`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          "User-Agent": "GitPulse",
+          "User-Agent": "Unticket",
           Accept: "application/vnd.github+json",
         },
       }
@@ -475,7 +475,7 @@ export async function migrateGitPulseConfig(db, token, orgId, orgLogin) {
 // ---------- syncInit: lightweight init (repos + members + config migration) ----------
 
 export async function syncInit(db, token, orgId, orgLogin, force = false) {
-  await migrateGitPulseConfig(db, token, orgId, orgLogin);
+  await migrateUnticketConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
   await syncFeatures(db, token, orgId, orgLogin, force);
@@ -495,7 +495,7 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) 
     const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
     await syncPRs(db, token, orgId, orgLogin, repo, prSince);
   } catch (err) {
-    console.error(`[gitpulse] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
+    console.error(`[unticket] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
     throw err;
   }
 
@@ -503,7 +503,7 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) 
     const issueSince = force ? null : (await getSyncState(db, orgId, `issues:${repo}`))?.lastSynced;
     await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
   } catch (err) {
-    console.error(`[gitpulse] syncRepo issues failed for ${repo}:`, err?.message ?? err);
+    console.error(`[unticket] syncRepo issues failed for ${repo}:`, err?.message ?? err);
     throw err;
   }
 }

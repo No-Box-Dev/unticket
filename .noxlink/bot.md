@@ -17,5 +17,5 @@
 
 ### Rules
 - Never push directly — create PRs for all changes
-- Do not modify sprint/feature config in .gitpulse/
+- Do not modify sprint/feature config in .unticket/
 - Post a summary of what was done to NoxLink

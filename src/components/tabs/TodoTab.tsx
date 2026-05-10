@@ -347,7 +347,7 @@ function MyTodosView({
       }
     }
     if (failed.length > 0) {
-      console.error(`[gitpulse] Failed to delete ${failed.length} todo(s):`, failed);
+      console.error(`[unticket] Failed to delete ${failed.length} todo(s):`, failed);
     }
   }
 
@@ -1141,7 +1141,7 @@ function TodoDetailModal({
   }, [org, planId]);
 
   const planUrl = org
-    ? `https://github.com/${org}/gitpulse/blob/main/${todoPlanFilePath(planId)}`
+    ? `https://github.com/${org}/unticket/blob/main/${todoPlanFilePath(planId)}`
     : null;
 
   useEffect(() => {

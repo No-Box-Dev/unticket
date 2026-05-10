@@ -80,7 +80,7 @@ export async function onRequestPost(context) {
           .run();
       }
     } catch (e) {
-      console.error(`[gitpulse] Failed to update GitHub metadata for feature #${feature_number}:`, e);
+      console.error(`[unticket] Failed to update GitHub metadata for feature #${feature_number}:`, e);
     }
   })());
 

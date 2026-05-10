@@ -48,7 +48,7 @@ import {
 } from "@/lib/github-features";
 import type { SubIssue } from "@/lib/github-features";
 import type { LegacyFeature } from "@/lib/github-features";
-import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/gitpulse-repo";
+import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/unticket-repo";
 import { useRef } from "react";
 import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot, Points, PersonRole } from "@/lib/types";
 
@@ -207,7 +207,7 @@ export function useAllSprintSubIssues(featureIds: number[]) {
               ]);
               return { fid, subs, roles };
             } catch (e) {
-              console.error(`[gitpulse] Failed to fetch sub-issues/roles for feature #${fid}:`, e);
+              console.error(`[unticket] Failed to fetch sub-issues/roles for feature #${fid}:`, e);
               return { fid, subs: [] as SubIssue[], roles: [] as PersonRole[] };
             }
           }),
@@ -232,7 +232,7 @@ export function useAllSprintSubIssues(featureIds: number[]) {
             try {
               return { roleNumber: role.number, tasks: await fetchTasksForRole(selectedOrg, role.number) };
             } catch (e) {
-              console.error(`[gitpulse] Failed to fetch tasks for role #${role.number}:`, e);
+              console.error(`[unticket] Failed to fetch tasks for role #${role.number}:`, e);
               return { roleNumber: role.number, tasks: [] as SubIssue[] };
             }
           }),
@@ -471,7 +471,7 @@ export function useRolesWithTasks(featureId: number) {
               .reduce((sum, t) => sum + (t.points ?? 0), 0);
             return { role, tasks, totalPoints, donePoints };
           } catch (e) {
-            console.error(`[gitpulse] Failed to fetch tasks for role #${role.number}:`, e);
+            console.error(`[unticket] Failed to fetch tasks for role #${role.number}:`, e);
             return { role, tasks: [], totalPoints: 0, donePoints: 0 };
           }
         }),
@@ -888,7 +888,7 @@ export function useAdvanceSprint() {
         const existing = await fetchSprintSnapshots();
         const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
         await saveSprintSnapshots([...filtered, fullSnapshot]);
-        // Also persist to gitpulse repo as a JSON file
+        // Also persist to unticket repo as a JSON file
         saveSnapshotToRepo(org, fullSnapshot as SprintSnapshot).catch(() => {});
       }
 
@@ -907,7 +907,7 @@ export function useAdvanceSprint() {
         try {
           await ghDeleteFeature(org, f.id);
         } catch (e) {
-          console.error(`[gitpulse] Failed to close feature #${f.id} during sprint advance:`, e);
+          console.error(`[unticket] Failed to close feature #${f.id} during sprint advance:`, e);
           failed.push(f.id);
         }
         done++;
@@ -919,7 +919,7 @@ export function useAdvanceSprint() {
         try {
           await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
         } catch (e) {
-          console.error(`[gitpulse] Failed to move feature #${f.id} to sprint ${newSprint.number}:`, e);
+          console.error(`[unticket] Failed to move feature #${f.id} to sprint ${newSprint.number}:`, e);
           failed.push(f.id);
         }
         done++;
@@ -966,7 +966,7 @@ export function useRevertSprint() {
       const existing = await fetchSprintSnapshots();
       const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
       await saveSprintSnapshots(filtered);
-      // Also remove from gitpulse repo
+      // Also remove from unticket repo
       deleteSnapshotFromRepo(org, snapshot.sprintNumber).catch(() => {});
     },
     onSuccess: () => {

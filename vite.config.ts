@@ -16,8 +16,8 @@ function oauthDevProxy(): Plugin {
     name: "oauth-dev-proxy",
     configResolved(config) {
       const env = loadEnv(config.mode, config.root, "");
-      clientId = env.VITE_GITHUB_CLIENT_ID ?? "";
-      clientSecret = env.OAUTH_CLIENT_SECRET ?? "";
+      clientId = env.VITE_GITHUB_APP_CLIENT_ID ?? "";
+      clientSecret = env.GITHUB_APP_CLIENT_SECRET ?? "";
     },
     configureServer(server) {
       server.middlewares.use("/api/auth/callback", async (req, res) => {
@@ -34,7 +34,7 @@ function oauthDevProxy(): Plugin {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
-              error: "Set VITE_GITHUB_CLIENT_ID and OAUTH_CLIENT_SECRET in .env.local",
+              error: "Set VITE_GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET in .env.local",
             }),
           );
           return;
@@ -74,7 +74,7 @@ function oauthDevProxy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), oauthDevProxy()],
-  base: process.env.GITHUB_PAGES === "true" ? "/gitpulse/" : "/",
+  base: process.env.GITHUB_PAGES === "true" ? "/unticket/" : "/",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
