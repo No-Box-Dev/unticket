@@ -3,6 +3,7 @@ import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation } from "../lib/gh-mirror";
+import { narrateEvent } from "../lib/narrator";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -108,7 +109,15 @@ export async function onRequestPost(context) {
     // break the existing sprint-board upserts below). owner_id matches
     // NoxLink's text convention (org github_login).
     try {
-      await storeEvent(db, event, deliveryId, payload, orgLogin);
+      const stored = await storeEvent(db, event, deliveryId, payload, orgLogin);
+      if (stored?.id) {
+        // Narrate out-of-band so the webhook returns immediately.
+        context.waitUntil(
+          narrateEvent(context.env, stored.id).catch((err) => {
+            console.error("[unticket narrator] narrateEvent failed:", err);
+          })
+        );
+      }
     } catch (err) {
       console.error("[unticket webhook] storeEvent failed:", err);
     }

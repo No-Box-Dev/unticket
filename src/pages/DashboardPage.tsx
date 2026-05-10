@@ -12,11 +12,13 @@ const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ 
 const PRsTab = lazy(() => import("@/components/tabs/PRsTab").then(m => ({ default: m.PRsTab })));
 const IssuesTab = lazy(() => import("@/components/tabs/IssuesTab").then(m => ({ default: m.IssuesTab })));
 const TodoTab = lazy(() => import("@/components/tabs/TodoTab").then(m => ({ default: m.TodoTab })));
+const PostsTab = lazy(() => import("@/components/tabs/PostsTab").then(m => ({ default: m.PostsTab })));
+const ReposTab = lazy(() => import("@/components/tabs/ReposTab").then(m => ({ default: m.ReposTab })));
 const EngineersTab = lazy(() => import("@/components/tabs/EngineersTab").then(m => ({ default: m.EngineersTab })));
 const ReleasesTab = lazy(() => import("@/components/tabs/ReleasesTab").then(m => ({ default: m.ReleasesTab })));
 const SettingsTab = lazy(() => import("@/components/tabs/SettingsTab").then(m => ({ default: m.SettingsTab })));
 
-const VALID_TABS = new Set<string>(["sprint", "prs", "issues", "todos", "engineers", "releases", "settings"]);
+const VALID_TABS = new Set<string>(["sprint", "prs", "issues", "todos", "posts", "repos", "engineers", "releases", "settings"]);
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
@@ -68,6 +70,8 @@ export function DashboardPage() {
             {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "todos" && <TodoTab />}
+            {activeTab === "posts" && <PostsTab />}
+            {activeTab === "repos" && <ReposTab />}
             {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "releases" && <ReleasesTab />}
           </ErrorBoundary>
