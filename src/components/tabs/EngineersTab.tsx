@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
-import { usePeople, useFeatures } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues, usePRsForFeature } from "@/hooks/useGitHub";
+import { usePeople } from "@/hooks/useConfigRepo";
+import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, ChevronDown, ChevronRight, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
-import type { Person, Feature } from "@/lib/types";
+import { ArrowLeft, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
+import type { Person } from "@/lib/types";
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -22,18 +22,12 @@ function formatRelative(iso: string): string {
 
 export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
-  const { data: features } = useFeatures();
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: openIssues } = useOpenIssues(repoNames);
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
-
-  const activeFeatures = useMemo(() => {
-    if (!features) return [];
-    return features.filter((f) => f.status !== "future");
-  }, [features]);
 
   // Build engineer list
   const engineers = useMemo(() => {
@@ -43,7 +37,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
-      const myFeatures = activeFeatures.filter((f) => f.owners.includes(member.login));
       const openPRs = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.state === "open")?.length ?? 0;
       const prsInReview = allPRs?.filter((pr: any) =>
         pr.state === "open"
@@ -61,13 +54,12 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         role: person?.role ?? "",
         team: person?.team ?? "",
         description: person?.description ?? "",
-        myFeatures,
         openPRs,
         prsInReview,
         assignedIssues,
       };
     });
-  }, [orgMembers, people, activeFeatures, allPRs, openIssues]);
+  }, [orgMembers, people, allPRs, openIssues]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -181,16 +173,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 
         {/* Activity feed */}
         <ActivityFeed items={feed} />
-
-        {/* Active features */}
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-          <div className="flex items-center border-b border-stone-200 px-4 py-3">
-            <h3 className="text-sm font-semibold text-stone-700">Active features ({selected.myFeatures.length})</h3>
-          </div>
-          <div className="p-4">
-            <FeaturesView features={selected.myFeatures} />
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -246,96 +228,6 @@ function CardStat({ label, value }: { label: string; value: number | string }) {
     <div className="flex items-baseline gap-1">
       <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
       <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
-    </div>
-  );
-}
-
-// ---------- View Components ----------
-
-const STATUS_COLORS: Record<string, string> = {
-  todo: "bg-status-plan",
-  staging: "bg-status-progress",
-  ready: "bg-status-tested",
-  production: "bg-status-production",
-  future: "bg-status-future",
-};
-const STATUS_LABELS: Record<string, string> = {
-  todo: "To do",
-  staging: "Testing on staging",
-  ready: "Ready for production",
-  production: "On production",
-  future: "Future",
-};
-
-function FeaturesView({ features }: { features: Feature[] }) {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-
-  if (features.length === 0) return <p className="text-sm text-stone-400">No features assigned</p>;
-
-  return (
-    <div className="space-y-1">
-      {features.map((f) => {
-        const isExpanded = expandedId === f.id;
-        return (
-          <div key={f.id}>
-            <button
-              onClick={() => setExpandedId(isExpanded ? null : f.id)}
-              className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-stone-50 cursor-pointer text-left"
-            >
-              {isExpanded ? <ChevronDown size={14} className="text-stone-400 shrink-0" /> : <ChevronRight size={14} className="text-stone-400 shrink-0" />}
-              <span className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[f.status])} />
-              <span className="text-sm text-stone-700 flex-1 truncate">{f.title}</span>
-              <span className="text-xs text-stone-400">{STATUS_LABELS[f.status]}</span>
-            </button>
-            {isExpanded && (
-              <div className="ml-7 mb-2">
-                <LinkedPRsPanel featureId={f.id} />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------- Linked PRs Panel ----------
-
-function LinkedPRsPanel({ featureId }: { featureId: number }) {
-  const { data: prs, isLoading } = usePRsForFeature(featureId);
-
-  if (isLoading) return <div className="py-2 px-2"><Spinner className="w-4 h-4 text-stone-400" /></div>;
-  if (!prs || prs.length === 0) return null;
-
-  return (
-    <div className="border-t border-stone-100 pt-2 mt-1">
-      <span className="text-[10px] text-stone-400 uppercase tracking-wider px-2">Linked PRs</span>
-      <div className="space-y-0.5 mt-1">
-        {prs.map((pr) => {
-          const isMerged = pr.state === "closed" || (pr as any).merged_at;
-          const source = (pr as any).linkSource as string | undefined;
-          return (
-            <a
-              key={pr.id}
-              href={pr.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-stone-50 group"
-            >
-              {isMerged
-                ? <GitMerge size={12} className="text-stone-400 shrink-0" />
-                : <GitPullRequest size={12} className="text-stone-400 shrink-0" />
-              }
-              <span className="text-xs text-stone-400 shrink-0">{pr.repo}#{pr.number}</span>
-              <span className="text-xs text-stone-600 truncate flex-1">{pr.title}</span>
-              {source && (
-                <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 bg-stone-100 text-stone-500">{source}</span>
-              )}
-              <ExternalLink size={10} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
-            </a>
-          );
-        })}
-      </div>
     </div>
   );
 }
