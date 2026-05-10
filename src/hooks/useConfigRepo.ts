@@ -1,16 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
-  fetchSprint,
-  saveSprint,
   fetchPeople,
   savePeople,
   fetchSettings,
   saveSettings,
   fetchAgentRules,
   saveAgentRules,
-  fetchSprintSnapshots,
-  saveSprintSnapshots,
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
@@ -19,13 +15,9 @@ import {
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
-  closeMilestone,
-  reopenMilestone,
-  findOrCreateMilestone,
   syncFeaturesFromGitHub,
 } from "@/lib/github-features";
-import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/unticket-repo";
-import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, SprintSnapshot } from "@/lib/types";
+import type { Feature, FeatureStatus, Person, OrgSettings } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -34,15 +26,6 @@ export function useConfigRepoExists() {
     queryFn: ensureConfigRepo,
     enabled: !!selectedOrg,
     staleTime: 5 * 60 * 1000,
-  });
-}
-
-export function useSprint() {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["sprint", selectedOrg],
-    queryFn: fetchSprint,
-    enabled: !!selectedOrg,
   });
 }
 
@@ -77,7 +60,7 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; sprint: number | null; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: { title: string; status: FeatureStatus; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     onSuccess: (newFeature) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
@@ -130,24 +113,6 @@ export function useDeleteFeature() {
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
     },
-  });
-}
-
-export function useSaveSprint() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (sprint: SprintConfig) => saveSprint(sprint),
-    onMutate: async (sprint) => {
-      await qc.cancelQueries({ queryKey: ["sprint", selectedOrg] });
-      const previous = qc.getQueryData<SprintConfig>(["sprint", selectedOrg]);
-      qc.setQueryData(["sprint", selectedOrg], sprint);
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(["sprint", selectedOrg], context.previous);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] }),
   });
 }
 
@@ -214,24 +179,6 @@ export function useSaveAgentRules() {
   });
 }
 
-export function useSprintSnapshots() {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["sprintSnapshots", selectedOrg],
-    queryFn: fetchSprintSnapshots,
-    enabled: !!selectedOrg,
-  });
-}
-
-export function useSaveSprintSnapshots() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (snapshots: SprintSnapshot[]) => saveSprintSnapshots(snapshots),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] }),
-  });
-}
-
 export function useCreateConfigRepo() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
@@ -239,7 +186,6 @@ export function useCreateConfigRepo() {
     mutationFn: createConfigRepo,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["configRepo", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
@@ -258,113 +204,26 @@ export function useSyncFeatures() {
   });
 }
 
-// ---------- Sprint Advancement ----------
+// ---------- Bulk clean: close all features in production status ----------
 
-export function useAdvanceSprint() {
+export function useCleanDoneFeatures() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: {
-      newSprint: SprintConfig;
-      oldSprintNumber: number;
-      features: Feature[];
-      snapshot?: Omit<SprintSnapshot, "createdAt">;
-      onProgress?: (done: number, total: number) => void;
-    }) => {
-      const { newSprint, oldSprintNumber, features, snapshot, onProgress } = args;
+    mutationFn: async (features: Feature[]) => {
       const org = selectedOrg!;
-
-      // 1. Save snapshot of the old sprint before advancing
-      if (snapshot) {
-        const fullSnapshot = { ...snapshot, createdAt: new Date().toISOString() };
-        const existing = await fetchSprintSnapshots();
-        const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
-        await saveSprintSnapshots([...filtered, fullSnapshot]);
-        // Also persist to unticket repo as a JSON file
-        saveSnapshotToRepo(org, fullSnapshot as SprintSnapshot).catch(() => {});
-      }
-
-      // 2. Ensure the new milestone exists on GitHub first
-      await findOrCreateMilestone(org, newSprint.number);
-
-      const sprintFeatures = features.filter((f) => f.sprint === oldSprintNumber && f.status !== "future");
-      const toClose = sprintFeatures.filter((f) => f.status === "production");
-      const toMove = sprintFeatures.filter((f) => f.status !== "production");
-      const total = toClose.length + toMove.length;
+      const done = features.filter((f) => f.status === "production");
       const failed: number[] = [];
-      let done = 0;
-
-      // 3. Close features that are in production (close the GitHub issue)
-      for (const f of toClose) {
+      for (const f of done) {
         try {
           await ghDeleteFeature(org, f.id);
         } catch (e) {
-          console.error(`[unticket] Failed to close feature #${f.id} during sprint advance:`, e);
+          console.error(`[unticket] Failed to clean done feature #${f.id}:`, e);
           failed.push(f.id);
         }
-        done++;
-        onProgress?.(done, total);
       }
-
-      // 4. Move all non-production features to the new sprint
-      for (const f of toMove) {
-        try {
-          await ghUpdateFeature(org, { ...f, sprint: newSprint.number });
-        } catch (e) {
-          console.error(`[unticket] Failed to move feature #${f.id} to sprint ${newSprint.number}:`, e);
-          failed.push(f.id);
-        }
-        done++;
-        onProgress?.(done, total);
-      }
-
-      // 5. Only persist sprint config and close old milestone if all features processed
-      if (failed.length === 0) {
-        await saveSprint(newSprint);
-        await closeMilestone(org, oldSprintNumber);
-      }
-
-      return { failed };
+      return { cleaned: done.length - failed.length, failed };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] });
-    },
-  });
-}
-
-export function useRevertSprint() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: { snapshot: SprintSnapshot }) => {
-      const { snapshot } = args;
-      const org = selectedOrg!;
-
-      // 1. Restore sprint config from the snapshot
-      await saveSprint({
-        number: snapshot.sprintNumber,
-        name: snapshot.name,
-        startDate: snapshot.startDate,
-        endDate: snapshot.endDate,
-        focus: snapshot.focus,
-      });
-
-      // 2. Reopen the old milestone
-      await reopenMilestone(org, snapshot.sprintNumber);
-
-      // 3. Remove the snapshot from saved snapshots
-      const existing = await fetchSprintSnapshots();
-      const filtered = existing.filter((s) => s.sprintNumber !== snapshot.sprintNumber);
-      await saveSprintSnapshots(filtered);
-      // Also remove from unticket repo
-      deleteSnapshotFromRepo(org, snapshot.sprintNumber).catch(() => {});
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sprint", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["sprintSnapshots", selectedOrg] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }

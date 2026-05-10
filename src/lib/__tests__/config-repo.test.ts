@@ -52,42 +52,15 @@ describe("fetchSettings", () => {
 });
 
 describe("createConfigRepo", () => {
-  it("computes next Monday correctly", async () => {
-    // Wednesday 2026-02-18
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-02-18T12:00:00Z"));
-
-    mockApiPut.mockResolvedValue(undefined);
-    await createConfigRepo();
-
-    const sprintCall = mockApiPut.mock.calls.find(
-      (c) => c[0] === "/api/config/sprint",
-    );
-    expect(sprintCall).toBeDefined();
-    const sprint = sprintCall![1] as { startDate: string; endDate: string };
-    // Next Monday from Wednesday Feb 18 is Feb 23
-    expect(sprint.startDate).toBe("2026-02-23");
-    // 13 days later
-    expect(sprint.endDate).toBe("2026-03-08");
-
-    vi.useRealTimers();
-  });
-
-  it("seeds 3 config keys via apiPut", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-02-18T12:00:00Z"));
-
+  it("seeds 2 config keys via apiPut", async () => {
     mockApiPut.mockResolvedValue(undefined);
     await createConfigRepo();
 
     const paths = mockApiPut.mock.calls.map((c) => c[0]);
-    expect(paths).toContain("/api/config/sprint");
     expect(paths).toContain("/api/config/people");
     expect(paths).toContain("/api/config/settings");
+    expect(paths).not.toContain("/api/config/sprint");
     expect(paths).not.toContain("/api/config/features");
-    expect(paths).not.toContain("/api/config/todos");
-    expect(mockApiPut).toHaveBeenCalledTimes(3);
-
-    vi.useRealTimers();
+    expect(mockApiPut).toHaveBeenCalledTimes(2);
   });
 });

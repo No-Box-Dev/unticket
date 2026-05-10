@@ -4,8 +4,6 @@ import { createQueryWrapper } from "@/test/helpers";
 
 vi.mock("@/lib/config-repo", () => ({
   createConfigRepo: vi.fn(),
-  fetchSprint: vi.fn(),
-  saveSprint: vi.fn(),
   fetchPeople: vi.fn(),
   savePeople: vi.fn(),
   fetchSettings: vi.fn(),
@@ -13,31 +11,14 @@ vi.mock("@/lib/config-repo", () => ({
   ensureConfigRepo: vi.fn(),
   fetchAgentRules: vi.fn(),
   saveAgentRules: vi.fn(),
-  fetchSprintSnapshots: vi.fn(),
-  saveSprintSnapshots: vi.fn(),
 }));
 
 vi.mock("@/lib/github-features", () => ({
-  fetchFeatures: vi.fn(),
   fetchFeaturesFromD1: vi.fn(),
   createFeature: vi.fn(),
   updateFeature: vi.fn(),
   deleteFeature: vi.fn(),
   syncFeaturesFromGitHub: vi.fn(),
-  migrateFeatures: vi.fn(),
-  fetchLegacyFeatures: vi.fn(),
-  closeMilestone: vi.fn(),
-  findOrCreateMilestone: vi.fn(),
-  fetchSubIssues: vi.fn(),
-  createSubIssue: vi.fn(),
-  toggleSubIssue: vi.fn(),
-  updateSubIssueAssignees: vi.fn(),
-  deleteSubIssue: vi.fn(),
-  fetchRoles: vi.fn(),
-  createRole: vi.fn(),
-  deleteRole: vi.fn(),
-  fetchTasksForRole: vi.fn(),
-  createTask: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -74,7 +55,7 @@ beforeEach(() => {
 
 describe("useUpdateFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "todo", sprint: 1,
+    id: 1, title: "Test", owners: [], status: "todo",
   };
   const updated: Feature = { ...feature, title: "Updated", status: "staging" };
 
@@ -119,7 +100,7 @@ describe("useUpdateFeature", () => {
 
 describe("useDeleteFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "todo", sprint: 1,
+    id: 1, title: "Test", owners: [], status: "todo",
   };
 
   it("optimistically removes from cache", async () => {
@@ -161,7 +142,6 @@ describe("useCreateConfigRepo", () => {
       (c) => (c[0] as { queryKey: string[] }).queryKey[0],
     );
     expect(invalidatedKeys).toContain("configRepo");
-    expect(invalidatedKeys).toContain("sprint");
     expect(invalidatedKeys).toContain("features");
     expect(invalidatedKeys).toContain("people");
     expect(invalidatedKeys).toContain("settings");

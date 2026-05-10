@@ -67,7 +67,7 @@ export function SettingsTab() {
         </h2>
         <p className="text-xs text-stone-400">
           All repositories in {selectedOrg} are tracked by default. Mark repos as
-          draft to hide their issues from the Sprint view.
+          draft to hide their issues from the Issues view.
         </p>
         <div className="grid grid-cols-2 gap-1.5 max-h-60 overflow-y-auto">
           {repos?.map((repo) => {

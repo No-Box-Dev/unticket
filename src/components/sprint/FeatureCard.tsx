@@ -11,8 +11,7 @@ interface FeatureCardProps {
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
-  mode: "sprint" | "backlog";
-  currentSprint?: number;
+  mode: "active" | "backlog";
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, feature: Feature) => void;
   isAdmin?: boolean;
@@ -25,7 +24,6 @@ export function FeatureCard({
   onDelete,
   onOpenDetail,
   mode,
-  currentSprint,
   draggable,
   onDragStart,
   isAdmin,
@@ -86,20 +84,20 @@ export function FeatureCard({
         />
         <div className="flex-1 min-w-0" />
         <div className="flex items-center gap-1.5">
-          {mode === "sprint" && (
+          {mode === "active" && (
             <button
-              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "future"), sprint: null }))}
+              onClick={stop(() => onUpdate(withStatusTransition(feature, "future")))}
               className="p-1 text-stone-300 hover:text-stone-500 cursor-pointer rounded hover:bg-stone-100"
               title="Move to Backlog"
             >
               <Archive size={13} />
             </button>
           )}
-          {mode === "backlog" && currentSprint && (
+          {mode === "backlog" && (
             <button
-              onClick={stop(() => onUpdate({ ...withStatusTransition(feature, "todo"), sprint: currentSprint }))}
+              onClick={stop(() => onUpdate(withStatusTransition(feature, "todo")))}
               className="p-1 text-stone-300 hover:text-accent cursor-pointer rounded hover:bg-stone-100"
-              title="Move to Sprint"
+              title="Move to To do"
             >
               <ArrowUpFromLine size={13} />
             </button>

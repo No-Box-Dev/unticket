@@ -36,9 +36,7 @@ export function DashboardPage() {
   const tabParam = searchParams.get("tab");
   const activeTab: TabId = tabParam && VALID_TABS.has(tabParam) ? tabParam as TabId : "issues";
   const rawF = searchParams.get("f");
-  const rawS = searchParams.get("s");
   const featureId = rawF ? (Number.isFinite(Number(rawF)) ? Number(rawF) : undefined) : undefined;
-  const sprintNum = rawS ? (Number.isFinite(Number(rawS)) ? Number(rawS) : undefined) : undefined;
   const personParam = searchParams.get("person") ?? undefined;
   const viewParam = searchParams.get("view") ?? undefined;
 
@@ -63,9 +61,8 @@ export function DashboardPage() {
         <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-accent" /></div>}>
           <ErrorBoundary key={activeTab}>
             {activeTab === "settings" && <SettingsTab />}
-            {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} urlFeatureId={featureId} urlSprintNum={sprintNum} onUrlChange={(f, s) => {
+            {activeTab === "sprint" && <SprintTab navFilter={navFilter} urlFeatureId={featureId} onUrlChange={(f) => {
               const params: Record<string, string> = { tab: "sprint" };
-              if (s != null) params.s = String(s);
               if (f != null) params.f = String(f);
               if (personParam) params.person = personParam;
               if (viewParam) params.view = viewParam;

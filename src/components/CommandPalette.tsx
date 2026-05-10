@@ -5,7 +5,6 @@ import { Search } from "lucide-react";
 import { useFeatures, usePeople } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
-import { useSidebar } from "@/lib/sidebar";
 import type { TabId } from "@/lib/types";
 
 interface CommandPaletteProps {
@@ -21,7 +20,7 @@ interface SearchResult {
 
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "engineers", label: "People", keywords: "people engineers team members" },
-  { id: "sprint", label: "Sprint", keywords: "sprint features kanban board" },
+  { id: "sprint", label: "Features", keywords: "features kanban board" },
   { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
@@ -40,7 +39,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const { data: people } = usePeople();
   const { data: orgMembers } = useActiveMembers();
   const [, setSearchParams] = useSearchParams();
-  const { setViewingSprint } = useSidebar();
 
   // Build people lookup (org members + configured people)
   const allPeople = useMemo(() => {
@@ -102,12 +100,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         items.push({
           type: "feature",
           label: f.title,
-          detail: [
-            f.sprint ? `Sprint ${f.sprint}` : "Backlog",
-            f.owners.length > 0 ? f.owners.join(", ") : null,
-          ].filter(Boolean).join(" · "),
+          detail: f.owners.length > 0 ? f.owners.join(", ") : undefined,
           action: () => {
-            setViewingSprint(null);
             setSearchParams({ tab: "sprint", f: String(f.id) }, { replace: true });
             setOpen(false);
           },
@@ -141,7 +135,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, onNavigate, setViewingSprint, setSearchParams]);
+  }, [query, features, allPeople, onNavigate, setSearchParams]);
 
   // Keyboard navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect

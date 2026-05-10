@@ -438,7 +438,7 @@ export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
 
   if (!repoRes.ok) return;
 
-  const files = ["sprint", "features", "people", "settings"];
+  const files = ["features", "people", "settings"];
 
   for (const key of files) {
     const fileRes = await fetch(
