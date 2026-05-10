@@ -40,14 +40,6 @@ vi.mock("@/lib/github-features", () => ({
   createTask: vi.fn(),
 }));
 
-vi.mock("@/lib/github-todos", () => ({
-  fetchTodosByOwner: vi.fn(),
-  createTodo: vi.fn(),
-  updateTodo: vi.fn(),
-  deleteTodo: vi.fn(),
-  fetchTodosClosedInRange: vi.fn(),
-}));
-
 vi.mock("@/lib/auth", () => ({
   useAuth: vi.fn(),
 }));

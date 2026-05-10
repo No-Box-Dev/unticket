@@ -341,7 +341,7 @@ export function useAssignedIssues(login: string) {
     queryKey: ["assignedIssues", selectedOrg, login],
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
-      // Exclude issues from the unticket repo (those are todos/features/sprint tasks)
+      // Exclude issues from the unticket repo (those are features)
       return res.data.filter((i) => i.repo !== "unticket" && i.repo !== ".unticket");
     },
     enabled: !!selectedOrg && !!login,

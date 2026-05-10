@@ -28,7 +28,6 @@ config/
   people.json       # Team members: name, role, teams per GitHub login
 plans/
   PLAN-*.md         # Implementation plans per feature (e.g. PLAN-42.md)
-  TODO-*.md         # Implementation plans per todo (e.g. TODO-123.md)
 snapshots/
   sprint-N.json     # Sprint snapshot saved when a sprint is closed
 CLAUDE.md           # This file
@@ -37,24 +36,13 @@ CLAUDE.md           # This file
 ## Features (GitHub Issues in this repo)
 
 Features are tracked as issues with the \`feature\` label.
-- Labels: \`status:{plan,in_progress,demo,tested,production,future}\`
+- Labels: \`status:{todo,staging,ready,production,future}\`
 - Sprints: GitHub Milestones named "Sprint N"
 - Owners: issue assignees
-- Tasks: sub-issues under feature issues
 
 \`\`\`bash
 gh issue list --repo {org}/unticket --label feature
 gh issue view <number> --repo {org}/unticket
-\`\`\`
-
-## Todos (GitHub Issues in this repo)
-
-Personal todos are issues with the \`todo\` label.
-- Labels: \`todo\`, \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`
-- Closing a todo marks it done; reopening moves it back
-
-\`\`\`bash
-gh issue list --repo {org}/unticket --label todo
 \`\`\`
 
 ## People Config
@@ -140,27 +128,6 @@ export async function savePlanFile(
   content: string,
 ): Promise<void> {
   await saveFileToUnticket(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
-}
-
-// ---------- Todo plan files ----------
-
-export function todoPlanFilePath(todoId: string): string {
-  return `plans/TODO-${todoId}.md`;
-}
-
-export async function fetchTodoPlanFile(
-  org: string,
-  todoId: string,
-): Promise<{ content: string } | null> {
-  return fetchFileFromUnticket(org, todoPlanFilePath(todoId));
-}
-
-export async function saveTodoPlanFile(
-  org: string,
-  todoId: string,
-  content: string,
-): Promise<void> {
-  await saveFileToUnticket(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
 }
 
 // ---------- People config ----------

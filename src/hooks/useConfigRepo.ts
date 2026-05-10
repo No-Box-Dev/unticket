@@ -15,15 +15,7 @@ import {
   createConfigRepo,
 } from "@/lib/config-repo";
 import {
-  fetchTodosByOwner as ghFetchTodosByOwner,
-  createTodo as ghCreateTodo,
-  updateTodo as ghUpdateTodo,
-  deleteTodo as ghDeleteTodo,
-  fetchTodosClosedInRange as ghFetchTodosClosedInRange,
-} from "@/lib/github-todos";
-import {
   fetchFeaturesFromD1,
-  fetchAllFeaturesFromD1,
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
@@ -33,7 +25,7 @@ import {
   syncFeaturesFromGitHub,
 } from "@/lib/github-features";
 import { saveSnapshotToRepo, deleteSnapshotFromRepo } from "@/lib/unticket-repo";
-import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, Todo, TodoStatus, SprintSnapshot } from "@/lib/types";
+import type { SprintConfig, Feature, FeatureStatus, Person, OrgSettings, SprintSnapshot } from "@/lib/types";
 
 export function useConfigRepoExists() {
   const { selectedOrg } = useAuth();
@@ -60,17 +52,6 @@ export function useFeatures() {
     queryKey: ["features", selectedOrg],
     queryFn: fetchFeaturesFromD1,
     enabled: !!selectedOrg,
-  });
-}
-
-/** All features including closed — for releases calendar. */
-export function useAllFeatures() {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["allFeatures", selectedOrg],
-    queryFn: fetchAllFeaturesFromD1,
-    enabled: !!selectedOrg,
-    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -203,98 +184,6 @@ export function useSaveSettings() {
       if (context?.previous) qc.setQueryData(["settings", selectedOrg], context.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["settings", selectedOrg] }),
-  });
-}
-
-export function useTodos() {
-  const { selectedOrg, user } = useAuth();
-  return useQuery({
-    queryKey: ["todos", selectedOrg, user?.login],
-    queryFn: () => ghFetchTodosByOwner(selectedOrg!, user!.login!),
-    enabled: !!selectedOrg && !!user?.login && user.login.length > 0,
-    staleTime: 2 * 60 * 1000,
-  });
-}
-
-export function useCreateTodoItem() {
-  const { selectedOrg, user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { title: string; featureId?: number }) =>
-      ghCreateTodo(selectedOrg!, args.title, user!.login, {
-        featureId: args.featureId,
-      }),
-    onSuccess: (newTodo) => {
-      qc.setQueryData<Todo[]>(["todos", selectedOrg, user?.login], (old) =>
-        old ? [...old, newTodo] : [newTodo],
-      );
-    },
-  });
-}
-
-export function useUpdateTodoItem() {
-  const { selectedOrg, user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { issueNumber: number; updates: { title?: string; status?: TodoStatus; featureId?: number | null } }) =>
-      ghUpdateTodo(selectedOrg!, args.issueNumber, args.updates),
-    onMutate: async (args) => {
-      const key = ["todos", selectedOrg, user?.login];
-      await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<Todo[]>(key);
-      qc.setQueryData<Todo[]>(key, (old) =>
-        old?.map((t) => {
-          if (t.id !== args.issueNumber) return t;
-          const { featureId, ...rest } = args.updates;
-          return {
-            ...t,
-            ...rest,
-            status: args.updates.status ?? t.status,
-            featureId: featureId === null ? undefined : (featureId ?? t.featureId),
-          };
-        }) ?? [],
-      );
-      return { previous, key };
-    },
-    onSuccess: (result) => {
-      const key = ["todos", selectedOrg, user?.login];
-      qc.setQueryData<Todo[]>(key, (old) =>
-        old?.map((t) => t.id === result.id ? result : t) ?? [],
-      );
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(context.key, context.previous);
-    },
-  });
-}
-
-export function useDeleteTodoItem() {
-  const { selectedOrg, user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (issueNumber: number) => ghDeleteTodo(selectedOrg!, issueNumber),
-    onMutate: async (issueNumber) => {
-      const key = ["todos", selectedOrg, user?.login];
-      await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<Todo[]>(key);
-      qc.setQueryData<Todo[]>(key, (old) =>
-        old?.filter((t) => t.id !== issueNumber) ?? [],
-      );
-      return { previous, key };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(context.key, context.previous);
-    },
-  });
-}
-
-export function useTodosClosedInRange(startDate: string | undefined, endDate: string | undefined) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["todosClosedInRange", selectedOrg, startDate, endDate],
-    queryFn: () => ghFetchTodosClosedInRange(selectedOrg!, null, startDate!, endDate!),
-    enabled: !!selectedOrg && !!startDate && !!endDate,
-    staleTime: 5 * 60 * 1000,
   });
 }
 
