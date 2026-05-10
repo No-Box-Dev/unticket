@@ -50,6 +50,7 @@ export type TabId =
   | "prs"
   | "issues"
   | "todos"
+  | "posts"
   | "engineers"
   | "releases"
   | "settings";

@@ -9,7 +9,8 @@ import type { TabId } from "@/lib/types";
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
   { id: "sprint", label: "Sprint" },
-  { id: "todos", label: "Feed" },
+  { id: "posts", label: "Feed" },
+  { id: "todos", label: "Todos" },
   { id: "prs", label: "PR" },
   { id: "issues", label: "Issues" },
   { id: "releases", label: "Releases" },
