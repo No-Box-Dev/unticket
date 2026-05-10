@@ -484,15 +484,13 @@ export interface IssueStats {
   open: number;
   unassigned: number;
   stale: number;
-  closedRecent: number;
   byRepo: { repo: string; count: number; critical: number }[];
   byLabel: { name: string; color: string; count: number }[];
   closedPerDay: { day: string; count: number; critical: number }[];
 }
 
-export async function fetchIssueStats(closedSince?: string, repos?: string[]): Promise<IssueStats> {
+export async function fetchIssueStats(repos?: string[]): Promise<IssueStats> {
   const params = new URLSearchParams({ meta: "stats" });
-  if (closedSince) params.set("closed_since", closedSince);
   if (repos && repos.length > 0) params.set("repos", repos.join(","));
   return apiGet<IssueStats>(`/api/issues?${params}`);
 }

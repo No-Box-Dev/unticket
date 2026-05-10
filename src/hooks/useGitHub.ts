@@ -163,11 +163,11 @@ export function useIssueLabels() {
   });
 }
 
-export function useIssueStats(closedSince?: string, repos?: string[]) {
+export function useIssueStats(repos?: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery<IssueStats>({
-    queryKey: ["issues", selectedOrg, "stats", closedSince, repos],
-    queryFn: () => fetchIssueStats(closedSince, repos),
+    queryKey: ["issues", selectedOrg, "stats", repos],
+    queryFn: () => fetchIssueStats(repos),
     enabled: !!selectedOrg,
     staleTime: 2 * 60 * 1000,
   });

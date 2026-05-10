@@ -9,5 +9,18 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        var s = document.createElement('script');
+        s.src = 'https://cdn.noxspot.dev/noxspot.min.js';
+        s.async = true;
+        s.onload = function () {
+          if (window.NoxSpot) {
+            window.NoxSpot.init({ siteId: '43139df3-30bb-4208-bee8-1cffb6939b9b' });
+          }
+        };
+        document.head.appendChild(s);
+      })();
+    </script>
   </body>
 </html>
