@@ -1,25 +1,9 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" fill="white"/>
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- NoBoxDev Hexagon centered -->
+  <path d="M18 10L22 12.3L22 17L18 19.3L14 17L14 12.3Z" fill="black"/>
 
-  <!-- NoBoxDev Hexagon - larger, centered higher (matching NoxKey proportions) -->
-  <!-- Top chevron -->
-  <path d="M512 135L640 209L608 227.5L512 172L416 227.5L384 209L512 135Z" fill="#F07054"/>
-  <!-- Right side bar -->
-  <path d="M656 228V368L624 348.5V247.5L656 228Z" fill="#F07054"/>
-  <!-- Bottom chevron -->
-  <path d="M640 387L512 461L384 387L416 368.5L512 424L608 368.5L640 387Z" fill="#F07054"/>
-  <!-- Left side bar -->
-  <path d="M400 247.5V348.5L368 368V228L400 247.5Z" fill="#F07054"/>
-
-  <!-- Vertical shaft connecting hexagon to waves -->
-  <rect x="498" y="480" width="28" height="120" rx="14" fill="#6B7BF7"/>
-
-  <!-- Wave arc 1 (closest, tightest) -->
-  <path d="M440 620 A90 70 0 0 0 584 620" stroke="#6B7BF7" stroke-width="28" stroke-linecap="round" fill="none"/>
-
-  <!-- Wave arc 2 (middle) -->
-  <path d="M380 700 A160 100 0 0 0 644 700" stroke="#6B7BF7" stroke-width="28" stroke-linecap="round" fill="none"/>
-
-  <!-- Wave arc 3 (outer, widest) -->
-  <path d="M320 780 A230 120 0 0 0 704 780" stroke="#6B7BF7" stroke-width="28" stroke-linecap="round" fill="none"/>
+  <!-- Simple broadcast arcs below hexagon -->
+  <path d="M14 22 A5 4 0 0 0 22 22" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M10.5 25.5 A9 6 0 0 0 25.5 25.5" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M7 29 A13 8 0 0 0 29 29" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
 </svg>
