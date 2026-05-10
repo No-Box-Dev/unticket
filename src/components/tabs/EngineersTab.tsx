@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
 import { usePeople, useFeatures } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues, usePRsForFeature } from "@/hooks/useGitHub";
+import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues, usePRsForFeature } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
@@ -26,6 +26,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
+  const { data: openIssues } = useOpenIssues(repoNames);
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
 
@@ -40,16 +41,18 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     const peopleMap = new Map<string, Person>();
     for (const p of people ?? []) peopleMap.set(p.github, p);
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = thirtyDaysAgo.toISOString();
-
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
       const myFeatures = activeFeatures.filter((f) => f.owners.includes(member.login));
-      const prsMerged = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.merged_at && pr.merged_at >= cutoff)?.length ?? 0;
-      const issuesSolved = closedIssues?.filter((i: any) => i.closed_by === member.login && i.closed_at && i.closed_at >= cutoff)?.length ?? 0;
-      const featuresDone = myFeatures.filter((f) => f.status === "production").length;
+      const openPRs = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.state === "open")?.length ?? 0;
+      const prsInReview = allPRs?.filter((pr: any) =>
+        pr.state === "open"
+        && !pr.draft
+        && (pr.requested_reviewers ?? []).some((r: any) => r.login === member.login),
+      )?.length ?? 0;
+      const assignedIssues = openIssues?.filter((i: any) =>
+        (i.assignees ?? []).some((a: any) => a.login === member.login),
+      )?.length ?? 0;
 
       return {
         login: member.login,
@@ -59,12 +62,12 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         team: person?.team ?? "",
         description: person?.description ?? "",
         myFeatures,
-        prsMerged,
-        issuesSolved,
-        featuresDone,
+        openPRs,
+        prsInReview,
+        assignedIssues,
       };
     });
-  }, [orgMembers, people, activeFeatures, allPRs, closedIssues]);
+  }, [orgMembers, people, activeFeatures, allPRs, openIssues]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -116,8 +119,8 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   // Default landing: grid of cards. Click a card → set selectedLogin → detail view.
   if (!selectedLogin) {
     const sorted = [...engineers].sort((a, b) => {
-      const ax = a.prsMerged + a.issuesSolved + a.featuresDone;
-      const bx = b.prsMerged + b.issuesSolved + b.featuresDone;
+      const ax = a.openPRs + a.prsInReview + a.assignedIssues;
+      const bx = b.openPRs + b.prsInReview + b.assignedIssues;
       if (bx !== ax) return bx - ax;
       return a.name.localeCompare(b.name);
     });
@@ -167,9 +170,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             </div>
           </div>
           <div className="flex flex-wrap items-stretch gap-x-4 gap-y-3 lg:border-l lg:border-stone-200 lg:pl-4">
-            <InlineMetric label="PRs" value={selected.prsMerged} />
-            <InlineMetric label="Issues" value={selected.issuesSolved} />
-            <InlineMetric label="Features" value={selected.featuresDone} />
+            <InlineMetric label="Open PRs" value={selected.openPRs} />
+            <InlineMetric label="PRs in Review" value={selected.prsInReview} />
+            <InlineMetric label="Assigned Issues" value={selected.assignedIssues} />
           </div>
         </div>
 
@@ -202,9 +205,9 @@ interface EngineerSummary {
   role: string;
   team: string;
   description: string;
-  prsMerged: number;
-  issuesSolved: number;
-  featuresDone: number;
+  openPRs: number;
+  prsInReview: number;
+  assignedIssues: number;
 }
 
 function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
@@ -230,9 +233,9 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
       </div>
 
       <div className="flex items-center gap-4 text-xs text-stone-500">
-        <CardStat label="PRs" value={engineer.prsMerged} />
-        <CardStat label="Issues" value={engineer.issuesSolved} />
-        <CardStat label="Features" value={engineer.featuresDone} />
+        <CardStat label="Open PRs" value={engineer.openPRs} />
+        <CardStat label="In Review" value={engineer.prsInReview} />
+        <CardStat label="Assigned" value={engineer.assignedIssues} />
       </div>
     </button>
   );
