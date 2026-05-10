@@ -1,5 +1,5 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
-import { getInstallationToken } from "../lib/github-app";
+import { getInstallationToken, signAppJwt } from "../lib/github-app";
 import { setInstallationRepos, upsertInstallation } from "../lib/gh-mirror";
 
 const SELECT_COLS =
@@ -20,6 +20,7 @@ export async function onRequestGet(context) {
   const db = context.env.DB;
 
   await ensureInstallationsRow(db, orgLogin, orgId);
+  await discoverInstallationViaApp(context.env, orgLogin);
   await bootstrapReposIfEmpty(context.env, orgLogin);
   await syncProjectsFromInstallations(db, orgLogin);
 
@@ -48,6 +49,53 @@ async function ensureInstallationsRow(db, orgLogin, orgId) {
     id: org.installation_id,
     account: { login: orgLogin, type: "Organization" },
   });
+}
+
+// Last-resort discovery: if we have no installations row AND no
+// orgs.installation_id, ask GitHub directly with an App JWT. Covers users
+// who installed the app before the install webhook handler shipped.
+async function discoverInstallationViaApp(env, ownerId) {
+  const existing = await env.DB.prepare(
+    "SELECT installation_id FROM installations WHERE owner_id = ? LIMIT 1"
+  ).bind(ownerId).first();
+  if (existing) return;
+
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) return;
+
+  let jwt;
+  try {
+    jwt = await signAppJwt(env);
+  } catch (err) {
+    console.error("[unticket projects] signAppJwt failed:", err);
+    return;
+  }
+
+  const headers = {
+    Authorization: `Bearer ${jwt}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "unticket",
+  };
+
+  // Try org first, then user installation.
+  for (const path of [
+    `/orgs/${encodeURIComponent(ownerId)}/installation`,
+    `/users/${encodeURIComponent(ownerId)}/installation`,
+  ]) {
+    const res = await fetch(`https://api.github.com${path}`, { headers });
+    if (res.status === 404) continue;
+    if (!res.ok) {
+      console.error(`[unticket projects] discover ${path} ${res.status}`);
+      return;
+    }
+    const data = await res.json();
+    if (!data?.id) return;
+    await upsertInstallation(env.DB, {
+      id: data.id,
+      account: data.account || { login: ownerId },
+    });
+    return;
+  }
 }
 
 // For each installation belonging to this owner, if repos_json is empty,
