@@ -33,12 +33,13 @@ CLAUDE.md           # This file
 
 ## Features (GitHub Issues in this repo)
 
-Features are tracked as issues with the \`feature\` label.
-- Labels: \`status:{todo,staging,ready,production,future}\`
+Features are tracked as issues that carry BOTH the \`unticket\` and \`feature\` labels.
+- Default column ("To Do") = no status label
+- Other columns use \`status:staging\`, \`status:ready\`, \`status:production\`, or \`status:future\`
 - Owners: issue assignees
 
 \`\`\`bash
-gh issue list --repo {org}/unticket --label feature
+gh issue list --repo {org}/unticket --label unticket --label feature
 gh issue view <number> --repo {org}/unticket
 \`\`\`
 

@@ -16,12 +16,20 @@ interface D1FeatureRow {
   updated_at?: string;
 }
 
+const UNTICKET_LABEL = "unticket";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 
+// Feature issues are identified by carrying BOTH "unticket" and "feature" labels.
+// "unticket" marks the issue as project-management content owned by the app;
+// "feature" distinguishes feature-type entries from other unticket-managed items.
+//
+// "todo" is the implicit default and has no `status:` label — an issue with just
+// `unticket` + `feature` lands in the To Do column. Other columns require their
+// matching `status:*` label.
 const FEATURE_LABELS = [
-  { name: "feature", color: "1B6971", description: "Backlog feature" },
-  { name: "status:todo", color: "94A3B8", description: "To do" },
+  { name: "unticket", color: "1B6971", description: "Tracked by unticket.ai" },
+  { name: "feature", color: "1B6971", description: "Feature managed by unticket.ai" },
   { name: "status:staging", color: "B89464", description: "Testing on staging" },
   { name: "status:ready", color: "6A9991", description: "Ready for production" },
   { name: "status:production", color: "6E9970", description: "On production" },
@@ -71,7 +79,11 @@ function extractLabel(labels: string[], prefix: string): string | undefined {
 }
 
 function buildLabels(f: { status: FeatureStatus }): string[] {
-  return [FEATURE_LABEL, `${STATUS_PREFIX}${f.status}`];
+  // "todo" is the implicit default — represented by the absence of a status: label.
+  // Only emit explicit status labels for the non-default columns.
+  const labels = [UNTICKET_LABEL, FEATURE_LABEL];
+  if (f.status !== "todo") labels.push(`${STATUS_PREFIX}${f.status}`);
+  return labels;
 }
 
 function issueToFeature(issue: any): Feature {
@@ -138,7 +150,10 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
 export async function fetchFeaturesFromD1(): Promise<Feature[]> {
   const rows = await apiGet<D1FeatureRow[]>("/api/features?state=open");
   return rows
-    .filter((row) => row.labels.some((l) => l.name === "feature"))
+    .filter((row) => {
+      const names = new Set(row.labels.map((l) => l.name));
+      return names.has(UNTICKET_LABEL) && names.has(FEATURE_LABEL);
+    })
     .map(d1RowToFeature);
 }
 
@@ -149,10 +164,11 @@ const labelsEnsuredByOrg = new Set<string>();
 export async function ensureFeatureLabels(org: string): Promise<void> {
   if (labelsEnsuredByOrg.has(org)) return;
   const ok = getOctokit();
+  const repo = getUnticketRepoName();
 
   const { data: existing } = await ok.rest.issues.listLabelsForRepo({
     owner: org,
-    repo: getUnticketRepoName(),
+    repo,
     per_page: 100,
   });
   const existingNames = new Set(existing.map((l) => l.name));
@@ -160,12 +176,42 @@ export async function ensureFeatureLabels(org: string): Promise<void> {
   for (const label of FEATURE_LABELS) {
     if (!existingNames.has(label.name)) {
       try {
-        await ok.rest.issues.createLabel({ owner: org, repo: getUnticketRepoName(), ...label });
+        await ok.rest.issues.createLabel({ owner: org, repo, ...label });
       } catch (err: any) {
         if (err?.status !== 422) throw err;
       }
     }
   }
+
+  // One-time backfill: any open issue with the legacy "feature" label but
+  // missing the new "unticket" co-label needs the marker added so it keeps
+  // appearing on the board after the convention switch.
+  if (!existingNames.has(UNTICKET_LABEL)) {
+    const legacy = await ok.paginate(ok.rest.issues.listForRepo, {
+      owner: org,
+      repo,
+      labels: FEATURE_LABEL,
+      state: "open",
+      per_page: 100,
+    });
+    for (const issue of legacy) {
+      if (issue.pull_request) continue;
+      const names = (issue.labels ?? []).map((l: any) => (typeof l === "string" ? l : l.name));
+      if (!names.includes(UNTICKET_LABEL)) {
+        try {
+          await ok.rest.issues.addLabels({
+            owner: org,
+            repo,
+            issue_number: issue.number,
+            labels: [UNTICKET_LABEL],
+          });
+        } catch (err) {
+          console.warn(`[unticket] backfill add unticket label to #${issue.number} failed:`, err);
+        }
+      }
+    }
+  }
+
   labelsEnsuredByOrg.add(org);
 }
 
@@ -175,10 +221,11 @@ export async function fetchFeatures(org: string): Promise<Feature[]> {
   await ensureFeatureLabels(org);
 
   const ok = getOctokit();
+  // Octokit ANDs comma-separated labels — only issues carrying BOTH labels match.
   const issues = await ok.paginate(ok.rest.issues.listForRepo, {
     owner: org,
     repo: getUnticketRepoName(),
-    labels: FEATURE_LABEL,
+    labels: `${UNTICKET_LABEL},${FEATURE_LABEL}`,
     state: "open",
     per_page: 100,
   });
@@ -241,11 +288,11 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 
 export async function deleteFeature(org: string, issueNumber: number): Promise<void> {
   const ok = getOctokit();
-  // Close the GitHub issue and strip feature/status labels.
+  // Close the GitHub issue and strip unticket/feature/status labels.
   const { data: issue } = await ok.rest.issues.get({ owner: org, repo: getUnticketRepoName(), issue_number: issueNumber });
   const keepLabels = (issue.labels ?? [])
     .map((l: any) => (typeof l === "string" ? l : l.name))
-    .filter((l: string) => l !== FEATURE_LABEL && !l.startsWith(STATUS_PREFIX));
+    .filter((l: string) => l !== UNTICKET_LABEL && l !== FEATURE_LABEL && !l.startsWith(STATUS_PREFIX));
   await ok.rest.issues.update({
     owner: org,
     repo: getUnticketRepoName(),

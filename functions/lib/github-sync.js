@@ -321,11 +321,13 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     params
   );
 
-  // Only sync issues with the "feature" label (filter out PRs, todos, roles, tasks)
-  const features = issues.filter((i) =>
-    !i.pull_request &&
-    (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
-  );
+  // Only sync issues that carry BOTH the "unticket" and "feature" labels
+  // (filter out PRs, todos, roles, tasks, and legacy single-label items).
+  const features = issues.filter((i) => {
+    if (i.pull_request) return false;
+    const names = (i.labels ?? []).map((l) => (typeof l === "string" ? l : l.name));
+    return names.includes("unticket") && names.includes("feature");
+  });
 
   console.log(`[unticket] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
@@ -549,9 +551,9 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
 }
 
 export async function upsertFeature(db, orgId, issue) {
-  // Only upsert if the issue has the "feature" label
+  // Only upsert if the issue carries BOTH "unticket" and "feature" labels.
   const labels = (issue.labels ?? []).map((l) => (typeof l === "string" ? l : l.name));
-  if (!labels.includes("feature")) {
+  if (!labels.includes("unticket") || !labels.includes("feature")) {
     // Not a feature — remove from features table if it was previously tracked
     await db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, issue.number).run();
     return;

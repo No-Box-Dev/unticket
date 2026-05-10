@@ -41,17 +41,18 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 3. Add nav item in `src/components/TopNav.tsx` `NAV_ITEMS`
 4. Render in `src/pages/DashboardPage.tsx`
 
-### Config System (Hybrid: D1 + GitHub Issues + .unticket)
+### Config System (Hybrid: D1 + GitHub Issues + unticket repo)
 
-**Features as GitHub Issues (on `{org}/.unticket` repo):**
+**Features as GitHub Issues (on `{org}/unticket` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()`, `useCleanDoneFeatures()` with optimistic updates
-- Label scheme: `feature` (marker), `status:{todo,staging,ready,production,future}`
+- Label scheme: feature issues carry BOTH `unticket` AND `feature` labels. `todo` is the implicit default (no status label needed); the other columns use `status:{staging,ready,production,future}`. The `unticket` label marks an issue as project-management content owned by the app; `feature` distinguishes feature-type entries from other unticket-managed items
+- `ensureFeatureLabels()` runs a one-time backfill: when the `unticket` label doesn't exist yet on the repo, it adds it to every existing `feature`-labeled open issue so the convention switch is non-breaking
 - Owners: Issue assignees
 - Plan: Issue body (Markdown)
 - Feature ID: Issue number (integer)
 - "Clean done" bulk action closes all features with `status:production` (calls `deleteFeature` per issue), then they disappear from the board
-- CLI: `gh issue list --repo {org}/.unticket --label feature`
+- CLI: `gh issue list --repo {org}/unticket --label unticket --label feature`
 
 **D1 config (people, settings):**
 - API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
@@ -59,10 +60,11 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
-**`.unticket` repo (features as issues + plan files):**
+**`unticket` repo (features as issues + plan files):**
 - `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`
+- Default repo name is `unticket`; users can override via Settings (`settings.unticketRepo`)
 - Feature plans: `plans/PLAN-{featureId}.md` (e.g. `PLAN-42.md`)
-- CLI access: `gh api repos/{org}/.unticket/contents/plans/ --jq '.[].name'`
+- CLI access: `gh api repos/{org}/unticket/contents/plans/ --jq '.[].name'`
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)

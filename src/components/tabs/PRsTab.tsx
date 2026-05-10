@@ -1,14 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { useQueryClient } from "@tanstack/react-query";
-import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 
 function daysAgo(date: string): number {
   return Math.floor(
@@ -36,7 +34,6 @@ interface PRsTabProps {
 type PRView = "open" | "merged";
 
 export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
-  const qc = useQueryClient();
   const [view, setView] = useState<PRView>("open");
   const { data: feedProjects } = useFeedProjects();
   const archivedRepos = useMemo(
@@ -47,44 +44,10 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     () => repoNames.filter((n) => !archivedRepos.has(n)),
     [repoNames, archivedRepos],
   );
-  const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(activeRepoNames);
-  const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(activeRepoNames);
+  const { data: openPRs, isLoading: openLoading } = useOpenPRs(activeRepoNames);
+  const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(activeRepoNames);
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
-
-  const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
-  const [syncedRepos, setSyncedRepos] = useState<string[]>([]);
-
-  const isFetching = view === "open" ? openFetching : mergedFetching;
-
-  const startSync = useCallback(async () => {
-    setSyncModalOpen(true);
-    setSyncProgress(null);
-    setSyncedRepos([]);
-    let lastSyncingRepo: string | null = null;
-
-    await triggerSyncWithProgress((status) => {
-      setSyncProgress(status);
-      if (status.phase === "syncing" && status.repo) {
-        if (lastSyncingRepo) {
-          setSyncedRepos((prev) =>
-            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
-          );
-        }
-        lastSyncingRepo = status.repo;
-      }
-      if (status.phase === "done") {
-        if (lastSyncingRepo) {
-          setSyncedRepos((prev) =>
-            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
-          );
-        }
-        qc.invalidateQueries({ queryKey: ["prs"] });
-        qc.invalidateQueries({ queryKey: ["repos"] });
-      }
-    });
-  }, [qc]);
 
   const prs = view === "open" ? openPRs : mergedPRs;
   const isLoading = view === "open" ? openLoading : mergedLoading;
@@ -154,91 +117,8 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     }
   };
 
-  const syncDone = syncProgress?.phase === "done";
-  const syncError = syncProgress?.phase === "error";
-
   return (
     <div className="space-y-4">
-      {/* Sync Modal */}
-      {syncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <h3 className="text-sm font-semibold text-stone-800">
-                {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}
-              </h3>
-              {(syncDone || syncError) && (
-                <button
-                  onClick={() => setSyncModalOpen(false)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {syncProgress && syncProgress.total > 0 && (
-                <div>
-                  <div className="flex justify-between text-xs text-stone-500 mb-1">
-                    <span>{syncDone ? "All repos synced" : `Syncing repo ${Math.min(syncedRepos.length + 1, syncProgress.total)} of ${syncProgress.total}`}</span>
-                    <span>{Math.round(((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-300",
-                        syncError ? "bg-red-500" : "bg-accent",
-                      )}
-                      style={{
-                        width: `${((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {syncProgress?.phase === "init" && (
-                <div className="flex items-center gap-2 text-xs text-stone-500">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Initializing sync...
-                </div>
-              )}
-              {syncError && (
-                <div className="flex items-center gap-2 text-xs text-red-600">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {syncProgress.error}
-                </div>
-              )}
-              {syncProgress?.phase === "syncing" && syncProgress.repo && (
-                <div className="flex items-center gap-2 text-xs text-stone-600">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                  <span className="font-medium">{syncProgress.repo}</span>
-                </div>
-              )}
-              {syncedRepos.length > 0 && (
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {syncedRepos.map((repo) => (
-                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
-                      <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                      {repo}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {(syncDone || syncError) && (
-              <div className="px-5 py-3 border-t border-stone-100">
-                <button
-                  onClick={() => setSyncModalOpen(false)}
-                  className="w-full px-4 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
@@ -283,18 +163,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           ]}
           placeholder="All Repos"
         />
-
-        <button
-          onClick={startSync}
-          disabled={syncModalOpen}
-          className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500  hover:text-accent cursor-pointer",
-            syncModalOpen && "opacity-50 cursor-not-allowed",
-          )}
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin")} />
-          Sync from GitHub
-        </button>
 
         <span className="text-xs text-stone-400 ml-auto">
           {sorted.length} of {(prs ?? []).length} PRs
