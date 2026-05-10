@@ -23,11 +23,9 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "engineers", label: "People", keywords: "people engineers team members" },
   { id: "sprint", label: "Sprint", keywords: "sprint features kanban board" },
   { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
-  { id: "todos", label: "Todos", keywords: "todos tasks personal kanban" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
-  { id: "releases", label: "Releases", keywords: "releases history snapshots past sprints" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
