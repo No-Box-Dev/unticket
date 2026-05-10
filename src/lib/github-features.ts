@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
 import { apiGet, apiPost, apiPut, apiFetch } from "./api";
-import type { Feature, FeatureStatus, StatusHistoryEntry, PersonRole, LinkedPR } from "./types";
+import { getUnticketRepoName } from "./unticket-repo-name";
+import type { Feature, FeatureStatus, StatusHistoryEntry, LinkedPR } from "./types";
 
 // D1-backed row shape returned by /api/features
 interface D1FeatureRow {
@@ -16,27 +17,16 @@ interface D1FeatureRow {
   updated_at?: string;
 }
 
-const REPO = "unticket";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
-const ROLE_LABEL = "role";
 
 const FEATURE_LABELS = [
   { name: "feature", color: "1B6971", description: "Sprint/backlog feature" },
-  { name: "status:plan", color: "0E7C86", description: "Feature in planning" },
-  { name: "status:in_progress", color: "F59E0B", description: "Feature in progress" },
-  { name: "status:demo", color: "A855F7", description: "Feature ready for demo" },
-  { name: "status:tested", color: "06B6D4", description: "Feature tested" },
-  { name: "status:production", color: "22C55E", description: "Feature in production" },
+  { name: "status:todo", color: "94A3B8", description: "To do" },
+  { name: "status:staging", color: "B89464", description: "Testing on staging" },
+  { name: "status:ready", color: "6A9991", description: "Ready for production" },
+  { name: "status:production", color: "6E9970", description: "On production" },
   { name: "status:future", color: "A8A29E", description: "Backlog feature" },
-  { name: "status:scoping", color: "FB923C", description: "Feature in scoping pipeline" },
-  { name: "status:idea", color: "94A3B8", description: "Idea — not yet scoped" },
-  { name: "status:client_scoping", color: "F472B6", description: "Client scoping in progress" },
-  { name: "status:technical_scoping", color: "818CF8", description: "Technical scoping in progress" },
-  { name: "status:medical_scoping", color: "FB7185", description: "Medical scoping in progress" },
-  { name: "status:planned", color: "34D399", description: "Scoped and planned" },
-  { name: "status:deferred", color: "6B7280", description: "Deferred" },
-  { name: "role", color: "6366F1", description: "Person role (sub-issue grouping)" },
 ];
 
 // ---------- Metadata (hidden in issue body) ----------
@@ -97,11 +87,10 @@ function issueToFeature(issue: any): Feature {
   const sprint = sprintMatch ? parseInt(sprintMatch[1]) : null;
 
   // No sprint milestone → use label status or fall back to "future" (backlog).
-  // With sprint → use label status or default to "plan".
-  // This preserves workflow state when a feature is detached from a sprint.
+  // With sprint → use label status or default to "todo".
   const status: FeatureStatus = sprint === null
     ? (labelStatus ?? "future")
-    : (labelStatus ?? "plan");
+    : (labelStatus ?? "todo");
 
   const rawBody = issue.body ?? "";
   const { content, metadata } = parseMetadata(rawBody);
@@ -182,13 +171,13 @@ const milestoneCache = new Map<string, number>();
 
 export async function findOrCreateMilestone(org: string, sprintNumber: number): Promise<number> {
   const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${REPO}:${title}`;
+  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
   if (milestoneCache.has(cacheKey)) return milestoneCache.get(cacheKey)!;
 
   const ok = getOctokit();
   const { data: milestones } = await ok.rest.issues.listMilestones({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     state: "all",
     per_page: 100,
   });
@@ -201,7 +190,7 @@ export async function findOrCreateMilestone(org: string, sprintNumber: number): 
 
   const { data: created } = await ok.rest.issues.createMilestone({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     title,
   });
   milestoneCache.set(cacheKey, created.number);
@@ -218,7 +207,7 @@ export async function ensureFeatureLabels(org: string): Promise<void> {
 
   const { data: existing } = await ok.rest.issues.listLabelsForRepo({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     per_page: 100,
   });
   const existingNames = new Set(existing.map((l) => l.name));
@@ -226,7 +215,7 @@ export async function ensureFeatureLabels(org: string): Promise<void> {
   for (const label of FEATURE_LABELS) {
     if (!existingNames.has(label.name)) {
       try {
-        await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
+        await ok.rest.issues.createLabel({ owner: org, repo: getUnticketRepoName(), ...label });
       } catch (err: any) {
         if (err?.status !== 422) throw err;
       }
@@ -243,7 +232,7 @@ export async function fetchFeatures(org: string): Promise<Feature[]> {
   const ok = getOctokit();
   const issues = await ok.paginate(ok.rest.issues.listForRepo, {
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     labels: FEATURE_LABEL,
     state: "open",
     per_page: 100,
@@ -277,7 +266,7 @@ export async function createFeature(
 
   const { data } = await ok.rest.issues.create({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     title,
     labels,
     milestone,
@@ -307,7 +296,7 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 
   const { data } = await ok.rest.issues.update({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     issue_number: updated.id,
     title: updated.title,
     body,
@@ -323,13 +312,13 @@ export async function updateFeature(org: string, updated: Feature): Promise<Feat
 export async function deleteFeature(org: string, issueNumber: number): Promise<void> {
   const ok = getOctokit();
   // Downgrade to regular issue: remove feature + status labels, clear milestone
-  const { data: issue } = await ok.rest.issues.get({ owner: org, repo: REPO, issue_number: issueNumber });
+  const { data: issue } = await ok.rest.issues.get({ owner: org, repo: getUnticketRepoName(), issue_number: issueNumber });
   const keepLabels = (issue.labels ?? [])
     .map((l: any) => (typeof l === "string" ? l : l.name))
     .filter((l: string) => l !== FEATURE_LABEL && !l.startsWith(STATUS_PREFIX));
   await ok.rest.issues.update({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     issue_number: issueNumber,
     labels: keepLabels,
     milestone: null,
@@ -342,223 +331,15 @@ export async function deleteFeature(org: string, issueNumber: number): Promise<v
   }
 }
 
-// ---------- Sub-issues ----------
-
-export interface SubIssue {
-  id: number; // global issue ID (needed for sub-issue API)
-  number: number;
-  title: string;
-  state: "open" | "closed";
-  assignees: string[];
-  html_url: string;
-  roleNumber?: number;
-  closed_at?: string | null;
-}
-
-function toSubIssue(issue: any): SubIssue {
-  return {
-    id: issue.id,
-    number: issue.number,
-    title: issue.title,
-    state: issue.state as "open" | "closed",
-    assignees: (issue.assignees ?? []).map((a: any) => a.login),
-    html_url: issue.html_url,
-    closed_at: issue.closed_at ?? null,
-  };
-}
-
-function isRoleIssue(issue: any): boolean {
-  const labelNames = (issue.labels ?? [])
-    .map((l: any) => (typeof l === "string" ? l : l.name))
-    .filter(Boolean) as string[];
-  return labelNames.includes(ROLE_LABEL);
-}
-
-function toPersonRole(issue: any): PersonRole {
-  return {
-    id: issue.id,
-    number: issue.number,
-    title: issue.title,
-    assignee: issue.assignees?.[0]?.login ?? null,
-    state: issue.state as "open" | "closed",
-    html_url: issue.html_url,
-  };
-}
-
-export async function fetchSubIssues(org: string, issueNumber: number): Promise<SubIssue[]> {
-  const ok = getOctokit();
-  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: issueNumber,
-    per_page: 100,
-  });
-  return (data as any[]).map(toSubIssue);
-}
-
-export async function createSubIssue(
-  org: string,
-  parentIssueNumber: number,
-  title: string,
-  assignees?: string[],
-): Promise<SubIssue> {
-  const ok = getOctokit();
-  // 1. Create a new issue
-  const { data: issue } = await ok.rest.issues.create({
-    owner: org,
-    repo: REPO,
-    title,
-    ...(assignees?.length ? { assignees } : {}),
-  });
-  // 2. Link it as sub-issue (needs global ID, not issue number)
-  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: parentIssueNumber,
-    sub_issue_id: issue.id,
-  });
-  return toSubIssue(issue);
-}
-
-export async function toggleSubIssue(org: string, subIssue: SubIssue): Promise<SubIssue> {
-  const ok = getOctokit();
-  const newState = subIssue.state === "open" ? "closed" : "open";
-  const { data } = await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: subIssue.number,
-    state: newState,
-  });
-  return toSubIssue(data);
-}
-
-export async function updateSubIssueAssignees(
-  org: string,
-  subIssueNumber: number,
-  assignees: string[],
-): Promise<SubIssue> {
-  const ok = getOctokit();
-  const { data } = await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: subIssueNumber,
-    assignees,
-  });
-  return toSubIssue(data);
-}
-
-export async function deleteSubIssue(org: string, subIssueNumber: number): Promise<void> {
-  const ok = getOctokit();
-  await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: subIssueNumber,
-    state: "closed",
-  });
-}
-
-// ---------- Roles (Person Role sub-issues) ----------
-
-export async function fetchRoles(org: string, featureNumber: number): Promise<PersonRole[]> {
-  const ok = getOctokit();
-  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: featureNumber,
-    per_page: 100,
-  });
-  return (data as any[]).filter(isRoleIssue).map(toPersonRole);
-}
-
-export async function createRole(
-  org: string,
-  featureNumber: number,
-  title: string,
-  assignee?: string,
-): Promise<PersonRole> {
-  const ok = getOctokit();
-  const { data: issue } = await ok.rest.issues.create({
-    owner: org,
-    repo: REPO,
-    title,
-    labels: [ROLE_LABEL],
-    ...(assignee ? { assignees: [assignee] } : {}),
-  });
-  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: featureNumber,
-    sub_issue_id: issue.id,
-  });
-  return toPersonRole(issue);
-}
-
-export async function deleteRole(org: string, roleNumber: number): Promise<void> {
-  const ok = getOctokit();
-  await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: roleNumber,
-    state: "closed",
-  });
-}
-
-export async function fetchTasksForRole(org: string, roleNumber: number): Promise<SubIssue[]> {
-  const ok = getOctokit();
-  const { data } = await ok.request("GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: roleNumber,
-    per_page: 100,
-  });
-  return (data as any[]).map((issue: any) => ({
-    ...toSubIssue(issue),
-    roleNumber,
-  }));
-}
-
-export async function createTask(
-  org: string,
-  roleNumber: number,
-  title: string,
-  assignee?: string,
-): Promise<SubIssue> {
-  const ok = getOctokit();
-  const { data: issue } = await ok.rest.issues.create({
-    owner: org,
-    repo: REPO,
-    title,
-    ...(assignee ? { assignees: [assignee] } : {}),
-  });
-  await ok.request("POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues", {
-    owner: org,
-    repo: REPO,
-    issue_number: roleNumber,
-    sub_issue_id: issue.id,
-  });
-  return { ...toSubIssue(issue), roleNumber };
-}
-
-export async function updateTaskTitle(org: string, taskNumber: number, title: string): Promise<SubIssue> {
-  const ok = getOctokit();
-  const { data } = await ok.rest.issues.update({
-    owner: org,
-    repo: REPO,
-    issue_number: taskNumber,
-    title,
-  });
-  return toSubIssue(data);
-}
-
 // ---------- Milestone management ----------
 
 export async function closeMilestone(org: string, sprintNumber: number): Promise<void> {
   const ok = getOctokit();
   const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${REPO}:${title}`;
+  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
   const { data: milestones } = await ok.rest.issues.listMilestones({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     state: "open",
     per_page: 100,
   });
@@ -566,7 +347,7 @@ export async function closeMilestone(org: string, sprintNumber: number): Promise
   if (ms) {
     await ok.rest.issues.updateMilestone({
       owner: org,
-      repo: REPO,
+      repo: getUnticketRepoName(),
       milestone_number: ms.number,
       state: "closed",
     });
@@ -577,10 +358,10 @@ export async function closeMilestone(org: string, sprintNumber: number): Promise
 export async function reopenMilestone(org: string, sprintNumber: number): Promise<void> {
   const ok = getOctokit();
   const title = `Sprint ${sprintNumber}`;
-  const cacheKey = `${org}/${REPO}:${title}`;
+  const cacheKey = `${org}/${getUnticketRepoName()}:${title}`;
   const { data: milestones } = await ok.rest.issues.listMilestones({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     state: "closed",
     per_page: 100,
   });
@@ -588,7 +369,7 @@ export async function reopenMilestone(org: string, sprintNumber: number): Promis
   if (ms) {
     await ok.rest.issues.updateMilestone({
       owner: org,
-      repo: REPO,
+      repo: getUnticketRepoName(),
       milestone_number: ms.number,
       state: "open",
     });
@@ -596,49 +377,3 @@ export async function reopenMilestone(org: string, sprintNumber: number): Promis
   }
 }
 
-// ---------- Migration ----------
-
-export async function fetchLegacyFeatures(): Promise<LegacyFeature[]> {
-  const data = await apiGet<LegacyFeature[] | null>("/api/config/features");
-  return data ?? [];
-}
-
-export interface LegacyFeature {
-  id: string;
-  title: string;
-  team?: string;
-  owners: string[];
-  status: string;
-  sprint: number | null;
-  plan?: string;
-}
-
-export async function migrateFeatures(
-  org: string,
-  legacy: LegacyFeature[],
-  onProgress?: (done: number, total: number) => void,
-): Promise<number> {
-  await ensureFeatureLabels(org);
-
-  const statusMap: Record<string, FeatureStatus> = {
-    active: "in_progress", plan: "plan", in_progress: "in_progress",
-    demo: "demo", tested: "tested",
-    done: "production", production: "production", future: "future",
-  };
-  let created = 0;
-  for (const f of legacy) {
-    const status = statusMap[f.status] ?? "plan";
-
-    await createFeature(org, f.title, {
-      status, sprint: f.sprint,
-      owners: f.owners, plan: f.plan,
-    });
-    created++;
-    onProgress?.(created, legacy.length);
-  }
-
-  // Clear legacy D1 features so migration banner doesn't reappear
-  await apiPut("/api/config/features", []);
-
-  return created;
-}

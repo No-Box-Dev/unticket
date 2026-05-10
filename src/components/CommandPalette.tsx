@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import { useFeatures, usePeople, useTodos, useSprint, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
+import { useFeatures, usePeople, useTodos } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "@/lib/sidebar";
@@ -13,7 +13,7 @@ interface CommandPaletteProps {
 }
 
 interface SearchResult {
-  type: "feature" | "person" | "tab" | "todo" | "task" | "role" | "action";
+  type: "feature" | "person" | "tab" | "todo" | "action";
   label: string;
   detail?: string;
   action: () => void;
@@ -42,16 +42,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const { data: people } = usePeople();
   const { data: orgMembers } = useActiveMembers();
   const { data: todos } = useTodos();
-  const { data: sprint } = useSprint();
   const [, setSearchParams] = useSearchParams();
   const { setViewingSprint } = useSidebar();
-
-  // Sprint sub-issues for task/role search
-  const sprintFeatureIds = useMemo(() => {
-    if (!features || !sprint) return [];
-    return features.filter((f) => f.sprint === sprint.number).map((f) => f.id);
-  }, [features, sprint]);
-  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
   // Build people lookup (org members + configured people)
   const allPeople = useMemo(() => {
@@ -67,21 +59,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       };
     });
   }, [people, orgMembers]);
-
-  // Unique roles from tasks
-  const roles = useMemo(() => {
-    if (!allTasks) return [];
-    const roleMap = new Map<number, { number: number; name: string; featureTitle: string; assignees: Set<string>; taskCount: number; doneCount: number }>();
-    for (const t of allTasks) {
-      if (!t.roleNumber) continue;
-      const r = roleMap.get(t.roleNumber) ?? { number: t.roleNumber, name: t.roleName ?? `Role #${t.roleNumber}`, featureTitle: t.featureTitle, assignees: new Set(), taskCount: 0, doneCount: 0 };
-      for (const a of t.assignees) r.assignees.add(a);
-      r.taskCount++;
-      if (t.state === "closed") r.doneCount++;
-      roleMap.set(t.roleNumber, r);
-    }
-    return Array.from(roleMap.values());
-  }, [allTasks]);
 
   // CMD+K to open
   useEffect(() => {
@@ -155,47 +132,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       }
     }
 
-    // Search roles
-    for (const r of roles) {
-      if (items.length >= 30) break;
-      const searchText = `${r.name} ${r.featureTitle} ${Array.from(r.assignees).join(" ")}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "role",
-          label: r.name,
-          detail: `${r.featureTitle} · ${r.doneCount}/${r.taskCount} tasks · ${Array.from(r.assignees).join(", ")}`,
-          action: () => {
-            setViewingSprint(null);
-            onNavigate("sprint");
-            setOpen(false);
-          },
-        });
-      }
-    }
-
-    // Search tasks
-    for (const t of allTasks ?? []) {
-      if (items.length >= 30) break;
-      const searchText = `${t.title} ${t.featureTitle} ${t.assignees.join(" ")} ${t.roleName ?? ""}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "task",
-          label: t.title,
-          detail: [
-            t.featureTitle,
-            t.roleName,
-            t.assignees.join(", "),
-            t.state,
-          ].filter(Boolean).join(" · "),
-          action: () => {
-            setViewingSprint(null);
-            onNavigate("sprint");
-            setOpen(false);
-          },
-        });
-      }
-    }
-
     // Search todos
     for (const t of todos ?? []) {
       if (items.length >= 30) break;
@@ -222,7 +158,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, onNavigate, setViewingSprint, setSearchParams]);
+  }, [query, features, allPeople, todos, onNavigate, setViewingSprint, setSearchParams]);
 
   // Keyboard navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -254,8 +190,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     person: "text-amber-500",
     tab: "text-stone-400  ",
     todo: "text-purple-500",
-    task: "text-blue-500",
-    role: "text-teal-500",
     action: "text-indigo-500",
   };
 
@@ -271,7 +205,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search features, people, tasks, roles, todos..."
+            placeholder="Search features, people, todos..."
             className="flex-1 text-sm text-stone-800 placeholder:text-stone-400 outline-none bg-transparent"
           />
           <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">

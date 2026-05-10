@@ -1,29 +1,27 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/lib/auth";
-import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useAllSprintSubIssues, useSprint, useUpdateFeature, useDeleteFeature, usePeople } from "@/hooks/useConfigRepo";
+import { useTodos, useCreateTodoItem, useUpdateTodoItem, useDeleteTodoItem, useFeatures, useSprint, useUpdateFeature, useDeleteFeature, usePeople } from "@/hooks/useConfigRepo";
 import { useIsAdmin, useAssignedIssues, useUpdateIssueState, useReviewPRs } from "@/hooks/useGitHub";
 import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile } from "@/lib/config-repo";
 import { broadcastError } from "@/lib/api";
 import { getOctokit } from "@/lib/github";
 import { withStatusTransition } from "@/lib/github-features";
-import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, Zap, ListChecks, LayoutGrid, Users, CircleDot, GitPullRequest } from "lucide-react";
+import { Plus, X, Trash2, ExternalLink, FileText, Pencil, Save, Loader2, ListChecks, LayoutGrid, CircleDot, GitPullRequest } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { cn } from "@/lib/cn";
 import { STATUS_COLORS as SHARED_STATUS_COLORS } from "@/lib/types";
-import type { Todo, TodoStatus, Feature, FeatureStatus, ScopingStatus, AssignedIssue, ReviewPR } from "@/lib/types";
-import type { SubIssueWithFeature } from "@/hooks/useConfigRepo";
+import type { Todo, TodoStatus, Feature, FeatureStatus, AssignedIssue, ReviewPR } from "@/lib/types";
 
-type TodoView = "todos" | "issues" | "features" | "roles";
+type TodoView = "todos" | "issues" | "features";
 type SprintFilter = "sprint" | "all";
 
 const VIEW_TABS: { key: TodoView; label: string; icon: typeof ListChecks }[] = [
   { key: "todos", label: "My Todos", icon: ListChecks },
   { key: "issues", label: "My Issues", icon: CircleDot },
   { key: "features", label: "My Features", icon: LayoutGrid },
-  { key: "roles", label: "My Roles", icon: Users },
 ];
 
 const STATUS_DOT = SHARED_STATUS_COLORS;
@@ -37,13 +35,12 @@ const TODO_COLUMNS: { status: TodoStatus; label: string; color: string }[] = [
 
 const SPRINT_FILTERS: SprintFilter[] = ["sprint", "all"];
 
-type BoardStatus = Exclude<FeatureStatus, "future" | "scoping" | ScopingStatus>;
+type BoardStatus = Exclude<FeatureStatus, "future">;
 const FEATURE_COLUMNS: { status: BoardStatus; label: string; color: string }[] = [
-  { status: "plan", label: "Plan", color: "bg-status-plan" },
-  { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
-  { status: "demo", label: "Demo", color: "bg-status-demo" },
-  { status: "tested", label: "Tested", color: "bg-status-tested" },
-  { status: "production", label: "In Production", color: "bg-status-production" },
+  { status: "todo", label: "To do", color: "bg-status-plan" },
+  { status: "staging", label: "Testing on staging", color: "bg-status-progress" },
+  { status: "ready", label: "Ready for production", color: "bg-status-tested" },
+  { status: "production", label: "On production", color: "bg-status-production" },
 ];
 
 export function TodoTab() {
@@ -67,17 +64,6 @@ export function TodoTab() {
   const [detailTodo, setDetailTodo] = useState<Todo | null>(null);
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
   const [detailIssue, setDetailIssue] = useState<AssignedIssue | null>(null);
-
-  // Sprint tasks assigned to me
-  const sprintFeatureIds = useMemo(
-    () => (features ?? []).filter((f) => f.status !== "future" && f.sprint !== null).map((f) => f.id),
-    [features],
-  );
-  const { data: allSprintTasks, isLoading: tasksLoading } = useAllSprintSubIssues(sprintFeatureIds);
-  const mySprintTasks = useMemo(() => {
-    if (!allSprintTasks || !user) return [];
-    return allSprintTasks.filter((t) => t.assignees.includes(user.login));
-  }, [allSprintTasks, user]);
 
   const todos = useMemo(() => myTodos ?? [], [myTodos]);
 
@@ -170,7 +156,6 @@ export function TodoTab() {
         <MyTodosView
           todos={filteredTodos}
           allTodos={todos}
-          mySprintTasks={mySprintTasks}
           myFeatures={myFeatures}
           featureMap={featureMap}
           reviewPRs={reviewPRs ?? []}
@@ -198,15 +183,6 @@ export function TodoTab() {
           onOpenDetail={setDetailFeature}
           isAdmin={isAdmin}
           currentSprint={currentSprintNumber ?? undefined}
-        />
-      )}
-
-      {todoView === "roles" && (
-        <MyRolesView
-          mySprintTasks={mySprintTasks}
-          featureMap={featureMap}
-          tasksLoading={tasksLoading}
-          onOpenDetail={(f) => setDetailFeature(f)}
         />
       )}
 
@@ -257,22 +233,13 @@ export function TodoTab() {
 
 // ─── My Todos View ──────────────────────────────────────────────────────
 
-/** Classify sprint task into a todo board column */
-function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus): TodoStatus {
-  if (featureStatus === "production" || task.state === "closed") return "done";
-  if (featureStatus === "demo" || featureStatus === "tested") return "review";
-  return task.assignees.length > 0 ? "in_progress" : "backlog";
-}
-
 type BoardItem =
   | { type: "todo"; data: Todo }
-  | { type: "sprint"; data: SubIssueWithFeature }
   | { type: "pr"; data: ReviewPR };
 
 function MyTodosView({
   todos,
   allTodos,
-  mySprintTasks,
   myFeatures,
   featureMap,
   reviewPRs,
@@ -283,7 +250,6 @@ function MyTodosView({
 }: {
   todos: Todo[];
   allTodos: Todo[];
-  mySprintTasks: SubIssueWithFeature[];
   myFeatures: Feature[];
   featureMap: Map<number, Feature>;
   reviewPRs: ReviewPR[];
@@ -301,16 +267,11 @@ function MyTodosView({
   const columns = useMemo(() => {
     const grouped: Record<TodoStatus, BoardItem[]> = { backlog: [], in_progress: [], review: [], done: [] };
     for (const t of todos) grouped[t.status].push({ type: "todo", data: t });
-    for (const st of mySprintTasks) {
-      const col = classifyTask(st, featureMap.get(st.featureId)?.status);
-      grouped[col].push({ type: "sprint", data: st });
-    }
-    // PRs to review → review column
     for (const pr of reviewPRs) {
       grouped.review.push({ type: "pr", data: pr as ReviewPR });
     }
     return grouped;
-  }, [todos, mySprintTasks, featureMap, reviewPRs]);
+  }, [todos, reviewPRs]);
 
   function addTodo() {
     const title = input.trim();
@@ -417,7 +378,6 @@ function MyTodosView({
         {TODO_COLUMNS.map(({ status, label, color }) => {
           const items = columns[status];
           const todoCount = items.filter((i) => i.type === "todo").length;
-          const sprintCount = items.filter((i) => i.type === "sprint").length;
           const prCount = items.filter((i) => i.type === "pr").length;
           const isDoneCol = status === "done";
           return (
@@ -436,7 +396,7 @@ function MyTodosView({
                 <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
                 <span className="text-sm font-medium text-stone-700">{label}</span>
                 <span className="text-xs text-stone-400 ml-auto">
-                  {todoCount}{sprintCount > 0 ? ` + ${sprintCount}` : ""}{prCount > 0 ? ` + ${prCount}` : ""}
+                  {todoCount}{prCount > 0 ? ` + ${prCount}` : ""}
                 </span>
                 {isDoneCol && doneCount > 0 && (
                   <button
@@ -451,16 +411,6 @@ function MyTodosView({
               {/* Cards */}
               <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-260px)]">
                 {items.map((item) => {
-                  if (item.type === "sprint") {
-                    const st = item.data;
-                    return (
-                      <SprintTaskCard
-                        key={`sprint-${st.number}`}
-                        task={st}
-                        featureTitle={st.featureTitle || featureMap.get(st.featureId)?.title}
-                      />
-                    );
-                  }
                   if (item.type === "pr") {
                     const pr = item.data;
                     return (
@@ -520,7 +470,7 @@ function MyFeaturesView({
   const [dragOverCol, setDragOverCol] = useState<BoardStatus | null>(null);
 
   const featureColumns = useMemo(() => {
-    const grouped: Record<BoardStatus, Feature[]> = { plan: [], in_progress: [], demo: [], tested: [], production: [] };
+    const grouped: Record<BoardStatus, Feature[]> = { todo: [], staging: [], ready: [], production: [] };
     for (const f of myFeatures) {
       if (f.status !== "future") grouped[f.status as BoardStatus].push(f);
     }
@@ -564,7 +514,7 @@ function MyFeaturesView({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
       {FEATURE_COLUMNS.map(({ status, label, color }) => {
         const items = featureColumns[status];
         return (
@@ -612,146 +562,6 @@ function MyFeaturesView({
         );
       })}
     </div>
-  );
-}
-
-// ─── My Roles View ──────────────────────────────────────────────────────
-
-function MyRolesView({
-  mySprintTasks,
-  featureMap,
-  tasksLoading,
-  onOpenDetail,
-}: {
-  mySprintTasks: SubIssueWithFeature[];
-  featureMap: Map<number, Feature>;
-  tasksLoading: boolean;
-  onOpenDetail: (f: Feature) => void;
-}) {
-  const roleGroups = useMemo(() => {
-    const byRole = new Map<string, { key: string; roleName: string; featureId: number; featureTitle: string; tasks: SubIssueWithFeature[] }>();
-    for (const task of mySprintTasks) {
-      const roleKey = `${task.featureId}:${task.roleNumber ?? "none"}`;
-      if (!byRole.has(roleKey)) {
-        const feat = featureMap.get(task.featureId);
-        byRole.set(roleKey, {
-          key: roleKey,
-          roleName: task.roleName ?? "Tasks",
-          featureId: task.featureId,
-          featureTitle: task.featureTitle || (feat?.title ?? "Unknown"),
-          tasks: [],
-        });
-      }
-      byRole.get(roleKey)!.tasks.push(task);
-    }
-    return [...byRole.values()];
-  }, [mySprintTasks, featureMap]);
-
-  if (tasksLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
-    );
-  }
-
-  if (roleGroups.length === 0) {
-    return (
-      <div className="text-center py-16 text-sm text-stone-400">
-        No sprint tasks assigned to you
-      </div>
-    );
-  }
-
-  const allTasks = roleGroups.flatMap((r) => r.tasks);
-  const doneCount = allTasks.filter((t) => t.state === "closed").length;
-
-  return (
-    <div className="space-y-3">
-      {/* Summary */}
-      <div className="flex items-center gap-3 text-xs text-stone-500">
-        <span>{doneCount}/{allTasks.length} done</span>
-      </div>
-
-      {/* Role groups */}
-      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-        <div className="divide-y divide-stone-50">
-          {roleGroups.map((role) => (
-            <div key={role.key} className="px-4 py-2.5">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs font-medium text-stone-600">{role.roleName}</span>
-                <button
-                  onClick={() => {
-                    const f = featureMap.get(role.featureId);
-                    if (f) onOpenDetail(f);
-                  }}
-                  className="text-[10px] text-stone-400 hover:text-accent cursor-pointer"
-                >
-                  {role.featureTitle}
-                </button>
-              </div>
-              <div className="space-y-0.5 ml-1">
-                {role.tasks.map((task) => {
-                  const isDone = task.state === "closed";
-                  return (
-                    <div key={task.id} className="flex items-center gap-2 py-0.5">
-                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-status-production" : "bg-stone-300")} />
-                      <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-                        className={cn("text-sm hover:text-accent flex-1", isDone ? "line-through text-stone-400  " : "text-stone-700  ")}>
-                        {task.title}
-                      </a>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── SprintTaskCard ─────────────────────────────────────────────────────
-
-function SprintTaskCard({
-  task,
-  featureTitle,
-}: {
-  task: SubIssueWithFeature;
-  featureTitle?: string;
-}) {
-  const isDone = task.state === "closed";
-
-  return (
-    <a
-      href={task.html_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(
-        "flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-white  border-l-[3px] border-l-accent cursor-pointer hover:shadow-sm transition-shadow",
-        isDone ? "border-stone-100  opacity-50" : "border-stone-200  ",
-      )}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <Zap size={12} className="text-accent shrink-0" />
-          <span className={cn("text-sm block", isDone && "line-through text-stone-400  ")}>
-            {task.title}
-          </span>
-        </div>
-        {(featureTitle || task.roleName) && (
-          <span className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {featureTitle && (
-              <span className="text-xs text-stone-400">{featureTitle}</span>
-            )}
-            {task.roleName && (
-              <span className="text-xs text-stone-400">/ {task.roleName}</span>
-            )}
-          </span>
-        )}
-      </div>
-    </a>
   );
 }
 

@@ -1,5 +1,6 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { syncInit, syncRepo } from "../lib/github-sync";
+import { filterInactive } from "../lib/inactive-repos";
 
 // In-memory rate limit for ?force=true (one full re-sync per org per 5 min)
 // Force re-syncs hit the GitHub API hard, so deny rapid re-triggers.
@@ -91,31 +92,6 @@ export async function onRequestPost(context) {
   }
 }
 
-// Filter a repo-name list, removing entries marked as drafts in settings or
-// archived in the projects overlay. Both lookups happen on the same org.
-async function filterInactive(db, orgId, orgLogin, repoNames) {
-  if (repoNames.length === 0) return repoNames;
-
-  const [settingsRow, archivedRows] = await db.batch([
-    db.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
-    db.prepare("SELECT repo FROM projects WHERE owner_id = ? AND archived = 1").bind(orgLogin),
-  ]);
-
-  const exclude = new Set();
-  const settingsData = settingsRow.results?.[0]?.data;
-  if (settingsData) {
-    try {
-      for (const r of JSON.parse(settingsData).draftRepos ?? []) exclude.add(r);
-    } catch (e) {
-      console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, ignoring draftRepos:`, e);
-    }
-  }
-  for (const row of archivedRows.results ?? []) {
-    if (row.repo) exclude.add(row.repo);
-  }
-
-  return exclude.size > 0 ? repoNames.filter((n) => !exclude.has(n)) : repoNames;
-}
 
 // GET /api/sync — check sync freshness
 export async function onRequestGet(context) {

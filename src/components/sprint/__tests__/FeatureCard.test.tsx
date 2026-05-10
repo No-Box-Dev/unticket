@@ -8,7 +8,7 @@ const baseFeature: Feature = {
   id: 1,
   title: "Test Feature",
   owners: [],
-  status: "plan",
+  status: "todo",
   sprint: 1,
 };
 
@@ -74,7 +74,7 @@ describe("FeatureCard", () => {
     render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} onUpdate={onUpdate} />);
     await userEvent.click(screen.getByTitle("Move to Sprint"));
     expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ sprint: 2, status: "plan" }),
+      expect.objectContaining({ sprint: 2, status: "todo" }),
     );
   });
 

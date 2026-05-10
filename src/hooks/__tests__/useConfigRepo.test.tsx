@@ -82,9 +82,9 @@ beforeEach(() => {
 
 describe("useUpdateFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "plan", sprint: 1,
+    id: 1, title: "Test", owners: [], status: "todo", sprint: 1,
   };
-  const updated: Feature = { ...feature, title: "Updated", status: "demo" };
+  const updated: Feature = { ...feature, title: "Updated", status: "staging" };
 
   it("optimistically updates cache", async () => {
     mockUpdateFeature.mockResolvedValue(updated);
@@ -127,7 +127,7 @@ describe("useUpdateFeature", () => {
 
 describe("useDeleteFeature", () => {
   const feature: Feature = {
-    id: 1, title: "Test", owners: [], status: "plan", sprint: 1,
+    id: 1, title: "Test", owners: [], status: "todo", sprint: 1,
   };
 
   it("optimistically removes from cache", async () => {

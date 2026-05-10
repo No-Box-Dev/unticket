@@ -101,30 +101,18 @@ export interface Todo {
 
 // unticket config repo types
 
-export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
+export type FeatureStatus = "todo" | "staging" | "ready" | "production" | "future";
 
-/** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only, and scoping statuses). */
-export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
-
-/** Scoping board statuses in column order. */
-export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
-export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "medical_scoping", "planned", "deferred"];
+/** Ordered feature statuses for the sprint kanban (excludes "future" which is backlog-only). */
+export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["todo", "staging", "ready", "production"];
 
 /** Tailwind background color class for each feature status dot/indicator (muted palette). */
 export const STATUS_COLORS: Record<FeatureStatus, string> = {
-  plan: "bg-status-plan",
-  in_progress: "bg-status-progress",
-  demo: "bg-status-demo",
-  tested: "bg-status-tested",
+  todo: "bg-status-plan",
+  staging: "bg-status-progress",
+  ready: "bg-status-tested",
   production: "bg-status-production",
   future: "bg-status-future",
-  scoping: "bg-status-scoping",
-  idea: "bg-status-idea",
-  client_scoping: "bg-status-client",
-  technical_scoping: "bg-status-technical",
-  medical_scoping: "bg-status-medical",
-  planned: "bg-status-planned",
-  deferred: "bg-status-deferred",
 };
 
 /** Status type for personal todos (kanban). */
@@ -137,29 +125,12 @@ export const TODO_STATUS_DOTS: Record<TodoStatus, string> = {
 
 /** Human-readable display label for each feature status. */
 export const STATUS_LABELS: Record<FeatureStatus, string> = {
-  plan: "Plan",
-  in_progress: "In Progress",
-  demo: "Demo",
-  tested: "Tested",
-  production: "In Production",
+  todo: "To do",
+  staging: "Testing on staging",
+  ready: "Ready for production",
+  production: "On production",
   future: "Future",
-  scoping: "Scoping",
-  idea: "Idea",
-  client_scoping: "Client Scoping",
-  technical_scoping: "Technical Scoping",
-  medical_scoping: "Medical Scoping",
-  planned: "Planned",
-  deferred: "Deferred",
 };
-
-export interface PersonRole {
-  id: number;        // GitHub global issue ID
-  number: number;    // issue number
-  title: string;
-  assignee: string | null;
-  state: "open" | "closed";
-  html_url: string;
-}
 
 export interface SprintConfig {
   number: number;
@@ -203,6 +174,7 @@ export interface Person {
 export interface OrgSettings {
   draftRepos?: string[];
   excludedMembers?: string[];
+  unticketRepo?: string;
 }
 
 // Sprint snapshots

@@ -1,7 +1,9 @@
-import { useMemo, useCallback, lazy, Suspense } from "react";
+import { useMemo, useCallback, useEffect, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useRepos } from "@/hooks/useGitHub";
+import { useSettings } from "@/hooks/useConfigRepo";
+import { setUnticketRepoName } from "@/lib/unticket-repo-name";
 import { TopNav } from "@/components/TopNav";
 import { Spinner } from "@/components/Spinner";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -24,6 +26,10 @@ export function DashboardPage() {
   const { selectedOrg } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: repos } = useRepos();
+  const { data: settings } = useSettings();
+  useEffect(() => {
+    setUnticketRepoName(settings?.unticketRepo);
+  }, [settings?.unticketRepo]);
   const repoNames = useMemo(
     () => repos?.map((r) => r.name) ?? [],
     [repos],

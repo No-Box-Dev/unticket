@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
+import { getInactiveRepoSet } from "../lib/inactive-repos";
 
 // Allowed sort columns (whitelist to prevent SQL injection)
 const SORT_COLUMNS = {
@@ -21,8 +22,16 @@ const ISSUE_COLUMNS = [
 //               page, page_size, sort, sort_dir, meta
 export async function onRequestGet(context) {
   try {
-  const { orgId } = getCtx(context);
+  const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
+
+  // Always exclude drafts/archived/unticket-config repos at the read layer,
+  // even if D1 still has stale rows for them. Cap low (30) because these
+  // bindings are added to every query path alongside other filters; D1 has
+  // a hard 100-bind-per-stmt limit and the stats endpoint stacks orgId,
+  // optional repos param (also capped), date filters, and inactive together.
+  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 30);
+  const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
 
   // Meta endpoint: return distinct labels
   const meta = url.searchParams.get("meta");
@@ -31,10 +40,10 @@ export async function onRequestGet(context) {
       `SELECT DISTINCT json_extract(value, '$.name') AS name,
               json_extract(value, '$.color') AS color
        FROM issues, json_each(labels_json)
-       WHERE org_id = ? AND labels_json != '[]'
+       WHERE org_id = ? AND labels_json != '[]'${inactiveSql}
        ORDER BY name`
     )
-      .bind(orgId)
+      .bind(orgId, ...inactive)
       .all();
     return jsonResponse(rows.results);
   }
@@ -46,12 +55,16 @@ export async function onRequestGet(context) {
     let repoFilter = "";
     const repoBindings = [];
     if (reposParam) {
-      const repoList = reposParam.split(",").filter(Boolean).slice(0, 95);
+      const repoList = reposParam.split(",").filter(Boolean).slice(0, 50);
       if (repoList.length > 0) {
         repoFilter = ` AND repo IN (${repoList.map(() => "?").join(",")})`;
         repoBindings.push(...repoList);
       }
     }
+
+    // Apply inactive-repo exclusion to every stats query.
+    repoFilter += inactiveSql;
+    repoBindings.push(...inactive);
 
     const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -147,7 +160,7 @@ export async function onRequestGet(context) {
   }
 
   if (repos) {
-    const repoList = repos.split(",").filter(Boolean).slice(0, 90); // Cap to stay within D1 bind limits (100 max per stmt)
+    const repoList = repos.split(",").filter(Boolean).slice(0, 50); // Cap to stay within D1 bind limits (100 max per stmt; combined with inactive)
     if (repoList.length > 0) {
       where += ` AND repo IN (${repoList.map(() => "?").join(",")})`;
       bindings.push(...repoList);
@@ -157,6 +170,11 @@ export async function onRequestGet(context) {
   if (label) {
     where += " AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = ?)";
     bindings.push(label);
+  }
+
+  if (inactiveSql) {
+    where += inactiveSql;
+    bindings.push(...inactive);
   }
 
   const offset = (page - 1) * pageSize;
