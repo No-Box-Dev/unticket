@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import { useFeatures, usePeople, useTodos } from "@/hooks/useConfigRepo";
+import { useFeatures, usePeople } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "@/lib/sidebar";
@@ -13,7 +13,7 @@ interface CommandPaletteProps {
 }
 
 interface SearchResult {
-  type: "feature" | "person" | "tab" | "todo" | "action";
+  type: "feature" | "person" | "tab" | "action";
   label: string;
   detail?: string;
   action: () => void;
@@ -23,11 +23,9 @@ const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "engineers", label: "People", keywords: "people engineers team members" },
   { id: "sprint", label: "Sprint", keywords: "sprint features kanban board" },
   { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
-  { id: "todos", label: "Todos", keywords: "todos tasks personal kanban" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
-  { id: "releases", label: "Releases", keywords: "releases history snapshots past sprints" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
@@ -41,7 +39,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
   const { data: orgMembers } = useActiveMembers();
-  const { data: todos } = useTodos();
   const [, setSearchParams] = useSearchParams();
   const { setViewingSprint } = useSidebar();
 
@@ -132,20 +129,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       }
     }
 
-    // Search todos
-    for (const t of todos ?? []) {
-      if (items.length >= 30) break;
-      const searchText = `${t.title} ${t.owner} ${t.status}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "todo",
-          label: t.title,
-          detail: [t.owner, t.status.replace("_", " ")].filter(Boolean).join(" · "),
-          action: () => { onNavigate("todos"); setOpen(false); },
-        });
-      }
-    }
-
     // Search tabs
     for (const t of TAB_ITEMS) {
       if (t.label.toLowerCase().includes(q) || t.keywords.includes(q)) {
@@ -158,7 +141,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, todos, onNavigate, setViewingSprint, setSearchParams]);
+  }, [query, features, allPeople, onNavigate, setViewingSprint, setSearchParams]);
 
   // Keyboard navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -189,7 +172,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     feature: "text-accent",
     person: "text-amber-500",
     tab: "text-stone-400  ",
-    todo: "text-purple-500",
     action: "text-indigo-500",
   };
 
@@ -205,7 +187,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search features, people, todos..."
+            placeholder="Search features, people..."
             className="flex-1 text-sm text-stone-800 placeholder:text-stone-400 outline-none bg-transparent"
           />
           <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">

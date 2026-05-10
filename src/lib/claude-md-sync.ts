@@ -17,9 +17,9 @@ function buildPreamble(org: string): string {
 
 ### Features & Sprints
 - **Features** are tracked as GitHub Issues on a separate repo: [\`${org}/unticket\`](https://github.com/${org}/unticket) (not this repo)
-- Each feature issue has labels for status (\`status:plan\`, \`status:in_progress\`, \`status:demo\`, \`status:tested\`, \`status:production\`)
+- Each feature issue has labels for status (\`status:todo\`, \`status:staging\`, \`status:ready\`, \`status:production\`, \`status:future\`)
 - Owners are the issue's assignees. Sprints are GitHub Milestones named "Sprint N"
-- Feature plans live in the issue body as Markdown. Tasks are GitHub sub-issues linked to the parent feature issue
+- Feature plans live in the issue body as Markdown
 - List features: \`gh issue list --repo ${org}/unticket --label feature\`
 - View a feature: \`gh issue view <number> --repo ${org}/unticket\`
 
@@ -29,15 +29,9 @@ function buildPreamble(org: string): string {
 - It is fine to use "Closes #N" for issues that live in this repo (bugs, tasks, etc.)
 
 ### Feature Lifecycle
-- When working on a feature, update its plan and check off tasks on the \`${org}/unticket\` issue
-- Feature lifecycle: Plan → In Progress → Demo → Tested → In Production
-- To advance status via CLI: \`gh issue edit <number> --repo ${org}/unticket --remove-label status:plan --add-label status:in_progress\`
-
-### Todos
-- Personal todos are GitHub Issues in \`${org}/unticket\` with the \`todo\` label
-- Labels: \`todo\`, \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`
-- Closing a todo issue marks it as done; reopening moves it back
-- List todos: \`gh issue list --repo ${org}/unticket --label todo\`
+- When working on a feature, update its plan on the \`${org}/unticket\` issue
+- Feature lifecycle: To do → Testing on staging → Ready for production → On production
+- To advance status via CLI: \`gh issue edit <number> --repo ${org}/unticket --remove-label status:todo --add-label status:staging\`
 
 ### People Config
 - Team member info (name, role, team) is stored at \`${org}/unticket/people.json\`
