@@ -11,8 +11,8 @@ export async function onRequestGet(context) {
     });
   }
 
-  const clientId = context.env.GITHUB_CLIENT_ID;
-  const clientSecret = context.env.GITHUB_CLIENT_SECRET;
+  const clientId = context.env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = context.env.GITHUB_APP_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     return new Response(JSON.stringify({ error: "OAuth not configured" }), {
@@ -50,7 +50,7 @@ export async function onRequestGet(context) {
   });
 
   if (!tokenRes.ok) {
-    console.error("[gitpulse oauth] token exchange returned", tokenRes.status);
+    console.error("[unticket oauth] token exchange returned", tokenRes.status);
     return new Response(JSON.stringify({ error: "Authentication service temporarily unavailable" }), {
       status: 502,
       headers: { "Content-Type": "application/json" },
@@ -61,7 +61,7 @@ export async function onRequestGet(context) {
   try {
     data = await tokenRes.json();
   } catch (e) {
-    console.error("[gitpulse oauth] token exchange returned non-JSON:", e);
+    console.error("[unticket oauth] token exchange returned non-JSON:", e);
     return new Response(JSON.stringify({ error: "Authentication service returned invalid response" }), {
       status: 502,
       headers: { "Content-Type": "application/json" },
@@ -98,7 +98,7 @@ export async function onRequestGet(context) {
       "INSERT INTO pending_tokens (code, encrypted_token, csrf_state, created_at) VALUES (?, ?, ?, datetime('now'))"
     ).bind(exchangeCode, encryptedToken, stateParam).run();
   } catch (e) {
-    console.error("[gitpulse] Failed to store exchange code in D1:", e);
+    console.error("[unticket] Failed to store exchange code in D1:", e);
     return new Response(JSON.stringify({ error: "Authentication service temporarily unavailable" }), {
       status: 503,
       headers: { "Content-Type": "application/json" },

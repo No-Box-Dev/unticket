@@ -1,6 +1,6 @@
 // Server-side feature metadata helpers (mirrors frontend github-features.ts logic)
 
-const METADATA_RE = /\n?<!-- gitpulse:metadata\n([\s\S]*?)\n-->\s*$/;
+const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 
 /**
  * Parse metadata from a feature issue body.
@@ -14,7 +14,7 @@ export function parseFeatureMetadata(body) {
     const metadata = JSON.parse(match[1]);
     return { content: body.slice(0, match.index), metadata };
   } catch (e) {
-    console.warn("[gitpulse] Corrupt feature metadata block, ignoring:", e);
+    console.warn("[unticket] Corrupt feature metadata block, ignoring:", e);
     return { content: body, metadata: {} };
   }
 }
@@ -28,20 +28,20 @@ export function serializeFeatureMetadata(content, metadata) {
     (metadata.statusHistory && metadata.statusHistory.length > 0) ||
     (metadata.linkedPRs && metadata.linkedPRs.length > 0);
   if (!hasData) return content;
-  return `${content}\n\n<!-- gitpulse:metadata\n${JSON.stringify(metadata)}\n-->`;
+  return `${content}\n\n<!-- unticket:metadata\n${JSON.stringify(metadata)}\n-->`;
 }
 
 /**
- * Read a feature issue from the gitpulse repo.
+ * Read a feature issue from the unticket repo.
  * Returns the full issue object from GitHub API.
  */
 export async function readFeatureIssue(token, orgLogin, number) {
   const res = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/gitpulse/issues/${encodeURIComponent(number)}`,
+    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/unticket/issues/${encodeURIComponent(number)}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
         Accept: "application/vnd.github+json",
       },
     }
@@ -53,16 +53,16 @@ export async function readFeatureIssue(token, orgLogin, number) {
 }
 
 /**
- * Update a feature issue body in the gitpulse repo.
+ * Update a feature issue body in the unticket repo.
  */
 export async function updateFeatureBody(token, orgLogin, number, body) {
   const res = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/gitpulse/issues/${encodeURIComponent(number)}`,
+    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/unticket/issues/${encodeURIComponent(number)}`,
     {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
       },
@@ -92,25 +92,25 @@ export function parseFeatureFromBranch(ref) {
 /**
  * Extract feature numbers from a PR body/description.
  * Matches:
- *   - Part of org/gitpulse#42
- *   - Part of gitpulse#42
+ *   - Part of org/unticket#42
+ *   - Part of unticket#42
  *   - Feature #42 / Feature: #42
- *   - gitpulse#42 (standalone reference)
+ *   - unticket#42 (standalone reference)
  * Returns deduplicated array of feature numbers.
  */
 export function parseFeaturesFromBody(body) {
   if (!body) return [];
   const nums = new Set();
-  // "Part of org/gitpulse#N" or "Part of gitpulse#N"
-  for (const m of body.matchAll(/part\s+of\s+(?:[\w-]+\/)?gitpulse#(\d+)/gi)) {
+  // "Part of org/unticket#N" or "Part of unticket#N"
+  for (const m of body.matchAll(/part\s+of\s+(?:[\w-]+\/)?unticket#(\d+)/gi)) {
     nums.add(Number(m[1]));
   }
   // "Feature #N" or "Feature: #N"
   for (const m of body.matchAll(/feature[:\s]+#(\d+)/gi)) {
     nums.add(Number(m[1]));
   }
-  // Standalone "gitpulse#N"
-  for (const m of body.matchAll(/\bgitpulse#(\d+)/gi)) {
+  // Standalone "unticket#N"
+  for (const m of body.matchAll(/\bunticket#(\d+)/gi)) {
     nums.add(Number(m[1]));
   }
   return [...nums];

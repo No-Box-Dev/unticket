@@ -1,4 +1,4 @@
-# GitPulse
+# Unticket
 
 AI-powered project management dashboard for GitHub organisations.
 
@@ -13,10 +13,10 @@ Open http://localhost:5173 and sign in with a GitHub personal access token.
 
 ## Auth Modes
 
-GitPulse supports two authentication methods:
+Unticket supports two authentication methods:
 
 ### Personal Access Token (default)
-Works everywhere, no setup needed. Create a [GitHub PAT](https://github.com/settings/tokens/new?scopes=repo,read:org&description=GitPulse) with `repo` and `read:org` scopes.
+Works everywhere, no setup needed. Create a [GitHub PAT](https://github.com/settings/tokens/new?scopes=repo,read:org&description=Unticket) with `repo` and `read:org` scopes.
 
 ### GitHub OAuth (optional)
 Enables the "Sign in with GitHub" button. Requires:
@@ -29,7 +29,7 @@ Enables the "Sign in with GitHub" button. Requires:
 
 1. Enable Pages in repo settings (Source: GitHub Actions)
 2. Optionally set up OAuth:
-   - Create a GitHub OAuth App (callback URL: `https://yourname.github.io/gitpulse/api/auth/callback`)
+   - Create a GitHub OAuth App (callback URL: `https://yourname.github.io/unticket/api/auth/callback`)
    - Deploy the Cloudflare Worker in `/worker/` ([free tier](https://workers.cloudflare.com))
    - Add repo variables: `VITE_GITHUB_CLIENT_ID`, `VITE_OAUTH_PROXY_URL`
 3. Push to main — auto-deploys via GitHub Actions

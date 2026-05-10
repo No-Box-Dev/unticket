@@ -20,7 +20,7 @@ function daysAgo(date: string): number {
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
-const EXCLUDED_REPOS = new Set(["gitpulse", ".gitpulse"]);
+const EXCLUDED_REPOS = new Set(["unticket", ".unticket"]);
 const CRITICAL_LABELS = new Set(["critical"]);
 
 function isCritical(issue: any): boolean {

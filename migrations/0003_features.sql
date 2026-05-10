@@ -1,4 +1,4 @@
--- Features (cached from .gitpulse repo issues)
+-- Features (cached from .unticket repo issues)
 CREATE TABLE IF NOT EXISTS features (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id INTEGER NOT NULL REFERENCES orgs(id),

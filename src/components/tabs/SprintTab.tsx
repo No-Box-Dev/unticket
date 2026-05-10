@@ -291,7 +291,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
         </div>
         <h3 className="text-lg font-semibold text-stone-700 dark:text-neutral-300 mb-1">No sprint configured yet</h3>
         <p className="text-sm text-stone-400 dark:text-neutral-500 mb-6 max-w-sm mx-auto">
-          Create a <code className="bg-stone-100 dark:bg-dark-overlay px-1 rounded">gitpulse</code> config repo to start tracking sprints, features, and your team.
+          Create a <code className="bg-stone-100 dark:bg-dark-overlay px-1 rounded">unticket</code> config repo to start tracking sprints, features, and your team.
         </p>
         <button
           onClick={() => createRepo.mutate()}

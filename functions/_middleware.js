@@ -30,7 +30,7 @@ async function validateGitHubToken(token) {
   const res = await fetch("https://api.github.com/user", {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "GitPulse",
+      "User-Agent": "Unticket",
     },
   });
 
@@ -74,7 +74,7 @@ async function verifyOrgMembership(token, tokenHash, orgLogin, userLogin) {
     {
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
       },
     },
   );
@@ -202,7 +202,7 @@ export async function onRequest(context) {
     context.waitUntil(
       context.env.DB.prepare(
         "DELETE FROM sessions WHERE updated_at < datetime('now', '-30 days')"
-      ).run().catch((err) => console.error("[gitpulse] Session cleanup failed:", err))
+      ).run().catch((err) => console.error("[unticket] Session cleanup failed:", err))
     );
   }
 

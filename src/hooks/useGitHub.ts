@@ -334,15 +334,15 @@ export function useUnlinkPR() {
   });
 }
 
-/** Cross-repo issues assigned to the current user (from D1, excludes gitpulse repo). */
+/** Cross-repo issues assigned to the current user (from D1, excludes unticket repo). */
 export function useAssignedIssues(login: string) {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["assignedIssues", selectedOrg, login],
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
-      // Exclude issues from the gitpulse repo (those are todos/features/sprint tasks)
-      return res.data.filter((i) => i.repo !== "gitpulse" && i.repo !== ".gitpulse");
+      // Exclude issues from the unticket repo (those are todos/features/sprint tasks)
+      return res.data.filter((i) => i.repo !== "unticket" && i.repo !== ".unticket");
     },
     enabled: !!selectedOrg && !!login,
     staleTime: 2 * 60 * 1000,

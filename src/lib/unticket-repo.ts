@@ -1,11 +1,11 @@
 import { getOctokit } from "./github";
 import type { Person } from "./types";
 
-const REPO_NAME = "gitpulse";
+const REPO_NAME = "unticket";
 
 // ---------- Repo management ----------
 
-export async function ensureGitPulseRepo(org: string): Promise<boolean> {
+export async function ensureUnticketRepo(org: string): Promise<boolean> {
   const ok = getOctokit();
   try {
     await ok.rest.repos.get({ owner: org, repo: REPO_NAME });
@@ -18,7 +18,7 @@ export async function ensureGitPulseRepo(org: string): Promise<boolean> {
   }
 }
 
-const CLAUDE_MD = `# gitpulse
+const CLAUDE_MD = `# unticket
 
 Central config and plans repository for [unticket.ai](https://app.unticket.ai).
 
@@ -44,8 +44,8 @@ Features are tracked as issues with the \`feature\` label.
 - Tasks: sub-issues under feature issues (with \`points:{1,2,3,5,8,13}\` labels)
 
 \`\`\`bash
-gh issue list --repo {org}/gitpulse --label feature
-gh issue view <number> --repo {org}/gitpulse
+gh issue list --repo {org}/unticket --label feature
+gh issue view <number> --repo {org}/unticket
 \`\`\`
 
 ## Todos (GitHub Issues in this repo)
@@ -55,7 +55,7 @@ Personal todos are issues with the \`todo\` label.
 - Closing a todo marks it done; reopening moves it back
 
 \`\`\`bash
-gh issue list --repo {org}/gitpulse --label todo
+gh issue list --repo {org}/unticket --label todo
 \`\`\`
 
 ## People Config
@@ -70,11 +70,11 @@ Team member metadata at \`config/people.json\`:
 
 \`\`\`bash
 # Read
-gh api repos/{org}/gitpulse/contents/config/people.json --jq '.content' | base64 -d
+gh api repos/{org}/unticket/contents/config/people.json --jq '.content' | base64 -d
 
 # Update (get SHA first)
-SHA=$(gh api repos/{org}/gitpulse/contents/config/people.json --jq '.sha')
-cat people.json | base64 | gh api repos/{org}/gitpulse/contents/config/people.json \\
+SHA=$(gh api repos/{org}/unticket/contents/config/people.json --jq '.sha')
+cat people.json | base64 | gh api repos/{org}/unticket/contents/config/people.json \\
   -X PUT -f message="Update people" -f content=@- -f sha="$SHA"
 \`\`\`
 
@@ -82,14 +82,14 @@ cat people.json | base64 | gh api repos/{org}/gitpulse/contents/config/people.js
 
 \`\`\`bash
 # List all plans
-gh api repos/{org}/gitpulse/contents/plans/ --jq '.[].name'
+gh api repos/{org}/unticket/contents/plans/ --jq '.[].name'
 
 # Read a plan
-gh api repos/{org}/gitpulse/contents/plans/PLAN-42.md --jq '.content' | base64 -d
+gh api repos/{org}/unticket/contents/plans/PLAN-42.md --jq '.content' | base64 -d
 \`\`\`
 `;
 
-export async function createGitPulseRepo(org: string): Promise<void> {
+export async function createUnticketRepo(org: string): Promise<void> {
   const ok = getOctokit();
 
   await ok.rest.repos.createInOrg({
@@ -132,7 +132,7 @@ export async function fetchPlanFile(
   org: string,
   featureId: string,
 ): Promise<{ content: string } | null> {
-  return fetchFileFromGitPulse(org, planFilePath(featureId));
+  return fetchFileFromUnticket(org, planFilePath(featureId));
 }
 
 export async function savePlanFile(
@@ -140,7 +140,7 @@ export async function savePlanFile(
   featureId: string,
   content: string,
 ): Promise<void> {
-  await saveFileToGitPulse(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
+  await saveFileToUnticket(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
 }
 
 // ---------- Todo plan files ----------
@@ -153,7 +153,7 @@ export async function fetchTodoPlanFile(
   org: string,
   todoId: string,
 ): Promise<{ content: string } | null> {
-  return fetchFileFromGitPulse(org, todoPlanFilePath(todoId));
+  return fetchFileFromUnticket(org, todoPlanFilePath(todoId));
 }
 
 export async function saveTodoPlanFile(
@@ -161,7 +161,7 @@ export async function saveTodoPlanFile(
   todoId: string,
   content: string,
 ): Promise<void> {
-  await saveFileToGitPulse(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
+  await saveFileToUnticket(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
 }
 
 // ---------- People config ----------
@@ -172,7 +172,7 @@ const PEOPLE_PATHS = ["config/people.json", "people.json"];
 export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
   try {
     for (const path of PEOPLE_PATHS) {
-      const result = await fetchFileFromGitPulse(org, path);
+      const result = await fetchFileFromUnticket(org, path);
       if (result) return JSON.parse(result.content) as Person[];
     }
     return [];
@@ -184,7 +184,7 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
-  await saveFileToGitPulse(org, PEOPLE_PATHS[0], content, "Update people config");
+  await saveFileToUnticket(org, PEOPLE_PATHS[0], content, "Update people config");
 }
 
 // ---------- Sprint snapshots ----------
@@ -198,7 +198,7 @@ export async function saveSnapshotToRepo(
   snapshot: import("./types").SprintSnapshot,
 ): Promise<void> {
   const content = JSON.stringify(snapshot, null, 2);
-  await saveFileToGitPulse(org, snapshotFilePath(snapshot.sprintNumber), content, `Snapshot Sprint ${snapshot.sprintNumber}`);
+  await saveFileToUnticket(org, snapshotFilePath(snapshot.sprintNumber), content, `Snapshot Sprint ${snapshot.sprintNumber}`);
 }
 
 export async function deleteSnapshotFromRepo(
@@ -240,7 +240,7 @@ function decodeBase64Utf8(value: string): string {
 
 // ---------- Shared helpers ----------
 
-async function saveFileToGitPulse(
+async function saveFileToUnticket(
   org: string,
   path: string,
   content: string,
@@ -276,7 +276,7 @@ async function saveFileToGitPulse(
   });
 }
 
-async function fetchFileFromGitPulse(
+async function fetchFileFromUnticket(
   org: string,
   path: string,
 ): Promise<{ content: string } | null> {

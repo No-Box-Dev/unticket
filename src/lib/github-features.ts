@@ -17,7 +17,7 @@ interface D1FeatureRow {
   updated_at?: string;
 }
 
-const REPO = "gitpulse";
+const REPO = "unticket";
 const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 const ROLE_LABEL = "role";
@@ -49,7 +49,7 @@ const FEATURE_LABELS = [
 
 // ---------- Metadata (hidden in issue body) ----------
 
-const METADATA_RE = /\n?<!-- gitpulse:metadata\n([\s\S]*?)\n-->\s*$/;
+const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
@@ -63,7 +63,7 @@ function parseMetadata(body: string): { content: string; metadata: FeatureMetada
     const metadata = JSON.parse(match[1]) as FeatureMetadata;
     return { content: body.slice(0, match.index!), metadata };
   } catch (e) {
-    console.warn("[gitpulse] Corrupt feature metadata block, ignoring:", e);
+    console.warn("[unticket] Corrupt feature metadata block, ignoring:", e);
     return { content: body, metadata: {} };
   }
 }
@@ -73,7 +73,7 @@ function serializeMetadata(content: string, metadata: FeatureMetadata): string {
     (metadata.statusHistory && metadata.statusHistory.length > 0) ||
     (metadata.linkedPRs && metadata.linkedPRs.length > 0);
   if (!hasData) return content;
-  return `${content}\n\n<!-- gitpulse:metadata\n${JSON.stringify(metadata)}\n-->`;
+  return `${content}\n\n<!-- unticket:metadata\n${JSON.stringify(metadata)}\n-->`;
 }
 
 export function withStatusTransition(feature: Feature, newStatus: FeatureStatus): Feature {

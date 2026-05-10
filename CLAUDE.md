@@ -5,12 +5,12 @@
 - **When you add, remove, or significantly change a feature, update the `## Features` section of this file to reflect the change.** This keeps every future Claude Code session (for any team member) aware of what exists.
 - **When you add new architecture patterns (new API routes, new shared hooks, new config keys), update the `## Architecture` section.**
 - **Code review (`/review-external`)**: Always use the review-external skill at `~/.claude/skills/review-external/SKILL.md`. This runs a two-expert review (Zhipu GLM-5 + Claude) with peer discussion on critical findings. Use it before merging PRs.
-- **After merging PRs**: Always check the deploy status (`gh api repos/No-Box-Dev/gitpulse/actions/runs --jq '.workflow_runs[0]'`) and verify it succeeds. If the deploy fails, fix the build immediately. Also check for automated review comments (Gemini, CodeRabbit) on the merged PR and address any issues that landed on main.
+- **After merging PRs**: Always check the deploy status (`gh api repos/No-Box-Dev/unticket/actions/runs --jq '.workflow_runs[0]'`) and verify it succeeds. If the deploy fails, fix the build immediately. Also check for automated review comments (Gemini, CodeRabbit) on the merged PR and address any issues that landed on main.
 
 ## URLs
 
 - **Live:** https://app.unticket.ai
-- **Repo:** https://github.com/No-Box-Dev/gitpulse
+- **Repo:** https://github.com/No-Box-Dev/unticket
 - **OAuth Callback:** https://app.unticket.ai/api/auth/callback
 
 ## OAuth
@@ -43,9 +43,9 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 3. Add nav item in `src/components/Sidebar.tsx` navGroups
 4. Render in `src/pages/DashboardPage.tsx`
 
-### Config System (Hybrid: D1 + GitHub Issues + .gitpulse)
+### Config System (Hybrid: D1 + GitHub Issues + .unticket)
 
-**Features as GitHub Issues (on `{org}/.gitpulse` repo):**
+**Features as GitHub Issues (on `{org}/.unticket` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
 - Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
@@ -53,9 +53,9 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Owners: Issue assignees
 - Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
 - Feature ID: Issue number (integer)
-- CLI: `gh issue list --repo {org}/.gitpulse --label feature`
+- CLI: `gh issue list --repo {org}/.unticket --label feature`
 
-**Todos as GitHub Issues (on `{org}/.gitpulse` repo):**
+**Todos as GitHub Issues (on `{org}/.unticket` repo):**
 - `src/lib/github-todos.ts` — CRUD via Octokit (`fetchTodos`, `fetchTodosByOwner`, `createTodo`, `updateTodo`, `closeTodo`, `reopenTodo`, `deleteTodo`, `fetchTodosClosedInRange`, `migrateTodos`)
 - Hooks: `src/hooks/useConfigRepo.ts` — `useTodos()`, `useCreateTodoItem()`, `useUpdateTodoItem()`, `useDeleteTodoItem()`, `useTodosClosedInRange()`, `useLegacyTodos()`, `useMigrateTodos()`
 - Label scheme: `todo` (marker), `todo-status:{backlog,in_progress,done}`, `todo-owner:{login}`, `todo-feature:{number}`
@@ -71,10 +71,10 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 - D1 `todos` key is legacy — only used for migration source
 
-**`.gitpulse` repo (features as issues + todos as issues + plan files):**
-- `src/lib/gitpulse-repo.ts` — `ensureGitPulseRepo()`, `createGitPulseRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
+**`.unticket` repo (features as issues + todos as issues + plan files):**
+- `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`, `fetchTodoPlanFile()`, `todoPlanFilePath()`, `saveTodoPlanFile()`
 - Todo plans: `plans/TODO-{todoId}.md` (e.g. `TODO-42.md` where 42 is the issue number)
-- CLI access: `gh api repos/{org}/.gitpulse/contents/plans/ --jq '.[].name'`
+- CLI access: `gh api repos/{org}/.unticket/contents/plans/ --jq '.[].name'`
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
@@ -135,9 +135,9 @@ Issues dashboard (second item in sidebar, after Overview). Top section: four sta
 Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 #### Todos (`todos` tab)
-Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.gitpulse` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
+Per-user kanban board with Backlog / In Progress / Done columns and drag-and-drop. Each user only sees their own todos (filtered by `user.login`). **Backed by GitHub Issues** in `.unticket` repo with `todo` label — each todo is a GitHub issue with labels for status (`todo-status:*`), owner (`todo-owner:*`), linked feature (`todo-feature:*`). Dragging to Done closes the issue; dragging from Done reopens it. Todos can be linked to a feature and have an implementation plan (`plans/TODO-{issueNumber}.md`). Sprint tasks assigned to the user also appear as read-only cards (branded left border, lightning icon, points badge). Done column has a "Clear" button. Click a card to open a detail modal with feature/status selectors, GitHub link, and plan view. Completed todos are captured in sprint snapshots when advancing sprints.
 
 ### Other Features
 
 #### Settings (`settings` tab, sidebar bottom)
-Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via sidebar Settings nav item. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- gitpulse:start -->` / `<!-- gitpulse:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
+Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via sidebar Settings nav item. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- unticket:start -->` / `<!-- unticket:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.

@@ -1,8 +1,8 @@
-name = "gitpulse"
+name = "unticket"
 compatibility_date = "2024-12-01"
 pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "gitpulse"
-database_id = "328738d6-f12b-4a6c-921b-bc9670f6c0b2"
+database_name = "unticket"
+database_id = "c94084e6-d0be-423c-8de6-249e7cf8bf25"

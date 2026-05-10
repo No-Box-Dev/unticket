@@ -29,7 +29,7 @@ export async function onRequestPost(context) {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${token}`,
-        "User-Agent": "GitPulse",
+        "User-Agent": "Unticket",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ state }),
