@@ -45,14 +45,25 @@ export async function narrateEvent(env, eventId) {
   });
 
   const text = await completeNarrative(env.ZHIPU_API_KEY, ACTOR_SYSTEM, userMessage);
-  if (!text) return;
 
-  const trimmed = text.trim();
-  if (trimmed === "SKIP" || trimmed.startsWith("SKIP\n") || trimmed.startsWith("SKIP ")) return;
-
-  const summary = trimmed.length > MAX_OUTPUT_LENGTH
-    ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
-    : trimmed;
+  let summary;
+  let model;
+  if (text) {
+    const trimmed = text.trim();
+    // SKIP is a deliberate signal from the LLM that this event isn't worth surfacing.
+    // Honor it instead of falling back, so noise the model wanted filtered stays filtered.
+    if (trimmed === "SKIP" || trimmed.startsWith("SKIP\n") || trimmed.startsWith("SKIP ")) return;
+    summary = trimmed.length > MAX_OUTPUT_LENGTH
+      ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
+      : trimmed;
+    model = NARRATOR_MODEL;
+  } else {
+    // Zhipu unavailable (no key, timeout, HTTP error). Surface the raw event
+    // summary (e.g. "PR #42: title") so the feed isn't empty when the LLM is down.
+    if (!row.summary) return;
+    summary = row.summary;
+    model = "fallback";
+  }
 
   await env.DB.prepare(
     `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
@@ -68,7 +79,7 @@ export async function narrateEvent(env, eventId) {
     JSON.stringify({
       trigger_event_id: row.id,
       trigger_type: row.type,
-      model: NARRATOR_MODEL,
+      model,
     }),
     row.owner_id,
     row.created_at,

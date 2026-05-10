@@ -118,10 +118,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   }, [repoFilter, repoList]);
 
   // Stats for dashboard cards + charts (reactive to repo filter)
-  const { data: stats } = useIssueStats(
-    closedSince,
-    filteredRepos,
-  );
+  const { data: stats } = useIssueStats(filteredRepos);
 
   // Issues closed on selected day (for chart drill-down)
   // Use plain date strings — SQLite string comparison handles YYYY-MM-DD vs YYYY-MM-DDTHH:MM:SSZ correctly
@@ -352,7 +349,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
       </div>
 
       {/* ──── Dashboard Stats ──── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           label="Open Issues"
           value={stats?.open ?? 0}
@@ -371,13 +368,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           value={stats?.stale ?? 0}
           icon={<Clock className="w-4 h-4 text-red-500" />}
           accent={stats && stats.stale > 0 ? "red" : undefined}
-          loading={!stats}
-        />
-        <StatCard
-          label="Closed (30d)"
-          value={stats?.closedRecent ?? 0}
-          icon={<CircleCheck className="w-4 h-4 text-accent" />}
-          accent="accent"
           loading={!stats}
         />
       </div>
