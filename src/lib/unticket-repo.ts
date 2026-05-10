@@ -28,8 +28,6 @@ config/
   people.json       # Team members: name, role, teams per GitHub login
 plans/
   PLAN-*.md         # Implementation plans per feature (e.g. PLAN-42.md)
-snapshots/
-  sprint-N.json     # Sprint snapshot saved when a sprint is closed
 CLAUDE.md           # This file
 \`\`\`
 
@@ -37,7 +35,6 @@ CLAUDE.md           # This file
 
 Features are tracked as issues with the \`feature\` label.
 - Labels: \`status:{todo,staging,ready,production,future}\`
-- Sprints: GitHub Milestones named "Sprint N"
 - Owners: issue assignees
 
 \`\`\`bash
@@ -151,42 +148,6 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
   await saveFileToUnticket(org, PEOPLE_PATHS[0], content, "Update people config");
-}
-
-// ---------- Sprint snapshots ----------
-
-export function snapshotFilePath(sprintNumber: number): string {
-  return `snapshots/sprint-${sprintNumber}.json`;
-}
-
-export async function saveSnapshotToRepo(
-  org: string,
-  snapshot: import("./types").SprintSnapshot,
-): Promise<void> {
-  const content = JSON.stringify(snapshot, null, 2);
-  await saveFileToUnticket(org, snapshotFilePath(snapshot.sprintNumber), content, `Snapshot Sprint ${snapshot.sprintNumber}`);
-}
-
-export async function deleteSnapshotFromRepo(
-  org: string,
-  sprintNumber: number,
-): Promise<void> {
-  const ok = getOctokit();
-  const path = snapshotFilePath(sprintNumber);
-  try {
-    const { data } = await ok.rest.repos.getContent({ owner: org, repo: getUnticketRepoName(), path });
-    if ("sha" in data) {
-      await ok.rest.repos.deleteFile({
-        owner: org,
-        repo: getUnticketRepoName(),
-        path,
-        message: `Remove Sprint ${sprintNumber} snapshot`,
-        sha: data.sha,
-      });
-    }
-  } catch {
-    // File doesn't exist — nothing to delete
-  }
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------

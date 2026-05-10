@@ -30,32 +30,30 @@
 ## Architecture
 
 ### Layout System
-Sidebar + TopBar + Content layout (no more horizontal header/tab bar).
-- `src/components/Sidebar.tsx` — Collapsible sidebar with grouped nav, sprint dropdown, user menu, theme toggle. Collapse state persisted in localStorage via `src/lib/sidebar.ts` (Zustand store). Mobile: slide-over overlay.
-- `src/components/TopBar.tsx` — Slim h-12 bar with page title, CMD+K search button, rate limit dot. Hamburger on mobile.
-- `src/pages/DashboardPage.tsx` — Flex layout: `Sidebar | TopBar + Content`. Content is full-width (no max-w-7xl).
-- Sidebar store (`src/lib/sidebar.ts`): `collapsed`, `mobileOpen`, `viewingSprint` (shared with SprintTab for sprint selector).
+Top horizontal nav + content layout.
+- `src/components/TopNav.tsx` — Sticky top header with logo, centered nav items, CMD+K search button, rate limit dot, settings icon, user menu. Mobile: extra horizontal scroll row of nav items below the header.
+- `src/pages/DashboardPage.tsx` — Renders `TopNav` + the active tab inside an `ErrorBoundary` with lazy-loaded tab modules.
 
 ### Tab System
 Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 1. Add the ID to the `TabId` union in `src/lib/types.ts`
 2. Create `src/components/tabs/<Name>Tab.tsx`
-3. Add nav item in `src/components/Sidebar.tsx` navGroups
+3. Add nav item in `src/components/TopNav.tsx` `NAV_ITEMS`
 4. Render in `src/pages/DashboardPage.tsx`
 
 ### Config System (Hybrid: D1 + GitHub Issues + .unticket)
 
 **Features as GitHub Issues (on `{org}/.unticket` repo):**
 - `src/lib/github-features.ts` — CRUD via Octokit (`fetchFeatures`, `createFeature`, `updateFeature`, `deleteFeature`, `ensureFeatureLabels`)
-- Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()` with optimistic updates
-- Label scheme: `feature` (marker), `status:{plan,in_progress,demo,tested,production,future}`, `role` (person role grouping), `points:{1,2,3,5,8,13}` (task-level sprint points)
-- Sprint mapping: GitHub Milestones named "Sprint {number}" (auto-created)
+- Hooks: `src/hooks/useConfigRepo.ts` — `useFeatures()`, `useCreateFeature()`, `useUpdateFeature()`, `useDeleteFeature()`, `useCleanDoneFeatures()` with optimistic updates
+- Label scheme: `feature` (marker), `status:{todo,staging,ready,production,future}`
 - Owners: Issue assignees
-- Plan: Issue body (Markdown), with `## Tasks` section for subtasks (`- [ ] task @assignee`)
+- Plan: Issue body (Markdown)
 - Feature ID: Issue number (integer)
+- "Clean done" bulk action closes all features with `status:production` (calls `deleteFeature` per issue), then they disappear from the board
 - CLI: `gh issue list --repo {org}/.unticket --label feature`
 
-**D1 config (sprint, people, settings):**
+**D1 config (people, settings):**
 - API endpoint: `functions/api/config/[key].js` — GET/PUT with `VALID_KEYS` whitelist
 - API helpers: `src/lib/config-repo.ts` — `fetch<X>()` / `save<X>()` using `apiGet`/`apiPut`
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
@@ -103,22 +101,16 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 
 ### Active Tabs (visible in tab bar)
 
-#### Overview (`overview` tab)
-Dashboard landing page with sprint health banner, key metrics (PR throughput, cycle time, issues resolved, features shipped), attention alerts, open PR/issue age distributions, contributor activity table, sprint velocity trend, sprint burndown chart (ideal vs actual feature completion line chart using `computeBurndown`), and features-by-sprint breakdown. Range selector (2w–All). Clickable elements navigate to relevant tabs.
-
-#### Sprint Board (`sprint` tab)
-Sprint config + feature cards backed by GitHub Issues (label: `feature`). Kanban board with To do / Testing on staging / Ready for production / On production columns, drag-and-drop, search/filter by person, sort by title. Future sprints show a single column at full width. Sprint selector dropdown in sidebar (under Sprint Board nav item) allows switching to past sprint snapshots. `viewingSprint` state shared between sidebar and SprintTab via Zustand store. Features have owners, status (encoded as labels), and implementation plans (issue body with Markdown). Detail modal shows plan as Markdown and a sprint selector (move between sprints/backlog).
-
-#### Backlog (`backlog` tab)
-Future features (status: `future`) not yet assigned to a sprint. Same GitHub Issues backend.
+#### Features (`sprint` tab)
+Flat features kanban backed by GitHub Issues (label: `feature`). Four columns: To do / Testing on staging / Ready for production / On production. Drag-and-drop status changes, search/filter by person, sort by title. Features in `status:future` are hidden from the board (the "backlog"). Features have owners and a Markdown plan in the issue body. Detail modal shows the plan and a status selector (todo / staging / ready / production / future). Header has a Sync button and an admin-only **Clean Done** button that closes every feature in `status:production` (`useCleanDoneFeatures`), removing them from the board.
 
 #### Issues (`issues` tab)
-Issues dashboard (second item in sidebar, after Overview). Top section: four stat cards (open, unassigned, stale >30d, closed this sprint). Middle section: horizontal bar chart of open issues by repo, label distribution breakdown, and closed-per-week trend chart. Bottom section: full paginated table of open + closed issues (closed since sprint start). Stats powered by `meta=stats` endpoint on `/api/issues` (single D1 batch query). Filters: repo (searchable), assignee, assignment status, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` + `useIssueStats` hooks backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
+Issues dashboard. Top section: four stat cards (open, unassigned, stale >30d, closed in last 30d). Middle section: horizontal bar chart of open issues by repo, label distribution breakdown, and closed-per-week trend chart. Bottom section: full paginated table of open + closed issues (closed within the last 30 days). Stats powered by `meta=stats` endpoint on `/api/issues` (single D1 batch query). Filters: repo (searchable), assignee, assignment status, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` + `useIssueStats` hooks backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
 #### PRs (`prs` tab)
 Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
 
 ### Other Features
 
-#### Settings (`settings` tab, sidebar bottom)
-Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via sidebar Settings nav item. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- unticket:start -->` / `<!-- unticket:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
+#### Settings (`settings` tab, top-nav settings icon)
+Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via the gear icon in the top nav. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- unticket:start -->` / `<!-- unticket:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
