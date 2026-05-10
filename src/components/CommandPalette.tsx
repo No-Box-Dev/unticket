@@ -21,11 +21,11 @@ interface SearchResult {
 
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "engineers", label: "People", keywords: "people engineers team members" },
-  { id: "sprint", label: "Features", keywords: "features sprint kanban board" },
+  { id: "sprint", label: "Sprint", keywords: "sprint features kanban board" },
   { id: "todos", label: "Feed", keywords: "feed todos tasks personal" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
-  { id: "releases", label: "Sprint", keywords: "sprint releases history snapshots" },
+  { id: "releases", label: "Releases", keywords: "releases history snapshots past sprints" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
