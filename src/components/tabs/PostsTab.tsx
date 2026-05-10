@@ -46,7 +46,7 @@ export function PostsTab() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-3">
+    <div className="max-w-3xl mx-auto space-y-4">
       {events.map((event) => (
         <PostCard
           key={event.id}
@@ -73,38 +73,37 @@ function PostCard({ event, actor, project }: PostCardProps) {
   const model = typeof meta.model === "string" ? meta.model : null;
 
   return (
-    <article className="bg-white border border-stone-200 rounded-xl p-4">
-      <header className="flex items-start gap-3">
+    <article className="bg-white border border-stone-200 rounded-xl px-6 py-5">
+      <header className="flex items-center gap-3">
         <Avatar actor={actor} label={actorLabel} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-stone-900 truncate">{actorLabel}</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-[15px] font-semibold text-stone-900 truncate">{actorLabel}</span>
             {projectLabel && (
-              <span className="text-[10px] font-mono uppercase tracking-wide bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold tracking-wider rounded-full border border-accent/40 text-accent bg-accent/5">
                 {projectLabel}
               </span>
             )}
             {trigger && (
-              <span className="text-[10px] font-mono uppercase tracking-wide bg-accent/10 text-accent px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center px-2.5 py-0.5 text-[11px] font-mono rounded-full border border-stone-200 text-stone-500 bg-stone-50">
                 {trigger}
               </span>
             )}
           </div>
-          {actor?.github_login && (
-            <div className="text-xs text-stone-400 truncate">@{actor.github_login}</div>
-          )}
         </div>
         <span className="text-xs text-stone-400 shrink-0" title={event.created_at}>
           {timeAgo(event.created_at)}
         </span>
       </header>
 
-      <div className="mt-3 text-sm text-stone-700 whitespace-pre-wrap break-words">
+      <hr className="mt-3 mb-4 border-stone-100" />
+
+      <div className="text-[15px] leading-relaxed text-stone-800 whitespace-pre-wrap break-words">
         {event.summary || "(no summary)"}
       </div>
 
       {model && (
-        <div className="mt-3 text-[10px] font-mono text-stone-400">{model}</div>
+        <div className="mt-3 text-xs font-mono text-stone-400">{model}</div>
       )}
     </article>
   );
@@ -112,10 +111,10 @@ function PostCard({ event, actor, project }: PostCardProps) {
 
 function Avatar({ actor, label }: { actor: FeedActor | null; label: string }) {
   if (actor?.avatar_url) {
-    return <img src={actor.avatar_url} alt={label} loading="lazy" className="w-9 h-9 rounded-full shrink-0" />;
+    return <img src={actor.avatar_url} alt={label} loading="lazy" className="w-10 h-10 rounded-full shrink-0" />;
   }
   return (
-    <div className="w-9 h-9 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-sm font-bold text-stone-500">
+    <div className="w-10 h-10 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-base font-bold text-stone-500">
       {(label || "?").charAt(0).toUpperCase()}
     </div>
   );
