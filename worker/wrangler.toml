@@ -1,8 +1,0 @@
-name = "gitpulse-oauth"
-main = "oauth-proxy.js"
-compatibility_date = "2024-01-01"
-
-# Set these in the Cloudflare dashboard (Settings > Variables):
-# GITHUB_CLIENT_ID
-# GITHUB_CLIENT_SECRET
-# ALLOWED_ORIGINS = "https://yourname.github.io,http://localhost:5173"
