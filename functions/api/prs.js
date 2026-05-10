@@ -16,8 +16,9 @@ export async function onRequestGet(context) {
   const url = new URL(context.request.url);
 
   // Always exclude drafts/archived/unticket-config repos at the read layer,
-  // even if D1 still has stale rows for them.
-  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 90);
+  // even if D1 still has stale rows for them. Cap low (30) — D1 has a 100-bind
+  // hard limit per stmt and these bindings stack with other filters.
+  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 30);
   const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
 
   const state = url.searchParams.get("state");

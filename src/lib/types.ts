@@ -132,15 +132,6 @@ export const STATUS_LABELS: Record<FeatureStatus, string> = {
   future: "Future",
 };
 
-export interface PersonRole {
-  id: number;        // GitHub global issue ID
-  number: number;    // issue number
-  title: string;
-  assignee: string | null;
-  state: "open" | "closed";
-  html_url: string;
-}
-
 export interface SprintConfig {
   number: number;
   name: string;
