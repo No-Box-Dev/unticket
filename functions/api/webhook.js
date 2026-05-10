@@ -2,7 +2,7 @@ import { jsonResponse, errorResponse } from "../lib/db";
 import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
-import { upsertInstallation } from "../lib/gh-mirror";
+import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { narrateEvent } from "../lib/narrator";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
@@ -71,10 +71,25 @@ export async function onRequestPost(context) {
     return await handleInstallationEvent(context.env.DB, payload, deliveryId);
   }
   if (event === "installation_repositories") {
-    // We don't track per-repo installation scope yet; ack so GitHub stops
-    // retrying, but still log the event for audit (owner derived from the
-    // installation account, not payload.organization, which is absent).
+    // Maintain installations.repos_json as the source of truth for which
+    // repos are accessible. owner derived from the installation account
+    // (payload.organization is absent on these events).
+    const installationId = payload.installation?.id;
     const accountLogin = payload.installation?.account?.login;
+    if (installationId) {
+      try {
+        const current = new Set(await getInstallationRepos(context.env.DB, installationId));
+        for (const r of payload.repositories_added ?? []) {
+          if (r?.full_name) current.add(r.full_name);
+        }
+        for (const r of payload.repositories_removed ?? []) {
+          if (r?.full_name) current.delete(r.full_name);
+        }
+        await setInstallationRepos(context.env.DB, installationId, [...current]);
+      } catch (err) {
+        console.error("[unticket webhook] setInstallationRepos failed:", err);
+      }
+    }
     if (accountLogin) {
       try {
         await storeEvent(context.env.DB, event, deliveryId, payload, accountLogin);
@@ -254,7 +269,12 @@ async function handleInstallationEvent(db, payload, deliveryId) {
       ).bind(installationId, accountLogin),
     ]);
     try {
-      await upsertInstallation(db, payload.installation);
+      // installation.created carries the initial repo list in payload.repositories.
+      // Other actions don't, so we pass null and let COALESCE preserve it.
+      const repos = action === "created" && Array.isArray(payload.repositories)
+        ? JSON.stringify(payload.repositories.map((r) => r.full_name).filter(Boolean))
+        : null;
+      await upsertInstallation(db, payload.installation, repos);
       await storeEvent(db, "installation", deliveryId, payload, accountLogin);
     } catch (err) {
       console.error("[unticket webhook] installations sync failed:", err);

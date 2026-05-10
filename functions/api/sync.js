@@ -41,22 +41,8 @@ export async function onRequestPost(context) {
       // Phase 1: init (repos list, members, config migration)
       let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
 
-      // Filter to core repos only (exclude draftRepos from settings)
-      const settingsRow = await context.env.DB
-        .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
-        .bind(orgId)
-        .first();
-      if (settingsRow?.data) {
-        try {
-          const settings = JSON.parse(settingsRow.data);
-          const draftSet = new Set(settings.draftRepos ?? []);
-          if (draftSet.size > 0) {
-            repoNames = repoNames.filter((n) => !draftSet.has(n));
-          }
-        } catch (e) {
-          console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, syncing all repos:`, e);
-        }
-      }
+      // Filter out drafts (settings) and archived projects (platform inactive)
+      repoNames = await filterInactive(context.env.DB, orgId, orgLogin, repoNames);
 
       if (repoNames.length === 0) {
         return jsonResponse({ done: true, repos: 0 });
@@ -73,23 +59,16 @@ export async function onRequestPost(context) {
     // Phase 2: sync one repo
     await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force);
 
-    // Find next repo (filtered by core repos)
-    const [repoRows, settingsRow2] = await context.env.DB.batch([
-      context.env.DB.prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name").bind(orgId),
-      context.env.DB.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
-    ]);
-    let repoNames = repoRows.results.map((r) => r.name);
-    if (settingsRow2.results?.[0]?.data) {
-      try {
-        const settings = JSON.parse(settingsRow2.results[0].data);
-        const draftSet = new Set(settings.draftRepos ?? []);
-        if (draftSet.size > 0) {
-          repoNames = repoNames.filter((n) => !draftSet.has(n));
-        }
-      } catch (e) {
-        console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, including all repos in cursor:`, e);
-      }
-    }
+    // Find next repo (filtered by active repos)
+    const repoRows = await context.env.DB
+      .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
+      .bind(orgId).all();
+    let repoNames = await filterInactive(
+      context.env.DB,
+      orgId,
+      orgLogin,
+      repoRows.results.map((r) => r.name),
+    );
     const currentIdx = repoNames.indexOf(cursor);
     const nextRepo = currentIdx >= 0 && currentIdx < repoNames.length - 1
       ? repoNames[currentIdx + 1]
@@ -110,6 +89,32 @@ export async function onRequestPost(context) {
     console.error("[sync] error:", message, stack);
     return errorResponse("Sync failed. Please try again later.", 500);
   }
+}
+
+// Filter a repo-name list, removing entries marked as drafts in settings or
+// archived in the projects overlay. Both lookups happen on the same org.
+async function filterInactive(db, orgId, orgLogin, repoNames) {
+  if (repoNames.length === 0) return repoNames;
+
+  const [settingsRow, archivedRows] = await db.batch([
+    db.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
+    db.prepare("SELECT repo FROM projects WHERE owner_id = ? AND archived = 1").bind(orgLogin),
+  ]);
+
+  const exclude = new Set();
+  const settingsData = settingsRow.results?.[0]?.data;
+  if (settingsData) {
+    try {
+      for (const r of JSON.parse(settingsData).draftRepos ?? []) exclude.add(r);
+    } catch (e) {
+      console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, ignoring draftRepos:`, e);
+    }
+  }
+  for (const row of archivedRows.results ?? []) {
+    if (row.repo) exclude.add(row.repo);
+  }
+
+  return exclude.size > 0 ? repoNames.filter((n) => !exclude.has(n)) : repoNames;
 }
 
 // GET /api/sync — check sync freshness
