@@ -1,5 +1,5 @@
 import { jsonResponse, errorResponse } from "../lib/db";
-import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
+import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember, bootstrapInstallation } from "../lib/github-sync";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
@@ -68,7 +68,7 @@ export async function onRequestPost(context) {
 
   // App lifecycle events arrive without an organization payload — handle them up front.
   if (event === "installation") {
-    return await handleInstallationEvent(context.env.DB, payload, deliveryId);
+    return await handleInstallationEvent(context, payload, deliveryId);
   }
   if (event === "installation_repositories") {
     // Maintain installations.repos_json as the source of truth for which
@@ -249,7 +249,8 @@ export async function onRequestPost(context) {
   }
 }
 
-async function handleInstallationEvent(db, payload, deliveryId) {
+async function handleInstallationEvent(context, payload, deliveryId) {
+  const db = context.env.DB;
   const action = payload.action;
   const installationId = payload.installation?.id;
   const accountLogin = payload.installation?.account?.login;
@@ -279,7 +280,23 @@ async function handleInstallationEvent(db, payload, deliveryId) {
     } catch (err) {
       console.error("[unticket webhook] installations sync failed:", err);
     }
-    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
+
+    // Auto-bootstrap: backfill repos+members+features+per-repo issues/PRs.
+    // Run via waitUntil so the webhook returns within GitHub's 10s timeout
+    // even if the bootstrap takes longer for orgs with many repos.
+    // Re-bootstrap on `unsuspend` too — state may have drifted while suspended.
+    const orgRow = await db
+      .prepare("SELECT id FROM orgs WHERE github_login = ?")
+      .bind(accountLogin)
+      .first();
+    if (orgRow?.id) {
+      context.waitUntil(
+        bootstrapInstallation(context.env, orgRow.id, accountLogin, installationId).catch((err) => {
+          console.error(`[unticket bootstrap] failed for ${accountLogin}:`, err?.stack ?? err);
+        })
+      );
+    }
+    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin, bootstrapping: true });
   }
 
   if (action === "deleted" || action === "suspend") {
