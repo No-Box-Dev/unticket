@@ -53,8 +53,8 @@ export function LineChart({ lines, height = 200, xLabel }: LineChartProps) {
         {/* Grid lines */}
         {yTicks.map((v) => (
           <g key={`y-${v}`}>
-            <line x1={padL} x2={w - padR} y1={toY(v)} y2={toY(v)} className="stroke-stone-200 dark:stroke-neutral-700" strokeWidth={1} />
-            <text x={padL - 6} y={toY(v) + 4} textAnchor="end" className="fill-stone-400 dark:fill-neutral-500 text-[10px]">
+            <line x1={padL} x2={w - padR} y1={toY(v)} y2={toY(v)} className="stroke-stone-200" strokeWidth={1} />
+            <text x={padL - 6} y={toY(v) + 4} textAnchor="end" className="fill-stone-400 text-[10px]">
               {v}
             </text>
           </g>
@@ -62,7 +62,7 @@ export function LineChart({ lines, height = 200, xLabel }: LineChartProps) {
 
         {/* X-axis labels */}
         {xTicks.map((v) => (
-          <text key={`x-${v}`} x={toX(v)} y={height - 4} textAnchor="middle" className="fill-stone-400 dark:fill-neutral-500 text-[10px]">
+          <text key={`x-${v}`} x={toX(v)} y={height - 4} textAnchor="middle" className="fill-stone-400 text-[10px]">
             {xLabel ? xLabel(v) : `Day ${v}`}
           </text>
         ))}
@@ -114,7 +114,7 @@ export function LineChart({ lines, height = 200, xLabel }: LineChartProps) {
                   x={toX(pt.x)}
                   y={toY(pt.y) - 10}
                   textAnchor="middle"
-                  className="fill-stone-700 dark:fill-neutral-300 text-[11px] font-semibold"
+                  className="fill-stone-700 text-[11px] font-semibold"
                 >
                   {pt.y}
                 </text>
@@ -125,7 +125,7 @@ export function LineChart({ lines, height = 200, xLabel }: LineChartProps) {
       {/* Legend */}
       <div className="flex items-center gap-4 mt-2 justify-center">
         {lines.map((line) => (
-          <div key={line.label} className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-neutral-400">
+          <div key={line.label} className="flex items-center gap-1.5 text-xs text-stone-500">
             <div
               className="w-4 h-0.5"
               style={{

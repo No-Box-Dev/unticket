@@ -22,7 +22,7 @@ export function AddFeatureInput({ onAdd }: AddFeatureInputProps) {
     return (
       <button
         onClick={() => setEditing(true)}
-        className="flex items-center gap-1.5 text-xs text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer py-1"
+        className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-accent cursor-pointer py-1"
       >
         <Plus className="w-3.5 h-3.5" />
         Add Feature
@@ -47,11 +47,11 @@ export function AddFeatureInput({ onAdd }: AddFeatureInputProps) {
           if (!value.trim()) setEditing(false);
         }}
         placeholder="Feature title..."
-        className="flex-1 text-sm border border-stone-200 dark:border-white/[0.06] rounded-lg px-2.5 py-1 bg-white dark:bg-dark-raised dark:text-neutral-100 focus:outline-none focus:border-brand"
+        className="flex-1 text-sm border border-stone-200 rounded-lg px-2.5 py-1 bg-white focus:outline-none focus:border-accent"
       />
       <button
         onClick={submit}
-        className="text-xs font-medium text-brand hover:text-brand/80 cursor-pointer"
+        className="text-xs font-medium text-accent hover:text-accent/80 cursor-pointer"
       >
         Add
       </button>

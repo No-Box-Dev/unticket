@@ -67,9 +67,9 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
         className="text-xs cursor-pointer text-left"
       >
         {owners.length === 0 ? (
-          <span className="text-stone-300 dark:text-neutral-600 hover:text-stone-400 dark:hover:text-neutral-500 whitespace-nowrap">+ Assign</span>
+          <span className="text-stone-300 hover:text-stone-400 whitespace-nowrap">+ Assign</span>
         ) : (
-          <span className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 break-words">{owners.join(", ")}</span>
+          <span className="text-stone-400 hover:text-stone-600 break-words">{owners.join(", ")}</span>
         )}
       </button>
       {open && createPortal(
@@ -82,7 +82,7 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               ? { bottom: window.innerHeight - pos.top }
               : { top: pos.top }),
           }}
-          className="z-50 bg-white dark:bg-dark-raised border border-stone-200 dark:border-white/[0.06] rounded-lg shadow-md py-1 min-w-[160px]"
+          className="z-50 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[160px]"
         >
           <div className="px-2 pb-1">
             <input
@@ -91,25 +91,25 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full px-2 py-1 text-xs border border-stone-200 dark:border-white/[0.06] rounded bg-white dark:bg-dark-raised dark:text-neutral-100 focus:outline-none focus:border-brand"
+              className="w-full px-2 py-1 text-xs border border-stone-200 rounded bg-white focus:outline-none focus:border-accent"
             />
           </div>
           {filtered.map((person) => (
             <label
               key={person}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer dark:text-neutral-300"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-stone-50 cursor-pointer"
             >
               <input
                 type="checkbox"
                 checked={owners.includes(person)}
                 onChange={() => toggle(person)}
-                className="rounded border-stone-300 dark:border-white/[0.1]"
+                className="rounded border-stone-300"
               />
               {person}
             </label>
           ))}
           {filtered.length === 0 && (
-            <div className="px-3 py-1.5 text-xs text-stone-400 dark:text-neutral-500">
+            <div className="px-3 py-1.5 text-xs text-stone-400">
               {allPeople.length === 0 ? "No people configured" : "No matches"}
             </div>
           )}

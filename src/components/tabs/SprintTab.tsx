@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
-import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange, useUpdateTaskPoints } from "@/hooks/useConfigRepo";
+import { useSprint, useFeatures, usePeople, useCreateFeature, useUpdateFeature, useDeleteFeature, useCreateConfigRepo, useLegacyFeatures, useMigrateFeatures, useAdvanceSprint, useRevertSprint, useSprintSnapshots, useSaveSprintSnapshots, useSaveSprint, useSyncFeatures, useAllSprintSubIssues, useTodosClosedInRange } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { NewSprintModal } from "@/components/sprint/NewSprintModal";
@@ -11,9 +11,8 @@ import { useIsAdmin, useMergedPRs, useClosedIssues, useAllIssues, useActiveMembe
 import { useAuth } from "@/lib/auth";
 import { useSidebar } from "@/lib/sidebar";
 import { withStatusTransition } from "@/lib/github-features";
-import type { Feature, FeatureStatus, ScopingStatus, SprintSnapshot, Points } from "@/lib/types";
+import type { Feature, FeatureStatus, ScopingStatus, SprintSnapshot } from "@/lib/types";
 import { SCOPING_STATUS_ORDER } from "@/lib/types";
-import { PointsSelect } from "@/components/sprint/PointsSelect";
 import { Calendar, Rocket, ArrowUpDown, Upload, Loader2, Lock, Undo2, Play, RefreshCw, Search, LayoutGrid, BarChart3, Users, ListChecks, ChevronDown, List, ScanSearch } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -24,11 +23,11 @@ type SortKey = "default" | "title";
 
 type BoardStatus = Exclude<FeatureStatus, "future" | "scoping" | ScopingStatus>;
 const COLUMN_DEFS: { status: BoardStatus; label: string; color: string }[] = [
-  { status: "plan", label: "Plan", color: "bg-brand" },
-  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
-  { status: "demo", label: "Demo", color: "bg-purple-500" },
-  { status: "tested", label: "Tested", color: "bg-cyan-500" },
-  { status: "production", label: "In Production", color: "bg-green-500" },
+  { status: "plan", label: "Plan", color: "bg-status-plan" },
+  { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
+  { status: "demo", label: "Demo", color: "bg-status-demo" },
+  { status: "tested", label: "Tested", color: "bg-status-tested" },
+  { status: "production", label: "In Production", color: "bg-status-production" },
 ];
 
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
@@ -70,7 +69,6 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   const saveSnapshotsMut = useSaveSprintSnapshots();
   const saveSprintMut = useSaveSprint();
   const syncFeaturesMut = useSyncFeatures();
-  const updateTaskPointsMut = useUpdateTaskPoints();
   const { user } = useAuth();
   const { data: mergedPRs } = useMergedPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
@@ -286,17 +284,17 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
   if (!sprint) {
     return (
       <div className="text-center py-16">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand/10 mb-4">
-          <Rocket className="w-7 h-7 text-brand" />
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-accent/10 mb-4">
+          <Rocket className="w-7 h-7 text-accent" />
         </div>
-        <h3 className="text-lg font-semibold text-stone-700 dark:text-neutral-300 mb-1">No sprint configured yet</h3>
-        <p className="text-sm text-stone-400 dark:text-neutral-500 mb-6 max-w-sm mx-auto">
-          Create a <code className="bg-stone-100 dark:bg-dark-overlay px-1 rounded">unticket</code> config repo to start tracking sprints, features, and your team.
+        <h3 className="text-lg font-semibold text-stone-700 mb-1">No sprint configured yet</h3>
+        <p className="text-sm text-stone-400 mb-6 max-w-sm mx-auto">
+          Create a <code className="bg-stone-100 px-1 rounded">unticket</code> config repo to start tracking sprints, features, and your team.
         </p>
         <button
           onClick={() => createRepo.mutate()}
           disabled={createRepo.isPending}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 cursor-pointer"
         >
           {createRepo.isPending ? "Setting up..." : "Set Up unticket.ai"}
         </button>
@@ -353,7 +351,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
                 setViewingSprint(num);
                 onUrlChange?.(null, num ?? sprint?.number ?? null);
               }}
-              className="appearance-none pl-2.5 pr-7 py-1.5 text-sm font-semibold rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-700 dark:text-neutral-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand/30"
+              className="appearance-none pl-2.5 pr-7 py-1.5 text-sm font-semibold rounded-lg border border-stone-200 bg-white text-stone-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/30"
             >
               <option value="current">Sprint {sprint.number}</option>
               {futureSprints.map((num) => (
@@ -373,21 +371,21 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           </div>
 
           {/* Sprint info */}
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-stone-400 dark:text-neutral-500">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-stone-400">
             <Calendar className="w-3.5 h-3.5" />
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </div>
           {sprint.focus && (
-            <span className="hidden md:inline text-xs text-brand">{sprint.focus}</span>
+            <span className="hidden md:inline text-xs text-accent">{sprint.focus}</span>
           )}
 
-          <span className="hidden sm:block w-px h-5 bg-stone-200 dark:bg-white/[0.1]" />
+          <span className="hidden sm:block w-px h-5 bg-stone-200" />
 
           {/* Actions */}
           <button
             onClick={() => syncFeaturesMut.mutate()}
             disabled={syncFeaturesMut.isPending}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer"
           >
             <RefreshCw size={12} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
             <span className="hidden sm:inline">{syncFeaturesMut.isPending ? "Syncing..." : "Sync"}</span>
@@ -395,7 +393,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           {isAdmin && !isViewingFutureSprint && !activeSnapshot && (
             <button
               onClick={() => setShowNewSprint(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] text-xs text-stone-500 dark:text-neutral-400 hover:text-brand hover:border-brand/30 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer"
             >
               <Lock size={12} />
               <span className="hidden sm:inline">Close Sprint</span>
@@ -417,7 +415,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
                 );
               }}
               disabled={saveSprintMut.isPending}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-brand/30 text-xs text-brand hover:bg-brand/5 transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 text-xs text-accent hover:bg-accent/5 transition-colors cursor-pointer disabled:opacity-50"
             >
               {saveSprintMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
               <span className="hidden sm:inline">{saveSprintMut.isPending ? "Setting..." : "Set as Current Sprint"}</span>
@@ -426,7 +424,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           {isAdmin && (
             <button
               onClick={() => setShowBackfill(!showBackfill)}
-              className="px-2 py-1.5 text-xs text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
+              className="px-2 py-1.5 text-xs text-stone-400 hover:text-accent cursor-pointer"
             >
               +
             </button>
@@ -435,7 +433,7 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
 
         {/* View tabs — ClickUp style */}
         {!activeSnapshot && (
-          <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+          <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
             {VIEW_TABS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -443,8 +441,8 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all",
                   sprintView === key
-                    ? "bg-white dark:bg-dark-raised text-stone-800 dark:text-neutral-200 shadow-sm"
-                    : "text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-300",
+                    ? "bg-white  text-stone-800  shadow-sm"
+                    : "text-stone-500  hover:text-stone-700  ",
                 )}
               >
                 <Icon size={13} />
@@ -573,7 +571,6 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
           personPills={personPills}
           onOpenDetail={openDetail}
           features={features}
-          onUpdateTaskPoints={(taskNumber, points) => updateTaskPointsMut.mutate({ taskNumber, points })}
         />
       )}
 
@@ -628,22 +625,20 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
             });
             const doneTasks = actualTasks.filter((t) => t.state === "closed");
             const openTasks = actualTasks.filter((t) => t.state === "open");
-            const donePoints = doneTasks.reduce((s, t) => s + (t.points ?? 0), 0);
-            const totalPoints = actualTasks.reduce((s, t) => s + (t.points ?? 0), 0);
             const rolesCompleted = roles.filter((r) => r.state === "closed").length;
 
             // Per-engineer breakdown
             const sprintMergedPRs = (mergedPRs ?? []).filter((pr: any) => pr.merged_at && inRange(pr.merged_at));
             const sprintClosedIssues = (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at));
-            const engineerMap = new Map<string, { tasksDone: number; tasksOpen: number; points: number; prsMerged: number; issuesClosed: number }>();
+            const engineerMap = new Map<string, { tasksDone: number; tasksOpen: number; prsMerged: number; issuesClosed: number }>();
             const getEng = (login: string) => {
-              if (!engineerMap.has(login)) engineerMap.set(login, { tasksDone: 0, tasksOpen: 0, points: 0, prsMerged: 0, issuesClosed: 0 });
+              if (!engineerMap.has(login)) engineerMap.set(login, { tasksDone: 0, tasksOpen: 0, prsMerged: 0, issuesClosed: 0 });
               return engineerMap.get(login)!;
             };
             for (const t of actualTasks) {
               for (const a of t.assignees) {
                 const e = getEng(a);
-                if (t.state === "closed") { e.tasksDone++; e.points += t.points ?? 0; }
+                if (t.state === "closed") e.tasksDone++;
                 else e.tasksOpen++;
               }
             }
@@ -660,8 +655,6 @@ export function SprintTab({ repoNames, navFilter, urlFeatureId, urlSprintNum, on
                 featuresCarriedOver: sf.filter((f) => f.status === "plan" || f.status === "demo").length,
                 tasksDone: doneTasks.length,
                 tasksOpen: openTasks.length,
-                totalPoints,
-                donePoints,
                 rolesCompleted,
                 totalRoles: roles.length,
               },
@@ -741,12 +734,12 @@ function FeaturesView({
       {/* Search + filters row */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search features..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm text-stone-700 dark:text-neutral-300 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
 
@@ -754,11 +747,11 @@ function FeaturesView({
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
 
         <div className="flex items-center gap-1">
-          <ArrowUpDown size={13} className="text-stone-400 dark:text-neutral-500" />
+          <ArrowUpDown size={13} className="text-stone-400" />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="px-2 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs text-stone-500 dark:text-neutral-400 focus:outline-none focus:border-brand cursor-pointer"
+            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-500 focus:outline-none focus:border-accent cursor-pointer"
           >
             <option value="default">Default</option>
             <option value="title">Title A-Z</option>
@@ -780,16 +773,16 @@ function FeaturesView({
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, planCol.status)}
                 className={cn(
-                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
-                  dragOverCol === planCol.status && "border-brand/50 bg-brand/5",
+                  "rounded-xl border border-stone-200  bg-stone-50  transition-colors",
+                  dragOverCol === planCol.status && "border-accent/50 bg-accent/5",
                 )}
               >
-                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
                   <span className={cn("w-2.5 h-2.5 rounded-full", planCol.color)} />
-                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                  <span className="text-sm font-medium text-stone-700">
                     {planCol.label}
                   </span>
-                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                  <span className="text-xs text-stone-400 ml-auto">{items.length}</span>
                 </div>
                 <div className="p-2 pb-3 space-y-2">
                   {items.map((feature) => (
@@ -807,7 +800,7 @@ function FeaturesView({
                     />
                   ))}
                   {items.length === 0 && (
-                    <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                    <div className="px-3 py-8 text-sm text-stone-400 text-center">
                       Drag features here
                     </div>
                   )}
@@ -829,16 +822,16 @@ function FeaturesView({
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, col.status)}
                 className={cn(
-                  "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
-                  dragOverCol === col.status && "border-brand/50 bg-brand/5",
+                  "rounded-xl border border-stone-200  bg-stone-50  transition-colors",
+                  dragOverCol === col.status && "border-accent/50 bg-accent/5",
                 )}
               >
-                <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+                <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
                   <span className={cn("w-2.5 h-2.5 rounded-full", col.color)} />
-                  <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                  <span className="text-sm font-medium text-stone-700">
                     {col.label}
                   </span>
-                  <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                  <span className="text-xs text-stone-400 ml-auto">{items.length}</span>
                 </div>
                 <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
                   {items.map((feature) => (
@@ -856,7 +849,7 @@ function FeaturesView({
                     />
                   ))}
                   {items.length === 0 && (
-                    <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                    <div className="px-3 py-8 text-sm text-stone-400 text-center">
                       Drag features here
                     </div>
                   )}
@@ -873,12 +866,12 @@ function FeaturesView({
 // ─── Scoping View ─────────────────────────────────────────────────────
 
 const SCOPING_COLUMN_DEFS: { status: ScopingStatus; label: string; color: string }[] = [
-  { status: "idea", label: "Idea", color: "bg-slate-400" },
-  { status: "client_scoping", label: "Client Scoping", color: "bg-pink-400" },
-  { status: "technical_scoping", label: "Technical Scoping", color: "bg-indigo-400" },
-  { status: "medical_scoping", label: "Medical Scoping", color: "bg-rose-400" },
-  { status: "planned", label: "Planned", color: "bg-emerald-400" },
-  { status: "deferred", label: "Deferred", color: "bg-gray-500" },
+  { status: "idea", label: "Idea", color: "bg-status-idea" },
+  { status: "client_scoping", label: "Client Scoping", color: "bg-status-client" },
+  { status: "technical_scoping", label: "Technical Scoping", color: "bg-status-technical" },
+  { status: "medical_scoping", label: "Medical Scoping", color: "bg-status-medical" },
+  { status: "planned", label: "Planned", color: "bg-status-planned" },
+  { status: "deferred", label: "Deferred", color: "bg-status-deferred" },
 ];
 
 interface ScopingViewProps {
@@ -929,12 +922,12 @@ function ScopingView({
       {/* Search + filters row */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search features..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm text-stone-700 dark:text-neutral-300 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
@@ -954,16 +947,16 @@ function ScopingView({
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, col.status)}
               className={cn(
-                "rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50 transition-colors",
-                dragOverCol === col.status && "border-brand/50 bg-brand/5",
+                "rounded-xl border border-stone-200  bg-stone-50  transition-colors",
+                dragOverCol === col.status && "border-accent/50 bg-accent/5",
               )}
             >
-              <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+              <div className="px-4 py-3 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
                 <span className={cn("w-2.5 h-2.5 rounded-full", col.color)} />
-                <span className="text-sm font-medium text-stone-700 dark:text-neutral-300">
+                <span className="text-sm font-medium text-stone-700">
                   {col.label}
                 </span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                <span className="text-xs text-stone-400 ml-auto">{items.length}</span>
               </div>
               <div className="p-2 pb-3 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
                 {items.map((feature) => (
@@ -982,7 +975,7 @@ function ScopingView({
                   />
                 ))}
                 {items.length === 0 && (
-                  <div className="px-3 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+                  <div className="px-3 py-8 text-sm text-stone-400 text-center">
                     Drag features here
                   </div>
                 )}
@@ -1011,18 +1004,18 @@ function classifyTask(task: SubIssueWithFeature, featureStatus?: FeatureStatus):
 }
 
 const TASK_COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
-  { status: "plan", label: "Plan", color: "bg-brand" },
-  { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
-  { status: "demo", label: "Demo", color: "bg-purple-500" },
-  { status: "tested", label: "Tested", color: "bg-cyan-500" },
-  { status: "production", label: "In Production", color: "bg-green-500" },
+  { status: "plan", label: "Plan", color: "bg-status-plan" },
+  { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
+  { status: "demo", label: "Demo", color: "bg-status-demo" },
+  { status: "tested", label: "Tested", color: "bg-status-tested" },
+  { status: "production", label: "In Production", color: "bg-status-production" },
 ];
 
 const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
-  plan: "text-brand", in_progress: "text-amber-500", demo: "text-purple-500", tested: "text-cyan-500", production: "text-green-500",
+  plan: "text-stone-600", in_progress: "text-stone-600", demo: "text-stone-600", tested: "text-stone-600", production: "text-stone-600",
 };
 const TASK_STATUS_DOT: Record<TaskStatus, string> = {
-  plan: "bg-brand", in_progress: "bg-amber-500", demo: "bg-purple-500", tested: "bg-cyan-500", production: "bg-green-500",
+  plan: "bg-status-plan", in_progress: "bg-status-progress", demo: "bg-status-demo", tested: "bg-status-tested", production: "bg-status-production",
 };
 
 type SubViewMode = "list" | "board";
@@ -1053,13 +1046,12 @@ interface RolesViewProps {
   personPills: { login: string; name: string }[];
   onOpenDetail: (f: Feature) => void;
   features: Feature[] | undefined;
-  onUpdateTaskPoints: (taskNumber: number, points: Points) => void;
 }
 
 function RolesView({
   sprintFeatures, allTasks, tasksLoading, people, searchQuery, setSearchQuery,
   selectedPersons, setSelectedPersons,
-  personPills, onOpenDetail, features, onUpdateTaskPoints,
+  personPills, onOpenDetail, features,
 }: RolesViewProps) {
   const filtered = useMemo(
     () => filterTasks(allTasks ?? [], searchQuery, selectedPersons),
@@ -1116,12 +1108,12 @@ function RolesView({
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search roles..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm text-stone-700 dark:text-neutral-300 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
@@ -1129,7 +1121,7 @@ function RolesView({
       </div>
 
       {personRoles.length === 0 && (
-        <div className="text-center py-12 text-sm text-stone-400 dark:text-neutral-500">
+        <div className="text-center py-12 text-sm text-stone-400">
           No tasks with assignees found. Add roles and tasks to features first.
         </div>
       )}
@@ -1138,34 +1130,32 @@ function RolesView({
       {personRoles.map(({ login, name, roles }) => {
         const allTasks = roles.flatMap((r) => r.tasks);
         const doneCount = allTasks.filter((t) => t.state === "closed").length;
-        const totalPts = allTasks.reduce((s, t) => s + (t.points ?? 0), 0);
-        const donePts = allTasks.filter((t) => t.state === "closed").reduce((s, t) => s + (t.points ?? 0), 0);
 
         return (
-          <div key={login} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
+          <div key={login} className="bg-white rounded-xl border border-stone-200 overflow-hidden">
             {/* Person header */}
-            <div className="px-4 py-3 border-b border-stone-100 dark:border-white/[0.06] flex items-center gap-3">
-              <div className="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center text-brand text-[10px] font-bold shrink-0">
+            <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center text-accent text-[10px] font-bold shrink-0">
                 {name.slice(0, 2).toUpperCase()}
               </div>
-              <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">{name}</span>
-              <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
-                {doneCount}/{allTasks.length} done{totalPts > 0 && ` · ${donePts}/${totalPts} pts`}
+              <span className="text-sm font-semibold text-stone-800">{name}</span>
+              <span className="text-xs text-stone-400 ml-auto">
+                {doneCount}/{allTasks.length} done
               </span>
             </div>
 
             {/* Roles */}
-            <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
+            <div className="divide-y divide-stone-50">
               {roles.map((role, i) => (
                 <div key={i} className="px-4 py-2.5">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-medium text-stone-600 dark:text-neutral-300">{role.roleName}</span>
+                    <span className="text-xs font-medium text-stone-600">{role.roleName}</span>
                     <button
                       onClick={() => {
                         const f = (features ?? []).find((feat) => feat.id === role.featureId);
                         if (f) onOpenDetail(f);
                       }}
-                      className="text-[10px] text-stone-400 dark:text-neutral-500 hover:text-brand cursor-pointer"
+                      className="text-[10px] text-stone-400 hover:text-accent cursor-pointer"
                     >
                       {role.featureName}
                     </button>
@@ -1175,12 +1165,11 @@ function RolesView({
                       const isDone = task.state === "closed";
                       return (
                         <div key={task.id} className="flex items-center gap-2 py-0.5">
-                          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-green-500" : "bg-stone-300 dark:bg-neutral-600")} />
+                          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isDone ? "bg-status-production" : "bg-stone-300")} />
                           <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-                            className={cn("text-sm hover:text-brand flex-1", isDone ? "line-through text-stone-400 dark:text-neutral-500" : "text-stone-700 dark:text-neutral-300")}>
+                            className={cn("text-sm hover:text-accent flex-1", isDone ? "line-through text-stone-400  " : "text-stone-700  ")}>
                             {task.title}
                           </a>
-                          <PointsSelect value={task.points ?? undefined} onChange={(pts) => onUpdateTaskPoints(task.number, pts)} />
                         </div>
                       );
                     })}
@@ -1248,18 +1237,18 @@ function TasksView({
       {/* Filters + view toggle */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-neutral-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tasks..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-sm text-stone-700 dark:text-neutral-300 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-stone-200 bg-white text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
         <PersonSelect value={selectedPersons.length > 0 ? selectedPersons : null} onChange={(v) => setSelectedPersons(Array.isArray(v) ? v : v ? [v] : [])} placeholder="All people" multi
           options={personPills.map((p) => ({ value: p.login, label: p.name }))} />
         <ViewToggle value={viewMode} onChange={setViewMode} />
-        <div className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">
+        <div className="text-xs text-stone-400 ml-auto">
           {openCount} open · {doneCount} done
         </div>
       </div>
@@ -1270,18 +1259,18 @@ function TasksView({
           {TASK_COLUMNS.map(({ status, label, color }) => {
             const items = taskColumns[status];
             return (
-              <div key={status} className="rounded-xl border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-dark-base/50">
-                <div className="px-3 py-2.5 border-b border-stone-100 dark:border-white/[0.06] bg-white dark:bg-dark-raised rounded-t-xl flex items-center gap-2">
+              <div key={status} className="rounded-xl border border-stone-200 bg-stone-50">
+                <div className="px-3 py-2.5 border-b border-stone-100 bg-white rounded-t-xl flex items-center gap-2">
                   <span className={cn("w-2 h-2 rounded-full", color)} />
-                  <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{label}</span>
-                  <span className="text-[10px] text-stone-400 dark:text-neutral-500 ml-auto">{items.length}</span>
+                  <span className="text-xs font-medium text-stone-700">{label}</span>
+                  <span className="text-[10px] text-stone-400 ml-auto">{items.length}</span>
                 </div>
                 <div className="p-1.5 pb-2 space-y-1.5 overflow-y-auto max-h-[calc(100vh-260px)]">
                   {items.map((task) => (
                     <TaskKanbanCard key={task.id} task={task} feature={featureMap.get(task.featureId)} />
                   ))}
                   {items.length === 0 && (
-                    <div className="px-2 py-6 text-[11px] text-stone-400 dark:text-neutral-500 text-center">—</div>
+                    <div className="px-2 py-6 text-[11px] text-stone-400 text-center">—</div>
                   )}
                 </div>
               </div>
@@ -1290,14 +1279,13 @@ function TasksView({
         </div>
       ) : (
         /* List view: table grouped by status */
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] overflow-hidden">
-          <div className="grid grid-cols-[1fr_140px_100px_80px_80px_60px] gap-2 px-4 py-2 border-b border-stone-100 dark:border-white/[0.06] text-[10px] uppercase tracking-wider font-medium text-stone-400 dark:text-neutral-500">
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="grid grid-cols-[1fr_140px_100px_80px_80px] gap-2 px-4 py-2 border-b border-stone-100 text-[10px] uppercase tracking-wider font-medium text-stone-400">
             <span>Task</span>
             <span>Feature</span>
             <span>Role</span>
             <span>Assignee</span>
             <span>Status</span>
-            <span className="text-right">Pts</span>
           </div>
 
           {TASK_COLUMNS.map(({ status, label, color }) => {
@@ -1306,7 +1294,7 @@ function TasksView({
             const isLate = status === "tested" || status === "production";
             return (
               <div key={status}>
-                <div className="px-4 py-1.5 bg-stone-50 dark:bg-dark-overlay border-y border-stone-100 dark:border-white/[0.06] flex items-center gap-1.5">
+                <div className="px-4 py-1.5 bg-stone-50 border-y border-stone-100 flex items-center gap-1.5">
                   <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
                   <span className={cn("text-[10px] uppercase tracking-wider font-medium", TASK_STATUS_COLORS[status])}>{label} ({items.length})</span>
                 </div>
@@ -1320,7 +1308,7 @@ function TasksView({
           })}
 
           {filteredTasks.length === 0 && (
-            <div className="px-4 py-8 text-sm text-stone-400 dark:text-neutral-500 text-center">
+            <div className="px-4 py-8 text-sm text-stone-400 text-center">
               No tasks found. Add roles and tasks to your features to see them here.
             </div>
           )}
@@ -1334,28 +1322,23 @@ function TaskKanbanCard({ task, feature }: { task: SubIssueWithFeature; feature?
   const status = classifyTask(task, feature?.status);
   return (
     <div className={cn(
-      "bg-white dark:bg-dark-raised rounded-lg border border-stone-200 dark:border-white/[0.06] p-2.5 shadow-sm",
+      "bg-white  rounded-lg border border-stone-200  p-2.5 shadow-sm",
       status === "production" && "opacity-60",
     )}>
       <a href={task.html_url} target="_blank" rel="noopener noreferrer"
-        className="text-sm font-medium text-stone-700 dark:text-neutral-300 hover:text-brand leading-snug line-clamp-2 block">
+        className="text-sm font-medium text-stone-700 hover:text-accent leading-snug line-clamp-2 block">
         {task.title}
       </a>
       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
         {feature && (
-          <span className="text-[10px] text-stone-400 dark:text-neutral-500 truncate max-w-[120px]">{feature.title}</span>
+          <span className="text-[10px] text-stone-400 truncate max-w-[120px]">{feature.title}</span>
         )}
         {task.roleName && (
-          <span className="text-[10px] text-brand/70 bg-brand/5 px-1.5 py-0.5 rounded truncate max-w-[100px]">{task.roleName}</span>
+          <span className="text-[10px] text-accent/70 bg-accent/5 px-1.5 py-0.5 rounded truncate max-w-[100px]">{task.roleName}</span>
         )}
         <div className="flex-1" />
         {task.assignees.length > 0 && (
-          <span className="text-[10px] text-stone-400 dark:text-neutral-500">{task.assignees.join(", ")}</span>
-        )}
-        {task.points != null && (
-          <span className="text-[10px] font-medium text-stone-400 dark:text-neutral-500 bg-stone-100 dark:bg-dark-overlay px-1.5 py-0.5 rounded shrink-0">
-            {task.points}
-          </span>
+          <span className="text-[10px] text-stone-400">{task.assignees.join(", ")}</span>
         )}
       </div>
     </div>
@@ -1365,18 +1348,17 @@ function TaskKanbanCard({ task, feature }: { task: SubIssueWithFeature; feature?
 function TaskTableRow({ task, feature, statusLabel }: { task: SubIssueWithFeature; feature?: Feature; statusLabel: string }) {
   const status = classifyTask(task, feature?.status);
   return (
-    <div className="grid grid-cols-[1fr_140px_100px_80px_80px_60px] gap-2 px-4 py-2 border-b border-stone-50 dark:border-white/[0.03] hover:bg-stone-50 dark:hover:bg-white/[0.03] items-center">
+    <div className="grid grid-cols-[1fr_140px_100px_80px_80px] gap-2 px-4 py-2 border-b border-stone-50 hover:bg-stone-50 items-center">
       <div className="flex items-center gap-2 min-w-0">
         <span className={cn("w-2 h-2 rounded-full shrink-0", TASK_STATUS_DOT[status])} />
-        <a href={task.html_url} target="_blank" rel="noopener noreferrer" className="text-sm text-stone-700 dark:text-neutral-300 truncate hover:text-brand">
+        <a href={task.html_url} target="_blank" rel="noopener noreferrer" className="text-sm text-stone-700 truncate hover:text-accent">
           {task.title}
         </a>
       </div>
-      <span className="text-xs text-stone-400 dark:text-neutral-500 truncate">{feature?.title ?? ""}</span>
-      <span className="text-xs text-stone-400 dark:text-neutral-500 truncate">{task.roleName ?? "—"}</span>
-      <span className="text-xs text-stone-500 dark:text-neutral-400 truncate">{task.assignees.join(", ") || "—"}</span>
+      <span className="text-xs text-stone-400 truncate">{feature?.title ?? ""}</span>
+      <span className="text-xs text-stone-400 truncate">{task.roleName ?? "—"}</span>
+      <span className="text-xs text-stone-500 truncate">{task.assignees.join(", ") || "—"}</span>
       <span className={cn("text-[10px] font-medium", TASK_STATUS_COLORS[status])}>{statusLabel}</span>
-      <span className="text-xs text-stone-500 dark:text-neutral-400 text-right font-medium">{task.points ?? "—"}</span>
     </div>
   );
 }
@@ -1385,14 +1367,14 @@ function TaskTableRow({ task, feature, statusLabel }: { task: SubIssueWithFeatur
 
 function ViewToggle({ value, onChange }: { value: SubViewMode; onChange: (v: SubViewMode) => void }) {
   return (
-    <div className="flex items-center bg-stone-100 dark:bg-dark-overlay rounded-lg p-0.5">
+    <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
       <button
         onClick={() => onChange("board")}
         className={cn(
           "flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md cursor-pointer transition-all",
           value === "board"
-            ? "bg-white dark:bg-dark-raised text-stone-700 dark:text-neutral-200 shadow-sm"
-            : "text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400",
+            ? "bg-white  text-stone-700  shadow-sm"
+            : "text-stone-400  hover:text-stone-600  ",
         )}
       >
         <LayoutGrid size={11} />
@@ -1403,8 +1385,8 @@ function ViewToggle({ value, onChange }: { value: SubViewMode; onChange: (v: Sub
         className={cn(
           "flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md cursor-pointer transition-all",
           value === "list"
-            ? "bg-white dark:bg-dark-raised text-stone-700 dark:text-neutral-200 shadow-sm"
-            : "text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400",
+            ? "bg-white  text-stone-700  shadow-sm"
+            : "text-stone-400  hover:text-stone-600  ",
         )}
       >
         <List size={11} />
@@ -1419,23 +1401,24 @@ function MigrationBanner({ legacyCount, isPending, progress, onMigrate, onDismis
   onMigrate: () => void; onDismiss: () => void;
 }) {
   return (
-    <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center gap-3">
-      <Upload size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+    <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 flex items-center gap-3">
+      <span className="w-1.5 h-1.5 rounded-full bg-severity-mid shrink-0" />
+      <Upload size={16} className="text-stone-500 shrink-0" />
       <div className="flex-1">
-        <p className="text-sm text-amber-800 dark:text-amber-200">
+        <p className="text-sm text-stone-700">
           {progress
             ? `Migrating features... (${progress.done}/${progress.total})`
             : `${legacyCount} feature${legacyCount === 1 ? "" : "s"} found in D1. Migrate to GitHub Issues?`}
         </p>
       </div>
       {!isPending && (
-        <button onClick={onMigrate} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 cursor-pointer flex items-center gap-1.5">
+        <button onClick={onMigrate} className="px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-xs font-medium hover:bg-accent hover:text-white hover:border-accent cursor-pointer flex items-center gap-1.5">
           <Upload size={12} /> Migrate
         </button>
       )}
-      {isPending && <Loader2 size={16} className="text-amber-600 dark:text-amber-400 animate-spin" />}
+      {isPending && <Loader2 size={16} className="text-stone-500 animate-spin" />}
       {!isPending && (
-        <button onClick={onDismiss} className="text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 text-xs cursor-pointer">Dismiss</button>
+        <button onClick={onDismiss} className="text-stone-400 hover:text-stone-600 text-xs cursor-pointer">Dismiss</button>
       )}
     </div>
   );
@@ -1447,34 +1430,34 @@ function BackfillForm({ sprint: _sprint, features, mergedPRs, closedIssues, allI
   backfillEnd, setBackfillEnd, backfillFocus, setBackfillFocus, onSave, onCancel,
 }: any) {
   return (
-    <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4 space-y-3">
-      <h4 className="text-sm font-semibold text-stone-800 dark:text-neutral-200">Backfill Sprint Snapshot</h4>
+    <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
+      <h4 className="text-sm font-semibold text-stone-800">Backfill Sprint Snapshot</h4>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Sprint #</label>
+          <label className="text-xs text-stone-500 block mb-1">Sprint #</label>
           <input type="number" min={1} value={backfillNumber} onChange={(e: any) => setBackfillNumber(parseInt(e.target.value) || 1)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
         </div>
         <div>
-          <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Name</label>
+          <label className="text-xs text-stone-500 block mb-1">Name</label>
           <input type="text" value={backfillName} onChange={(e: any) => setBackfillName(e.target.value)} placeholder="Sprint name..."
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
         </div>
         <div>
-          <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Start Date</label>
+          <label className="text-xs text-stone-500 block mb-1">Start Date</label>
           <input type="date" value={backfillStart} onChange={(e: any) => setBackfillStart(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
         </div>
         <div>
-          <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">End Date</label>
+          <label className="text-xs text-stone-500 block mb-1">End Date</label>
           <input type="date" value={backfillEnd} onChange={(e: any) => setBackfillEnd(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
         </div>
       </div>
       <div>
-        <label className="text-xs text-stone-500 dark:text-neutral-400 block mb-1">Focus</label>
+        <label className="text-xs text-stone-500 block mb-1">Focus</label>
         <input type="text" value={backfillFocus} onChange={(e: any) => setBackfillFocus(e.target.value)} placeholder="Sprint focus..."
-          className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-overlay text-stone-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -1490,18 +1473,18 @@ function BackfillForm({ sprint: _sprint, features, mergedPRs, closedIssues, allI
                 issuesClosed: (closedIssues ?? []).filter((i: any) => i.closed_at && inRange(i.closed_at)).length,
                 featuresCompleted: bf.filter((f: Feature) => f.status === "production").length,
                 featuresCarriedOver: bf.filter((f: Feature) => f.status === "plan" || f.status === "demo").length,
-                tasksDone: 0, tasksOpen: 0, totalPoints: 0, donePoints: 0, rolesCompleted: 0, totalRoles: 0,
+                tasksDone: 0, tasksOpen: 0, rolesCompleted: 0, totalRoles: 0,
               },
               features: bf.map((f: Feature) => ({ title: f.title, status: f.status, owners: f.owners })),
               createdAt: new Date().toISOString(),
             };
             onSave(snap);
           }}
-          className="px-4 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+          className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
         >
           {isPending ? "Saving..." : "Create Snapshot"}
         </button>
-        <button onClick={onCancel} className="px-4 py-2 border border-stone-200 dark:border-white/[0.06] text-sm text-stone-600 dark:text-neutral-400 rounded-lg hover:bg-stone-50 dark:hover:bg-white/[0.06] cursor-pointer">Cancel</button>
+        <button onClick={onCancel} className="px-4 py-2 border border-stone-200 text-sm text-stone-600 rounded-lg hover:bg-stone-50 cursor-pointer">Cancel</button>
       </div>
     </div>
   );
@@ -1523,23 +1506,22 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
   // Filtered metrics when engineer is selected
   const eng = selectedEngineer ? engineers.find((e) => e.login === selectedEngineer) : null;
   const m = eng
-    ? { ...metrics, prsMerged: eng.prsMerged, issuesClosed: eng.issuesClosed, tasksDone: eng.tasksDone, tasksOpen: eng.tasksOpen, donePoints: eng.points }
+    ? { ...metrics, prsMerged: eng.prsMerged, issuesClosed: eng.issuesClosed, tasksDone: eng.tasksDone, tasksOpen: eng.tasksOpen }
     : metrics;
 
   const totalTasks = m.tasksDone + m.tasksOpen;
   const completionPct = totalTasks > 0 ? Math.round((m.tasksDone / totalTasks) * 100) : 0;
-  const pointsPct = m.totalPoints > 0 ? Math.round((m.donePoints / m.totalPoints) * 100) : 0;
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-neutral-200">
+          <h2 className="text-lg font-semibold text-stone-800">
             Sprint {snapshot.sprintNumber}
-            {snapshot.name && <span className="text-stone-400 dark:text-neutral-500 font-normal ml-2">— {snapshot.name}</span>}
+            {snapshot.name && <span className="text-stone-400 font-normal ml-2">— {snapshot.name}</span>}
           </h2>
-          <span className="text-xs text-stone-400 dark:text-neutral-500">
+          <span className="text-xs text-stone-400">
             {formatDate(snapshot.startDate)} – {formatDate(snapshot.endDate)}
           </span>
         </div>
@@ -1560,7 +1542,7 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
             <button
               onClick={onRevert}
               disabled={isReverting}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-xs text-red-500 hover:text-red-600 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs text-red-500 hover:text-red-600 hover:border-red-300 transition-colors cursor-pointer disabled:opacity-50"
             >
               {isReverting ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
               <span>{isReverting ? "Reverting..." : "Revert Sprint"}</span>
@@ -1569,36 +1551,36 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
         </div>
       </div>
 
-      {snapshot.focus && <p className="text-sm text-brand">{snapshot.focus}</p>}
+      {snapshot.focus && <p className="text-sm text-accent">{snapshot.focus}</p>}
 
       {/* Feature kanban board */}
       {snapshotFeatures.length > 0 && (() => {
         const STATUS_COLS: { status: string; label: string; color: string }[] = [
-          { status: "plan", label: "Plan", color: "bg-brand" },
-          { status: "in_progress", label: "In Progress", color: "bg-amber-500" },
-          { status: "demo", label: "Demo", color: "bg-purple-500" },
-          { status: "tested", label: "Tested", color: "bg-cyan-500" },
-          { status: "production", label: "In Production", color: "bg-green-500" },
+          { status: "plan", label: "Plan", color: "bg-status-plan" },
+          { status: "in_progress", label: "In Progress", color: "bg-status-progress" },
+          { status: "demo", label: "Demo", color: "bg-status-demo" },
+          { status: "tested", label: "Tested", color: "bg-status-tested" },
+          { status: "production", label: "In Production", color: "bg-status-production" },
         ];
         return (
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
             {STATUS_COLS.map((col) => {
               const cards = snapshotFeatures.filter((f) => f.status === col.status);
               return (
-                <div key={col.status} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] min-h-[120px]">
-                  <div className="flex items-center gap-2 px-3 py-2.5 border-b border-stone-100 dark:border-white/[0.06]">
+                <div key={col.status} className="bg-white rounded-xl border border-stone-200 min-h-[120px]">
+                  <div className="flex items-center gap-2 px-3 py-2.5 border-b border-stone-100">
                     <span className={cn("w-2 h-2 rounded-full", col.color)} />
-                    <span className="text-xs font-semibold text-stone-600 dark:text-neutral-300">{col.label}</span>
-                    <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto">{cards.length}</span>
+                    <span className="text-xs font-semibold text-stone-600">{col.label}</span>
+                    <span className="text-xs text-stone-400 ml-auto">{cards.length}</span>
                   </div>
                   <div className="p-2 space-y-2">
                     {cards.map((f, i) => (
-                      <div key={i} className={cn("rounded-lg border border-stone-200 dark:border-white/[0.06] p-2.5", f.status === "production" && "opacity-60")}>
-                        <div className="text-xs font-medium text-stone-700 dark:text-neutral-200 leading-snug">{f.title}</div>
+                      <div key={i} className={cn("rounded-lg border border-stone-200  p-2.5", f.status === "production" && "opacity-60")}>
+                        <div className="text-xs font-medium text-stone-700 leading-snug">{f.title}</div>
                         {f.owners.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {f.owners.map((o) => (
-                              <span key={o} className="text-[10px] bg-stone-100 dark:bg-white/[0.06] border border-stone-200 dark:border-white/[0.06] px-1.5 py-0.5 rounded-full text-stone-500 dark:text-neutral-400">{o}</span>
+                              <span key={o} className="text-[10px] bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded-full text-stone-500">{o}</span>
                             ))}
                           </div>
                         )}
@@ -1615,67 +1597,48 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
       {/* Top-level metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {([
-          ["Features Shipped", metrics.featuresCompleted, "text-green-600 dark:text-green-400"],
-          ["Carried Over", metrics.featuresCarriedOver, "text-amber-600 dark:text-amber-400"],
-          ["Tasks Done", m.tasksDone, "text-green-600 dark:text-green-400"],
+          ["Features Shipped", metrics.featuresCompleted, "text-stone-700  "],
+          ["Carried Over", metrics.featuresCarriedOver, "text-amber-600  "],
+          ["Tasks Done", m.tasksDone, "text-stone-700  "],
           ["Tasks Open", m.tasksOpen, "text-red-500"],
-          ["Roles Done", metrics.rolesCompleted ?? 0, "text-green-600 dark:text-green-400"],
-          ["PRs Merged", m.prsMerged, "text-brand"],
-          ["Issues Closed", m.issuesClosed, "text-purple-600 dark:text-purple-400"],
-          ["Issues Created", metrics.issuesCreated, "text-stone-600 dark:text-neutral-300"],
+          ["Roles Done", metrics.rolesCompleted ?? 0, "text-stone-700  "],
+          ["PRs Merged", m.prsMerged, "text-accent"],
+          ["Issues Closed", m.issuesClosed, "text-purple-600  "],
+          ["Issues Created", metrics.issuesCreated, "text-stone-600  "],
         ] as const).map(([label, value, color]) => (
-          <div key={label} className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] px-3 py-3 text-center">
+          <div key={label} className="bg-white rounded-xl border border-stone-200 px-3 py-3 text-center">
             <div className={cn("text-2xl font-semibold", color)}>{value}</div>
-            <div className="text-[10px] text-stone-400 dark:text-neutral-500 uppercase tracking-wider mt-0.5">{label}</div>
+            <div className="text-[10px] text-stone-400 uppercase tracking-wider mt-0.5">{label}</div>
           </div>
         ))}
       </div>
 
       {/* Progress bars */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Task completion */}
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Task Completion</h3>
-            <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">{completionPct}%</span>
-          </div>
-          <div className="h-3 bg-stone-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
-            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${completionPct}%` }} />
-          </div>
-          <div className="flex items-center gap-4 mt-2 text-xs text-stone-400 dark:text-neutral-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Done {m.tasksDone}</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-stone-300 dark:bg-neutral-600" /> Open {m.tasksOpen}</span>
-          </div>
+      <div className="bg-white rounded-xl border border-stone-200 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider">Task Completion</h3>
+          <span className="text-sm font-semibold text-stone-700">{completionPct}%</span>
         </div>
-
-        {/* Points progress */}
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider">Points Delivered</h3>
-            <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">{m.donePoints}/{m.totalPoints}</span>
-          </div>
-          <div className="h-3 bg-stone-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
-            <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${pointsPct}%` }} />
-          </div>
-          <div className="flex items-center gap-4 mt-2 text-xs text-stone-400 dark:text-neutral-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand" /> Completed {m.donePoints}pts</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-stone-300 dark:bg-neutral-600" /> Remaining {m.totalPoints - m.donePoints}pts</span>
-          </div>
+        <div className="h-3 bg-stone-100 rounded-full overflow-hidden">
+          <div className="h-full bg-status-production rounded-full transition-all" style={{ width: `${completionPct}%` }} />
+        </div>
+        <div className="flex items-center gap-4 mt-2 text-xs text-stone-400">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-production" /> Done {m.tasksDone}</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-stone-300" /> Open {m.tasksOpen}</span>
         </div>
       </div>
 
       {/* Engineer breakdown */}
       {engineers.length > 0 && !selectedEngineer && (
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">Engineer Breakdown</h3>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">Engineer Breakdown</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-stone-400 dark:text-neutral-500 uppercase tracking-wider">
+                <tr className="text-left text-xs text-stone-400 uppercase tracking-wider">
                   <th className="pb-2 pr-4 font-medium">Engineer</th>
                   <th className="pb-2 pr-4 font-medium text-center">Tasks Done</th>
                   <th className="pb-2 pr-4 font-medium text-center">Tasks Open</th>
-                  <th className="pb-2 pr-4 font-medium text-center">Points</th>
                   <th className="pb-2 pr-4 font-medium text-center">PRs Merged</th>
                   <th className="pb-2 font-medium text-center">Issues Closed</th>
                 </tr>
@@ -1690,21 +1653,20 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
                       <tr
                         key={e.login}
                         onClick={() => setSelectedEngineer(e.login)}
-                        className="border-t border-stone-100 dark:border-white/[0.06] hover:bg-stone-50 dark:hover:bg-white/[0.04] cursor-pointer"
+                        className="border-t border-stone-100 hover:bg-stone-50 cursor-pointer"
                       >
                         <td className="py-2 pr-4">
                           <div className="flex items-center gap-2">
-                            <span className="text-stone-700 dark:text-neutral-300 font-medium">{e.login}</span>
-                            <div className="flex-1 max-w-[80px] h-1.5 bg-stone-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
-                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${engPct}%` }} />
+                            <span className="text-stone-700 font-medium">{e.login}</span>
+                            <div className="flex-1 max-w-[80px] h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-status-production rounded-full" style={{ width: `${engPct}%` }} />
                             </div>
                           </div>
                         </td>
-                        <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400 font-medium">{e.tasksDone}</td>
-                        <td className="py-2 pr-4 text-center text-stone-500 dark:text-neutral-400">{e.tasksOpen}</td>
-                        <td className="py-2 pr-4 text-center text-brand font-medium">{e.points}</td>
-                        <td className="py-2 pr-4 text-center text-stone-600 dark:text-neutral-300">{e.prsMerged}</td>
-                        <td className="py-2 text-center text-stone-600 dark:text-neutral-300">{e.issuesClosed}</td>
+                        <td className="py-2 pr-4 text-center text-stone-700 font-medium">{e.tasksDone}</td>
+                        <td className="py-2 pr-4 text-center text-stone-500">{e.tasksOpen}</td>
+                        <td className="py-2 pr-4 text-center text-stone-600">{e.prsMerged}</td>
+                        <td className="py-2 text-center text-stone-600">{e.issuesClosed}</td>
                       </tr>
                     );
                   })}
@@ -1716,8 +1678,8 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
 
       {/* Burndown / velocity chart (bar chart showing done vs open) */}
       {engineers.length > 0 && !selectedEngineer && (
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">Tasks by Engineer</h3>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">Tasks by Engineer</h3>
           <div className="space-y-2.5">
             {engineers
               .sort((a, b) => (b.tasksDone + b.tasksOpen) - (a.tasksDone + a.tasksOpen))
@@ -1726,28 +1688,28 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
                 const maxTotal = Math.max(...engineers.map((x) => x.tasksDone + x.tasksOpen), 1);
                 return (
                   <div key={e.login} className="flex items-center gap-3">
-                    <span className="text-xs text-stone-600 dark:text-neutral-400 w-24 truncate shrink-0">{e.login}</span>
-                    <div className="flex-1 flex h-5 rounded overflow-hidden bg-stone-100 dark:bg-white/[0.06]">
+                    <span className="text-xs text-stone-600 w-24 truncate shrink-0">{e.login}</span>
+                    <div className="flex-1 flex h-5 rounded overflow-hidden bg-stone-100">
                       <div
-                        className="bg-green-500 h-full transition-all flex items-center justify-center"
+                        className="bg-status-production h-full transition-all flex items-center justify-center"
                         style={{ width: `${(e.tasksDone / maxTotal) * 100}%` }}
                       >
                         {e.tasksDone > 0 && <span className="text-[10px] text-white font-medium px-1">{e.tasksDone}</span>}
                       </div>
                       <div
-                        className="bg-red-400 h-full transition-all flex items-center justify-center"
+                        className="bg-severity-high h-full transition-all flex items-center justify-center"
                         style={{ width: `${(e.tasksOpen / maxTotal) * 100}%` }}
                       >
                         {e.tasksOpen > 0 && <span className="text-[10px] text-white font-medium px-1">{e.tasksOpen}</span>}
                       </div>
                     </div>
-                    <span className="text-xs text-stone-400 dark:text-neutral-500 w-8 text-right shrink-0">{total}</span>
+                    <span className="text-xs text-stone-400 w-8 text-right shrink-0">{total}</span>
                   </div>
                 );
               })}
-            <div className="flex items-center gap-4 mt-1 text-xs text-stone-400 dark:text-neutral-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Done</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> Open</span>
+            <div className="flex items-center gap-4 mt-1 text-xs text-stone-400">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-production" /> Done</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-severity-high" /> Open</span>
             </div>
           </div>
         </div>
@@ -1756,16 +1718,16 @@ function SnapshotView({ snapshot, isAdmin, isLatestSnapshot, onRevert, isReverti
 
       {/* Personal Todos Completed */}
       {snapshot.todosCompleted && snapshot.todosCompleted.length > 0 && (
-        <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-4">
-          <h3 className="text-xs font-medium text-stone-400 dark:text-neutral-500 uppercase tracking-wider mb-3">
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-3">
             Personal Todos Completed ({snapshot.todosCompleted.length})
           </h3>
           <div className="space-y-2">
             {snapshot.todosCompleted.map((t, i) => (
               <div key={i} className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
-                <span className="text-sm text-stone-700 dark:text-neutral-300">{t.title}</span>
-                <span className="text-xs text-stone-400 dark:text-neutral-500 ml-auto shrink-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-status-production" />
+                <span className="text-sm text-stone-700">{t.title}</span>
+                <span className="text-xs text-stone-400 ml-auto shrink-0">
                   {t.owner} · {formatDate(t.closedAt)}
                 </span>
               </div>

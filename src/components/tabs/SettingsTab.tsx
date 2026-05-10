@@ -21,8 +21,8 @@ export function SettingsTab() {
   return (
     <div className="max-w-2xl space-y-6">
       {/* Account */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">Account</h2>
+      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-stone-900">Account</h2>
         <div className="flex items-center gap-3">
           {user && (
             <img
@@ -32,14 +32,14 @@ export function SettingsTab() {
             />
           )}
           <div>
-            <div className="text-sm font-medium text-stone-800 dark:text-neutral-200">
+            <div className="text-sm font-medium text-stone-800">
               {user?.name ?? user?.login}
             </div>
-            <div className="text-xs text-stone-400 dark:text-neutral-500">@{user?.login}</div>
+            <div className="text-xs text-stone-400">@{user?.login}</div>
           </div>
         </div>
-        <div className="text-xs text-stone-400 dark:text-neutral-500">
-          Organisation: <span className="font-medium text-stone-600 dark:text-neutral-400">{selectedOrg}</span>
+        <div className="text-xs text-stone-400">
+          Organisation: <span className="font-medium text-stone-600">{selectedOrg}</span>
         </div>
         <button
           onClick={logout}
@@ -61,11 +61,11 @@ export function SettingsTab() {
       )}
 
       {/* Tracked repos */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">
+      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-stone-900">
           Tracked Repositories ({repos?.length ?? 0})
         </h2>
-        <p className="text-xs text-stone-400 dark:text-neutral-500">
+        <p className="text-xs text-stone-400">
           All repositories in {selectedOrg} are tracked by default. Mark repos as
           draft to hide their issues from the Sprint view.
         </p>
@@ -85,16 +85,16 @@ export function SettingsTab() {
                 }}
                 className={`text-xs text-left px-2 py-1 rounded cursor-pointer transition-colors ${
                   isDraft
-                    ? "bg-stone-100 dark:bg-dark-overlay text-stone-400 dark:text-neutral-500"
-                    : "bg-stone-50 dark:bg-white/[0.04] text-stone-600 dark:text-neutral-400 hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                    ? "bg-stone-100  text-stone-400  "
+                    : "bg-stone-50  text-stone-600  hover:bg-stone-100  "
                 }`}
               >
                 {repo.name}
                 {isDraft && (
-                  <span className="ml-1 text-stone-300 dark:text-neutral-600">(draft)</span>
+                  <span className="ml-1 text-stone-300">(draft)</span>
                 )}
                 {!isDraft && repo.language && (
-                  <span className="text-stone-300 dark:text-neutral-600 ml-1">({repo.language})</span>
+                  <span className="text-stone-300 ml-1">({repo.language})</span>
                 )}
               </button>
             );
@@ -106,9 +106,9 @@ export function SettingsTab() {
       <AgentIntegrationSection org={selectedOrg!} repos={repos as any} />
 
       {/* GitHub App installation */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">GitHub App</h2>
-        <p className="text-xs text-stone-400 dark:text-neutral-500">
+      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-stone-900">GitHub App</h2>
+        <p className="text-xs text-stone-400">
           Unticket runs as a GitHub App. Installing it on <span className="font-medium">{selectedOrg}</span> grants
           per-repo permissions and registers the webhook automatically — no manual setup.
         </p>
@@ -126,9 +126,9 @@ export function SettingsTab() {
       <FullResyncSection />
 
       {/* About */}
-      <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">About unticket.ai</h2>
-        <p className="text-xs text-stone-400 dark:text-neutral-500">
+      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
+        <h2 className="text-sm font-semibold text-stone-900">About unticket.ai</h2>
+        <p className="text-xs text-stone-400">
           AI-powered project management dashboard for GitHub organisations.
           Your token is stored locally and sent securely to our API for GitHub operations.
         </p>
@@ -152,9 +152,9 @@ function FullResyncSection() {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-3">
-      <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">Data Sync</h2>
-      <p className="text-xs text-stone-400 dark:text-neutral-500">
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <h2 className="text-sm font-semibold text-stone-900">Data Sync</h2>
+      <p className="text-xs text-stone-400">
         Run a full re-sync to fetch all historical PRs and issues from GitHub.
         This ignores the incremental sync timestamp and re-fetches everything.
         Use this to backfill data that was missed during initial setup.
@@ -162,7 +162,7 @@ function FullResyncSection() {
       <button
         onClick={handleResync}
         disabled={syncing}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
       >
         {syncing ? (
           <Loader2 size={14} className="animate-spin" />
@@ -355,11 +355,11 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
   }
 
   return (
-    <div className="bg-white dark:bg-dark-raised rounded-xl border border-stone-200 dark:border-white/[0.06] p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-neutral-100">Agent Rules</h2>
-        <p className="text-xs text-stone-400 dark:text-neutral-500 mt-1">
-          Rules pushed to each repo's <code className="bg-stone-100 dark:bg-dark-overlay px-1 rounded">CLAUDE.md</code> so
+        <h2 className="text-sm font-semibold text-stone-900">Agent Rules</h2>
+        <p className="text-xs text-stone-400 mt-1">
+          Rules pushed to each repo's <code className="bg-stone-100 px-1 rounded">CLAUDE.md</code> so
           coding agents follow org conventions. Updates are appended in a managed section.
         </p>
       </div>
@@ -367,34 +367,34 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
       {/* Rules list */}
       <div className="space-y-1.5">
         {currentRules.map((rule, i) => (
-          <div key={i} className="group flex items-start gap-2 bg-stone-50 dark:bg-white/[0.04] rounded-lg px-3 py-2">
+          <div key={i} className="group flex items-start gap-2 bg-stone-50 rounded-lg px-3 py-2">
             {editingIdx === i ? (
               <>
                 <textarea
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
-                  className="flex-1 text-xs bg-white dark:bg-dark-raised border border-stone-300 dark:border-white/[0.1] rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand/30 resize-y min-h-[60px]"
+                  className="flex-1 text-xs bg-white border border-stone-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-accent/30 resize-y min-h-[60px]"
                   rows={3}
                 />
-                <button onClick={confirmEdit} className="text-brand hover:text-brand/80 cursor-pointer shrink-0 mt-1">
+                <button onClick={confirmEdit} className="text-accent hover:text-accent/80 cursor-pointer shrink-0 mt-1">
                   <Check size={14} />
                 </button>
-                <button onClick={() => setEditingIdx(null)} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer shrink-0 mt-1">
+                <button onClick={() => setEditingIdx(null)} className="text-stone-400 hover:text-stone-600 cursor-pointer shrink-0 mt-1">
                   <X size={14} />
                 </button>
               </>
             ) : (
               <>
-                <p className="flex-1 text-xs text-stone-700 dark:text-neutral-300 whitespace-pre-wrap">{rule}</p>
+                <p className="flex-1 text-xs text-stone-700 whitespace-pre-wrap">{rule}</p>
                 <button
                   onClick={() => startEdit(i)}
-                  className="text-stone-300 dark:text-neutral-600 hover:text-stone-500 dark:hover:text-neutral-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  className="text-stone-300 hover:text-stone-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                 >
                   <Pencil size={12} />
                 </button>
                 <button
                   onClick={() => deleteRule(i)}
-                  className="text-stone-300 dark:text-neutral-600 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                 >
                   <X size={14} />
                 </button>
@@ -411,13 +411,13 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
           onChange={(e) => setNewRule(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), addRule())}
           placeholder="Add a rule (e.g. When creating PRs, reference features with Part of unticket#N)"
-          className="flex-1 px-3 py-2 rounded-lg border border-stone-200 dark:border-white/[0.06] bg-white dark:bg-dark-raised text-xs focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand resize-y min-h-[40px]"
+          className="flex-1 px-3 py-2 rounded-lg border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y min-h-[40px]"
           rows={2}
         />
         <button
           onClick={addRule}
           disabled={!newRule.trim()}
-          className="px-3 py-2 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0"
+          className="px-3 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0"
         >
           <Plus size={14} />
           Add
@@ -425,48 +425,48 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
       </div>
 
       {/* Preview */}
-      <div className="space-y-2 border-t border-stone-100 dark:border-white/[0.06] pt-4">
+      <div className="space-y-2 border-t border-stone-100 pt-4">
         <button
           onClick={() => setShowPreview(!showPreview)}
-          className="text-xs text-brand hover:text-brand/80 cursor-pointer"
+          className="text-xs text-accent hover:text-accent/80 cursor-pointer"
         >
           {showPreview ? "Hide preview" : "Preview CLAUDE.md content"}
         </button>
         {showPreview && (
-          <pre className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] px-4 py-3 text-xs text-stone-600 dark:text-neutral-400 font-mono whitespace-pre-wrap overflow-y-auto max-h-[400px]">
+          <pre className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 font-mono whitespace-pre-wrap overflow-y-auto max-h-[400px]">
             {preview}
           </pre>
         )}
       </div>
 
       {/* Repo selector */}
-      <div className="space-y-2 border-t border-stone-100 dark:border-white/[0.06] pt-4">
+      <div className="space-y-2 border-t border-stone-100 pt-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">
+            <span className="text-xs font-medium text-stone-700">
               Push to repositories ({selected.size}/{repoNames.length})
             </span>
             <button
               onClick={toggleAll}
-              className="text-xs text-brand hover:text-brand/80 cursor-pointer"
+              className="text-xs text-accent hover:text-accent/80 cursor-pointer"
             >
               {selected.size === repoNames.length ? "Deselect all" : "Select all"}
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">
             {repoNames.map((name) => (
-              <div key={name} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-stone-50 dark:hover:bg-white/[0.06] text-xs text-stone-600 dark:text-neutral-400">
+              <div key={name} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-stone-50 text-xs text-stone-600">
                 <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selected.has(name)}
                     onChange={() => toggleRepo(name)}
-                    className="rounded border-stone-300 dark:border-white/[0.1] text-brand focus:ring-brand/30"
+                    className="rounded border-stone-300 text-accent focus:ring-accent/30"
                   />
                   {name}
                 </label>
                 <button
                   onClick={() => handleViewRepo(name)}
-                  className={`shrink-0 cursor-pointer ${viewingRepo === name ? "text-brand" : "text-stone-300 dark:text-neutral-600 hover:text-brand"}`}
+                  className={`shrink-0 cursor-pointer ${viewingRepo === name ? "text-accent" : "text-stone-300  hover:text-accent"}`}
                   title="View CLAUDE.md"
                 >
                   <Eye size={11} />
@@ -475,7 +475,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
                   href={`https://github.com/${org}/${name}/blob/main/CLAUDE.md`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-stone-300 dark:text-neutral-600 hover:text-brand shrink-0"
+                  className="text-stone-300 hover:text-accent shrink-0"
                   title="View on GitHub"
                 >
                   <ExternalLink size={11} />
@@ -486,22 +486,22 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
 
           {/* CLAUDE.md inline viewer */}
           {viewingRepo && (
-            <div className="rounded-lg border border-stone-200 dark:border-white/[0.06] bg-stone-50 dark:bg-white/[0.04] overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-stone-200 dark:border-white/[0.06]">
-                <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{viewingRepo}/CLAUDE.md</span>
-                <button onClick={() => setViewingRepo(null)} className="text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-400 cursor-pointer">
+            <div className="rounded-lg border border-stone-200 bg-stone-50 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-stone-200">
+                <span className="text-xs font-medium text-stone-700">{viewingRepo}/CLAUDE.md</span>
+                <button onClick={() => setViewingRepo(null)} className="text-stone-400 hover:text-stone-600 cursor-pointer">
                   <X size={14} />
                 </button>
               </div>
               <div className="px-4 py-3 max-h-[400px] overflow-y-auto">
                 {viewLoading && (
-                  <div className="flex items-center gap-2 text-xs text-stone-400 dark:text-neutral-500">
+                  <div className="flex items-center gap-2 text-xs text-stone-400">
                     <Loader2 size={14} className="animate-spin" /> Loading...
                   </div>
                 )}
-                {viewError && <p className="text-xs text-stone-400 dark:text-neutral-500">{viewError}</p>}
+                {viewError && <p className="text-xs text-stone-400">{viewError}</p>}
                 {viewContent && (
-                  <pre className="text-xs text-stone-600 dark:text-neutral-400 font-mono whitespace-pre-wrap">{viewContent}</pre>
+                  <pre className="text-xs text-stone-600 font-mono whitespace-pre-wrap">{viewContent}</pre>
                 )}
               </div>
             </div>
@@ -512,7 +512,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
             <button
               onClick={handleCheckOutdated}
               disabled={checking || selected.size === 0}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-white/[0.1] text-xs font-medium text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-white/[0.04] disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50 cursor-pointer"
             >
               {checking && <Loader2 size={14} className="animate-spin" />}
               {checking
@@ -520,7 +520,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
                 : "Check for updates"}
             </button>
             {outdatedRepos !== null && !checking && (
-              <span className={`text-xs font-medium ${outdatedRepos.length + noFileRepos.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
+              <span className={`text-xs font-medium ${outdatedRepos.length + noFileRepos.length > 0 ? "text-amber-600  " : "text-green-600  "}`}>
                 {outdatedRepos.length + noFileRepos.length > 0
                   ? `${outdatedRepos.length + noFileRepos.length} repo${outdatedRepos.length + noFileRepos.length !== 1 ? "s" : ""} need updating`
                   : "All up to date"}
@@ -529,12 +529,12 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
           </div>
           {outdatedRepos !== null && (outdatedRepos.length + noFileRepos.length > 0) && !checking && (
             <div className="space-y-2">
-              <div className="text-xs text-stone-500 dark:text-neutral-400 space-y-0.5">
+              <div className="text-xs text-stone-500 space-y-0.5">
                 {outdatedRepos.map((r) => (
-                  <p key={r}>• {r} <span className="text-stone-400 dark:text-neutral-500">(outdated)</span></p>
+                  <p key={r}>• {r} <span className="text-stone-400">(outdated)</span></p>
                 ))}
                 {noFileRepos.map((r) => (
-                  <p key={r}>• {r} <span className="text-stone-400 dark:text-neutral-500">(no file)</span></p>
+                  <p key={r}>• {r} <span className="text-stone-400">(no file)</span></p>
                 ))}
               </div>
               <button
@@ -558,7 +558,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
           <button
             onClick={handlePush}
             disabled={syncing || selected.size === 0}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
           >
             {syncing && <Loader2 size={14} className="animate-spin" />}
             {syncing
@@ -573,7 +573,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
                   <p className="text-green-600">{result.updated} repo{result.updated !== 1 ? "s" : ""} updated</p>
                 )}
                 {result.skipped > 0 && (
-                  <p className="text-stone-400 dark:text-neutral-500">{result.skipped} already up to date</p>
+                  <p className="text-stone-400">{result.skipped} already up to date</p>
                 )}
                 {result.errors.map((e, i) => (
                   <p key={i} className="text-red-500">{e}</p>
@@ -587,7 +587,7 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
                       href={`https://github.com/${org}/${name}/edit/main/CLAUDE.md`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded bg-stone-50 dark:bg-white/[0.04] text-stone-600 dark:text-neutral-400 hover:text-brand hover:bg-stone-100 dark:hover:bg-white/[0.06] transition-colors"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded bg-stone-50 text-stone-600 hover:text-accent hover:bg-stone-100 transition-colors"
                     >
                       {name}
                       <ExternalLink size={10} />
