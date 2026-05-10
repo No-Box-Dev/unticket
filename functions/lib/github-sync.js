@@ -309,16 +309,16 @@ export async function syncMembers(db, token, orgId, orgLogin) {
 }
 
 // ---------- Sync Features (unticket repo issues) ----------
+//
+// Always does a full sync. The unticket repo is small (<100 issues) so the
+// `since` cursor saved next to nothing, but it broke reconciliation: an
+// incremental sync can't know which D1 rows no longer exist on GitHub.
 
-export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
-  const since = force ? null : (await getSyncState(db, orgId, "features"))?.lastSynced;
-  const params = { state: "all", sort: "updated", direction: "desc" };
-  if (since) params.since = since;
-
+export async function syncFeatures(db, token, orgId, orgLogin) {
   const issues = await fetchAllPages(
     token,
     `https://api.github.com/repos/${orgLogin}/unticket/issues`,
-    params
+    { state: "all", sort: "updated", direction: "desc" }
   );
 
   // Only sync issues that carry BOTH the "unticket" and "feature" labels
@@ -386,33 +386,28 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     }
   }
 
-  // Always advance the sync timestamp on a full sync, even when the unticket
-  // repo is empty — otherwise stale rows from prior sync sources stick around.
-  if (features.length > 0 || !since) {
-    await setSyncState(db, orgId, "features");
-  }
-  // Reconcile D1 against the unticket repo on every full sync. Drops any open
-  // rows whose issue number isn't in the current feature set — including
-  // legacy rows synced from earlier repo sources.
-  if (!since) {
-    const featureNumbers = new Set(features.map((f) => f.number));
-    const existing = await db
-      .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
-      .bind(orgId)
-      .all();
-    const toDelete = existing.results
-      .filter((r) => !featureNumbers.has(r.number))
-      .map((r) => r.number);
-    if (toDelete.length > 0) {
-      console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} stale features from D1 (org=${orgLogin})`);
-      for (let i = 0; i < toDelete.length; i += 50) {
-        const batch = toDelete.slice(i, i + 50);
-        await db.batch(
-          batch.map((num) =>
-            db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, num)
-          )
-        );
-      }
+  await setSyncState(db, orgId, "features");
+
+  // Reconcile D1 against the unticket repo. Drops any open rows whose issue
+  // number isn't in the current feature set — including legacy rows synced
+  // from earlier repo sources.
+  const featureNumbers = new Set(features.map((f) => f.number));
+  const existing = await db
+    .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
+    .bind(orgId)
+    .all();
+  const toDelete = existing.results
+    .filter((r) => !featureNumbers.has(r.number))
+    .map((r) => r.number);
+  if (toDelete.length > 0) {
+    console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} stale features from D1 (org=${orgLogin})`);
+    for (let i = 0; i < toDelete.length; i += 50) {
+      const batch = toDelete.slice(i, i + 50);
+      await db.batch(
+        batch.map((num) =>
+          db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, num)
+        )
+      );
     }
   }
 
@@ -477,11 +472,11 @@ export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
 
 // ---------- syncInit: lightweight init (repos + members + config migration) ----------
 
-export async function syncInit(db, token, orgId, orgLogin, force = false) {
+export async function syncInit(db, token, orgId, orgLogin) {
   await migrateUnticketConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
-  await syncFeatures(db, token, orgId, orgLogin, force);
+  await syncFeatures(db, token, orgId, orgLogin);
 
   const repoRows = await db
     .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")

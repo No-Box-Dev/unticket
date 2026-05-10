@@ -40,7 +40,7 @@ export async function onRequestPost(context) {
   try {
     if (!cursor) {
       // Phase 1: init (repos list, members, config migration)
-      let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
+      let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin);
 
       // Filter out drafts (settings) and archived projects (platform inactive)
       repoNames = await filterInactive(context.env.DB, orgId, orgLogin, repoNames);
