@@ -80,6 +80,8 @@ export async function syncRepos(db, token, orgId, orgLogin) {
   }
 
   await setSyncState(db, orgId, "repos");
+
+  return repos.map((r) => r.name);
 }
 
 // ---------- Sync PRs ----------
@@ -308,6 +310,8 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   }
 
   await setSyncState(db, orgId, "members");
+
+  return members.map((m) => m.login);
 }
 
 // ---------- Sync Features (unticket repo issues) ----------
