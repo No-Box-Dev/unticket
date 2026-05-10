@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
+import { getInactiveRepoSet } from "../lib/inactive-repos";
 
 // Allowed sort columns (whitelist to prevent SQL injection)
 const SORT_COLUMNS = {
@@ -21,8 +22,13 @@ const ISSUE_COLUMNS = [
 //               page, page_size, sort, sort_dir, meta
 export async function onRequestGet(context) {
   try {
-  const { orgId } = getCtx(context);
+  const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
+
+  // Always exclude drafts/archived/unticket-config repos at the read layer,
+  // even if D1 still has stale rows for them.
+  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 90);
+  const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
 
   // Meta endpoint: return distinct labels
   const meta = url.searchParams.get("meta");
@@ -31,10 +37,10 @@ export async function onRequestGet(context) {
       `SELECT DISTINCT json_extract(value, '$.name') AS name,
               json_extract(value, '$.color') AS color
        FROM issues, json_each(labels_json)
-       WHERE org_id = ? AND labels_json != '[]'
+       WHERE org_id = ? AND labels_json != '[]'${inactiveSql}
        ORDER BY name`
     )
-      .bind(orgId)
+      .bind(orgId, ...inactive)
       .all();
     return jsonResponse(rows.results);
   }
@@ -52,6 +58,10 @@ export async function onRequestGet(context) {
         repoBindings.push(...repoList);
       }
     }
+
+    // Apply inactive-repo exclusion to every stats query.
+    repoFilter += inactiveSql;
+    repoBindings.push(...inactive);
 
     const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -157,6 +167,11 @@ export async function onRequestGet(context) {
   if (label) {
     where += " AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = ?)";
     bindings.push(label);
+  }
+
+  if (inactiveSql) {
+    where += inactiveSql;
+    bindings.push(...inactive);
   }
 
   const offset = (page - 1) * pageSize;

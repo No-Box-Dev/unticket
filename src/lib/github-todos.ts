@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
+import { getUnticketRepoName } from "./unticket-repo-name";
 import type { Todo, TodoStatus } from "./types";
 
-const REPO = "unticket";
 const TODO_LABEL = "todo";
 const STATUS_PREFIX = "todo-status:";
 const FEATURE_PREFIX = "todo-feature:";
@@ -29,7 +29,7 @@ export async function ensureTodoLabels(org: string): Promise<void> {
 
   const { data: existing } = await ok.rest.issues.listLabelsForRepo({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     per_page: 100,
   });
   const existingNames = new Set(existing.map((l) => l.name));
@@ -37,7 +37,7 @@ export async function ensureTodoLabels(org: string): Promise<void> {
   for (const label of STATUS_LABELS) {
     if (!existingNames.has(label.name)) {
       try {
-        await ok.rest.issues.createLabel({ owner: org, repo: REPO, ...label });
+        await ok.rest.issues.createLabel({ owner: org, repo: getUnticketRepoName(), ...label });
       } catch (err: any) {
         if (err?.status !== 422) throw err;
       }
@@ -99,7 +99,7 @@ async function ensureDynamicLabel(org: string, name: string, color: string, desc
   if (dynamicLabelsEnsured.has(cacheKey)) return;
   const ok = getOctokit();
   try {
-    await ok.rest.issues.createLabel({ owner: org, repo: REPO, name, color, description });
+    await ok.rest.issues.createLabel({ owner: org, repo: getUnticketRepoName(), name, color, description });
   } catch (err: any) {
     if (err?.status !== 422) throw err; // 422 = already exists
   }
@@ -116,14 +116,14 @@ export async function fetchTodos(org: string): Promise<Todo[]> {
   const [open, closed] = await Promise.all([
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
-      repo: REPO,
+      repo: getUnticketRepoName(),
       labels: TODO_LABEL,
       state: "open",
       per_page: 100,
     }),
     ok.paginate(ok.rest.issues.listForRepo, {
       owner: org,
-      repo: REPO,
+      repo: getUnticketRepoName(),
       labels: TODO_LABEL,
       state: "closed",
       per_page: 100,
@@ -163,7 +163,7 @@ export async function createTodo(
   }
   const { data } = await ok.rest.issues.create({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     title,
     labels,
     assignees: [owner],
@@ -186,7 +186,7 @@ export async function updateTodo(
   // Get current issue to read existing labels
   const { data: current } = await ok.rest.issues.get({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     issue_number: issueNumber,
   });
 
@@ -226,7 +226,7 @@ export async function updateTodo(
 
   const { data } = await ok.rest.issues.update({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     issue_number: issueNumber,
     ...(updates.title ? { title: updates.title } : {}),
     labels: newLabels,
@@ -248,7 +248,7 @@ export async function deleteTodo(org: string, issueNumber: number): Promise<void
   const ok = getOctokit();
   await ok.rest.issues.update({
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     issue_number: issueNumber,
     state: "closed",
   });
@@ -266,7 +266,7 @@ export async function fetchTodosClosedInRange(
 
   const issues = await ok.paginate(ok.rest.issues.listForRepo, {
     owner: org,
-    repo: REPO,
+    repo: getUnticketRepoName(),
     labels: TODO_LABEL,
     state: "closed",
     since: startDate,
