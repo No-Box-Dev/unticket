@@ -35,7 +35,10 @@ export async function onRequestGet(context) {
     const n = parseInt(before, 10);
     if (Number.isFinite(n)) { sql += " AND id < ?"; binds.push(n); }
   }
-  sql += " ORDER BY id DESC LIMIT ?";
+  // Order by event time, not insertion order — a narrative for an old PR
+  // backfilled just now should sort *below* a fresh merge from this morning.
+  // id is the tiebreaker for narratives sharing a created_at second.
+  sql += " ORDER BY created_at DESC, id DESC LIMIT ?";
   binds.push(limit);
 
   const rows = await context.env.DB.prepare(sql).bind(...binds).all();
