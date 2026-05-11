@@ -455,10 +455,22 @@ export interface IssueQueryParams {
   assignee?: string;
   assigned?: "true" | "false"; // filter by has-assignee / no-assignee
   label?: string;
+  stale?: boolean;
   sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
   closedSince?: string;
   closedBefore?: string;
+}
+
+export interface PrQueryParams {
+  state?: "open" | "closed" | "merged" | "all";
+  page?: number;
+  pageSize?: number;
+  repo?: string;
+  author?: string;
+  draft?: boolean;
+  stale?: boolean;
+  since?: string;
 }
 
 export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
@@ -470,6 +482,7 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
   if (params.assignee) qs.set("assignee", params.assignee);
   if (params.assigned) qs.set("assigned", params.assigned);
   if (params.label) qs.set("label", params.label);
+  if (params.stale) qs.set("stale", "1");
   if (params.sort) qs.set("sort", params.sort);
   if (params.sortDir) qs.set("sort_dir", params.sortDir);
   if (params.closedSince) qs.set("closed_since", params.closedSince);
@@ -488,6 +501,102 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
 
 export async function fetchIssueLabels(): Promise<{ name: string; color: string }[]> {
   return apiGet<{ name: string; color: string }[]>("/api/issues?meta=labels");
+}
+
+export async function fetchPaginatedPrs(
+  params: PrQueryParams,
+): Promise<PaginatedResponse<ReturnType<typeof transformPR>>> {
+  const qs = new URLSearchParams();
+  if (params.state) qs.set("state", params.state);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.pageSize) qs.set("page_size", String(params.pageSize));
+  if (params.repo) qs.set("repo", params.repo);
+  if (params.author) qs.set("author", params.author);
+  if (params.draft) qs.set("draft", "1");
+  if (params.stale) qs.set("stale", "1");
+  if (params.since) qs.set("since", params.since);
+
+  const raw = await apiGet<{ data: ApiPR[]; totalCount: number; page: number; pageSize: number }>(
+    `/api/prs?${qs}`,
+  );
+  return {
+    data: raw.data.map(transformPR),
+    totalCount: raw.totalCount,
+    page: raw.page,
+    pageSize: raw.pageSize,
+  };
+}
+
+export async function fetchIssueDetail(repo: string, number: number) {
+  const raw = await apiGet<{ issue: ApiIssue }>(
+    `/api/issues/${encodeURIComponent(repo)}/${number}`,
+  );
+  return transformIssue(raw.issue);
+}
+
+export async function fetchPrDetail(repo: string, number: number) {
+  const raw = await apiGet<{ pr: ApiPR }>(
+    `/api/prs/${encodeURIComponent(repo)}/${number}`,
+  );
+  return transformPR(raw.pr);
+}
+
+export interface IssueBody {
+  body: string | null;
+  comments: number;
+  reactions_total: number;
+}
+
+export async function fetchIssueBody(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<IssueBody> {
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.issues.get({ owner, repo, issue_number: number });
+    return {
+      body: data.body ?? null,
+      comments: data.comments ?? 0,
+      reactions_total: data.reactions?.total_count ?? 0,
+    };
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
+}
+
+export interface PrBody {
+  body: string | null;
+  comments: number;
+  review_comments: number;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  merged: boolean;
+  mergeable: boolean | null;
+}
+
+export async function fetchPrBody(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<PrBody> {
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.pulls.get({ owner, repo, pull_number: number });
+    return {
+      body: data.body ?? null,
+      comments: data.comments ?? 0,
+      review_comments: data.review_comments ?? 0,
+      additions: data.additions ?? 0,
+      deletions: data.deletions ?? 0,
+      changed_files: data.changed_files ?? 0,
+      merged: data.merged ?? false,
+      mergeable: data.mergeable ?? null,
+    };
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
 }
 
 export interface IssueStats {

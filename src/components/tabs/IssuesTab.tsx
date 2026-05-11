@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
@@ -71,6 +72,7 @@ function recentClosedSince(): string {
 }
 
 export function IssuesTab({ navFilter }: IssuesTabProps) {
+  const navigate = useNavigate();
   const closedSince = useMemo(() => recentClosedSince(), []);
   const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
@@ -316,13 +318,32 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
               </thead>
               <tbody className="divide-y divide-stone-50">
                 {sorted.map((issue: any) => (
-                  <tr key={issue.id} className="hover:bg-red-50/50">
+                  <tr
+                    key={issue.id}
+                    onClick={() => navigate(`/issues/${issue.repo}/${issue.number}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/issues/${issue.repo}/${issue.number}`);
+                      }
+                    }}
+                    tabIndex={0}
+                    className="hover:bg-red-50/50 cursor-pointer focus:bg-red-50/50 focus:outline-none"
+                  >
                     <td className="px-3 py-2">
                       <Flag className="w-4 h-4 text-red-500" />
                     </td>
                     <td className="px-3 py-2 text-stone-500 whitespace-nowrap">#{issue.number}</td>
                     <td className="px-3 py-2 max-w-md truncate text-stone-800">{issue.title}</td>
-                    <td className="px-3 py-2 text-stone-500">{issue.repo}</td>
+                    <td className="px-3 py-2 text-stone-500">
+                      <Link
+                        to={`/issues/repo/${issue.repo}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:text-accent hover:underline"
+                      >
+                        {issue.repo}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 text-stone-500">
                       {(issue.assignees ?? []).length > 0
                         ? (issue.assignees as any[]).map((a: any) => a.login).join(", ")
@@ -336,7 +357,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                       {daysAgo(issue.created_at)}d
                     </td>
                     <td className="px-3 py-2">
-                      <a href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-accent">
+                      <a
+                        href={issue.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-stone-300 hover:text-accent"
+                      >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </td>
@@ -560,14 +587,26 @@ function PaginationControls({
 // ──── Issue Row ────
 
 function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: boolean; allPeople: string[]; onAssign: (assignees: string[]) => void }) {
+  const navigate = useNavigate();
   const age = daysAgo(issue.created_at);
+  const onActivate = () => navigate(`/issues/${issue.repo}/${issue.number}`);
 
   return (
-    <tr className={cn(
-      "hover:bg-stone-50  ",
-      closed && "text-stone-400  ",
-      !closed && isCritical(issue) && "bg-red-50/50  ",
-    )}>
+    <tr
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+      tabIndex={0}
+      className={cn(
+        "hover:bg-stone-50 cursor-pointer focus:outline-none focus:bg-stone-50",
+        closed && "text-stone-400  ",
+        !closed && isCritical(issue) && "bg-red-50/50  ",
+      )}
+    >
       <td className="px-3 py-2">
         {closed ? (
           <CircleCheck className="w-4 h-4 text-accent" />
@@ -579,27 +618,41 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
       </td>
       <td className="px-3 py-2 text-stone-500 whitespace-nowrap">#{issue.number}</td>
       <td className="px-3 py-2 max-w-md truncate">{issue.title}</td>
-      <td className="px-3 py-2 text-stone-500 text-xs">{issue.repo || "—"}</td>
+      <td className="px-3 py-2 text-stone-500 text-xs">
+        {issue.repo ? (
+          <Link
+            to={`/issues/repo/${issue.repo}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-accent hover:underline"
+          >
+            {issue.repo}
+          </Link>
+        ) : (
+          "—"
+        )}
+      </td>
       <td className="px-3 py-2">
         <div className="flex gap-1 flex-wrap">
           {(issue.labels ?? []).slice(0, 3).map((l: any) => {
             const style = getLabelStyle(l.name, l.color);
             return (
-              <span
+              <Link
                 key={l.name}
+                to={`/issues/label/${encodeURIComponent(l.name)}`}
+                onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "text-xs px-1.5 py-0.5 rounded-full font-medium",
+                  "text-xs px-1.5 py-0.5 rounded-full font-medium hover:opacity-80",
                   style.bg,
                   style.text,
                 )}
               >
                 {l.name}
-              </span>
+              </Link>
             );
           })}
         </div>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
         <AssignDropdown
           owners={(issue.assignees ?? []).map((a: any) => a.login)}
           allPeople={allPeople}
@@ -619,6 +672,7 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
           href={issue.html_url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
           className="text-stone-300 hover:text-accent"
         >
           <ExternalLink className="w-3.5 h-3.5" />

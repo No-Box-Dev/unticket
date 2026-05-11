@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useOpenPRs, useMergedPRs, usePRStats } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
@@ -36,6 +37,7 @@ interface PRsTabProps {
 type PRView = "open" | "merged";
 
 export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
+  const navigate = useNavigate();
   const [view, setView] = useState<PRView>("open");
   const { data: feedProjects } = useFeedProjects();
   const archivedRepos = useMemo(
@@ -272,10 +274,22 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                 const age = daysAgo(pr.created_at);
                 const isStale = age > 7;
                 const repoName = pr.head.repo?.name ?? "";
+                const onActivate = () => navigate(`/prs/${repoName}/${pr.number}`);
                 return (
                   <tr
                     key={pr.id}
-                    className={cn("hover:bg-stone-50  ", isStale && "bg-amber-50  ")}
+                    onClick={onActivate}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onActivate();
+                      }
+                    }}
+                    tabIndex={0}
+                    className={cn(
+                      "hover:bg-stone-50 cursor-pointer focus:bg-stone-50 focus:outline-none",
+                      isStale && "bg-amber-50",
+                    )}
                   >
                     <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
@@ -289,7 +303,16 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                             )}
                           />
                         )}
-                        {repoName}#{pr.number}
+                        {repoName && (
+                          <Link
+                            to={`/prs/repo/${repoName}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-accent hover:underline"
+                          >
+                            {repoName}
+                          </Link>
+                        )}
+                        #{pr.number}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 max-w-md">
@@ -305,7 +328,17 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                         {pr.head.ref} → {pr.base.ref}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-stone-500">{pr.user?.login}</td>
+                    <td className="px-4 py-2.5 text-stone-500">
+                      {pr.user?.login ? (
+                        <Link
+                          to={`/prs/author/${pr.user.login}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-accent hover:underline"
+                        >
+                          {pr.user.login}
+                        </Link>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-2.5 text-stone-500 text-xs">
                       {(pr.requested_reviewers ?? []).length > 0
                         ? (pr.requested_reviewers ?? []).map((r: any) => r.login).join(", ")
@@ -324,6 +357,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                         href={pr.html_url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="text-stone-300 hover:text-accent"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />

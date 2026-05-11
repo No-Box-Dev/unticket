@@ -13,6 +13,7 @@ import {
   triggerSync,
   triggerFeatureSync,
   fetchPaginatedIssues,
+  fetchPaginatedPrs,
   fetchIssueLabels,
   fetchIssueStats,
   fetchPRStats,
@@ -20,8 +21,12 @@ import {
   fetchUserOrgRole,
   fetchRateLimit,
   updateIssueState,
+  fetchIssueDetail,
+  fetchPrDetail,
+  fetchIssueBody,
+  fetchPrBody,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats, PRStats } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -150,6 +155,58 @@ export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
     queryFn: () => fetchPaginatedIssues(params),
     enabled: !!selectedOrg && enabled,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function usePaginatedPrs(params: PrQueryParams, enabled = true) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prs", selectedOrg, params],
+    queryFn: () => fetchPaginatedPrs(params),
+    enabled: !!selectedOrg && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useIssueDetail(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issueDetail", selectedOrg, repo, number],
+    queryFn: () => fetchIssueDetail(repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function usePrDetail(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prDetail", selectedOrg, repo, number],
+    queryFn: () => fetchPrDetail(repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useIssueBody(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issueBody", selectedOrg, repo, number],
+    queryFn: () => fetchIssueBody(selectedOrg!, repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
+export function usePrBody(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prBody", selectedOrg, repo, number],
+    queryFn: () => fetchPrBody(selectedOrg!, repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 60 * 1000,
+    retry: false,
   });
 }
 
