@@ -210,9 +210,15 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 const normalPct = (normal / repoMax) * 100;
                 const stalePct = (r.stale / repoMax) * 100;
                 const criticalPct = (r.critical / repoMax) * 100;
+                const breakdownParts = [
+                  `${r.count} open`,
+                  r.critical > 0 ? `${r.critical} critical` : null,
+                  r.stale > 0 ? `${r.stale} stale (>30d)` : null,
+                ].filter(Boolean);
+                const tooltip = `${r.repo} — ${breakdownParts.join(" · ")}`;
                 return (
-                  <div key={r.repo} className="flex items-center gap-3">
-                    <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                  <div key={r.repo} className="flex items-center gap-3" title={tooltip}>
+                    <span className="text-xs text-stone-600 w-28 truncate shrink-0">{r.repo}</span>
                     <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                       {normal > 0 && (
                         <div className="h-full bg-stone-400 transition-all duration-300" style={{ width: `${normalPct}%` }} />
@@ -225,19 +231,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                       )}
                     </div>
                     <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {r.critical > 0 && (
-                        <span className="flex items-center gap-0.5 text-[10px] font-semibold tabular-nums bg-red-50 text-red-700 rounded-full px-1.5 py-0.5">
-                          <Flag className="w-3 h-3" />
-                          {r.critical}
-                        </span>
-                      )}
-                      {r.stale > 0 && (
-                        <span className="text-[10px] font-semibold tabular-nums bg-amber-50 text-amber-700 rounded-full px-1.5 py-0.5">
-                          stale {r.stale}
-                        </span>
-                      )}
-                    </div>
                   </div>
                 );
               })}
