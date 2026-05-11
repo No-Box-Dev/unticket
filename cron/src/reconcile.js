@@ -22,6 +22,12 @@ import {
 } from "../../functions/lib/github-sync.js";
 import { getInstallationToken } from "../../functions/lib/github-app.js";
 import { getInactiveRepoSet } from "../../functions/lib/inactive-repos.js";
+import { recordMergedPr } from "../../functions/lib/events.js";
+
+// Look back this far when hunting for missed PR-merge narratives. Long
+// enough to cover a deploy gap or a 24h Zhipu outage; short enough that
+// we don't backfill ancient history every tick.
+const MISSED_MERGE_LOOKBACK_HOURS = 48;
 
 // If an unfinished run started within this window, the cron skips the org
 // to avoid two ticks racing. Picked just under the 30 min cron interval.
@@ -65,6 +71,11 @@ export async function reconcileOrg(env, db, orgId, orgLogin, installationId) {
         await syncIssues(db, token, orgId, orgLogin, repo, await sinceCursor(db, orgId, `issues:${repo}`));
       } catch (err) {
         console.error(`[unticket-cron] org=${orgLogin} repo=${repo} issues failed:`, err?.message ?? err);
+      }
+      try {
+        await narrateMissedMerges(env, db, orgId, orgLogin, repo);
+      } catch (err) {
+        console.error(`[unticket-cron] org=${orgLogin} repo=${repo} missed-merge narration failed:`, err?.message ?? err);
       }
     }
 
@@ -124,6 +135,68 @@ async function sinceCursor(db, orgId, resource) {
     .bind(orgId, resource)
     .first();
   return row?.last_synced ?? null;
+}
+
+// Find PRs merged in the lookback window that don't yet have a
+// github:pr:merged event row, and write+narrate one each. Catches the
+// case where the pull_request webhook was missed (deploy, GitHub
+// delivery pause) — the canonical sync now has the merge, but Posts
+// would never have seen it.
+//
+// `pull_requests` only stores author login + avatar; we join gh_users
+// to get the GitHub user_id needed for actor resolution. PRs whose
+// author isn't in gh_users yet (e.g. an external contributor on an
+// unsynced repo) are skipped this tick and picked up after the next
+// syncPRs upserts gh_users.
+async function narrateMissedMerges(env, db, orgId, orgLogin, repo) {
+  const projectId = `proj_${orgLogin}_${repo}`.toLowerCase();
+
+  const rows = await db
+    .prepare(
+      `SELECT pr.number, pr.title, pr.author, pr.author_avatar, pr.merged_at,
+              u.id AS user_id, u.type AS user_type
+         FROM pull_requests pr
+         LEFT JOIN gh_users u ON u.login = pr.author
+        WHERE pr.org_id = ? AND pr.repo = ?
+          AND pr.merged_at IS NOT NULL
+          AND pr.merged_at > datetime('now', ?)
+          AND NOT EXISTS (
+            SELECT 1 FROM events e
+            WHERE e.owner_id = ? AND e.repo = ?
+              AND e.type = 'github:pr:merged'
+              AND CAST(json_extract(e.payload_json, '$.pr.number') AS INTEGER) = pr.number
+          )`,
+    )
+    .bind(orgId, repo, `-${MISSED_MERGE_LOOKBACK_HOURS} hours`, orgLogin, repo)
+    .all();
+
+  for (const row of rows.results ?? []) {
+    if (!row.author || row.user_id == null) continue;
+    try {
+      await recordMergedPr(env, {
+        ownerId: orgLogin,
+        projectId,
+        org: orgLogin,
+        repo,
+        deliveryId: `reconcile:${orgLogin}:${repo}:pr-${row.number}:merged`,
+        source: "github-reconcile",
+        pr: {
+          number: row.number,
+          title: row.title,
+          state: "closed",
+          merged_at: row.merged_at,
+          user: {
+            login: row.author,
+            id: Number(row.user_id),
+            avatar_url: row.author_avatar,
+            type: row.user_type === "Bot" ? "Bot" : "User",
+          },
+        },
+      });
+    } catch (err) {
+      console.error(`[unticket-cron] recordMergedPr ${repo}#${row.number} failed:`, err?.message ?? err);
+    }
+  }
 }
 
 async function reconcileDeletedMembers(db, orgId, apiMemberLogins) {

@@ -2,6 +2,7 @@ import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
 import { filterInactive } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
+import { upsertGhUser } from "./gh-mirror";
 
 // Paginated GitHub API fetcher
 const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
@@ -142,6 +143,27 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
         )
       )
     );
+  }
+
+  // Mirror PR authors into gh_users so the cron's missed-merge narration
+  // path can resolve login → user_id (resolveActorFromGithub requires id).
+  // Webhook handlers already upsert; this fills the gap for PRs that only
+  // ever arrive via the sync API (e.g. a missed webhook delivery).
+  const seenUserIds = new Set();
+  for (const pr of prs) {
+    if (!pr.user?.id || seenUserIds.has(pr.user.id)) continue;
+    seenUserIds.add(pr.user.id);
+    try {
+      await upsertGhUser(db, {
+        id: pr.user.id,
+        login: pr.user.login,
+        avatar_url: pr.user.avatar_url ?? null,
+        type: pr.user.type === "Bot" ? "Bot" : "User",
+        name: null,
+      });
+    } catch (err) {
+      console.error("[unticket sync] upsertGhUser failed:", err?.message ?? err);
+    }
   }
 
   // Auto-detect feature links from branch names + PR bodies
