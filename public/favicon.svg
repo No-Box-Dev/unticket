@@ -1,9 +1,12 @@
 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- NoBoxDev Hexagon centered -->
-  <path d="M18 10L22 12.3L22 17L18 19.3L14 17L14 12.3Z" fill="black"/>
+  <!-- Black rounded square background -->
+  <rect width="36" height="36" rx="7" fill="black"/>
 
-  <!-- Simple broadcast arcs below hexagon -->
-  <path d="M14 22 A5 4 0 0 0 22 22" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M10.5 25.5 A9 6 0 0 0 25.5 25.5" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M7 29 A13 8 0 0 0 29 29" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- NoBoxDev Hexagon centered, white -->
+  <path d="M18 10L22 12.3L22 17L18 19.3L14 17L14 12.3Z" fill="white"/>
+
+  <!-- Broadcast arcs below hexagon, white -->
+  <path d="M14 22 A5 4 0 0 0 22 22" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M10.5 25.5 A9 6 0 0 0 25.5 25.5" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M7 29 A13 8 0 0 0 29 29" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
 </svg>
