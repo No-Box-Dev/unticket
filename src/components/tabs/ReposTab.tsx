@@ -247,7 +247,7 @@ function RepoRow({ project, days }: { project: FeedProject; days: number }) {
                 : "bg-stone-700 text-white hover:bg-stone-900",
             )}
           >
-            {backfill.isPending ? "Backfilling…" : "Backfill 3d"}
+            {backfill.isPending ? "Backfilling…" : "Backfill"}
           </button>
         )}
         <button
