@@ -88,6 +88,9 @@ export interface EventQuery {
   triggerTypes?: string[];
 }
 
+export const fetchEvent = (id: number) =>
+  apiGet<{ event: FeedEvent }>(`/api/events/${id}`).then((r) => r.event);
+
 export const fetchEvents = (q: EventQuery = {}) => {
   const params = new URLSearchParams();
   if (q.type) params.set("type", q.type);
