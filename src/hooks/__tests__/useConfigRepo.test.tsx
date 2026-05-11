@@ -18,7 +18,6 @@ vi.mock("@/lib/github-features", () => ({
   createFeature: vi.fn(),
   updateFeature: vi.fn(),
   deleteFeature: vi.fn(),
-  syncFeaturesFromGitHub: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
