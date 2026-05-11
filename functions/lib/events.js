@@ -6,6 +6,7 @@
 
 import { resolveActorFromGithub } from "./actors";
 import { upsertGhUser } from "./gh-mirror";
+import { narrateEvent } from "./narrator";
 
 export function mapEventType(ghEvent, action, payload) {
   switch (ghEvent) {
@@ -215,4 +216,74 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
 
   const id = result?.meta?.last_row_id;
   return id ? { id } : null;
+}
+
+// Build & insert a github:pr:merged event row, then kick off narration.
+// Use this from anywhere we observe a merge from GitHub data (backfill,
+// reconcile cron) — webhooks already go through storeEvent + narrateEvent.
+// Idempotent via the caller-provided deliveryId.
+//
+// `pr` is the GitHub Pulls API shape (or a synthesized equivalent). At
+// minimum: { number, title, user: { login, id, avatar_url, type }, merged_at }.
+export async function recordMergedPr(env, args) {
+  const { ownerId, projectId, org, repo, deliveryId, source, pr } = args;
+  if (!pr?.number || !pr.user?.login || !pr.merged_at) return null;
+
+  if (pr.user.id != null) {
+    try {
+      await upsertGhUser(env.DB, {
+        id: pr.user.id,
+        login: pr.user.login,
+        avatar_url: pr.user.avatar_url ?? null,
+        type: pr.user.type === "Bot" ? "Bot" : "User",
+        name: pr.user.name ?? null,
+      });
+    } catch (err) {
+      console.error("[unticket events] upsertGhUser failed:", err);
+    }
+  }
+
+  const actor = await resolveActorFromGithub(env.DB, ownerId, {
+    login: pr.user.login,
+    id: pr.user.id ?? null,
+    avatar_url: pr.user.avatar_url ?? null,
+    type: pr.user.type === "Bot" ? "Bot" : "User",
+    name: null,
+  });
+  if (!actor) return null;
+
+  const result = await env.DB.prepare(
+    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
+     VALUES (?, ?, 'github:pr:merged', ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(delivery_id) DO NOTHING`
+  ).bind(
+    deliveryId,
+    source,
+    actor.id,
+    projectId,
+    org,
+    repo,
+    `PR #${pr.number}: ${pr.title}`,
+    JSON.stringify({
+      action: "merged",
+      pr: {
+        number: pr.number,
+        title: pr.title,
+        body: pr.body?.slice(0, 1000) ?? null,
+        state: pr.state ?? "closed",
+        merged: true,
+        author: pr.user.login,
+        additions: pr.additions ?? null,
+        deletions: pr.deletions ?? null,
+        changed_files: pr.changed_files ?? null,
+      },
+    }),
+    ownerId,
+    pr.merged_at,
+  ).run();
+
+  const eventId = result.meta?.last_row_id;
+  if (!eventId) return null;
+  await narrateEvent(env, eventId);
+  return { id: eventId };
 }
