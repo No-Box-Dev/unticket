@@ -43,7 +43,7 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
 
   return (
     <header className="shrink-0 bg-white border-b border-stone-200 sticky top-0 z-30">
-      <div className="h-14 px-4 sm:px-6 flex items-center justify-between gap-4">
+      <div className="relative h-14 px-4 sm:px-6 flex items-center justify-between gap-4">
         {/* Logo */}
         <button
           onClick={() => handleNav("issues")}
@@ -53,8 +53,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           <span className="font-normal">ticket</span>
         </button>
 
-        {/* Centered nav */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+        {/* Centered nav — absolutely positioned so width of logo/right cluster
+            doesn't shift the visual center off the page midpoint. */}
+        <nav className="hidden md:flex items-center gap-1 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           {NAV_ITEMS.map(({ id, label }) => {
             const isActive = activeTab === id;
             return (
