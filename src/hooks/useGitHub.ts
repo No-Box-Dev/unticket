@@ -15,12 +15,13 @@ import {
   fetchPaginatedIssues,
   fetchIssueLabels,
   fetchIssueStats,
+  fetchPRStats,
   updateIssueAssignees,
   fetchUserOrgRole,
   fetchRateLimit,
   updateIssueState,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats, PRStats } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -166,6 +167,16 @@ export function useIssueStats(repos?: string[]) {
   return useQuery<IssueStats>({
     queryKey: ["issues", selectedOrg, "stats", repos],
     queryFn: () => fetchIssueStats(repos),
+    enabled: !!selectedOrg,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function usePRStats() {
+  const { selectedOrg } = useAuth();
+  return useQuery<PRStats>({
+    queryKey: ["prs", selectedOrg, "stats"],
+    queryFn: fetchPRStats,
     enabled: !!selectedOrg,
     staleTime: 2 * 60 * 1000,
   });
