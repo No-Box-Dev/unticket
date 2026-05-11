@@ -281,6 +281,33 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
     );
   }
 
+  // Reconcile: on a full sync the GitHub response is the authoritative list.
+  // Delete D1 rows for issues GitHub no longer returns — those were
+  // transferred to another repo or deleted, and were leaving phantom
+  // "open" rows that skewed the by-repo chart.
+  if (!since) {
+    const fetchedNumbers = new Set(issues.map((i) => i.number));
+    const existing = await db
+      .prepare("SELECT number FROM issues WHERE org_id = ? AND repo = ?")
+      .bind(orgId, repo)
+      .all();
+    const stale = existing.results
+      .map((r) => r.number)
+      .filter((n) => !fetchedNumbers.has(n));
+    if (stale.length > 0) {
+      const CHUNK = 90;
+      for (let i = 0; i < stale.length; i += CHUNK) {
+        const chunk = stale.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => "?").join(", ");
+        await db
+          .prepare(`DELETE FROM issues WHERE org_id = ? AND repo = ? AND number IN (${placeholders})`)
+          .bind(orgId, repo, ...chunk)
+          .run();
+      }
+      console.log(`[unticket] syncIssues: deleted ${stale.length} stale issues from D1 for ${repo}`);
+    }
+  }
+
   // Only advance sync timestamp if we got data or this is a fresh sync
   if (issues.length > 0 || !since) {
     await setSyncState(db, orgId, `issues:${repo}`);
