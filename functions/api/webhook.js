@@ -111,7 +111,7 @@ export async function onRequestPost(context) {
   // 24h+). Cheap single UPDATE; failures are logged but never abort.
   try {
     await db
-      .prepare("UPDATE orgs SET last_event_at = datetime('now') WHERE id = ?")
+      .prepare("UPDATE orgs SET last_event_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
       .bind(orgId)
       .run();
   } catch (err) {
