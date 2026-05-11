@@ -23,34 +23,25 @@ export function PostsTab() {
     return m;
   }, [projects.data]);
 
-  // Restrict the dropdowns to actors/projects that actually appear in the feed.
+  // Dropdowns list every known person/repo, not just those with posts in the
+  // current window — so a teammate who hasn't shipped yet is still selectable
+  // (and you can confirm "yep, nothing from them yet" via the empty state).
   const events = posts.data ?? [];
-  const visibleActorIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of events) if (e.actor_id) s.add(e.actor_id);
-    return s;
-  }, [events]);
-  const visibleProjectIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of events) if (e.project_id) s.add(e.project_id);
-    return s;
-  }, [events]);
 
   const actorOptions = useMemo(() => {
     const opts = (actors.data ?? [])
-      .filter((a) => visibleActorIds.has(a.id))
       .map((a) => ({ value: a.id, label: a.name || a.github_login || a.id }))
       .sort((a, b) => a.label.localeCompare(b.label));
     return [{ value: "", label: "All people" }, ...opts];
-  }, [actors.data, visibleActorIds]);
+  }, [actors.data]);
 
   const projectOptions = useMemo(() => {
     const opts = (projects.data ?? [])
-      .filter((p) => visibleProjectIds.has(p.id))
+      .filter((p) => !p.archived)
       .map((p) => ({ value: p.id, label: p.slug || p.name || p.id }))
       .sort((a, b) => a.label.localeCompare(b.label));
     return [{ value: "", label: "All repos" }, ...opts];
-  }, [projects.data, visibleProjectIds]);
+  }, [projects.data]);
 
   const filteredEvents = useMemo(() => {
     if (!actorFilter && !projectFilter) return events;
