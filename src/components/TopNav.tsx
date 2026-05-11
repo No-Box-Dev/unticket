@@ -4,7 +4,7 @@ import { useRateLimit } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
 import type { TabId } from "@/lib/types";
-import { SyncFromGithubMenuItem } from "@/components/SyncFromGithub";
+import { SyncFromGithubMenuItem, SyncFromGithubModal } from "@/components/SyncFromGithub";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
@@ -25,6 +25,7 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   const { data: rateLimit } = useRateLimit();
   const isRateLimited = rateLimit && rateLimit.remaining < rateLimit.limit * 0.2;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -130,7 +131,12 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
                   <ArrowLeftRight className="w-4 h-4" />
                   Switch Organisation
                 </button>
-                <SyncFromGithubMenuItem onAfterStart={() => setMenuOpen(false)} />
+                <SyncFromGithubMenuItem
+                  onTrigger={() => {
+                    setMenuOpen(false);
+                    setSyncOpen(true);
+                  }}
+                />
                 <div className="border-t border-stone-100 my-1" />
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
@@ -163,6 +169,8 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           );
         })}
       </nav>
+
+      <SyncFromGithubModal open={syncOpen} onClose={() => setSyncOpen(false)} />
     </header>
   );
 }
