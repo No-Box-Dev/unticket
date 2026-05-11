@@ -29,14 +29,21 @@ export async function onRequestGet(context) {
        WHERE i.owner_id = ?
      )
      UNION
-     SELECT a.id, NULL AS github_login, a.github_user_id, a.name, a.avatar_url,
-            COALESCE(NULLIF(a.tone, ''), ?) AS tone,
+     SELECT a.id,
+            u.login                                      AS github_login,
+            a.github_user_id,
+            COALESCE(NULLIF(a.name, ''), u.name, u.login, a.id) AS name,
+            COALESCE(a.avatar_url, u.avatar_url)         AS avatar_url,
+            COALESCE(NULLIF(a.tone, ''), ?)              AS tone,
             a.kind, a.owner_id, a.created_at, a.updated_at
      FROM actors a
+     LEFT JOIN gh_users u ON CAST(u.id AS TEXT) = a.github_user_id
      WHERE a.owner_id = ?
-       AND (
-         a.github_user_id IS NULL
-         OR NOT EXISTS (SELECT 1 FROM gh_users u WHERE CAST(u.id AS TEXT) = a.github_user_id)
+       AND NOT EXISTS (
+         SELECT 1 FROM gh_members m
+         JOIN installations i ON i.installation_id = m.installation_id
+         WHERE i.owner_id = a.owner_id
+           AND CAST(m.gh_user_id AS TEXT) = a.github_user_id
        )
      ORDER BY name`
   ).bind(
