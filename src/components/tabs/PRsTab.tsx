@@ -136,25 +136,25 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
         ) : (
           <div className="space-y-2">
             {prStats.byRepo.map((r) => {
+              const ready = Math.max(0, r.count - r.draft);
               const draftPct = r.draft > 0 ? (r.draft / repoMax) * 100 : 0;
-              const readyPct = ((r.count - r.draft) / repoMax) * 100;
-              const breakdownParts = [
-                `${r.count} open`,
-                r.draft > 0 ? `${r.draft} draft` : null,
-              ].filter(Boolean);
-              const tooltip = `${r.repo} — ${breakdownParts.join(" · ")}`;
+              const readyPct = (ready / repoMax) * 100;
               return (
-                <div key={r.repo} className="flex items-center gap-3" title={tooltip}>
-                  <span className="text-xs text-stone-600 w-28 truncate shrink-0">{r.repo}</span>
+                <div key={r.repo} className="flex items-center gap-3">
+                  <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={`${r.repo} — ${r.count} open`}>{r.repo}</span>
                   <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
-                    <div
-                      className="h-full bg-stone-400 transition-all duration-300"
-                      style={{ width: `${readyPct}%` }}
-                    />
+                    {ready > 0 && (
+                      <div
+                        className="h-full bg-stone-400 transition-all duration-300"
+                        style={{ width: `${readyPct}%` }}
+                        title={`${ready} ready for review`}
+                      />
+                    )}
                     {r.draft > 0 && (
                       <div
                         className="h-full bg-stone-300 transition-all duration-300"
                         style={{ width: `${draftPct}%` }}
+                        title={`${r.draft} draft`}
                       />
                     )}
                   </div>
