@@ -215,10 +215,10 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                     <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
                     <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                       {normal > 0 && (
-                        <div className="h-full bg-stone-500 transition-all duration-300" style={{ width: `${normalPct}%` }} />
+                        <div className="h-full bg-stone-400 transition-all duration-300" style={{ width: `${normalPct}%` }} />
                       )}
                       {r.stale > 0 && (
-                        <div className="h-full bg-amber-300 transition-all duration-300" style={{ width: `${stalePct}%` }} />
+                        <div className="h-full bg-amber-200 transition-all duration-300" style={{ width: `${stalePct}%` }} />
                       )}
                       {r.critical > 0 && (
                         <div className="h-full bg-red-300 transition-all duration-300" style={{ width: `${criticalPct}%` }} />
