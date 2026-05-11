@@ -210,24 +210,30 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 const normalPct = (normal / repoMax) * 100;
                 const stalePct = (r.stale / repoMax) * 100;
                 const criticalPct = (r.critical / repoMax) * 100;
-                const breakdownParts = [
-                  `${r.count} open`,
-                  r.critical > 0 ? `${r.critical} critical` : null,
-                  r.stale > 0 ? `${r.stale} stale (>30d)` : null,
-                ].filter(Boolean);
-                const tooltip = `${r.repo} — ${breakdownParts.join(" · ")}`;
                 return (
-                  <div key={r.repo} className="flex items-center gap-3" title={tooltip}>
-                    <span className="text-xs text-stone-600 w-28 truncate shrink-0">{r.repo}</span>
+                  <div key={r.repo} className="flex items-center gap-3">
+                    <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={`${r.repo} — ${r.count} open`}>{r.repo}</span>
                     <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                       {normal > 0 && (
-                        <div className="h-full bg-stone-400 transition-all duration-300" style={{ width: `${normalPct}%` }} />
+                        <div
+                          className="h-full bg-stone-400 transition-all duration-300"
+                          style={{ width: `${normalPct}%` }}
+                          title={`${normal} open (not stale, not critical)`}
+                        />
                       )}
                       {r.stale > 0 && (
-                        <div className="h-full bg-amber-200 transition-all duration-300" style={{ width: `${stalePct}%` }} />
+                        <div
+                          className="h-full bg-amber-200 transition-all duration-300"
+                          style={{ width: `${stalePct}%` }}
+                          title={`${r.stale} stale (>30d)`}
+                        />
                       )}
                       {r.critical > 0 && (
-                        <div className="h-full bg-red-300 transition-all duration-300" style={{ width: `${criticalPct}%` }} />
+                        <div
+                          className="h-full bg-red-300 transition-all duration-300"
+                          style={{ width: `${criticalPct}%` }}
+                          title={`${r.critical} critical`}
+                        />
                       )}
                     </div>
                     <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
