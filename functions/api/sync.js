@@ -1,5 +1,5 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
-import { syncInit, syncRepo } from "../lib/github-sync";
+import { syncInit, syncRepo, syncFeatures } from "../lib/github-sync";
 import { filterInactive } from "../lib/inactive-repos";
 
 // In-memory rate limit for ?force=true (one full re-sync per org per 5 min)
@@ -16,6 +16,18 @@ export async function onRequestPost(context) {
   const url = new URL(context.request.url);
   const cursor = url.searchParams.get("cursor");
   const force = url.searchParams.get("force") === "true";
+  const scope = url.searchParams.get("scope");
+
+  if (scope === "features") {
+    try {
+      await syncFeatures(context.env.DB, token, orgId, orgLogin);
+      return jsonResponse({ done: true, scope: "features" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sync failed";
+      console.error("[sync features] error:", message, e instanceof Error ? e.stack : undefined);
+      return errorResponse("Feature sync failed. Please try again later.", 500);
+    }
+  }
 
   // Rate-limit ?force=true on initial call (no cursor) only.
   // Subsequent cursor calls in the same re-sync chain pass through.

@@ -12,11 +12,11 @@ import {
 import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
-import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
+import { useIsAdmin, useActiveMembers, useTriggerFeatureSync } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { ArrowUpDown, Rocket, Search, Sparkles } from "lucide-react";
+import { ArrowUpDown, RefreshCw, Rocket, Search, Sparkles } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -60,6 +60,7 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   const isAdmin = useIsAdmin();
   const { confirm, dialogProps } = useConfirm();
   const cleanDoneMut = useCleanDoneFeatures();
+  const syncFeaturesMut = useTriggerFeatureSync();
   const { user } = useAuth();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
@@ -214,6 +215,17 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
     <div className="space-y-4 pb-8">
       {/* Header: actions */}
       <div className="flex items-center justify-end flex-wrap gap-2">
+        <button
+          onClick={() => syncFeaturesMut.mutate()}
+          disabled={syncFeaturesMut.isPending}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer disabled:opacity-50 disabled:hover:text-stone-500 disabled:hover:border-stone-200"
+          title="Re-sync features from the unticket repo on GitHub"
+        >
+          <RefreshCw size={12} className={cn(syncFeaturesMut.isPending && "animate-spin")} />
+          <span className="hidden sm:inline">
+            {syncFeaturesMut.isPending ? "Syncing..." : "Sync features"}
+          </span>
+        </button>
         {isAdmin && (
           <button
             onClick={handleCleanDone}
