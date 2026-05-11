@@ -74,8 +74,6 @@ export async function onRequestPost(context) {
     return errorResponse("Invalid JSON payload", 400);
   }
 
-  console.log(`[unticket webhook] received event=${event} action=${payload.action ?? "-"} delivery=${deliveryId}`);
-
   // Ping event (sent when webhook is first created)
   if (event === "ping") {
     return jsonResponse({ ok: true, message: "pong" });
@@ -91,10 +89,7 @@ export async function onRequestPost(context) {
 
   // Look up org
   const orgLogin = payload.organization?.login;
-  const repoOwnerLogin = payload.repository?.owner?.login;
-  console.log(`[unticket webhook] org resolve: organization.login=${orgLogin ?? "null"} repository.owner.login=${repoOwnerLogin ?? "null"} installation.id=${payload.installation?.id ?? "null"}`);
   if (!orgLogin) {
-    console.log(`[unticket webhook] SKIP: no organization in payload — payload keys=${Object.keys(payload).join(",")}`);
     return jsonResponse({ ok: true, skipped: "no organization in payload" });
   }
 
@@ -104,7 +99,6 @@ export async function onRequestPost(context) {
     .first();
 
   if (!orgRow) {
-    console.log(`[unticket webhook] SKIP: org not tracked — orgLogin=${orgLogin}`);
     return jsonResponse({ ok: true, skipped: "org not tracked" });
   }
 
