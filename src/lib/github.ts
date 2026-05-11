@@ -226,6 +226,10 @@ export async function fetchSyncStatus() {
   return apiGet<{ isStale: boolean; lastSync: string | null }>("/api/sync");
 }
 
+export async function triggerFeatureSync() {
+  return apiPost<{ done: true; scope: "features" }>("/api/sync?scope=features");
+}
+
 // ---------- DB-backed API types ----------
 
 interface ApiRepo {
