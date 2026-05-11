@@ -232,6 +232,7 @@ interface ApiRepo {
   name: string;
   language: string | null;
   pushed_at: string | null;
+  inactive?: boolean;
 }
 
 interface ApiPR {
@@ -319,8 +320,12 @@ function transformIssue(issue: ApiIssue) {
 
 // ---------- Data fetchers (call our API) ----------
 
-export async function fetchRepos() {
-  const repos = await apiGet<ApiRepo[]>("/api/repos");
+// fetchRepos defaults to ACTIVE repos only. Pass { includeAll: true } from
+// Settings' repo-management UI to see drafts/archived/unticket-repo as well
+// (each row carries an `inactive` flag in that case).
+export async function fetchRepos(opts?: { includeAll?: boolean }) {
+  const query = opts?.includeAll ? "?include=all" : "";
+  const repos = await apiGet<ApiRepo[]>(`/api/repos${query}`);
   return repos.map((r) => ({
     id: 0,
     name: r.name,
@@ -330,6 +335,7 @@ export async function fetchRepos() {
     pushed_at: r.pushed_at,
     language: r.language,
     visibility: "private",
+    inactive: r.inactive ?? false,
   }));
 }
 

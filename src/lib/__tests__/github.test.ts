@@ -79,6 +79,7 @@ describe("fetchRepos", () => {
         pushed_at: "2026-01-01",
         language: "TypeScript",
         visibility: "private",
+        inactive: false,
       },
     ]);
   });
