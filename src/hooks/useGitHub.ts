@@ -34,11 +34,12 @@ export function useOrgs() {
   });
 }
 
-export function useRepos() {
+export function useRepos(opts?: { includeAll?: boolean }) {
   const { selectedOrg } = useAuth();
+  const includeAll = opts?.includeAll ?? false;
   return useQuery({
-    queryKey: ["repos", selectedOrg],
-    queryFn: fetchRepos,
+    queryKey: ["repos", selectedOrg, includeAll],
+    queryFn: () => fetchRepos({ includeAll }),
     enabled: !!selectedOrg,
     staleTime: 10 * 60 * 1000,
   });
