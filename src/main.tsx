@@ -18,6 +18,16 @@ window.addEventListener("error", (e) => {
   broadcastError(e.message);
 });
 
+// Auto-reload when a lazy chunk fails to load — typically after a deploy
+// replaces the chunks the open SPA was holding references to. One reload
+// per session: a flag in sessionStorage prevents a loop if the error is
+// not actually deploy-related.
+window.addEventListener("vite:preloadError", () => {
+  if (sessionStorage.getItem("preloadErrorReloaded") === "1") return;
+  sessionStorage.setItem("preloadErrorReloaded", "1");
+  window.location.reload();
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
