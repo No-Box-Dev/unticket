@@ -3,7 +3,7 @@
 # any unknown path — including /assets/*.js requests racing a deploy. That
 # HTML response inherits the immutable cache-control header from _headers
 # and gets pinned at the edge for a year, poisoning fresh browsers.
-/assets/*  /404  404
+/assets/*  404
 
 # SPA fallback for everything else.
 /*  /index.html  200
