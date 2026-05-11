@@ -6,9 +6,6 @@ import {
   patchActor,
   fetchProjects,
   fetchEvents,
-  fetchNotes,
-  putNote,
-  deleteNote,
   backfillProjectPrs,
   archiveProject,
   unarchiveProject,
@@ -66,16 +63,6 @@ export function usePosts(limit = 50) {
   return useFeedEvents({ type: "narrative", limit, triggerTypes: POST_TRIGGER_TYPES });
 }
 
-export function useActorNotes(actorId: string | null) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["noxlink", "notes", selectedOrg, actorId],
-    queryFn: () => fetchNotes({ actorId: actorId! }),
-    enabled: !!selectedOrg && !!actorId,
-    staleTime: 30_000,
-  });
-}
-
 export function usePatchActor() {
   const qc = useQueryClient();
   const { selectedOrg } = useAuth();
@@ -85,30 +72,6 @@ export function usePatchActor() {
     onSuccess: (actor) => {
       qc.setQueryData(["noxlink", "actor", selectedOrg, actor.id], actor);
       qc.invalidateQueries({ queryKey: ["noxlink", "actors", selectedOrg] });
-    },
-  });
-}
-
-export function usePutNote() {
-  const qc = useQueryClient();
-  const { selectedOrg } = useAuth();
-  return useMutation({
-    mutationFn: ({ actorId, projectId, note }: { actorId: string; projectId: string; note: string }) =>
-      putNote(actorId, projectId, note),
-    onSuccess: (_data, { actorId }) => {
-      qc.invalidateQueries({ queryKey: ["noxlink", "notes", selectedOrg, actorId] });
-    },
-  });
-}
-
-export function useDeleteNote() {
-  const qc = useQueryClient();
-  const { selectedOrg } = useAuth();
-  return useMutation({
-    mutationFn: ({ actorId, projectId }: { actorId: string; projectId: string }) =>
-      deleteNote(actorId, projectId),
-    onSuccess: (_data, { actorId }) => {
-      qc.invalidateQueries({ queryKey: ["noxlink", "notes", selectedOrg, actorId] });
     },
   });
 }

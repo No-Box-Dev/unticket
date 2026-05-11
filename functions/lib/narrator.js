@@ -33,15 +33,10 @@ export async function narrateEvent(env, eventId) {
   ).bind(row.actor_id, row.owner_id).first();
   if (!actor) return;
 
-  const note = await env.DB.prepare(
-    "SELECT note FROM actor_repo_notes WHERE actor_id = ? AND project_id = ?"
-  ).bind(actor.id, row.project_id).first();
-
   const userMessage = buildActorMessage({
     actorName: actor.name,
     actorTone: actor.tone,
     projectName: project.name,
-    repoNote: note?.note ?? null,
     event: {
       type: row.type,
       summary: row.summary,
