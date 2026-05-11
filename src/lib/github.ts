@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
-import { apiGet, apiPost, apiFetch, ApiError, broadcastError } from "./api";
+import { apiGet, apiPost, ApiError, broadcastError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -501,33 +501,5 @@ export async function updateIssueAssignees(
   assignees: string[],
 ): Promise<{ assignees: { login: string; avatar_url: string }[] }> {
   return apiPost("/api/assign", { repo, issue_number: issueNumber, assignees });
-}
-
-// ---------- PR-Feature Links ----------
-
-export interface PRLink {
-  pr_repo: string;
-  pr_number: number;
-  source: string;
-  created_at: string;
-}
-
-export async function fetchLinkedPRs(featureNumber: number): Promise<PRLink[]> {
-  return apiGet<PRLink[]>(`/api/pr-links?feature=${featureNumber}`);
-}
-
-export async function linkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
-  await apiPost("/api/pr-links", { feature_number: featureNumber, pr_repo: prRepo, pr_number: prNumber });
-}
-
-export async function unlinkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
-  const res = await apiFetch(
-    `/api/pr-links?feature=${featureNumber}&pr_repo=${encodeURIComponent(prRepo)}&pr_number=${prNumber}`,
-    { method: "DELETE" },
-  );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError((body as { error?: string }).error ?? `API error: ${res.status}`, res.status);
-  }
 }
 
