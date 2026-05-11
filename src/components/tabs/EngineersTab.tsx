@@ -5,7 +5,7 @@ import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues } from "@/h
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, GitPullRequest, GitMerge, CircleCheck, ExternalLink } from "lucide-react";
+import { ArrowLeft, GitPullRequest, GitMerge, CircleCheck, ExternalLink, Circle } from "lucide-react";
 import type { Person } from "@/lib/types";
 
 function formatRelative(iso: string): string {
@@ -96,6 +96,22 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return items;
   }, [selected, allPRs, closedIssues]);
 
+  // Open issues currently assigned to the selected engineer.
+  // Drives the "Assigned Issues" panel that mirrors the card stat.
+  const assignedIssueList = useMemo(() => {
+    if (!selected) return [] as AssignedIssue[];
+    return (openIssues ?? [])
+      .filter((i: any) => (i.assignees ?? []).some((a: any) => a.login === selected.login))
+      .map((i: any) => ({
+        repo: i.repo,
+        number: i.number,
+        title: i.title,
+        html_url: i.html_url,
+        updated_at: i.updated_at,
+      }))
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }, [selected, openIssues]);
+
   if (membersLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -168,6 +184,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
           </div>
         </div>
 
+        {/* Currently-assigned open issues — matches the "Assigned Issues" card stat. */}
+        <AssignedIssuesPanel items={assignedIssueList} />
+
         {/* Voice & per-repo notes (narrator config) */}
         <ActorVoiceCard githubLogin={selected.login} />
 
@@ -217,7 +236,7 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
       <div className="flex items-center gap-4 text-xs text-stone-500">
         <CardStat label="Open PRs" value={engineer.openPRs} />
         <CardStat label="Reviewing" value={engineer.reviewing} />
-        <CardStat label="Assigned" value={engineer.assignedIssues} />
+        <CardStat label="Assigned Issues" value={engineer.assignedIssues} />
       </div>
     </button>
   );
@@ -239,6 +258,53 @@ function InlineMetric({ label, value }: { label: string; value: number }) {
     <div className="flex flex-col items-start">
       <span className="text-xl font-bold font-display leading-none text-stone-800">{value}</span>
       <span className="text-[10px] font-medium text-stone-400 uppercase tracking-wider mt-1">{label}</span>
+    </div>
+  );
+}
+
+// ---------- Assigned Issues Panel ----------
+
+type AssignedIssue = {
+  repo: string;
+  number: number;
+  title: string;
+  html_url: string;
+  updated_at: string;
+};
+
+function AssignedIssuesPanel({ items }: { items: AssignedIssue[] }) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+        <div className="flex items-center gap-2">
+          <Circle size={10} className="text-stone-300" />
+          <h3 className="text-sm font-semibold text-stone-700">Assigned issues</h3>
+          <span className="text-xs text-stone-400">{items.length} open</span>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="p-6 text-center text-sm text-stone-400">No open issues currently assigned.</div>
+      ) : (
+        <ol className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto">
+          {items.map((item) => (
+            <li key={`${item.repo}#${item.number}`}>
+              <a
+                href={item.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
+              >
+                <Circle size={12} className="text-stone-400 shrink-0" />
+                <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
+                <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
+                <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.updated_at)}</span>
+                <ExternalLink size={12} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
