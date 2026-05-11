@@ -211,7 +211,7 @@ function PostsBackfillSection() {
     total: 0,
     current: null,
   });
-  const [result, setResult] = useState<{ queued: number; found: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ queued: number; found: number; renarrated: number; errors: string[] } | null>(null);
 
   async function handleBackfillAll() {
     if (activeProjects.length === 0) return;
@@ -221,6 +221,7 @@ function PostsBackfillSection() {
 
     let queuedTotal = 0;
     let foundTotal = 0;
+    let renarratedTotal = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < activeProjects.length; i++) {
@@ -230,13 +231,14 @@ function PostsBackfillSection() {
         const res = await backfillProjectPrs(p.id, days);
         queuedTotal += res.queued ?? 0;
         foundTotal += res.found ?? 0;
+        renarratedTotal += res.renarrated ?? 0;
       } catch (err) {
         errors.push(`${p.repo}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
     setProgress({ done: activeProjects.length, total: activeProjects.length, current: null });
-    setResult({ queued: queuedTotal, found: foundTotal, errors });
+    setResult({ queued: queuedTotal, found: foundTotal, renarrated: renarratedTotal, errors });
     setRunning(false);
     qc.invalidateQueries({ queryKey: ["noxlink", "events"] });
   }
@@ -275,7 +277,8 @@ function PostsBackfillSection() {
       {result && !running && (
         <div className="text-xs space-y-1">
           <p className="text-green-600">
-            Queued {result.queued} new post{result.queued === 1 ? "" : "s"} from {result.found} PR{result.found === 1 ? "" : "s"} found.
+            Queued {result.queued} new post{result.queued === 1 ? "" : "s"} from {result.found} PR{result.found === 1 ? "" : "s"} found
+            {result.renarrated > 0 && `, re-narrated ${result.renarrated} fallback post${result.renarrated === 1 ? "" : "s"}`}.
           </p>
           {result.errors.length > 0 && (
             <div className="text-red-500 space-y-0.5">

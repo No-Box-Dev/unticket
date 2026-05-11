@@ -57,6 +57,7 @@ export interface BackfillResult {
   found: number;
   queued: number;
   skipped: number;
+  renarrated: number;
   days: number;
   message?: string;
 }
