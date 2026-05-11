@@ -91,6 +91,7 @@ export interface EventQuery {
   before?: number;
   projectId?: string;
   actorId?: string;
+  triggerTypes?: string[];
 }
 
 export const fetchEvents = (q: EventQuery = {}) => {
@@ -100,6 +101,7 @@ export const fetchEvents = (q: EventQuery = {}) => {
   if (q.before) params.set("before", String(q.before));
   if (q.projectId) params.set("project_id", q.projectId);
   if (q.actorId) params.set("actor_id", q.actorId);
+  if (q.triggerTypes?.length) params.set("trigger_types", q.triggerTypes.join(","));
   const qs = params.toString();
   return apiGet<{ events: FeedEvent[] }>(`/api/events${qs ? `?${qs}` : ""}`).then((r) => r.events);
 };
