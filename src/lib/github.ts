@@ -494,7 +494,7 @@ export interface IssueStats {
   open: number;
   unassigned: number;
   stale: number;
-  byRepo: { repo: string; count: number; critical: number }[];
+  byRepo: { repo: string; count: number; critical: number; stale: number }[];
   byLabel: { name: string; color: string; count: number }[];
   closedPerDay: { day: string; count: number; critical: number }[];
 }

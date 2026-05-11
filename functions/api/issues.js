@@ -90,6 +90,8 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, ...repoBindings),
       // critical closed per day (last 28 days)
       context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days') AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
+      // stale (non-critical) open by repo — critical-and-stale rows count as critical only, never both.
+      context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND created_at < ? AND NOT EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, staleDate, ...repoBindings),
     ];
 
     const results = await context.env.DB.batch(queries);
@@ -98,12 +100,18 @@ export async function onRequestGet(context) {
     const criticalByRepo = Object.fromEntries((results[6].results ?? []).map((r) => [r.repo, r.count]));
     // Build critical-closed-per-day lookup
     const criticalClosedMap = Object.fromEntries((results[7].results ?? []).map((r) => [r.day, r.count]));
+    // Build stale-by-repo lookup (open, >30d, non-critical)
+    const staleByRepo = Object.fromEntries((results[8].results ?? []).map((r) => [r.repo, r.count]));
 
     return jsonResponse({
       open: results[0].results[0]?.c ?? 0,
       unassigned: results[1].results[0]?.c ?? 0,
       stale: results[2].results[0]?.c ?? 0,
-      byRepo: results[3].results.map((r) => ({ ...r, critical: criticalByRepo[r.repo] ?? 0 })),
+      byRepo: results[3].results.map((r) => ({
+        ...r,
+        critical: criticalByRepo[r.repo] ?? 0,
+        stale: staleByRepo[r.repo] ?? 0,
+      })),
       byLabel: results[4].results,
       closedPerDay: results[5].results.map((r) => ({ ...r, critical: criticalClosedMap[r.day] ?? 0 })),
     });
