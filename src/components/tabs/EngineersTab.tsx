@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { usePeople } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
@@ -289,18 +290,25 @@ function AssignedIssuesPanel({ items }: { items: AssignedIssue[] }) {
         <ol className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto">
           {items.map((item) => (
             <li key={`${item.repo}#${item.number}`}>
-              <a
-                href={item.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to={`/issues/${item.repo}/${item.number}`}
                 className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
               >
                 <Circle size={12} className="text-stone-400 shrink-0" />
                 <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
                 <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
                 <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.updated_at)}</span>
-                <ExternalLink size={12} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
-              </a>
+                <a
+                  href={item.html_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
+                  title="Open on GitHub"
+                >
+                  <ExternalLink size={12} />
+                </a>
+              </Link>
             </li>
           ))}
         </ol>
@@ -360,23 +368,35 @@ function ActivityFeed({ items }: { items: FeedItem[] }) {
         <div className="p-6 text-center text-sm text-stone-400">No activity in the last 30 days.</div>
       ) : (
         <ol className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto">
-          {visible.map((item) => (
-            <li key={`${item.kind}:${item.repo}#${item.number}:${item.at}`}>
-              <a
-                href={item.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
-              >
-                <FeedIcon kind={item.kind} />
-                <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
-                <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
-                <span className="text-xs text-stone-400 shrink-0">{labelFor(item.kind)}</span>
-                <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
-                <ExternalLink size={12} className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0" />
-              </a>
-            </li>
-          ))}
+          {visible.map((item) => {
+            const to = item.kind === "issue_closed"
+              ? `/issues/${item.repo}/${item.number}`
+              : `/prs/${item.repo}/${item.number}`;
+            return (
+              <li key={`${item.kind}:${item.repo}#${item.number}:${item.at}`}>
+                <Link
+                  to={to}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
+                >
+                  <FeedIcon kind={item.kind} />
+                  <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
+                  <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
+                  <span className="text-xs text-stone-400 shrink-0">{labelFor(item.kind)}</span>
+                  <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
+                  <a
+                    href={item.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
+                    title="Open on GitHub"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                </Link>
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>
