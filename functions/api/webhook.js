@@ -140,6 +140,23 @@ export async function onRequestPost(context) {
       const repo = payload.repository?.name;
       if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
 
+      // Issues deleted or transferred away no longer exist in this repo —
+      // remove them from D1 instead of upserting (which would re-insert with
+      // their pre-delete state, leaving stale rows on the dashboard).
+      if (action === "deleted" || action === "transferred") {
+        await db
+          .prepare("DELETE FROM issues WHERE org_id = ? AND repo = ? AND number = ?")
+          .bind(orgId, repo, payload.issue.number)
+          .run();
+        if (repo === "unticket") {
+          await db
+            .prepare("DELETE FROM features WHERE org_id = ? AND number = ?")
+            .bind(orgId, payload.issue.number)
+            .run();
+        }
+        return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number, deleted: true });
+      }
+
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
       // Also upsert into features table if this is a unticket repo issue
