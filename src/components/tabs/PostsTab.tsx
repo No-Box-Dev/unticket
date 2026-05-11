@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ExternalLink, GitPullRequest } from "lucide-react";
 import { usePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -232,17 +233,28 @@ function PrDetails({
       ) : (
         <div className="text-xs text-stone-400 italic">No PR description.</div>
       )}
-      {ghUrl && (
-        <a
-          href={ghUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800"
-        >
-          <ExternalLink className="w-3 h-3" />
-          View on GitHub
-        </a>
-      )}
+      <div className="flex items-center gap-3">
+        {repo && number != null && (
+          <Link
+            to={`/prs/${repo}/${number}`}
+            className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+          >
+            <GitPullRequest className="w-3 h-3" />
+            View PR
+          </Link>
+        )}
+        {ghUrl && (
+          <a
+            href={ghUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800"
+          >
+            <ExternalLink className="w-3 h-3" />
+            View on GitHub
+          </a>
+        )}
+      </div>
     </div>
   );
 }

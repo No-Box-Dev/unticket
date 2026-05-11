@@ -213,8 +213,13 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                 const stalePct = (r.stale / repoMax) * 100;
                 const criticalPct = (r.critical / repoMax) * 100;
                 return (
-                  <div key={r.repo} className="flex items-center gap-3">
-                    <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={`${r.repo} — ${r.count} open`}>{r.repo}</span>
+                  <Link
+                    key={r.repo}
+                    to={`/issues/repo/${r.repo}`}
+                    className="flex items-center gap-3 -mx-2 px-2 py-0.5 rounded hover:bg-stone-50 group"
+                    title={`Open issues in ${r.repo}`}
+                  >
+                    <span className="text-xs text-stone-600 w-28 truncate shrink-0 group-hover:text-accent" title={`${r.repo} — ${r.count} open`}>{r.repo}</span>
                     <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                       {normal > 0 && (
                         <div
@@ -239,7 +244,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                       )}
                     </div>
                     <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
