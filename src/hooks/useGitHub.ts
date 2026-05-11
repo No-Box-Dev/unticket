@@ -11,6 +11,7 @@ import {
   fetchOrgMembers,
   fetchSyncStatus,
   triggerSync,
+  triggerFeatureSync,
   fetchPaginatedIssues,
   fetchIssueLabels,
   fetchIssueStats,
@@ -222,6 +223,17 @@ export function useSyncStatus() {
     queryFn: fetchSyncStatus,
     enabled: !!selectedOrg,
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useTriggerFeatureSync() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: triggerFeatureSync,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
+    },
   });
 }
 
