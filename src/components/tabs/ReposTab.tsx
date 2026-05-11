@@ -15,6 +15,7 @@ import type { FeedProject, BackfillResult } from "@/lib/noxlink-api";
 export function ReposTab() {
   const projects = useFeedProjects();
   const [showArchived, setShowArchived] = useState(false);
+  const [days, setDays] = useState(3);
 
   if (projects.isLoading) {
     return (
@@ -49,12 +50,25 @@ export function ReposTab() {
             {active.length} active{archived.length > 0 ? ` · ${archived.length} archived` : ""}
           </span>
         </div>
-        <BackfillAllButton activeProjects={active} />
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-stone-600 flex items-center gap-2">
+            Days:
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={days}
+              onChange={(e) => setDays(Math.max(1, Math.min(30, Number(e.target.value) || 3)))}
+              className="w-14 px-2 py-1 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+            />
+          </label>
+          <BackfillAllButton activeProjects={active} days={days} />
+        </div>
       </header>
 
       <div className="space-y-2">
         {active.map((p) => (
-          <RepoRow key={p.id} project={p} />
+          <RepoRow key={p.id} project={p} days={days} />
         ))}
       </div>
 
@@ -70,7 +84,7 @@ export function ReposTab() {
           {showArchived && (
             <div className="mt-2 space-y-2">
               {archived.map((p) => (
-                <RepoRow key={p.id} project={p} />
+                <RepoRow key={p.id} project={p} days={days} />
               ))}
             </div>
           )}
@@ -80,7 +94,7 @@ export function ReposTab() {
   );
 }
 
-function BackfillAllButton({ activeProjects }: { activeProjects: FeedProject[] }) {
+function BackfillAllButton({ activeProjects, days }: { activeProjects: FeedProject[]; days: number }) {
   const qc = useQueryClient();
   const { selectedOrg } = useAuth();
   const [running, setRunning] = useState(false);
@@ -105,7 +119,7 @@ function BackfillAllButton({ activeProjects }: { activeProjects: FeedProject[] }
       const p = activeProjects[i];
       setProgress({ done: i, total: activeProjects.length, current: p.repo });
       try {
-        const r = await backfillProjectPrs(p.id, 3);
+        const r = await backfillProjectPrs(p.id, days);
         queued += r.queued ?? 0;
         found += r.found ?? 0;
       } catch {
@@ -130,7 +144,7 @@ function BackfillAllButton({ activeProjects }: { activeProjects: FeedProject[] }
         type="button"
         onClick={handleClick}
         disabled={running || activeProjects.length === 0}
-        title="Generate posts for the last 3 days of merged PRs across every active repo. Idempotent — already-backfilled PRs are skipped."
+        title={`Generate posts for the last ${days} day${days === 1 ? "" : "s"} of merged PRs across every active repo. Idempotent — already-backfilled PRs are skipped.`}
         className={cn(
           "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer",
           running
@@ -147,7 +161,7 @@ function BackfillAllButton({ activeProjects }: { activeProjects: FeedProject[] }
   );
 }
 
-function RepoRow({ project }: { project: FeedProject }) {
+function RepoRow({ project, days }: { project: FeedProject; days: number }) {
   const backfill = useBackfillProjectPrs();
   const setArchived = useSetProjectArchived();
   const [result, setResult] = useState<BackfillResult | null>(null);
@@ -158,7 +172,7 @@ function RepoRow({ project }: { project: FeedProject }) {
     setResult(null);
     setErr(null);
     try {
-      const r = await backfill.mutateAsync({ id: project.id, days: 3 });
+      const r = await backfill.mutateAsync({ id: project.id, days });
       setResult(r);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Backfill failed");
