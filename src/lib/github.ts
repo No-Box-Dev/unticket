@@ -505,6 +505,17 @@ export async function fetchIssueStats(repos?: string[]): Promise<IssueStats> {
   return apiGet<IssueStats>(`/api/issues?${params}`);
 }
 
+export interface PRStats {
+  open: number;
+  draft: number;
+  stale: number;
+  byRepo: { repo: string; count: number; draft: number }[];
+}
+
+export async function fetchPRStats(): Promise<PRStats> {
+  return apiGet<PRStats>("/api/prs?meta=stats");
+}
+
 export async function updateIssueAssignees(
   repo: string,
   issueNumber: number,
