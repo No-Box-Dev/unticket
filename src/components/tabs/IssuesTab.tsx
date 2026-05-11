@@ -194,7 +194,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   }, [byRepo]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tab="issues">
       {/* ──── Charts Row ──── */}
       <div className="grid grid-cols-1 gap-4">
         {/* Issues by Repo */}

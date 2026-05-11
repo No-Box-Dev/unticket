@@ -127,7 +127,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tab="prs">
       {/* Open PRs by Repo */}
       <div className={cn(card, "p-5")}>
         <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open PRs by Repo</h3>
