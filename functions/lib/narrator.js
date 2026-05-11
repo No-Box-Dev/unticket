@@ -6,15 +6,19 @@ import { ACTOR_SYSTEM, buildActorMessage } from "./prompt";
 
 const MAX_OUTPUT_LENGTH = 800;
 
+// Only narrate "shipped" events. Opens, reviews, comments, pushes etc. crowd
+// the feed and burn LLM tokens on posts the Posts tab now filters out anyway.
+// Keep this list in sync with usePosts() in src/hooks/useNoxlink.ts.
+export const NARRATABLE_TYPES = ["github:pr:merged", "github:issue:closed"];
+
 export async function narrateEvent(env, eventId) {
   const row = await env.DB.prepare(
     `SELECT id, type, actor_id, project_id, org, repo, owner_id, summary, payload_json, created_at
      FROM events WHERE id = ?`
   ).bind(eventId).first();
   if (!row) return;
-  if (row.type === "narrative") return;
+  if (!NARRATABLE_TYPES.includes(row.type)) return;
   if (!row.actor_id || !row.project_id || !row.owner_id) return;
-  if (await isSquashMergeConsequence(env, row)) return;
 
   const project = await env.DB.prepare(
     "SELECT name, narrator_enabled FROM projects WHERE id = ? AND owner_id = ?"
@@ -84,36 +88,6 @@ export async function narrateEvent(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
-}
-
-// A squash-merge produces both a pr:merged event and a push event with the
-// squash commit. The push narrative would just restate the merge — skip it
-// when the push is a single commit shaped "<title> (#N)" and a pr:merged
-// for #N on the same project landed in the last 5 minutes.
-async function isSquashMergeConsequence(env, row) {
-  if (row.type !== "github:push") return false;
-  const payload = safeParseObject(row.payload_json);
-  const commits = payload.commits;
-  if (!commits || commits.length !== 1) return false;
-  const firstLine = commits[0].message?.split("\n")[0] ?? "";
-  const match = firstLine.match(/\(#(\d+)\)\s*$/);
-  if (!match) return false;
-  const prNumber = Number(match[1]);
-
-  const recent = await env.DB.prepare(
-    `SELECT payload_json FROM events
-      WHERE owner_id = ? AND project_id = ?
-        AND type = 'github:pr:merged'
-        AND created_at > datetime(?, '-5 minutes')
-      ORDER BY id DESC LIMIT 10`
-  ).bind(row.owner_id, row.project_id, row.created_at).all();
-
-  for (const r of recent.results ?? []) {
-    const p = safeParseObject(r.payload_json);
-    const pr = p.pr;
-    if (pr?.number === prNumber) return true;
-  }
-  return false;
 }
 
 function safeParseObject(s) {
