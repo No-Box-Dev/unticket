@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
-import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
+import { useOpenPRs, useMergedPRs, usePRStats } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
+import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, FileEdit } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -16,6 +16,8 @@ function daysAgo(date: string): number {
 
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
+
+const card = "bg-white  border border-stone-200  rounded-xl";
 
 function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: SortDir }) {
   if (activeSortKey !== column) return null;
@@ -46,6 +48,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   );
   const { data: openPRs, isLoading: openLoading } = useOpenPRs(activeRepoNames);
   const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(activeRepoNames);
+  const { data: prStats } = usePRStats();
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
@@ -108,6 +111,12 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     return list;
   }, [filtered, sortKey, sortDir]);
 
+  const byRepo = prStats?.byRepo;
+  const repoMax = useMemo(() => {
+    if (!byRepo?.length) return 1;
+    return Math.max(...byRepo.map((r) => r.count), 1);
+  }, [byRepo]);
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -118,7 +127,48 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Open PRs by Repo */}
+      <div className={cn(card, "p-5")}>
+        <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open PRs by Repo</h3>
+        {!prStats?.byRepo?.length ? (
+          <p className="text-xs text-stone-400">No data</p>
+        ) : (
+          <div className="space-y-2">
+            {prStats.byRepo.map((r) => {
+              const draftPct = r.draft > 0 ? (r.draft / repoMax) * 100 : 0;
+              const readyPct = ((r.count - r.draft) / repoMax) * 100;
+              return (
+                <div key={r.repo} className="flex items-center gap-3">
+                  <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                  <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
+                    <div
+                      className="h-full bg-accent/70 transition-all duration-300"
+                      style={{ width: `${readyPct}%` }}
+                    />
+                    {r.draft > 0 && (
+                      <div
+                        className="h-full bg-stone-300 transition-all duration-300"
+                        style={{ width: `${draftPct}%` }}
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums">{r.count}</span>
+                    {r.draft > 0 && (
+                      <span className="flex items-center gap-0.5 text-stone-400">
+                        <FileEdit className="w-3 h-3" />
+                        <span className="text-[10px] font-semibold tabular-nums">{r.draft}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">

@@ -9,14 +9,51 @@ const PR_COLUMNS = [
   "requested_reviewers_json", "labels_json",
 ].join(", ");
 
+const EMPTY_PR_STATS = { open: 0, draft: 0, stale: 0, byRepo: [] };
+
 // GET /api/prs — query cached pull requests
-// Query params: state, author, since, repo, page, page_size
+// Query params: state, author, since, repo, page, page_size, meta
 export async function onRequestGet(context) {
   const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
 
   // Active repos only — see /api/issues for rationale and Settings exception.
   const activeRepos = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
+
+  const meta = url.searchParams.get("meta");
+  if (meta === "stats") {
+    if (activeRepos.length === 0) return jsonResponse(EMPTY_PR_STATS);
+
+    const repoFilter = ` AND repo IN (${activeRepos.map(() => "?").join(",")})`;
+    const staleDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [openCount, draftCount, staleCount, byRepo, draftByRepo] = await context.env.DB.batch([
+      context.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM pull_requests WHERE org_id = ? AND state = 'open'${repoFilter}`,
+      ).bind(orgId, ...activeRepos),
+      context.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM pull_requests WHERE org_id = ? AND state = 'open' AND draft = 1${repoFilter}`,
+      ).bind(orgId, ...activeRepos),
+      context.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM pull_requests WHERE org_id = ? AND state = 'open' AND created_at < ?${repoFilter}`,
+      ).bind(orgId, staleDate, ...activeRepos),
+      context.env.DB.prepare(
+        `SELECT repo, COUNT(*) as count FROM pull_requests WHERE org_id = ? AND state = 'open'${repoFilter} GROUP BY repo ORDER BY count DESC LIMIT 15`,
+      ).bind(orgId, ...activeRepos),
+      context.env.DB.prepare(
+        `SELECT repo, COUNT(*) as count FROM pull_requests WHERE org_id = ? AND state = 'open' AND draft = 1${repoFilter} GROUP BY repo`,
+      ).bind(orgId, ...activeRepos),
+    ]);
+
+    const draftByRepoMap = Object.fromEntries((draftByRepo.results ?? []).map((r) => [r.repo, r.count]));
+
+    return jsonResponse({
+      open: openCount.results[0]?.c ?? 0,
+      draft: draftCount.results[0]?.c ?? 0,
+      stale: staleCount.results[0]?.c ?? 0,
+      byRepo: byRepo.results.map((r) => ({ ...r, draft: draftByRepoMap[r.repo] ?? 0 })),
+    });
+  }
 
   const state = url.searchParams.get("state");
   const author = url.searchParams.get("author");
