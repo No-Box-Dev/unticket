@@ -203,9 +203,7 @@ function RepoRow({ project }: { project: FeedProject }) {
           <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{project.description}</p>
         )}
         <div className="mt-1 text-xs text-stone-400 min-h-[1rem]">
-          {result && (result.queued > 0
-            ? `Queued ${result.queued} PR${result.queued === 1 ? "" : "s"}${result.skipped ? ` (${result.skipped} already done)` : ""}. Posts appear in the Feed shortly.`
-            : result.message || `All ${result.found} PRs already backfilled.`)}
+          {result && renderBackfillStatus(result)}
           {err && <span className="text-severity-high">{err}</span>}
         </div>
       </div>
@@ -257,4 +255,19 @@ function RepoRow({ project }: { project: FeedProject }) {
       </div>
     </div>
   );
+}
+
+function renderBackfillStatus(r: BackfillResult): string {
+  const parts: string[] = [];
+  if (r.queued > 0) {
+    parts.push(`Queued ${r.queued} PR${r.queued === 1 ? "" : "s"}`);
+    if (r.skipped) parts.push(`${r.skipped} already done`);
+  }
+  if (r.renarrated > 0) {
+    parts.push(`re-narrated ${r.renarrated} fallback post${r.renarrated === 1 ? "" : "s"}`);
+  }
+  if (parts.length === 0) {
+    return r.message || `All ${r.found} PRs already backfilled.`;
+  }
+  return parts.join(" · ") + ". Posts appear in the Feed shortly.";
 }
