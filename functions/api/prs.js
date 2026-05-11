@@ -1,5 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
-import { getInactiveRepoSet } from "../lib/inactive-repos";
+import { getActiveRepoNames } from "../lib/inactive-repos";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const PR_COLUMNS = [
@@ -15,11 +15,8 @@ export async function onRequestGet(context) {
   const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
 
-  // Always exclude drafts/archived/unticket-config repos at the read layer,
-  // even if D1 still has stale rows for them. Cap low (30) — D1 has a 100-bind
-  // hard limit per stmt and these bindings stack with other filters.
-  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 30);
-  const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
+  // Active repos only — see /api/issues for rationale and Settings exception.
+  const activeRepos = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
 
   const state = url.searchParams.get("state");
   const author = url.searchParams.get("author");
@@ -28,8 +25,23 @@ export async function onRequestGet(context) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "100", 10) || 100));
 
-  let query = `SELECT ${PR_COLUMNS} FROM pull_requests WHERE org_id = ?`;
-  const bindings = [orgId];
+  if (activeRepos.length === 0) {
+    return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+  }
+
+  // Honor an explicit ?repo= filter only when it's in the active set.
+  let repoBindings = activeRepos;
+  if (repo) {
+    if (!activeRepos.includes(repo)) {
+      return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+    }
+    repoBindings = [repo];
+  }
+
+  const repoSql = ` AND repo IN (${repoBindings.map(() => "?").join(",")})`;
+
+  let query = `SELECT ${PR_COLUMNS} FROM pull_requests WHERE org_id = ?${repoSql}`;
+  const bindings = [orgId, ...repoBindings];
 
   if (state && state !== "all") {
     query += " AND state = ?";
@@ -46,18 +58,9 @@ export async function onRequestGet(context) {
     bindings.push(since);
   }
 
-  if (repo) {
-    query += " AND repo = ?";
-    bindings.push(repo);
-  }
-  if (inactiveSql) {
-    query += inactiveSql;
-    bindings.push(...inactive);
-  }
-
   // Build separate count query from the same WHERE conditions
-  let countQuery = "SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?";
-  const countBindings = [orgId];
+  let countQuery = `SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?${repoSql}`;
+  const countBindings = [orgId, ...repoBindings];
 
   if (state && state !== "all") {
     countQuery += " AND state = ?";
@@ -70,14 +73,6 @@ export async function onRequestGet(context) {
   if (since) {
     countQuery += " AND updated_at >= ?";
     countBindings.push(since);
-  }
-  if (repo) {
-    countQuery += " AND repo = ?";
-    countBindings.push(repo);
-  }
-  if (inactiveSql) {
-    countQuery += inactiveSql;
-    countBindings.push(...inactive);
   }
 
   const countStmt = context.env.DB.prepare(countQuery).bind(...countBindings);

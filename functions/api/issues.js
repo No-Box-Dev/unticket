@@ -1,5 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
-import { getInactiveRepoSet } from "../lib/inactive-repos";
+import { getActiveRepoNames } from "../lib/inactive-repos";
 
 // Allowed sort columns (whitelist to prevent SQL injection)
 const SORT_COLUMNS = {
@@ -17,6 +17,17 @@ const ISSUE_COLUMNS = [
   "assignees_json", "labels_json", "milestone_title", "closed_by",
 ].join(", ");
 
+// Empty stats payload returned when the org has no active repos — keeps the
+// dashboard charts from blowing up while still returning a 200.
+const EMPTY_STATS = {
+  open: 0,
+  unassigned: 0,
+  stale: 0,
+  byRepo: [],
+  byLabel: [],
+  closedPerDay: [],
+};
+
 // GET /api/issues — query cached issues with pagination
 // Query params: state, assignee, repo, repos, label, since, closed_since,
 //               page, page_size, sort, sort_dir, meta
@@ -25,46 +36,41 @@ export async function onRequestGet(context) {
   const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
 
-  // Always exclude drafts/archived/unticket-config repos at the read layer,
-  // even if D1 still has stale rows for them. Cap low (30) because these
-  // bindings are added to every query path alongside other filters; D1 has
-  // a hard 100-bind-per-stmt limit and the stats endpoint stacks orgId,
-  // optional repos param (also capped), date filters, and inactive together.
-  const inactive = Array.from(await getInactiveRepoSet(context.env.DB, orgId, orgLogin)).slice(0, 30);
-  const inactiveSql = inactive.length > 0 ? ` AND repo NOT IN (${inactive.map(() => "?").join(",")})` : "";
+  // Active repos only — drafts, archived (platform + GitHub), and the
+  // unticket-config repo are hidden from every issue surface in the app.
+  // Settings' repo-management UI uses /api/repos?include=all instead.
+  const activeRepos = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
+  const activeSql = ` AND repo IN (${activeRepos.map(() => "?").join(",")})`;
 
   // Meta endpoint: return distinct labels
   const meta = url.searchParams.get("meta");
   if (meta === "labels") {
+    if (activeRepos.length === 0) return jsonResponse([]);
     const rows = await context.env.DB.prepare(
       `SELECT DISTINCT json_extract(value, '$.name') AS name,
               json_extract(value, '$.color') AS color
        FROM issues, json_each(labels_json)
-       WHERE org_id = ? AND labels_json != '[]'${inactiveSql}
+       WHERE org_id = ? AND labels_json != '[]'${activeSql}
        ORDER BY name`
     )
-      .bind(orgId, ...inactive)
+      .bind(orgId, ...activeRepos)
       .all();
     return jsonResponse(rows.results);
   }
 
   if (meta === "stats") {
-    const reposParam = url.searchParams.get("repos") || null;
+    if (activeRepos.length === 0) return jsonResponse(EMPTY_STATS);
 
-    let repoFilter = "";
-    const repoBindings = [];
+    const reposParam = url.searchParams.get("repos") || null;
+    let repoSubset = activeRepos;
     if (reposParam) {
-      const repoList = reposParam.split(",").filter(Boolean).slice(0, 50);
-      if (repoList.length > 0) {
-        repoFilter = ` AND repo IN (${repoList.map(() => "?").join(",")})`;
-        repoBindings.push(...repoList);
-      }
+      const requested = new Set(reposParam.split(",").filter(Boolean));
+      repoSubset = activeRepos.filter((r) => requested.has(r));
+      if (repoSubset.length === 0) return jsonResponse(EMPTY_STATS);
     }
 
-    // Apply inactive-repo exclusion to every stats query.
-    repoFilter += inactiveSql;
-    repoBindings.push(...inactive);
-
+    const repoFilter = ` AND repo IN (${repoSubset.map(() => "?").join(",")})`;
+    const repoBindings = repoSubset;
     const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const queries = [
@@ -103,6 +109,11 @@ export async function onRequestGet(context) {
     });
   }
 
+  // No active repos → empty page. Avoids `IN ()` which SQLite rejects.
+  if (activeRepos.length === 0) {
+    return jsonResponse({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+  }
+
   const state = url.searchParams.get("state");
   const assignee = url.searchParams.get("assignee");
   const assigned = url.searchParams.get("assigned"); // "true" | "false" | null
@@ -120,8 +131,27 @@ export async function onRequestGet(context) {
   // Validate sort column
   const sortColumn = SORT_COLUMNS[sort] || "updated_at";
 
-  let where = "WHERE org_id = ?";
-  const bindings = [orgId];
+  // Start with active-only constraint, then intersect with optional repo/repos
+  // filters (drop anything not in the active set).
+  const activeSet = new Set(activeRepos);
+  let repoBindings = activeRepos;
+
+  if (repo) {
+    if (!activeSet.has(repo)) {
+      return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+    }
+    repoBindings = [repo];
+  } else if (repos) {
+    const requested = repos.split(",").filter(Boolean);
+    const intersect = requested.filter((r) => activeSet.has(r));
+    if (intersect.length === 0) {
+      return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+    }
+    repoBindings = intersect;
+  }
+
+  let where = `WHERE org_id = ? AND repo IN (${repoBindings.map(() => "?").join(",")})`;
+  const bindings = [orgId, ...repoBindings];
 
   if (state && state !== "all") {
     where += " AND state = ?";
@@ -150,27 +180,9 @@ export async function onRequestGet(context) {
     bindings.push(since);
   }
 
-  if (repo) {
-    where += " AND repo = ?";
-    bindings.push(repo);
-  }
-
-  if (repos) {
-    const repoList = repos.split(",").filter(Boolean).slice(0, 50); // Cap to stay within D1 bind limits (100 max per stmt; combined with inactive)
-    if (repoList.length > 0) {
-      where += ` AND repo IN (${repoList.map(() => "?").join(",")})`;
-      bindings.push(...repoList);
-    }
-  }
-
   if (label) {
     where += " AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = ?)";
     bindings.push(label);
-  }
-
-  if (inactiveSql) {
-    where += inactiveSql;
-    bindings.push(...inactive);
   }
 
   const offset = (page - 1) * pageSize;

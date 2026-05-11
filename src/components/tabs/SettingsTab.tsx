@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
   const { user, selectedOrg, logout } = useAuth();
-  const { data: repos } = useRepos();
+  const { data: repos } = useRepos({ includeAll: true });
   const { data: settings } = useSettings();
   const saveSettings = useSaveSettings();
   const { data: people } = usePeople();
@@ -191,7 +191,7 @@ function FullResyncSection() {
   );
 }
 
-function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: string }[] | undefined }) {
+function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: string; inactive?: boolean }[] | undefined }) {
   const { data: savedRules } = useAgentRules();
   const saveRulesMut = useSaveAgentRules();
 
@@ -207,7 +207,12 @@ function AgentIntegrationSection({ org, repos }: { org: string; repos: { name: s
 
   // Initialize from saved rules once loaded
   const currentRules = rules ?? savedRules ?? [];
-  const repoNames = useMemo(() => (repos ?? []).map((r) => r.name), [repos]);
+  // Only ever push CLAUDE.md to ACTIVE repos — drafts and archived repos are
+  // hidden across the app and shouldn't get rule updates either.
+  const repoNames = useMemo(
+    () => (repos ?? []).filter((r) => !r.inactive).map((r) => r.name),
+    [repos],
+  );
   const selected = selectedRepos ?? new Set(repoNames);
 
   function saveRules(next: string[]) {
