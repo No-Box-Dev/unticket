@@ -23,6 +23,21 @@ export function mapEventType(ghEvent, action, payload) {
       if (action === "opened") return "github:issue:opened";
       if (action === "closed") return "github:issue:closed";
       return null;
+    case "pull_request_review":
+      if (action === "submitted") {
+        const state = payload.review?.state;
+        if (state === "approved") return "github:pr:review:approved";
+        if (state === "changes_requested") return "github:pr:review:changes_requested";
+        if (state === "commented") return "github:pr:review:commented";
+      }
+      return null;
+    case "repository":
+      if (action === "archived") return "github:repo:archived";
+      if (action === "unarchived") return "github:repo:unarchived";
+      if (action === "deleted") return "github:repo:deleted";
+      if (action === "transferred") return "github:repo:transferred";
+      if (action === "renamed") return "github:repo:renamed";
+      return null;
     case "installation":
       return `github:installation:${action ?? "unknown"}`;
     case "installation_repositories":
@@ -37,6 +52,7 @@ function pickAuthor(ghEvent, payload) {
     ghEvent === "pull_request" ? payload.pull_request?.user :
     ghEvent === "issues" ? payload.issue?.user :
     ghEvent === "release" ? payload.release?.author :
+    ghEvent === "pull_request_review" ? payload.review?.user :
     payload.sender;
   if (!candidate?.login) return null;
   return {
@@ -64,6 +80,16 @@ function buildSummary(type, payload) {
   if (type.startsWith("github:issue:")) {
     const issue = payload.issue;
     if (issue) return `Issue #${issue.number}: ${issue.title}`;
+  }
+  if (type.startsWith("github:pr:review:")) {
+    const pr = payload.pull_request;
+    const state = payload.review?.state ?? "reviewed";
+    if (pr) return `Review (${state}) on PR #${pr.number}: ${pr.title}`;
+  }
+  if (type.startsWith("github:repo:")) {
+    const action = type.split(":")[2];
+    const repo = payload.repository?.full_name ?? payload.repository?.name ?? "?";
+    return `Repository ${action}: ${repo}`;
   }
   if (type.startsWith("github:installation")) {
     return `Installation ${payload.action ?? ""}`.trim();
@@ -105,6 +131,26 @@ function slimPayload(ghEvent, payload) {
         deletions: pr.deletions,
         changed_files: pr.changed_files,
       },
+    };
+  }
+  if (ghEvent === "pull_request_review" && payload.review) {
+    const pr = payload.pull_request;
+    return {
+      action: payload.action,
+      review: {
+        state: payload.review.state,
+        body: payload.review.body?.slice(0, 1000),
+        author: payload.review.user?.login,
+        submitted_at: payload.review.submitted_at,
+      },
+      pr: pr ? { number: pr.number, title: pr.title, author: pr.user?.login } : null,
+    };
+  }
+  if (ghEvent === "repository") {
+    return {
+      action: payload.action,
+      repo: payload.repository?.full_name ?? payload.repository?.name ?? null,
+      changes: payload.changes ?? null,
     };
   }
   return { action: payload.action };

@@ -1,8 +1,21 @@
 import { jsonResponse, errorResponse } from "../lib/db";
-import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember, bootstrapInstallation } from "../lib/github-sync";
+import {
+  upsertIssue,
+  upsertFeature,
+  upsertPR,
+  upsertMember,
+  removeMember,
+  bootstrapInstallation,
+  markRepoArchived,
+  removeRepo,
+  renameRepo,
+  touchRepoPushed,
+  syncRepo,
+} from "../lib/github-sync";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
+import { getInstallationToken } from "../lib/github-app";
 import { narrateEvent } from "../lib/narrator";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
@@ -71,33 +84,7 @@ export async function onRequestPost(context) {
     return await handleInstallationEvent(context, payload, deliveryId);
   }
   if (event === "installation_repositories") {
-    // Maintain installations.repos_json as the source of truth for which
-    // repos are accessible. owner derived from the installation account
-    // (payload.organization is absent on these events).
-    const installationId = payload.installation?.id;
-    const accountLogin = payload.installation?.account?.login;
-    if (installationId) {
-      try {
-        const current = new Set(await getInstallationRepos(context.env.DB, installationId));
-        for (const r of payload.repositories_added ?? []) {
-          if (r?.full_name) current.add(r.full_name);
-        }
-        for (const r of payload.repositories_removed ?? []) {
-          if (r?.full_name) current.delete(r.full_name);
-        }
-        await setInstallationRepos(context.env.DB, installationId, [...current]);
-      } catch (err) {
-        console.error("[unticket webhook] setInstallationRepos failed:", err);
-      }
-    }
-    if (accountLogin) {
-      try {
-        await storeEvent(context.env.DB, event, deliveryId, payload, accountLogin);
-      } catch (err) {
-        console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
-      }
-    }
-    return jsonResponse({ ok: true, event, action: payload.action });
+    return await handleInstallationReposEvent(context, payload, deliveryId);
   }
 
   // Look up org
@@ -118,6 +105,18 @@ export async function onRequestPost(context) {
   const orgId = orgRow.id;
   const db = context.env.DB;
   const action = payload.action;
+
+  // Bump orgs.last_event_at on every webhook write — the reconcile cron
+  // uses this to flag installations that have gone silent (no events for
+  // 24h+). Cheap single UPDATE; failures are logged but never abort.
+  try {
+    await db
+      .prepare("UPDATE orgs SET last_event_at = datetime('now') WHERE id = ?")
+      .bind(orgId)
+      .run();
+  } catch (err) {
+    console.error("[unticket webhook] last_event_at bump failed:", err);
+  }
 
   try {
     // Record into the events log first (additive — failure here must not
@@ -240,7 +239,45 @@ export async function onRequestPost(context) {
       return jsonResponse({ ok: true, event, action, login: member.login });
     }
 
-    // Unhandled event — acknowledge it
+    if (event === "repository") {
+      const repo = payload.repository?.name;
+      if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
+
+      if (action === "archived") {
+        await markRepoArchived(db, orgId, repo);
+      } else if (action === "unarchived") {
+        await db.prepare("UPDATE repos SET archived_at = NULL WHERE org_id = ? AND name = ?").bind(orgId, repo).run();
+      } else if (action === "deleted" || action === "transferred") {
+        await removeRepo(db, orgId, repo);
+      } else if (action === "renamed") {
+        // GitHub fires a repository rename with `changes.repository.name.from`
+        // and the new name at `payload.repository.name`. Rename in place so
+        // issues, PRs, and feature links keep pointing at the live repo
+        // without waiting for a reconcile to repopulate.
+        const oldName = payload.changes?.repository?.name?.from;
+        if (oldName && oldName !== repo) {
+          await renameRepo(db, orgId, oldName, repo);
+        }
+      }
+      return jsonResponse({ ok: true, event, action, repo });
+    }
+
+    if (event === "push") {
+      const repo = payload.repository?.name;
+      if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
+      // Only the pushed_at update is interesting for the dashboard — the
+      // events row + narrator already handle the feed side.
+      try {
+        await touchRepoPushed(db, orgId, repo);
+      } catch (err) {
+        console.error(`[unticket webhook] touchRepoPushed ${repo} failed:`, err);
+      }
+      return jsonResponse({ ok: true, event, repo });
+    }
+
+    // pull_request_review and other events without dedicated handlers fall
+    // through to here. They've already been recorded via storeEvent +
+    // narrateEvent above, so the Posts feed gets them automatically.
     return jsonResponse({ ok: true, skipped: `unhandled event: ${event}` });
   } catch (e) {
     // Don't leak internal error details to webhook senders. Log server-side only.
@@ -313,4 +350,84 @@ async function handleInstallationEvent(context, payload, deliveryId) {
   }
 
   return jsonResponse({ ok: true, event: "installation", skipped: `unhandled action: ${action}` });
+}
+
+// `installation_repositories` fires when an admin grants the App access to
+// new repos (or removes some) post-install. Three responsibilities:
+//   1. Keep installations.repos_json in sync with what GitHub thinks we can
+//      see — that table is the source of truth for `/api/projects`.
+//   2. For added repos, kick off a backfill via syncRepo so issues + PRs
+//      land in D1 within seconds instead of waiting for the next reconcile.
+//   3. Log the event for the feed.
+async function handleInstallationReposEvent(context, payload, deliveryId) {
+  const db = context.env.DB;
+  const installationId = payload.installation?.id;
+  const accountLogin = payload.installation?.account?.login;
+  const action = payload.action;
+
+  if (installationId) {
+    try {
+      const current = new Set(await getInstallationRepos(db, installationId));
+      for (const r of payload.repositories_added ?? []) {
+        if (r?.full_name) current.add(r.full_name);
+      }
+      for (const r of payload.repositories_removed ?? []) {
+        if (r?.full_name) current.delete(r.full_name);
+      }
+      await setInstallationRepos(db, installationId, [...current]);
+    } catch (err) {
+      console.error("[unticket webhook] setInstallationRepos failed:", err);
+    }
+  }
+
+  if (accountLogin) {
+    try {
+      await storeEvent(db, "installation_repositories", deliveryId, payload, accountLogin);
+    } catch (err) {
+      console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
+    }
+  }
+
+  // For removed repos, drop their D1 footprint so they stop appearing in
+  // dashboards. The org-resolution lookup is the same shape used by the
+  // main handler.
+  const orgRow = accountLogin
+    ? await db.prepare("SELECT id FROM orgs WHERE github_login = ?").bind(accountLogin).first()
+    : null;
+
+  if (orgRow?.id && Array.isArray(payload.repositories_removed)) {
+    for (const r of payload.repositories_removed) {
+      const name = r?.name ?? (r?.full_name?.split("/")[1] ?? null);
+      if (!name) continue;
+      try {
+        await removeRepo(db, orgRow.id, name);
+      } catch (err) {
+        console.error(`[unticket webhook] removeRepo ${name} failed:`, err);
+      }
+    }
+  }
+
+  // Backfill added repos out-of-band — keeps the webhook fast and avoids
+  // GitHub's 10s timeout for orgs that grant access to many repos at once.
+  if (orgRow?.id && installationId && Array.isArray(payload.repositories_added) && payload.repositories_added.length > 0) {
+    const repoNames = payload.repositories_added
+      .map((r) => r?.name ?? (r?.full_name?.split("/")[1] ?? null))
+      .filter(Boolean);
+    context.waitUntil((async () => {
+      try {
+        const token = await getInstallationToken(context.env, installationId);
+        for (const repo of repoNames) {
+          try {
+            await syncRepo(db, token, orgRow.id, accountLogin, repo, true);
+          } catch (err) {
+            console.error(`[unticket webhook] backfill repo ${repo} failed:`, err?.message ?? err);
+          }
+        }
+      } catch (err) {
+        console.error(`[unticket webhook] backfill failed for ${accountLogin}:`, err?.stack ?? err);
+      }
+    })());
+  }
+
+  return jsonResponse({ ok: true, event: "installation_repositories", action });
 }
