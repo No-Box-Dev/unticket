@@ -33,3 +33,13 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=unticket --branch=main
+
+      # Deploy the sibling cron Worker. It imports from functions/lib/, so
+      # without this step Pages and cron drift out of sync — every change
+      # to shared code (sync logic, GitHub App helpers) has to land on both.
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cron
+          command: deploy
