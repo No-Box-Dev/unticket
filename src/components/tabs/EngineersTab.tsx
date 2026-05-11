@@ -187,7 +187,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         {/* Currently-assigned open issues — matches the "Assigned Issues" card stat. */}
         <AssignedIssuesPanel items={assignedIssueList} />
 
-        {/* Voice & per-repo notes (narrator config) */}
+        {/* Voice (narrator tone, applied across every repo) */}
         <ActorVoiceCard githubLogin={selected.login} />
 
         {/* Activity feed */}

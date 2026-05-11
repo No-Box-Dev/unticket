@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost, apiPut, apiDelete } from "./api";
+import { apiGet, apiPatch, apiPost, apiDelete } from "./api";
 
 export interface FeedActor {
   id: string;
@@ -38,13 +38,6 @@ export interface FeedEvent {
   summary: string | null;
   payload_json: string | null;
   created_at: string;
-}
-
-export interface FeedNote {
-  actor_id: string;
-  project_id: string;
-  note: string;
-  updated_at: string;
 }
 
 export const fetchActors = () =>
@@ -106,22 +99,3 @@ export const fetchEvents = (q: EventQuery = {}) => {
   return apiGet<{ events: FeedEvent[] }>(`/api/events${qs ? `?${qs}` : ""}`).then((r) => r.events);
 };
 
-export const fetchNotes = (params: { actorId?: string; projectId?: string } = {}) => {
-  const qs = new URLSearchParams();
-  if (params.actorId) qs.set("actor_id", params.actorId);
-  if (params.projectId) qs.set("project_id", params.projectId);
-  const q = qs.toString();
-  return apiGet<{ notes: FeedNote[] }>(`/api/notes${q ? `?${q}` : ""}`).then((r) => r.notes);
-};
-
-export const putNote = (actorId: string, projectId: string, note: string) =>
-  apiPut<{ ok: boolean; deleted?: boolean }>("/api/notes", {
-    actor_id: actorId,
-    project_id: projectId,
-    note,
-  });
-
-export const deleteNote = (actorId: string, projectId: string) => {
-  const qs = new URLSearchParams({ actor_id: actorId, project_id: projectId });
-  return apiDelete<{ ok: boolean }>(`/api/notes?${qs.toString()}`);
-};
