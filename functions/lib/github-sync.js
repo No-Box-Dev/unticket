@@ -691,3 +691,49 @@ export async function removeMember(db, orgId, login) {
     .run();
 }
 
+// Mark a repo as archived on GitHub. Keeps the row so historical issues/PRs
+// remain joinable; UI is expected to filter on archived_at IS NULL.
+export async function markRepoArchived(db, orgId, repo) {
+  await db
+    .prepare("UPDATE repos SET archived_at = datetime('now') WHERE org_id = ? AND name = ?")
+    .bind(orgId, repo)
+    .run();
+}
+
+// Drop a repo and all of its dependent rows. Used when GitHub fires
+// `repository.deleted` or `repository.transferred` — the repo is no
+// longer accessible under this org, so its issues and PRs go with it.
+// Renames go through `renameRepo` instead so historical rows are kept.
+export async function removeRepo(db, orgId, repo) {
+  await db.batch([
+    db.prepare("DELETE FROM issues WHERE org_id = ? AND repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM pull_requests WHERE org_id = ? AND repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM repos WHERE org_id = ? AND name = ?").bind(orgId, repo),
+  ]);
+}
+
+// Rename a repo across every table that stores `repo` as plain text.
+// GitHub's `repository.renamed` event carries `changes.repository.name.from`
+// and the new name on `repository.name`. Doing the rename in place keeps
+// history (issues, PRs, feature links) intact rather than dropping it
+// and waiting for the next reconcile to refetch.
+export async function renameRepo(db, orgId, fromName, toName) {
+  if (!fromName || !toName || fromName === toName) return;
+  await db.batch([
+    db.prepare("UPDATE repos SET name = ? WHERE org_id = ? AND name = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE issues SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE pull_requests SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE pr_feature_links SET pr_repo = ? WHERE org_id = ? AND pr_repo = ?").bind(toName, orgId, fromName),
+  ]);
+}
+
+// Update repos.pushed_at from a `push` webhook so the repo list ordering
+// (sort: pushed_at desc) stays accurate without waiting for a reconcile.
+export async function touchRepoPushed(db, orgId, repo) {
+  await db
+    .prepare("UPDATE repos SET pushed_at = datetime('now') WHERE org_id = ? AND name = ?")
+    .bind(orgId, repo)
+    .run();
+}
+
