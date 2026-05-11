@@ -99,16 +99,19 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
 
   const personPills = useMemo(() => {
     const myLogin = user?.login;
-    const names = (people ?? []).map((p) => p.name || p.github);
-    const logins = (people ?? []).map((p) => p.github);
-    const pairs = logins.map((login, i) => ({ login, name: names[i] }));
+    // Display-name overrides from the People config — fall back to login when
+    // no override exists. The set of options comes from org members so the
+    // dropdown is always populated even when the config repo is empty.
+    const nameByLogin = new Map((people ?? []).map((p) => [p.github, p.name || p.github]));
+    const logins = Array.from(new Set((orgMembers ?? []).map((m) => m.login)));
+    const pairs = logins.map((login) => ({ login, name: nameByLogin.get(login) ?? login }));
     pairs.sort((a, b) => {
       if (a.login === myLogin) return -1;
       if (b.login === myLogin) return 1;
-      return a.name.localeCompare(b.name);
+      return a.login.localeCompare(b.login);
     });
     return pairs;
-  }, [people, user]);
+  }, [orgMembers, people, user]);
 
   // Active features (everything except backlog/future)
   const activeFeatures = useMemo(() => {
