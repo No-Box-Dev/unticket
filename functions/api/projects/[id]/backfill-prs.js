@@ -150,8 +150,7 @@ async function backfillOnePr(env, args, pr) {
       ? "github:pr:closed"
       : "github:pr:opened";
 
-  const anchor = prAnchor(pr);
-  const createdAt = anchor.replace("T", " ").replace(/Z$/, "").slice(0, 19);
+  const createdAt = prAnchor(pr);
 
   const result = await env.DB.prepare(
     `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)

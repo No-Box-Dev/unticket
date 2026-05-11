@@ -3,16 +3,6 @@ import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } f
 import { filterInactive } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 
-// GitHub's `since` param requires ISO 8601 (`2026-05-11T07:47:51Z`). Old
-// sync_state rows were written via `datetime('now')` which produces the
-// space-separated SQLite format — that string round-trips to GitHub as a
-// silent empty-result query. Normalize before sending.
-export function toIsoSince(since) {
-  if (!since) return since;
-  if (since.includes("T")) return since;
-  return since.replace(" ", "T") + "Z";
-}
-
 // Paginated GitHub API fetcher
 const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
 
@@ -102,7 +92,7 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
     sort: "updated",
     direction: "desc",
   };
-  if (since) params.since = toIsoSince(since);
+  if (since) params.since = since;
 
   const prs = await fetchAllPages(
     token,
@@ -186,7 +176,7 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
     sort: "updated",
     direction: "desc",
   };
-  if (since) params.since = toIsoSince(since);
+  if (since) params.since = since;
 
   const allItems = await fetchAllPages(
     token,
@@ -771,9 +761,13 @@ export async function renameRepo(db, orgId, fromName, toName) {
 
 // Update repos.pushed_at from a `push` webhook so the repo list ordering
 // (sort: pushed_at desc) stays accurate without waiting for a reconcile.
+// ISO 8601 to match the format `syncRepos` copies from GitHub responses —
+// mixing space and ISO formats in the same column breaks ORDER BY DESC.
 export async function touchRepoPushed(db, orgId, repo) {
   await db
-    .prepare("UPDATE repos SET pushed_at = datetime('now') WHERE org_id = ? AND name = ?")
+    .prepare(
+      "UPDATE repos SET pushed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE org_id = ? AND name = ?"
+    )
     .bind(orgId, repo)
     .run();
 }

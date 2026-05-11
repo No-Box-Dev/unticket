@@ -164,7 +164,7 @@ async function updateHealthStatus(db, orgId, installationId) {
   if (!lastEventAt) {
     status = "silent";
   } else {
-    const ageMs = Date.now() - new Date(lastEventAt + "Z").getTime();
+    const ageMs = Date.now() - new Date(lastEventAt).getTime();
     if (ageMs > SILENT_THRESHOLD_HOURS * 60 * 60 * 1000) status = "silent";
   }
 

@@ -109,7 +109,7 @@ describe("reconcileOrg", () => {
     const db = makeDb({
       members: ["alice", "bob", "ghost"],   // ghost no longer in API
       repos: ["app", "core", "old-repo"],   // old-repo no longer in API
-      lastEventAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+      lastEventAt: new Date().toISOString(),
     });
 
     await reconcileOrg(env, db, 42, "acme", 12345);
@@ -132,16 +132,16 @@ describe("reconcileOrg", () => {
       members: [],
       repos: ["app", "core"],
       syncCursors: {
-        "prs:app": "2026-05-10 12:00:00",
-        "issues:app": "2026-05-10 11:00:00",
+        "prs:app": "2026-05-10T12:00:00Z",
+        "issues:app": "2026-05-10T11:00:00Z",
       },
-      lastEventAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+      lastEventAt: new Date().toISOString(),
     });
 
     await reconcileOrg(env, db, 1, "acme", 99);
 
-    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10 12:00:00");
-    expect(syncIssues).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10 11:00:00");
+    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10T12:00:00Z");
+    expect(syncIssues).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10T11:00:00Z");
     expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "core", null);
     expect(syncIssues).toHaveBeenCalledWith(db, "install-token", 1, "acme", "core", null);
   });
@@ -162,8 +162,7 @@ describe("reconcileOrg", () => {
   it("flags installation as silent when last_event_at is older than 24h", async () => {
     syncMembers.mockResolvedValue([]);
     syncRepos.mockResolvedValue([]);
-    const oldStamp = new Date(Date.now() - 26 * 60 * 60 * 1000)
-      .toISOString().replace("T", " ").slice(0, 19);
+    const oldStamp = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
     const db = makeDb({ lastEventAt: oldStamp });
 
     await reconcileOrg(env, db, 1, "acme", 555);
@@ -176,8 +175,7 @@ describe("reconcileOrg", () => {
   it("clears health_status when last_event_at is recent", async () => {
     syncMembers.mockResolvedValue([]);
     syncRepos.mockResolvedValue([]);
-    const recentStamp = new Date(Date.now() - 60 * 60 * 1000)
-      .toISOString().replace("T", " ").slice(0, 19);
+    const recentStamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const db = makeDb({ lastEventAt: recentStamp });
 
     await reconcileOrg(env, db, 1, "acme", 555);

@@ -197,8 +197,8 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
   const actor = author ? await resolveActorFromGithub(db, ownerId, author) : null;
 
   const result = await db.prepare(
-    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(delivery_id) DO NOTHING`
   ).bind(
     deliveryId || null,
