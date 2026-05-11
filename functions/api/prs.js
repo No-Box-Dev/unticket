@@ -59,6 +59,8 @@ export async function onRequestGet(context) {
   const author = url.searchParams.get("author");
   const since = url.searchParams.get("since");
   const repo = url.searchParams.get("repo");
+  const draft = url.searchParams.get("draft") === "1";
+  const stale = url.searchParams.get("stale") === "1";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get("page_size") || "100", 10) || 100));
 
@@ -95,6 +97,17 @@ export async function onRequestGet(context) {
     bindings.push(since);
   }
 
+  if (draft) {
+    query += " AND draft = 1";
+  }
+
+  let staleDate = null;
+  if (stale) {
+    staleDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    query += " AND state = 'open' AND created_at < ?";
+    bindings.push(staleDate);
+  }
+
   // Build separate count query from the same WHERE conditions
   let countQuery = `SELECT COUNT(*) as count FROM pull_requests WHERE org_id = ?${repoSql}`;
   const countBindings = [orgId, ...repoBindings];
@@ -110,6 +123,13 @@ export async function onRequestGet(context) {
   if (since) {
     countQuery += " AND updated_at >= ?";
     countBindings.push(since);
+  }
+  if (draft) {
+    countQuery += " AND draft = 1";
+  }
+  if (stale) {
+    countQuery += " AND state = 'open' AND created_at < ?";
+    countBindings.push(staleDate);
   }
 
   const countStmt = context.env.DB.prepare(countQuery).bind(...countBindings);

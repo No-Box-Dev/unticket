@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useFeedProjects,
@@ -9,7 +10,7 @@ import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { useAuth } from "@/lib/auth";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import { Archive, ArchiveRestore, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, Sparkles, Loader2, CircleDot, GitPullRequest } from "lucide-react";
 import type { FeedProject, BackfillResult } from "@/lib/noxlink-api";
 
 export function ReposTab() {
@@ -223,6 +224,24 @@ function RepoRow({ project, days }: { project: FeedProject; days: number }) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {project.repo && (
+          <>
+            <Link
+              to={`/issues/repo/${project.repo}`}
+              className="p-1.5 rounded-md text-stone-400 hover:text-accent hover:bg-stone-100 transition-colors"
+              title={`Open issues in ${project.repo}`}
+            >
+              <CircleDot className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              to={`/prs/repo/${project.repo}`}
+              className="p-1.5 rounded-md text-stone-400 hover:text-accent hover:bg-stone-100 transition-colors"
+              title={`Open PRs in ${project.repo}`}
+            >
+              <GitPullRequest className="w-3.5 h-3.5" />
+            </Link>
+          </>
+        )}
         {ghUrl && (
           <a
             href={ghUrl}

@@ -131,6 +131,7 @@ export async function onRequestGet(context) {
   const repo = url.searchParams.get("repo");
   const repos = url.searchParams.get("repos"); // comma-separated
   const label = url.searchParams.get("label");
+  const stale = url.searchParams.get("stale") === "1";
   const sort = url.searchParams.get("sort") || "updated_at";
   const sortDir = url.searchParams.get("sort_dir") === "asc" ? "ASC" : "DESC";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
@@ -191,6 +192,12 @@ export async function onRequestGet(context) {
   if (label) {
     where += " AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = ?)";
     bindings.push(label);
+  }
+
+  if (stale) {
+    const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    where += " AND state = 'open' AND created_at < ?";
+    bindings.push(staleDate);
   }
 
   const offset = (page - 1) * pageSize;
