@@ -7,7 +7,6 @@ import {
   useUpdateFeature,
   useDeleteFeature,
   useCreateConfigRepo,
-  useSyncFeatures,
   useCleanDoneFeatures,
 } from "@/hooks/useConfigRepo";
 import { FeatureCard } from "@/components/sprint/FeatureCard";
@@ -17,7 +16,7 @@ import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { ArrowUpDown, Rocket, RefreshCw, Search, Sparkles } from "lucide-react";
+import { ArrowUpDown, Rocket, Search, Sparkles } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -60,7 +59,6 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   const createRepo = useCreateConfigRepo();
   const isAdmin = useIsAdmin();
   const { confirm, dialogProps } = useConfirm();
-  const syncFeaturesMut = useSyncFeatures();
   const cleanDoneMut = useCleanDoneFeatures();
   const { user } = useAuth();
 
@@ -216,14 +214,6 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
     <div className="space-y-4 pb-8">
       {/* Header: actions */}
       <div className="flex items-center justify-end flex-wrap gap-2">
-        <button
-          onClick={() => syncFeaturesMut.mutate()}
-          disabled={syncFeaturesMut.isPending}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer"
-        >
-          <RefreshCw size={12} className={syncFeaturesMut.isPending ? "animate-spin" : ""} />
-          <span className="hidden sm:inline">{syncFeaturesMut.isPending ? "Syncing..." : "Sync"}</span>
-        </button>
         {isAdmin && (
           <button
             onClick={handleCleanDone}

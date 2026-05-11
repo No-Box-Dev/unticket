@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getOctokit } from "./github";
-import { apiGet, apiPost, apiPut, apiFetch } from "./api";
+import { apiGet, apiPut, apiFetch } from "./api";
 import { getUnticketRepoName } from "./unticket-repo-name";
 import type { Feature, FeatureStatus, StatusHistoryEntry, LinkedPR } from "./types";
 
@@ -125,12 +125,6 @@ async function syncIssueToD1(data: any): Promise<void> {
     created_at: data.created_at,
     updated_at: data.updated_at,
   });
-}
-
-export async function syncFeaturesFromGitHub(): Promise<{ synced: number; total: number }> {
-  const result = await apiPost<{ ok: boolean; synced: number; total: number }>("/api/features");
-  console.log(`[unticket.ai] Feature sync: ${result.synced} features from ${result.total} issues`);
-  return result;
 }
 
 // ---------- D1-backed fetch (no GitHub API calls) ----------

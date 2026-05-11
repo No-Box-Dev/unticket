@@ -15,7 +15,6 @@ import {
   createFeature as ghCreateFeature,
   updateFeature as ghUpdateFeature,
   deleteFeature as ghDeleteFeature,
-  syncFeaturesFromGitHub,
 } from "@/lib/github-features";
 import type { Feature, FeatureStatus, Person, OrgSettings } from "@/lib/types";
 
@@ -190,17 +189,6 @@ export function useCreateConfigRepo() {
       qc.invalidateQueries({ queryKey: ["people", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["settings", selectedOrg] });
     },
-  });
-}
-
-// ---------- Sync Features ----------
-
-export function useSyncFeatures() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: syncFeaturesFromGitHub,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["features", selectedOrg] }),
   });
 }
 

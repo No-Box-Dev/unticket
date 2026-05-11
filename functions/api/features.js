@@ -1,5 +1,4 @@
 import { getCtx, jsonResponse } from "../lib/db";
-import { syncFeatures } from "../lib/github-sync";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const FEATURE_COLUMNS = [
@@ -92,11 +91,4 @@ export async function onRequestDelete(context) {
     .run();
 
   return jsonResponse({ ok: true });
-}
-
-// POST /api/features — sync features from unticket repo
-export async function onRequestPost(context) {
-  const { orgId, token, orgLogin } = getCtx(context);
-  const result = await syncFeatures(context.env.DB, token, orgId, orgLogin);
-  return jsonResponse({ ok: true, ...result });
 }
