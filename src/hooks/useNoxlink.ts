@@ -60,7 +60,7 @@ export function useFeedEvents(q: EventQuery = {}) {
 // Only show narratives that came from a "shipped" event. Keep this list in
 // sync with NARRATABLE_TYPES in functions/lib/narrator.js — the server uses
 // it to skip narration entirely so we don't pay tokens for posts we'd hide.
-export const POST_TRIGGER_TYPES = ["github:pr:merged", "github:issue:closed"];
+export const POST_TRIGGER_TYPES = ["github:pr:merged"];
 
 export function usePosts(limit = 50) {
   return useFeedEvents({ type: "narrative", limit, triggerTypes: POST_TRIGGER_TYPES });
