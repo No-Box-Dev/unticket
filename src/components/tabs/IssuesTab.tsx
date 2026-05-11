@@ -205,29 +205,36 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
           ) : (
             <div className="space-y-2">
               {stats.byRepo.map((r) => {
-                const criticalPct = r.critical > 0 ? (r.critical / repoMax) * 100 : 0;
-                const normalPct = ((r.count - r.critical) / repoMax) * 100;
+                // Mutually exclusive: critical first, then stale (non-critical), then normal = remainder.
+                const normal = Math.max(0, r.count - r.critical - r.stale);
+                const normalPct = (normal / repoMax) * 100;
+                const stalePct = (r.stale / repoMax) * 100;
+                const criticalPct = (r.critical / repoMax) * 100;
                 return (
                   <div key={r.repo} className="flex items-center gap-3">
                     <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
                     <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
-                      {r.critical > 0 && (
-                        <div
-                          className="h-full bg-red-500 transition-all duration-300"
-                          style={{ width: `${criticalPct}%` }}
-                        />
+                      {normal > 0 && (
+                        <div className="h-full bg-stone-500 transition-all duration-300" style={{ width: `${normalPct}%` }} />
                       )}
-                      <div
-                        className="h-full bg-accent/70 transition-all duration-300"
-                        style={{ width: `${normalPct}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums">{r.count}</span>
+                      {r.stale > 0 && (
+                        <div className="h-full bg-amber-300 transition-all duration-300" style={{ width: `${stalePct}%` }} />
+                      )}
                       {r.critical > 0 && (
-                        <span className="flex items-center gap-0.5 text-red-500">
+                        <div className="h-full bg-red-300 transition-all duration-300" style={{ width: `${criticalPct}%` }} />
+                      )}
+                    </div>
+                    <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {r.critical > 0 && (
+                        <span className="flex items-center gap-0.5 text-[10px] font-semibold tabular-nums bg-red-50 text-red-700 rounded-full px-1.5 py-0.5">
                           <Flag className="w-3 h-3" />
-                          <span className="text-[10px] font-semibold tabular-nums">{r.critical}</span>
+                          {r.critical}
+                        </span>
+                      )}
+                      {r.stale > 0 && (
+                        <span className="text-[10px] font-semibold tabular-nums bg-amber-50 text-amber-700 rounded-full px-1.5 py-0.5">
+                          stale {r.stale}
                         </span>
                       )}
                     </div>
