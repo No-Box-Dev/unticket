@@ -162,7 +162,10 @@ function PostCard({ event, actor, project }: PostCardProps) {
             <div className="text-xs text-stone-400 truncate">@{actor.github_login}</div>
           )}
         </div>
-        <span className="text-xs text-stone-400 shrink-0" title={event.created_at}>
+        <span
+          className="text-xs text-stone-400 shrink-0"
+          title={formatAbsolute(event.created_at)}
+        >
           {timeAgo(event.created_at)}
         </span>
       </header>
@@ -204,17 +207,48 @@ function formatTrigger(trigger: string | null): string | null {
   return trigger.startsWith("github:") ? trigger.slice("github:".length) : trigger;
 }
 
+// Bluesky-style compact relative time. Recent posts show s/m/h/d (no "ago"
+// suffix), older than a week switches to "Mon DD" same-year, "Mon DD, YYYY"
+// older. Full timestamp ("Jul 3, 2023 at 11:11 AM") is on the tooltip.
 function timeAgo(iso: string | null): string {
-  if (!iso) return "";
-  const t = Date.parse(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z"));
-  if (!Number.isFinite(t)) return iso;
+  const t = parseTimestamp(iso);
+  if (t == null) return iso ?? "";
   const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (sec < 60) return `${sec}s ago`;
+  if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return `${min}m`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
+  if (hr < 24) return `${hr}h`;
   const d = Math.floor(hr / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(t).toLocaleDateString();
+  if (d < 7) return `${d}d`;
+  const date = new Date(t);
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+function formatAbsolute(iso: string | null): string {
+  const t = parseTimestamp(iso);
+  if (t == null) return iso ?? "";
+  const date = new Date(t);
+  const datePart = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timePart = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${datePart} at ${timePart}`;
+}
+
+function parseTimestamp(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z"));
+  return Number.isFinite(t) ? t : null;
 }
