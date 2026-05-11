@@ -8,8 +8,10 @@ const MAX_OUTPUT_LENGTH = 800;
 
 // Only narrate "shipped" events. Opens, reviews, comments, pushes etc. crowd
 // the feed and burn LLM tokens on posts the Posts tab now filters out anyway.
+// Issue closes are excluded because a closing PR already produces its own
+// pr:merged narrative — two cards about the same work read as a duplicate.
 // Keep this list in sync with usePosts() in src/hooks/useNoxlink.ts.
-export const NARRATABLE_TYPES = ["github:pr:merged", "github:issue:closed"];
+export const NARRATABLE_TYPES = ["github:pr:merged"];
 
 export async function narrateEvent(env, eventId) {
   const row = await env.DB.prepare(
