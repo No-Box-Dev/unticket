@@ -32,6 +32,9 @@ export default {
 
 async function runTick(env) {
   const db = env.DB;
+
+  await healOrgInstallationLinks(db);
+
   const orgs = await db
     .prepare(
       `SELECT id, github_login, installation_id
@@ -52,5 +55,26 @@ async function runTick(env) {
         err?.message ?? err,
       );
     }
+  }
+}
+
+// Self-heal: link `orgs` rows to their matching `installations` row and
+// stamp `bootstrapped_at` whenever either is missing. Covers orgs that
+// predate the bootstrap-on-install path (Slice 1) and any future row
+// that lands in D1 without those columns set. Idempotent — once both
+// columns are populated the row drops out of the WHERE clause.
+async function healOrgInstallationLinks(db) {
+  const res = await db
+    .prepare(
+      `UPDATE orgs SET
+         installation_id = (SELECT installation_id FROM installations WHERE account_login = orgs.github_login),
+         bootstrapped_at = COALESCE(bootstrapped_at, datetime('now'))
+       WHERE (installation_id IS NULL OR bootstrapped_at IS NULL)
+         AND EXISTS (SELECT 1 FROM installations WHERE account_login = orgs.github_login)`,
+    )
+    .run();
+  const changed = res?.meta?.changes ?? 0;
+  if (changed > 0) {
+    console.log(`[unticket-cron] healed ${changed} org→installation link(s)`);
   }
 }
