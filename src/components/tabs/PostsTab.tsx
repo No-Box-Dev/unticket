@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { usePosts, useFeedActors, useFeedProjects } from "@/hooks/useNoxlink";
+import { ExternalLink } from "lucide-react";
+import { usePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
@@ -130,9 +131,15 @@ function PostCard({ event, actor, project }: PostCardProps) {
   const projectLabel = (project?.slug || project?.name || event.project_id || "").toUpperCase();
   const trigger = formatTrigger(typeof meta.trigger_type === "string" ? meta.trigger_type : null);
   const model = typeof meta.model === "string" ? meta.model : null;
+  const triggerEventId = typeof meta.trigger_event_id === "number" ? meta.trigger_event_id : null;
+  const [expanded, setExpanded] = useState(false);
+  const expandable = triggerEventId != null;
 
   return (
-    <article className="bg-white border border-stone-200 rounded-xl p-4">
+    <article
+      onClick={expandable ? () => setExpanded((v) => !v) : undefined}
+      className={`bg-white border border-stone-200 rounded-xl p-4 ${expandable ? "cursor-pointer hover:border-stone-300 transition-colors" : ""}`}
+    >
       <header className="flex items-start gap-3">
         <Avatar actor={actor} label={actorLabel} />
         <div className="flex-1 min-w-0">
@@ -165,10 +172,78 @@ function PostCard({ event, actor, project }: PostCardProps) {
         {event.summary || "(no summary)"}
       </div>
 
+      {expanded && triggerEventId != null && (
+        <PrDetails triggerEventId={triggerEventId} fallbackOrg={event.org} fallbackRepo={event.repo} />
+      )}
+
       {model && (
         <div className="mt-3 text-[10px] font-mono text-stone-400">{model}</div>
       )}
     </article>
+  );
+}
+
+function PrDetails({
+  triggerEventId,
+  fallbackOrg,
+  fallbackRepo,
+}: {
+  triggerEventId: number;
+  fallbackOrg: string | null;
+  fallbackRepo: string | null;
+}) {
+  const trigger = useFeedEvent(triggerEventId, true);
+
+  if (trigger.isLoading) {
+    return (
+      <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-400">
+        Loading PR…
+      </div>
+    );
+  }
+  if (trigger.isError || !trigger.data) {
+    return (
+      <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-400">
+        PR details unavailable.
+      </div>
+    );
+  }
+
+  const payload = parsePayload(trigger.data.payload_json);
+  const pr = (payload.pr && typeof payload.pr === "object") ? (payload.pr as Record<string, unknown>) : {};
+  const number = typeof pr.number === "number" ? pr.number : null;
+  const title = typeof pr.title === "string" ? pr.title : null;
+  const body = typeof pr.body === "string" ? pr.body.trim() : "";
+  const org = trigger.data.org ?? fallbackOrg;
+  const repo = trigger.data.repo ?? fallbackRepo;
+  const ghUrl = org && repo && number ? `https://github.com/${org}/${repo}/pull/${number}` : null;
+
+  return (
+    <div className="mt-3 border-t border-stone-100 pt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+      {title && (
+        <div className="text-xs font-medium text-stone-600">
+          {number != null ? `#${number} · ` : ""}{title}
+        </div>
+      )}
+      {body ? (
+        <div className="text-xs text-stone-600 whitespace-pre-wrap break-words max-h-72 overflow-y-auto">
+          {body}
+        </div>
+      ) : (
+        <div className="text-xs text-stone-400 italic">No PR description.</div>
+      )}
+      {ghUrl && (
+        <a
+          href={ghUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800"
+        >
+          <ExternalLink className="w-3 h-3" />
+          View on GitHub
+        </a>
+      )}
+    </div>
   );
 }
 

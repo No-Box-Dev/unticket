@@ -6,6 +6,7 @@ import {
   patchActor,
   fetchProjects,
   fetchEvents,
+  fetchEvent,
   backfillProjectPrs,
   archiveProject,
   unarchiveProject,
@@ -40,6 +41,16 @@ export function useFeedProjects() {
     queryFn: fetchProjects,
     enabled: !!selectedOrg,
     staleTime: 60_000,
+  });
+}
+
+export function useFeedEvent(id: number | null, enabled = true) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["noxlink", "event", selectedOrg, id],
+    queryFn: () => fetchEvent(id!),
+    enabled: !!selectedOrg && id != null && enabled,
+    staleTime: 5 * 60_000,
   });
 }
 
