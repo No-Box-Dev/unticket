@@ -143,7 +143,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                   <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
                   <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                     <div
-                      className="h-full bg-stone-500 transition-all duration-300"
+                      className="h-full bg-stone-400 transition-all duration-300"
                       style={{ width: `${readyPct}%` }}
                     />
                     {r.draft > 0 && (
