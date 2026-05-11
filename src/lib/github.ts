@@ -166,6 +166,7 @@ export interface SyncProgress {
   repo?: string;
   synced: number;
   total: number;
+  failed?: string[];
   error?: string;
 }
 
@@ -174,51 +175,47 @@ export async function triggerSyncWithProgress(
   force = false,
   signal?: AbortSignal,
 ) {
+  let init: SyncResponse;
   try {
     onProgress({ phase: "init", synced: 0, total: 0 });
-
-    const init = await apiPost<SyncResponse>("/api/sync");
-
-    if (init.done) {
-      onProgress({ phase: "done", synced: 0, total: 0 });
-      return;
-    }
-
-    const total = init.repos ?? 0;
-    let cursor = init.cursor;
-    const maxIterations = total + 5;
-    let iterations = 0;
-    let synced = 0;
-    const forceParam = force ? "&force=true" : "";
-
-    while (cursor && iterations < maxIterations) {
-      if (signal?.aborted) return;
-      onProgress({ phase: "syncing", repo: cursor, synced, total });
-      const res = await apiPost<SyncResponse>(
-        `/api/sync?cursor=${encodeURIComponent(cursor)}${forceParam}`,
-      );
-      synced++;
-      if (res.done) break;
-      cursor = res.cursor;
-      iterations++;
-    }
-
-    if (!signal?.aborted) {
-      onProgress({ phase: "done", synced, total });
-    }
+    init = await apiPost<SyncResponse>("/api/sync");
   } catch (err) {
     if (signal?.aborted) return;
     const msg = err instanceof Error ? err.message : "Sync failed";
-    // ApiError already broadcasts; for other errors, broadcast manually
-    if (!(err instanceof ApiError)) {
-      broadcastError(msg);
+    if (!(err instanceof ApiError)) broadcastError(msg);
+    onProgress({ phase: "error", synced: 0, total: 0, error: msg });
+    return;
+  }
+
+  if (init.done) {
+    onProgress({ phase: "done", synced: 0, total: 0 });
+    return;
+  }
+
+  // Iterate the explicit repo list rather than chasing server-returned cursors.
+  // A single failing repo must not strand the rest — capture per-repo errors
+  // and keep going so every active repo gets its shot.
+  const repos = init.repoList ?? (init.cursor ? [init.cursor] : []);
+  const total = repos.length;
+  const failed: string[] = [];
+  const forceParam = force ? "&force=true" : "";
+  let synced = 0;
+
+  for (const repo of repos) {
+    if (signal?.aborted) return;
+    onProgress({ phase: "syncing", repo, synced, total, failed: [...failed] });
+    try {
+      await apiPost<SyncResponse>(`/api/sync?cursor=${encodeURIComponent(repo)}${forceParam}`);
+      synced++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[unticket] sync failed for ${repo}:`, msg);
+      failed.push(repo);
     }
-    onProgress({
-      phase: "error",
-      synced: 0,
-      total: 0,
-      error: msg,
-    });
+  }
+
+  if (!signal?.aborted) {
+    onProgress({ phase: "done", synced, total, failed });
   }
 }
 

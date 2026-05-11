@@ -49,6 +49,8 @@ export function SyncFromGithubMenuItem({ onAfterStart }: SyncFromGithubMenuItemP
 
   const done = progress?.phase === "done";
   const error = progress?.phase === "error";
+  const failedRepos = progress?.failed ?? [];
+  const hadPartialFailures = done && failedRepos.length > 0;
 
   return (
     <>
@@ -70,7 +72,13 @@ export function SyncFromGithubMenuItem({ onAfterStart }: SyncFromGithubMenuItemP
             <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
                 <h3 className="text-sm font-semibold text-stone-800">
-                  {done ? "Sync Complete" : error ? "Sync Failed" : "Syncing from GitHub"}
+                  {error
+                    ? "Sync Failed"
+                    : hadPartialFailures
+                      ? "Sync Complete (with errors)"
+                      : done
+                        ? "Sync Complete"
+                        : "Syncing from GitHub"}
                 </h3>
                 {(done || error) && (
                   <button
@@ -125,12 +133,19 @@ export function SyncFromGithubMenuItem({ onAfterStart }: SyncFromGithubMenuItemP
                     <span className="font-medium">{progress.repo}</span>
                   </div>
                 )}
-                {syncedRepos.length > 0 && (
+                {(syncedRepos.length > 0 || failedRepos.length > 0) && (
                   <div className="max-h-48 overflow-y-auto space-y-1">
                     {syncedRepos.map((repo) => (
                       <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
                         <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
                         {repo}
+                      </div>
+                    ))}
+                    {failedRepos.map((repo) => (
+                      <div key={`failed-${repo}`} className="flex items-center gap-2 text-xs text-red-600">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-medium">{repo}</span>
+                        <span className="text-stone-400">— failed, will retry on next cron tick</span>
                       </div>
                     ))}
                   </div>
