@@ -1,0 +1,23 @@
+name = "unticket-cron"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# Same D1 database as the Pages app — the cron writes the same tables
+# (repos, issues, pull_requests, features, members, reconcile_runs).
+[[d1_databases]]
+binding = "DB"
+database_name = "unticket"
+database_id = "c94084e6-d0be-423c-8de6-249e7cf8bf25"
+
+# Reconciliation tick. Webhooks are the running source of truth; this
+# cron exists to catch the cases webhooks structurally miss: deletes
+# (GitHub doesn't fire delete webhooks), missed deliveries during
+# deploys, and label changes on issues created before the App was
+# installed. 30 min is a reasonable RPO without being chatty.
+[triggers]
+crons = ["*/30 * * * *"]
+
+# GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY must be set as secrets on
+# this worker before the first cron run:
+#   wrangler secret put GITHUB_APP_ID --env="" --name unticket-cron
+#   wrangler secret put GITHUB_APP_PRIVATE_KEY --env="" --name unticket-cron
