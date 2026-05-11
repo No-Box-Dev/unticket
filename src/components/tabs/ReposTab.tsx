@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useFeedProjects,
   useBackfillProjectPrs,
   useSetProjectArchived,
 } from "@/hooks/useNoxlink";
+import { backfillProjectPrs } from "@/lib/noxlink-api";
+import { useAuth } from "@/lib/auth";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import { Archive, ArchiveRestore, ExternalLink } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, Sparkles, Loader2 } from "lucide-react";
 import type { FeedProject, BackfillResult } from "@/lib/noxlink-api";
 
 export function ReposTab() {
@@ -39,11 +42,14 @@ export function ReposTab() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-2">
-      <header className="flex items-baseline justify-between px-1">
-        <h2 className="text-lg font-semibold text-stone-900 font-display">Repos</h2>
-        <span className="text-xs text-stone-500">
-          {active.length} active{archived.length > 0 ? ` · ${archived.length} archived` : ""}
-        </span>
+      <header className="flex items-center justify-between gap-3 px-1">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-lg font-semibold text-stone-900 font-display">Repos</h2>
+          <span className="text-xs text-stone-500">
+            {active.length} active{archived.length > 0 ? ` · ${archived.length} archived` : ""}
+          </span>
+        </div>
+        <BackfillAllButton activeProjects={active} />
       </header>
 
       <div className="space-y-2">
@@ -70,6 +76,73 @@ export function ReposTab() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function BackfillAllButton({ activeProjects }: { activeProjects: FeedProject[] }) {
+  const qc = useQueryClient();
+  const { selectedOrg } = useAuth();
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; current: string | null }>({
+    done: 0,
+    total: 0,
+    current: null,
+  });
+  const [summary, setSummary] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    if (activeProjects.length === 0 || running) return;
+    setRunning(true);
+    setSummary(null);
+    setProgress({ done: 0, total: activeProjects.length, current: null });
+
+    let queued = 0;
+    let found = 0;
+    let errors = 0;
+
+    for (let i = 0; i < activeProjects.length; i++) {
+      const p = activeProjects[i];
+      setProgress({ done: i, total: activeProjects.length, current: p.repo });
+      try {
+        const r = await backfillProjectPrs(p.id, 3);
+        queued += r.queued ?? 0;
+        found += r.found ?? 0;
+      } catch {
+        errors += 1;
+      }
+    }
+
+    setProgress({ done: activeProjects.length, total: activeProjects.length, current: null });
+    setSummary(
+      `Queued ${queued} new post${queued === 1 ? "" : "s"} from ${found} PR${found === 1 ? "" : "s"}${errors ? ` · ${errors} error${errors === 1 ? "" : "s"}` : ""}.`,
+    );
+    setRunning(false);
+    qc.invalidateQueries({ queryKey: ["noxlink", "events", selectedOrg] });
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {summary && !running && (
+        <span className="text-xs text-stone-500">{summary}</span>
+      )}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={running || activeProjects.length === 0}
+        title="Generate posts for the last 3 days of merged PRs across every active repo. Idempotent — already-backfilled PRs are skipped."
+        className={cn(
+          "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer",
+          running
+            ? "bg-stone-100 text-stone-500 cursor-not-allowed"
+            : "bg-stone-700 text-white hover:bg-stone-900 disabled:opacity-50",
+        )}
+      >
+        {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+        {running
+          ? `${progress.current ?? ""} (${progress.done}/${progress.total})`
+          : `Backfill all ${activeProjects.length} repo${activeProjects.length === 1 ? "" : "s"}`}
+      </button>
     </div>
   );
 }
