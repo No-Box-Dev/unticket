@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { useOpenPRs, useMergedPRs, usePRStats } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, FileEdit } from "lucide-react";
+import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
@@ -138,9 +138,14 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
             {prStats.byRepo.map((r) => {
               const draftPct = r.draft > 0 ? (r.draft / repoMax) * 100 : 0;
               const readyPct = ((r.count - r.draft) / repoMax) * 100;
+              const breakdownParts = [
+                `${r.count} open`,
+                r.draft > 0 ? `${r.draft} draft` : null,
+              ].filter(Boolean);
+              const tooltip = `${r.repo} — ${breakdownParts.join(" · ")}`;
               return (
-                <div key={r.repo} className="flex items-center gap-3">
-                  <span className="text-xs text-stone-600 w-28 truncate shrink-0" title={r.repo}>{r.repo}</span>
+                <div key={r.repo} className="flex items-center gap-3" title={tooltip}>
+                  <span className="text-xs text-stone-600 w-28 truncate shrink-0">{r.repo}</span>
                   <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
                     <div
                       className="h-full bg-stone-400 transition-all duration-300"
@@ -153,15 +158,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                       />
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums">{r.count}</span>
-                    {r.draft > 0 && (
-                      <span className="flex items-center gap-0.5 text-stone-400">
-                        <FileEdit className="w-3 h-3" />
-                        <span className="text-[10px] font-semibold tabular-nums">{r.draft}</span>
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
                 </div>
               );
             })}
