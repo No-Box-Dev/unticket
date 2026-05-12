@@ -3,10 +3,24 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { usePeople } from "@/hooks/useConfigRepo";
 import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues } from "@/hooks/useGitHub";
+import { useFeedActors, useFeedEvents } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, GitPullRequest, GitMerge, CircleCheck, ExternalLink, Circle } from "lucide-react";
+import {
+  ArrowLeft,
+  Circle,
+  CircleCheck,
+  ExternalLink,
+  GitCommit,
+  GitMerge,
+  GitPullRequest,
+  MessageSquare,
+  Rocket,
+  Tag,
+  XCircle,
+} from "lucide-react";
+import type { FeedEvent } from "@/lib/noxlink-api";
 import type { Person } from "@/lib/types";
 
 function formatRelative(iso: string): string {
@@ -66,36 +80,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     const login = selectedLogin ?? engineers[0]?.login;
     return engineers.find((e) => e.login === login) ?? engineers[0];
   }, [selectedLogin, engineers]);
-
-  // Build chronological activity feed for the selected engineer (last 30 days).
-  const feed = useMemo<FeedItem[]>(() => {
-    if (!selected) return [];
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 30);
-    const cutoff = cutoffDate.getTime();
-    const items: FeedItem[] = [];
-
-    for (const pr of allPRs ?? []) {
-      const p = pr as any;
-      if (p.user?.login !== selected.login) continue;
-      if (p.merged_at && new Date(p.merged_at).getTime() >= cutoff) {
-        items.push({ kind: "pr_merged", at: p.merged_at, repo: p.repo, number: p.number, title: p.title, html_url: p.html_url });
-      } else if (!p.merged_at && p.created_at && new Date(p.created_at).getTime() >= cutoff) {
-        items.push({ kind: "pr_opened", at: p.created_at, repo: p.repo, number: p.number, title: p.title, html_url: p.html_url });
-      }
-    }
-
-    for (const issue of closedIssues ?? []) {
-      const i = issue as any;
-      if (i.closed_by !== selected.login) continue;
-      if (i.closed_at && new Date(i.closed_at).getTime() >= cutoff) {
-        items.push({ kind: "issue_closed", at: i.closed_at, repo: i.repo, number: i.number, title: i.title, html_url: i.html_url });
-      }
-    }
-
-    items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-    return items;
-  }, [selected, allPRs, closedIssues]);
 
   // Open issues currently assigned to the selected engineer.
   const assignedIssueList = useMemo<ListPanelItem[]>(() => {
@@ -272,7 +256,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         </div>
 
         {/* Activity feed */}
-        <ActivityFeed items={feed} />
+        <ActivityFeed login={selected.login} />
       </div>
     </div>
   );
@@ -417,100 +401,249 @@ function ItemListPanel({
   );
 }
 
-// ---------- Activity Feed ----------
+// ---------- Activity Feed (server-side: events table) ----------
 
-type FeedItem =
-  | { kind: "pr_merged" | "pr_opened"; at: string; repo: string; number: number; title: string; html_url: string }
-  | { kind: "issue_closed"; at: string; repo: string; number: number; title: string; html_url: string };
+type Category = "pr" | "review" | "issue" | "push" | "other";
 
-function ActivityFeed({ items }: { items: FeedItem[] }) {
-  const [filter, setFilter] = useState<"all" | "prs" | "issues">("all");
+type ActivityItem = {
+  id: number;
+  category: Category;
+  type: string;
+  label: string;
+  repo: string | null;
+  number: number | null;
+  title: string;
+  to: string | null;
+  html_url: string | null;
+  at: string;
+};
 
-  const visible = useMemo(() => {
-    if (filter === "prs") return items.filter((i) => i.kind === "pr_merged" || i.kind === "pr_opened");
-    if (filter === "issues") return items.filter((i) => i.kind === "issue_closed");
-    return items;
-  }, [items, filter]);
+const FILTER_BUTTONS: Array<{ id: "all" | Category; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "pr", label: "PRs" },
+  { id: "review", label: "Reviews" },
+  { id: "issue", label: "Issues" },
+  { id: "push", label: "Pushes" },
+  { id: "other", label: "Other" },
+];
 
-  const counts = useMemo(() => ({
-    all: items.length,
-    prs: items.filter((i) => i.kind === "pr_merged" || i.kind === "pr_opened").length,
-    issues: items.filter((i) => i.kind === "issue_closed").length,
-  }), [items]);
+function ActivityFeed({ login }: { login: string }) {
+  const actors = useFeedActors();
+  const actor = useMemo(
+    () => (actors.data ?? []).find((a) => a.github_login === login) ?? null,
+    [actors.data, login],
+  );
+  const events = useFeedEvents(
+    { actorId: actor?.id, limit: 100 },
+    { enabled: !!actor?.id },
+  );
+
+  const items = useMemo<ActivityItem[]>(() => {
+    return (events.data ?? [])
+      .map(buildItem)
+      .filter((x): x is ActivityItem => x !== null);
+  }, [events.data]);
+
+  const [filter, setFilter] = useState<"all" | Category>("all");
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: items.length, pr: 0, review: 0, issue: 0, push: 0, other: 0 };
+    for (const it of items) c[it.category] = (c[it.category] ?? 0) + 1;
+    return c;
+  }, [items]);
+
+  const visible = useMemo(
+    () => (filter === "all" ? items : items.filter((i) => i.category === filter)),
+    [items, filter],
+  );
+
+  const isLoading = actors.isLoading || (!!actor?.id && events.isLoading);
 
   return (
     <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-1.5 w-1.5 rounded-full bg-status-production" />
           <h3 className="text-sm font-semibold text-stone-700">Live activity</h3>
-          <span className="text-xs text-stone-400">last 30 days</span>
+          <span className="text-xs text-stone-400">last {items.length} events</span>
         </div>
-        <div className="flex items-center gap-1 text-xs">
-          {(["all", "prs", "issues"] as const).map((f) => (
+        <div className="flex items-center gap-1 text-xs flex-wrap">
+          {FILTER_BUTTONS.map(({ id, label }) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={id}
+              onClick={() => setFilter(id)}
               className={cn(
-                "px-2 py-1 rounded transition-colors capitalize cursor-pointer",
-                filter === f
+                "px-2 py-1 rounded transition-colors cursor-pointer",
+                filter === id
                   ? "bg-accent/10 text-accent"
-                  : "text-stone-500  hover:bg-stone-100  ",
+                  : "text-stone-500 hover:bg-stone-100",
               )}
             >
-              {f === "prs" ? "PRs" : f} ({counts[f]})
+              {label} ({counts[id] ?? 0})
             </button>
           ))}
         </div>
       </div>
 
-      {visible.length === 0 ? (
-        <div className="p-6 text-center text-sm text-stone-400">No activity in the last 30 days.</div>
+      {isLoading ? (
+        <div className="p-6 text-center">
+          <Spinner className="w-5 h-5 text-accent inline-block" />
+        </div>
+      ) : !actor ? (
+        <div className="p-6 text-center text-sm text-stone-400">
+          No tracked activity for @{login} yet — they'll appear here once they show up in a webhook event.
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="p-6 text-center text-sm text-stone-400">No activity recorded.</div>
       ) : (
         <ol className="divide-y divide-stone-100 max-h-[420px] overflow-y-auto">
-          {visible.map((item) => {
-            const to = item.kind === "issue_closed"
-              ? `/issues/${item.repo}/${item.number}`
-              : `/prs/${item.repo}/${item.number}`;
-            return (
-              <li key={`${item.kind}:${item.repo}#${item.number}:${item.at}`}>
-                <Link
-                  to={to}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group"
-                >
-                  <FeedIcon kind={item.kind} />
-                  <span className="text-xs text-stone-400 shrink-0 font-mono">{item.repo}#{item.number}</span>
-                  <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
-                  <span className="text-xs text-stone-400 shrink-0">{labelFor(item.kind)}</span>
-                  <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
-                  <a
-                    href={item.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
-                    title="Open on GitHub"
-                  >
-                    <ExternalLink size={12} />
-                  </a>
-                </Link>
-              </li>
-            );
-          })}
+          {visible.map((item) => (
+            <ActivityRow key={item.id} item={item} />
+          ))}
         </ol>
       )}
     </div>
   );
 }
 
-function FeedIcon({ kind }: { kind: FeedItem["kind"] }) {
-  if (kind === "pr_merged") return <GitMerge size={14} className="text-stone-400 shrink-0" />;
-  if (kind === "pr_opened") return <GitPullRequest size={14} className="text-stone-400 shrink-0" />;
-  return <CircleCheck size={14} className="text-stone-400 shrink-0" />;
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const content = (
+    <>
+      <ActivityIcon type={item.type} />
+      <span className="text-xs text-stone-400 shrink-0 font-mono">
+        {item.repo ?? "—"}{item.number != null ? `#${item.number}` : ""}
+      </span>
+      <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
+      <span className="text-xs text-stone-400 shrink-0">{item.label}</span>
+      <span className="text-xs text-stone-400 shrink-0 w-16 text-right">{formatRelative(item.at)}</span>
+      {item.html_url ? (
+        <a
+          href={item.html_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
+          title="Open on GitHub"
+        >
+          <ExternalLink size={12} />
+        </a>
+      ) : (
+        <span className="w-3 shrink-0" />
+      )}
+    </>
+  );
+
+  const className = "flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 group";
+  return (
+    <li>
+      {item.to ? (
+        <Link to={item.to} className={className}>{content}</Link>
+      ) : (
+        <div className={className}>{content}</div>
+      )}
+    </li>
+  );
 }
 
-function labelFor(kind: FeedItem["kind"]) {
-  if (kind === "pr_merged") return "merged PR";
-  if (kind === "pr_opened") return "opened PR";
-  return "closed issue";
+function ActivityIcon({ type }: { type: string }) {
+  const cls = "shrink-0";
+  if (type === "github:pr:merged") return <GitMerge size={14} className={cn(cls, "text-purple-500")} />;
+  if (type === "github:pr:review:approved") return <CircleCheck size={14} className={cn(cls, "text-green-600")} />;
+  if (type === "github:pr:review:changes_requested") return <XCircle size={14} className={cn(cls, "text-red-500")} />;
+  if (type.startsWith("github:pr:review:")) return <MessageSquare size={14} className={cn(cls, "text-stone-400")} />;
+  if (type.startsWith("github:pr:")) return <GitPullRequest size={14} className={cn(cls, "text-stone-400")} />;
+  if (type === "github:issue:closed") return <CircleCheck size={14} className={cn(cls, "text-stone-400")} />;
+  if (type.startsWith("github:issue:")) return <Circle size={14} className={cn(cls, "text-stone-400")} />;
+  if (type === "github:push") return <GitCommit size={14} className={cn(cls, "text-stone-400")} />;
+  if (type === "github:release:published") return <Rocket size={14} className={cn(cls, "text-stone-400")} />;
+  return <Tag size={14} className={cn(cls, "text-stone-400")} />;
+}
+
+// Map an event row to a display item. Returns null for types we don't surface.
+function buildItem(e: FeedEvent): ActivityItem | null {
+  const label = labelForType(e.type);
+  if (!label) return null;
+
+  const category = categoryForType(e.type);
+  const payload = parsePayload(e.payload_json);
+  const number = extractNumber(e, payload);
+  const title = extractTitle(e, payload);
+  const repo = e.repo;
+  const org = e.org;
+
+  let to: string | null = null;
+  let html_url: string | null = null;
+
+  if (repo && number != null) {
+    if (category === "issue") {
+      to = `/issues/${repo}/${number}`;
+      if (org) html_url = `https://github.com/${org}/${repo}/issues/${number}`;
+    } else if (category === "pr" || category === "review") {
+      to = `/prs/${repo}/${number}`;
+      if (org) html_url = `https://github.com/${org}/${repo}/pull/${number}`;
+    }
+  }
+
+  if (e.type === "github:push" && org && repo && payload?.after) {
+    html_url = `https://github.com/${org}/${repo}/commit/${payload.after}`;
+  }
+
+  return {
+    id: e.id,
+    category,
+    type: e.type,
+    label,
+    repo,
+    number,
+    title,
+    to,
+    html_url,
+    at: e.created_at,
+  };
+}
+
+function categoryForType(type: string): Category {
+  if (type.startsWith("github:pr:review:")) return "review";
+  if (type.startsWith("github:pr:")) return "pr";
+  if (type.startsWith("github:issue:")) return "issue";
+  if (type === "github:push") return "push";
+  return "other";
+}
+
+function labelForType(type: string): string | null {
+  switch (type) {
+    case "github:pr:opened": return "opened PR";
+    case "github:pr:merged": return "merged PR";
+    case "github:pr:closed": return "closed PR";
+    case "github:pr:reopened": return "reopened PR";
+    case "github:pr:review:approved": return "approved";
+    case "github:pr:review:changes_requested": return "requested changes";
+    case "github:pr:review:commented": return "reviewed";
+    case "github:issue:opened": return "opened issue";
+    case "github:issue:closed": return "closed issue";
+    case "github:push": return "pushed";
+    case "github:release:published": return "released";
+    default: return null;
+  }
+}
+
+function parsePayload(raw: string | null): any {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function extractNumber(e: FeedEvent, payload: any): number | null {
+  const fromPayload = payload?.pr?.number ?? payload?.issue?.number;
+  if (typeof fromPayload === "number") return fromPayload;
+  const m = e.summary?.match(/#(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function extractTitle(e: FeedEvent, payload: any): string {
+  const fromPayload = payload?.pr?.title ?? payload?.issue?.title;
+  if (fromPayload) return fromPayload;
+  if (!e.summary) return "—";
+  // Strip leading "PR #N: " / "Issue #N: " / "Review (state) on PR #N: " prefixes.
+  const stripped = e.summary.replace(/^[^:]+:\s*/, "");
+  return stripped || e.summary;
 }

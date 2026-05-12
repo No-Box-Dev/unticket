@@ -124,7 +124,7 @@ function slimPayload(ghEvent, payload) {
       pr: {
         number: pr.number,
         title: pr.title,
-        body: pr.body?.slice(0, 1000),
+        body: pr.body?.slice(0, 16000),
         state: pr.state,
         merged: pr.merged,
         author: pr.user?.login,
@@ -140,7 +140,7 @@ function slimPayload(ghEvent, payload) {
       action: payload.action,
       review: {
         state: payload.review.state,
-        body: payload.review.body?.slice(0, 1000),
+        body: payload.review.body?.slice(0, 16000),
         author: payload.review.user?.login,
         submitted_at: payload.review.submitted_at,
       },
@@ -269,7 +269,7 @@ export async function recordMergedPr(env, args) {
       pr: {
         number: pr.number,
         title: pr.title,
-        body: pr.body?.slice(0, 1000) ?? null,
+        body: pr.body?.slice(0, 16000) ?? null,
         state: pr.state ?? "closed",
         merged: true,
         author: pr.user.login,
