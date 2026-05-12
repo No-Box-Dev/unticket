@@ -60,7 +60,13 @@ async function discoverInstallationViaApp(env, ownerId) {
   ).bind(ownerId).first();
   if (existing) return;
 
-  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) return;
+  // Webhook + install paths throw on missing App credentials. This path used
+  // to silently no-op, which hid a real misconfiguration: users with no
+  // installations row saw `{projects: []}` instead of an error. Make it loud
+  // so the missing env vars get spotted (matches signAppJwt's behavior).
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+    throw new Error("GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are required for installation discovery");
+  }
 
   let jwt;
   try {
@@ -150,7 +156,7 @@ async function fetchInstallationRepos(env, installationId) {
 
 async function syncProjectsFromInstallations(db, ownerId) {
   const insts = await db.prepare(
-    "SELECT repos_json FROM installations WHERE owner_id = ?"
+    "SELECT installation_id, repos_json FROM installations WHERE owner_id = ?"
   ).bind(ownerId).all();
 
   const upserts = [];
@@ -159,10 +165,21 @@ async function syncProjectsFromInstallations(db, ownerId) {
     let repos;
     try {
       repos = JSON.parse(inst.repos_json);
-    } catch {
+    } catch (err) {
+      // Surface corruption — silently skipping made installations look like
+      // they had no repos and stranded projects in the dashboard.
+      console.error(
+        `[unticket projects] Corrupt repos_json for installation ${inst.installation_id} owner=${ownerId}:`,
+        err?.message ?? err,
+      );
       continue;
     }
-    if (!Array.isArray(repos)) continue;
+    if (!Array.isArray(repos)) {
+      console.error(
+        `[unticket projects] repos_json is not an array for installation ${inst.installation_id} owner=${ownerId}`,
+      );
+      continue;
+    }
 
     for (const fullName of repos) {
       if (typeof fullName !== "string" || !fullName.includes("/")) continue;

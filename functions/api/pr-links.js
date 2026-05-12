@@ -48,41 +48,40 @@ export async function onRequestPost(context) {
     return errorResponse("pr_repo must be a valid repo name", 400);
   }
 
-  // 1. Upsert D1 cache first (atomic, no race condition)
-  await context.env.DB
-    .prepare(
+  // GitHub-first, D1-second (mirrors the DELETE flow below). The old
+  // ordering wrote D1 then ran the GitHub write inside waitUntil — a silent
+  // GitHub failure left D1 with a "manual" link that didn't exist in the
+  // feature issue body, and the manual-source row never gets reconciled.
+  const issue = await readFeatureIssue(token, orgLogin, feature_number);
+  const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
+
+  const linkedPRs = metadata.linkedPRs ?? [];
+  const exists = linkedPRs.some(
+    (l) => l.repo === pr_repo && l.number === pr_number
+  );
+  let newBody = null;
+  if (!exists) {
+    linkedPRs.push({ repo: pr_repo, number: pr_number });
+    metadata.linkedPRs = linkedPRs;
+    newBody = serializeFeatureMetadata(content, metadata);
+    await updateFeatureBody(token, orgLogin, feature_number, newBody);
+  }
+
+  const ops = [
+    context.env.DB.prepare(
       `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
        VALUES (?, ?, ?, ?, 'manual')
-       ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-    )
-    .bind(orgId, feature_number, pr_repo, pr_number)
-    .run();
-
-  // 2. Update GitHub issue metadata in the background (read-modify-write)
-  // This avoids blocking the response and reduces race window
-  context.waitUntil((async () => {
-    try {
-      const issue = await readFeatureIssue(token, orgLogin, feature_number);
-      const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
-
-      const linkedPRs = metadata.linkedPRs ?? [];
-      const exists = linkedPRs.some(
-        (l) => l.repo === pr_repo && l.number === pr_number
-      );
-      if (!exists) {
-        linkedPRs.push({ repo: pr_repo, number: pr_number });
-        metadata.linkedPRs = linkedPRs;
-        const newBody = serializeFeatureMetadata(content, metadata);
-        await updateFeatureBody(token, orgLogin, feature_number, newBody);
-        await context.env.DB
-          .prepare("UPDATE features SET body = ? WHERE org_id = ? AND number = ?")
-          .bind(newBody, orgId, feature_number)
-          .run();
-      }
-    } catch (e) {
-      console.error(`[unticket] Failed to update GitHub metadata for feature #${feature_number}:`, e);
-    }
-  })());
+       ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`,
+    ).bind(orgId, feature_number, pr_repo, pr_number),
+  ];
+  if (newBody !== null) {
+    ops.push(
+      context.env.DB.prepare(
+        "UPDATE features SET body = ? WHERE org_id = ? AND number = ?",
+      ).bind(newBody, orgId, feature_number),
+    );
+  }
+  await context.env.DB.batch(ops);
 
   return jsonResponse({ ok: true });
 }
