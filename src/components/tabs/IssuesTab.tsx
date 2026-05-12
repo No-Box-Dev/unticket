@@ -178,8 +178,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   // Compute max for repo bar chart
   const byRepo = stats?.byRepo;
   const repoMax = useMemo(() => {
-    if (!byRepo?.length) return 1;
-    return Math.max(...byRepo.map((r) => r.count), 1);
+    if (!byRepo?.length) return 50;
+    return Math.max(...byRepo.map((r) => r.count), 50);
   }, [byRepo]);
 
   return (
