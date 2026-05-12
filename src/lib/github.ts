@@ -438,6 +438,15 @@ export async function fetchOrgMembers() {
   }));
 }
 
+export interface TeamsResponse {
+  teams: { slug: string; name: string }[];
+  memberships: Record<string, string[]>;
+}
+
+export async function fetchTeams(): Promise<TeamsResponse> {
+  return apiGet<TeamsResponse>("/api/teams");
+}
+
 // ---------- Paginated issues ----------
 
 export interface PaginatedResponse<T> {
