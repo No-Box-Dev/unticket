@@ -51,9 +51,6 @@ export async function narrateEvent(env, eventId) {
   let model;
   if (text) {
     const trimmed = text.trim();
-    // SKIP is a deliberate signal from the LLM that this event isn't worth surfacing.
-    // Honor it instead of falling back, so noise the model wanted filtered stays filtered.
-    if (trimmed === "SKIP" || trimmed.startsWith("SKIP\n") || trimmed.startsWith("SKIP ")) return;
     summary = trimmed.length > MAX_OUTPUT_LENGTH
       ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
       : trimmed;
