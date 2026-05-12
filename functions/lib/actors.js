@@ -36,7 +36,7 @@ export async function resolveActorFromGithub(db, ownerId, author) {
                WHEN name = ? THEN COALESCE(?, name)
                ELSE name
              END,
-             updated_at = CURRENT_TIMESTAMP
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
        WHERE id = ? AND owner_id = ?`
     ).bind(
       author.avatar_url ?? null,
@@ -55,7 +55,7 @@ export async function resolveActorFromGithub(db, ownerId, author) {
   // same deterministic id, so the second insert is a no-op.
   await db.prepare(
     `INSERT INTO actors (id, github_user_id, name, avatar_url, tone, kind, owner_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(id) DO NOTHING`
   ).bind(
     newId,

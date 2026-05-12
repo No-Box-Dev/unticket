@@ -414,19 +414,10 @@ export async function updateIssueState(repo: string, issueNumber: number, state:
   });
 }
 
-/**
- * Extract a feature number from a branch name.
- * Matches patterns like: feat/42-description, feature/42, fix/42-bug, 42-some-branch
- */
-/** NOTE: Duplicated in functions/lib/feature-metadata.js — keep both in sync. */
-export function parseFeatureFromBranch(ref: string): number | null {
-  const match = ref.match(/^(?:feat|feature|fix|chore|refactor)\/(\d+)(?:-|$)/);
-  if (match) return Number(match[1]);
-  // Also match plain "42-description" branches
-  const plain = ref.match(/^(\d+)-/);
-  if (plain) return Number(plain[1]);
-  return null;
-}
+// Re-exported from the server-side parser so the regex lives in one place
+// (functions/lib/branch-parser.js). Vite happily imports the .js across the
+// runtime boundary; the function is signature-compatible.
+export { parseFeatureFromBranch } from "../../functions/lib/branch-parser";
 
 export async function fetchOrgMembers() {
   const members = await apiGet<ApiMember[]>("/api/members");

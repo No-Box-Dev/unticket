@@ -208,7 +208,7 @@ async function backfillOnePr(env, args, pr) {
       pr: {
         number: pr.number,
         title: pr.title,
-        body: pr.body?.slice(0, 1000) ?? null,
+        body: pr.body?.slice(0, 16000) ?? null,
         state: pr.state,
         merged: !!pr.merged_at,
         author: pr.user.login,

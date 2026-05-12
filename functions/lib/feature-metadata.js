@@ -75,19 +75,7 @@ export async function updateFeatureBody(token, orgLogin, number, body) {
   return res.json();
 }
 
-/**
- * Extract a feature number from a branch name.
- * Matches: feat/42-description, feature/42, fix/42-bug, chore/42, refactor/42, 42-some-branch
- * NOTE: Duplicated from src/lib/github.ts — keep both in sync when changing branch patterns.
- */
-export function parseFeatureFromBranch(ref) {
-  if (!ref) return null;
-  const match = ref.match(/^(?:feat|feature|fix|chore|refactor)\/(\d+)(?:-|$)/);
-  if (match) return Number(match[1]);
-  const plain = ref.match(/^(\d+)-/);
-  if (plain) return Number(plain[1]);
-  return null;
-}
+export { parseFeatureFromBranch } from "./branch-parser";
 
 /**
  * Extract feature numbers from a PR body/description.

@@ -177,35 +177,6 @@ export async function ensureFeatureLabels(org: string): Promise<void> {
     }
   }
 
-  // One-time backfill: any open issue with the legacy "feature" label but
-  // missing the new "unticket" co-label needs the marker added so it keeps
-  // appearing on the board after the convention switch.
-  if (!existingNames.has(UNTICKET_LABEL)) {
-    const legacy = await ok.paginate(ok.rest.issues.listForRepo, {
-      owner: org,
-      repo,
-      labels: FEATURE_LABEL,
-      state: "open",
-      per_page: 100,
-    });
-    for (const issue of legacy) {
-      if (issue.pull_request) continue;
-      const names = (issue.labels ?? []).map((l: any) => (typeof l === "string" ? l : l.name));
-      if (!names.includes(UNTICKET_LABEL)) {
-        try {
-          await ok.rest.issues.addLabels({
-            owner: org,
-            repo,
-            issue_number: issue.number,
-            labels: [UNTICKET_LABEL],
-          });
-        } catch (err) {
-          console.warn(`[unticket] backfill add unticket label to #${issue.number} failed:`, err);
-        }
-      }
-    }
-  }
-
   labelsEnsuredByOrg.add(org);
 }
 

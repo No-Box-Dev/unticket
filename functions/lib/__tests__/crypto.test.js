@@ -17,16 +17,22 @@ describe("encryptToken", () => {
     expect(ciphertext).toMatch(/^[0-9a-f]+$/);
   });
 
-  it("returns plaintext when no key is provided", async () => {
-    const token = "ghp_testtoken123";
-    const result = await encryptToken(token, undefined);
-    expect(result).toBe(token);
+  it("throws when no key is provided", async () => {
+    await expect(encryptToken("ghp_testtoken123", undefined)).rejects.toThrow(
+      /ENCRYPTION_KEY is required/,
+    );
   });
 
-  it("returns plaintext when key is empty string", async () => {
-    const token = "ghp_testtoken123";
-    const result = await encryptToken(token, "");
-    expect(result).toBe(token);
+  it("throws when key is empty string", async () => {
+    await expect(encryptToken("ghp_testtoken123", "")).rejects.toThrow(
+      /ENCRYPTION_KEY is required/,
+    );
+  });
+
+  it("throws when key is not 64 hex chars", async () => {
+    await expect(encryptToken("ghp_testtoken123", "not-a-hex-key")).rejects.toThrow(
+      /64-character hex string/,
+    );
   });
 
   it("produces different ciphertexts for the same input (random IV)", async () => {
@@ -59,21 +65,25 @@ describe("decryptToken", () => {
     expect(decrypted).toBe(original);
   });
 
-  it("handles legacy unencrypted tokens (no colon = returns as-is)", async () => {
-    const legacyToken = "ghp_plaintoken_no_encryption";
-    const result = await decryptToken(legacyToken, TEST_KEY);
-    expect(result).toBe(legacyToken);
+  it("throws on value without iv:ciphertext separator", async () => {
+    await expect(
+      decryptToken("ghp_plaintoken_no_encryption", TEST_KEY),
+    ).rejects.toThrow(/iv:ciphertext/);
   });
 
-  it("returns value as-is when no key is provided", async () => {
-    const encrypted = "aabbccdd11223344aabbccdd:ff00ff00ff00";
-    const result = await decryptToken(encrypted, undefined);
-    expect(result).toBe(encrypted);
+  it("throws on malformed iv:ciphertext value", async () => {
+    await expect(decryptToken("notHex:alsoNotHex", TEST_KEY)).rejects.toThrow();
   });
 
-  it("returns value as-is when key is empty string", async () => {
-    const encrypted = "aabbccdd11223344aabbccdd:ff00ff00ff00";
-    const result = await decryptToken(encrypted, "");
-    expect(result).toBe(encrypted);
+  it("throws when no key is provided", async () => {
+    await expect(
+      decryptToken("aabbccdd11223344aabbccdd:ff00ff00ff00", undefined),
+    ).rejects.toThrow(/ENCRYPTION_KEY is required/);
+  });
+
+  it("throws when key is empty string", async () => {
+    await expect(
+      decryptToken("aabbccdd11223344aabbccdd:ff00ff00ff00", ""),
+    ).rejects.toThrow(/ENCRYPTION_KEY is required/);
   });
 });

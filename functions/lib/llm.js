@@ -33,11 +33,20 @@ export async function completeNarrative(apiKey, system, user) {
       signal: controller.signal,
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[narrator] Zhipu returned ${res.status}`);
+      return null;
+    }
     const body = await res.json();
     const text = (body.content ?? []).find((b) => b?.type === "text")?.text;
     return sanitize(text);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (err instanceof Error && err.name === "AbortError") {
+      console.warn(`[narrator] Zhipu request aborted after ${TIMEOUT_MS}ms`);
+    } else {
+      console.warn(`[narrator] Zhipu request failed: ${msg}`);
+    }
     return null;
   } finally {
     clearTimeout(timer);

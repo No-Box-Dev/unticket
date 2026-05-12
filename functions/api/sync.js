@@ -2,10 +2,33 @@ import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { syncInit, syncRepo, syncFeatures } from "../lib/github-sync";
 import { filterInactive } from "../lib/inactive-repos";
 
-// In-memory rate limit for ?force=true (one full re-sync per org per 5 min)
-// Force re-syncs hit the GitHub API hard, so deny rapid re-triggers.
+// Rate limit for ?force=true (one full re-sync per org per 5 min). Persisted
+// in sync_state so the cooldown holds across Worker isolates — a Map is
+// per-isolate and would let parallel cold-starts bypass it.
 const FORCE_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
-const lastForceSync = new Map();
+const FORCE_SYNC_RESOURCE = "__force_sync_dedupe";
+
+async function getLastForceSync(db, orgId) {
+  const row = await db
+    .prepare("SELECT last_synced FROM sync_state WHERE org_id = ? AND resource = ?")
+    .bind(orgId, FORCE_SYNC_RESOURCE)
+    .first();
+  if (!row?.last_synced) return 0;
+  const ms = new Date(row.last_synced).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+async function markForceSync(db, orgId) {
+  await db
+    .prepare(
+      `INSERT INTO sync_state (org_id, resource, last_synced)
+       VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+       ON CONFLICT(org_id, resource) DO UPDATE SET
+         last_synced = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
+    )
+    .bind(orgId, FORCE_SYNC_RESOURCE)
+    .run();
+}
 
 // POST /api/sync — cursor-based sync (one repo per call)
 // No cursor → run syncInit, return first repo as cursor
@@ -32,7 +55,7 @@ export async function onRequestPost(context) {
   // Rate-limit ?force=true on initial call (no cursor) only.
   // Subsequent cursor calls in the same re-sync chain pass through.
   if (force && !cursor) {
-    const last = lastForceSync.get(orgId);
+    const last = await getLastForceSync(context.env.DB, orgId);
     if (last && Date.now() - last < FORCE_SYNC_COOLDOWN_MS) {
       const retryAfterSec = Math.ceil((FORCE_SYNC_COOLDOWN_MS - (Date.now() - last)) / 1000);
       return new Response(
@@ -46,7 +69,7 @@ export async function onRequestPost(context) {
         },
       );
     }
-    lastForceSync.set(orgId, Date.now());
+    await markForceSync(context.env.DB, orgId);
   }
 
   try {
@@ -110,8 +133,8 @@ export async function onRequestGet(context) {
   const { orgId } = getCtx(context);
 
   const rows = await context.env.DB
-    .prepare("SELECT resource, last_synced, etag FROM sync_state WHERE org_id = ?")
-    .bind(orgId)
+    .prepare("SELECT resource, last_synced, etag FROM sync_state WHERE org_id = ? AND resource != ?")
+    .bind(orgId, FORCE_SYNC_RESOURCE)
     .all();
 
   const syncMap = {};
@@ -119,10 +142,10 @@ export async function onRequestGet(context) {
     syncMap[row.resource] = { lastSynced: row.last_synced, etag: row.etag };
   }
 
-  // Check staleness: use MIN(last_synced) across all resources
+  // Check staleness: use MIN(last_synced) across all real resources
   const oldest = await context.env.DB
-    .prepare("SELECT MIN(last_synced) as oldest FROM sync_state WHERE org_id = ?")
-    .bind(orgId)
+    .prepare("SELECT MIN(last_synced) as oldest FROM sync_state WHERE org_id = ? AND resource != ?")
+    .bind(orgId, FORCE_SYNC_RESOURCE)
     .first();
 
   const oldestTime = oldest?.oldest ? new Date(oldest.oldest).getTime() : 0;

@@ -43,6 +43,27 @@ export async function getInactiveRepoSet(db, orgId, orgLogin) {
   return exclude;
 }
 
+// Resolve the configured unticket repo name (settings.unticketRepo, default
+// "unticket"). The unticket repo holds features/todos/plans, not product work,
+// and is read separately from the product-repo sync.
+export async function getUnticketRepoName(db, orgId) {
+  const settingsRow = await db
+    .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
+    .bind(orgId)
+    .first();
+  if (settingsRow?.data) {
+    try {
+      const parsed = JSON.parse(settingsRow.data);
+      if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
+        return parsed.unticketRepo.trim();
+      }
+    } catch (e) {
+      console.warn(`[unticket] Corrupt settings JSON for org ${orgId}:`, e);
+    }
+  }
+  return "unticket";
+}
+
 export async function filterInactive(db, orgId, orgLogin, repoNames) {
   if (!Array.isArray(repoNames) || repoNames.length === 0) return repoNames ?? [];
   const exclude = await getInactiveRepoSet(db, orgId, orgLogin);

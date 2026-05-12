@@ -172,7 +172,7 @@ async function syncProjectsFromInstallations(db, ownerId) {
       upserts.push(
         db.prepare(
           `INSERT OR IGNORE INTO projects (id, name, org, repo, owner_id, updated_at)
-           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+           VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
         ).bind(projectId, repo, org, repo, ownerId)
       );
     }

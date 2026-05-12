@@ -227,7 +227,7 @@ export async function onRequestGet(context) {
   return jsonResponse({ data, totalCount, page, pageSize });
   } catch (err) {
     console.error("[issues] Error:", err?.message ?? err);
-    return new Response(JSON.stringify({ error: "Internal server error", detail: err?.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

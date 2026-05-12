@@ -1,9 +1,10 @@
-// Token encryption helpers using AES-256-GCM (Web Crypto API)
+// Token encryption helpers using AES-256-GCM (Web Crypto API).
 // ENCRYPTION_KEY env var must be a 64-char hex string (256 bits).
+//
+// No plaintext fallback: writes refuse to proceed without a key, and reads
+// refuse to accept a value that doesn't look like `<iv>:<cipher>`. Migration
+// 0016 deletes any legacy plaintext rows so reads can't trip over them.
 
-/**
- * Import a hex-encoded 256-bit key as a CryptoKey for AES-GCM.
- */
 async function importKey(hexKey) {
   if (!hexKey || typeof hexKey !== "string" || !/^[0-9a-fA-F]{64}$/.test(hexKey)) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string");
@@ -17,14 +18,10 @@ async function importKey(hexKey) {
 
 /**
  * Encrypt a plaintext token with AES-256-GCM.
- * Returns "iv:ciphertext" as a hex string.
- * If no key is provided, returns the token as-is (graceful fallback).
+ * Returns "iv:ciphertext" as a hex string. Throws if `key` is missing.
  */
 export async function encryptToken(token, key) {
-  if (!key) {
-    console.warn("[unticket] ENCRYPTION_KEY not set — token stored in plaintext. Set ENCRYPTION_KEY env var for AES-256-GCM encryption.");
-    return token;
-  }
+  if (!key) throw new Error("ENCRYPTION_KEY is required");
 
   const cryptoKey = await importKey(key);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -44,20 +41,20 @@ export async function encryptToken(token, key) {
 
 /**
  * Decrypt an "iv:ciphertext" hex string back to plaintext.
- * If the value doesn't look encrypted (no colon), returns it as-is
- * (handles legacy unencrypted tokens).
- * If no key is provided, returns the value as-is (graceful fallback).
+ * Throws if `key` is missing or the value isn't in the expected format.
  */
 export async function decryptToken(encrypted, key) {
-  if (!key) return encrypted;
-  if (!encrypted.includes(":")) return encrypted;
+  if (!key) throw new Error("ENCRYPTION_KEY is required");
+  if (typeof encrypted !== "string" || !encrypted.includes(":")) {
+    throw new Error("Encrypted token must be in iv:ciphertext format");
+  }
 
   const parts = encrypted.split(":");
-  if (parts.length !== 2) return encrypted; // Not in expected format, return as-is
+  if (parts.length !== 2) throw new Error("Malformed encrypted token");
   const [ivHex, cipherHex] = parts;
   const ivMatch = ivHex.match(/.{2}/g);
   const cipherMatch = cipherHex.match(/.{2}/g);
-  if (!ivMatch || !cipherMatch) return encrypted; // Malformed, return as-is
+  if (!ivMatch || !cipherMatch) throw new Error("Malformed encrypted token");
   const iv = new Uint8Array(ivMatch.map((b) => parseInt(b, 16)));
   const cipherBytes = new Uint8Array(cipherMatch.map((b) => parseInt(b, 16)));
 
