@@ -130,15 +130,12 @@ export async function savePlanFile(
 
 // ---------- People config ----------
 
-// Canonical path is config/people.json; people.json is legacy fallback for reads only
-const PEOPLE_PATHS = ["config/people.json", "people.json"];
+const PEOPLE_PATH = "config/people.json";
 
 export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
   try {
-    for (const path of PEOPLE_PATHS) {
-      const result = await fetchFileFromUnticket(org, path);
-      if (result) return JSON.parse(result.content) as Person[];
-    }
+    const result = await fetchFileFromUnticket(org, PEOPLE_PATH);
+    if (result) return JSON.parse(result.content) as Person[];
     return [];
   } catch (error) {
     console.warn("[unticket.ai] Failed to fetch people.json:", error);
@@ -148,7 +145,7 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
-  await saveFileToUnticket(org, PEOPLE_PATHS[0], content, "Update people config");
+  await saveFileToUnticket(org, PEOPLE_PATH, content, "Update people config");
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------

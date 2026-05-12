@@ -68,7 +68,7 @@ async function healOrgInstallationLinks(db) {
     .prepare(
       `UPDATE orgs SET
          installation_id = (SELECT installation_id FROM installations WHERE account_login = orgs.github_login),
-         bootstrapped_at = COALESCE(bootstrapped_at, datetime('now'))
+         bootstrapped_at = COALESCE(bootstrapped_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
        WHERE (installation_id IS NULL OR bootstrapped_at IS NULL)
          AND EXISTS (SELECT 1 FROM installations WHERE account_login = orgs.github_login)`,
     )

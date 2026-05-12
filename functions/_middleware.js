@@ -1,9 +1,14 @@
-import { encryptToken, decryptToken } from "./lib/crypto";
+import { encryptToken } from "./lib/crypto";
 
 // Cache validated tokens for 5 min to avoid hammering GitHub /user
 const tokenCache = new Map();
 // Cache org membership checks (keyed by tokenHash:orgLogin)
 const membershipCache = new Map();
+
+// Fraction of authenticated requests that also sweep expired sessions.
+// At ~5 req/s steady state this fires every ~20s — frequent enough to keep the
+// sessions table small without paying for it on every request.
+const SESSION_CLEANUP_RATE = 0.01;
 
 /** Hash a token with SHA-256 so raw tokens are never used as Map keys. */
 async function hashToken(token) {
@@ -191,17 +196,19 @@ export async function onRequest(context) {
   const encryptedToken = await encryptToken(token, encryptionKey);
   await context.env.DB.prepare(
     `INSERT INTO sessions (org_id, github_login, encrypted_token, updated_at)
-     VALUES (?, ?, ?, datetime('now'))
+     VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(org_id, github_login) DO UPDATE SET
        encrypted_token = excluded.encrypted_token,
-       updated_at = datetime('now')`
+       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
   ).bind(orgRow.id, userLogin, encryptedToken).run();
 
-  // Probabilistic session cleanup: ~1% of requests, delete sessions older than 30 days
-  if (Math.random() < 0.01) {
+  // Probabilistic session cleanup: SESSION_CLEANUP_RATE of requests trigger a sweep
+  // of sessions older than 30 days. Keeping this here (vs a cron) means cleanup is
+  // free-rolling and self-throttling at request volume.
+  if (Math.random() < SESSION_CLEANUP_RATE) {
     context.waitUntil(
       context.env.DB.prepare(
-        "DELETE FROM sessions WHERE updated_at < datetime('now', '-30 days')"
+        "DELETE FROM sessions WHERE updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')"
       ).run().catch((err) => console.error("[unticket] Session cleanup failed:", err))
     );
   }

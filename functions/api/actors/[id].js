@@ -43,7 +43,7 @@ export async function onRequestPatch(context) {
   if (setClauses.length === 0) return errorResponse("No editable fields supplied", 400);
 
   await context.env.DB.prepare(
-    `UPDATE actors SET ${setClauses.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_id = ?`
+    `UPDATE actors SET ${setClauses.join(", ")}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND owner_id = ?`
   ).bind(...values, materialized.id, orgLogin).run();
 
   const fresh = await selectActorById(context.env.DB, orgLogin, materialized.id);

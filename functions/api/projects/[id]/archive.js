@@ -25,7 +25,7 @@ async function setArchived(context, value) {
 
   const result = await context.env.DB.prepare(
     `UPDATE projects
-        SET archived = ?, archived_at = ?, updated_at = CURRENT_TIMESTAMP
+        SET archived = ?, archived_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ? AND owner_id = ?`
   ).bind(value, archivedAt, id, orgLogin).run();
 

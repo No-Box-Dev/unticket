@@ -20,7 +20,7 @@ export async function onRequestPost(context) {
 
   // Clean up expired pending tokens first
   await context.env.DB.prepare(
-    "DELETE FROM pending_tokens WHERE created_at < datetime('now', '-5 minutes')"
+    "DELETE FROM pending_tokens WHERE created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')"
   ).run();
 
   // Look up and delete the pending token in one step

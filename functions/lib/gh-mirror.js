@@ -7,13 +7,13 @@ export async function upsertGhUser(db, user) {
   if (!user?.id || !user?.login) return;
   await db.prepare(
     `INSERT INTO gh_users (id, login, avatar_url, type, name, synced_at)
-     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(id) DO UPDATE SET
        login = excluded.login,
        avatar_url = COALESCE(excluded.avatar_url, gh_users.avatar_url),
        type = excluded.type,
        name = COALESCE(excluded.name, gh_users.name),
-       synced_at = CURRENT_TIMESTAMP`
+       synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
   ).bind(
     user.id,
     user.login,

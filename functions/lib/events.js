@@ -175,7 +175,7 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
     projectId = `proj_${org}_${repo}`.toLowerCase();
     await db.prepare(
       `INSERT OR IGNORE INTO projects (id, name, org, repo, owner_id, updated_at)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+       VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
     ).bind(projectId, repo, org, repo, ownerId).run();
   }
 

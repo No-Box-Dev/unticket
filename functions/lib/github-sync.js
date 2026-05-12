@@ -1,11 +1,15 @@
 import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
-import { filterInactive } from "./inactive-repos";
+import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
 
-// Paginated GitHub API fetcher
-const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
+// Paginated GitHub API fetcher.
+// MAX_PAGES caps any single resource sync at 5000 items (50 pages × 100/page).
+// The number is a Cloudflare Worker CPU-budget guard: at 50ms/page (cold cache,
+// GH p99) a 50-page sync stays well under the 30s Pages Functions limit. Bump
+// only if you also split the call across multiple invocations.
+const MAX_PAGES = 50;
 
 async function fetchAllPages(token, url, params = {}) {
   const all = [];
@@ -514,9 +518,10 @@ export async function removeTeamMember(db, orgId, teamGithubId, login) {
 // incremental sync can't know which D1 rows no longer exist on GitHub.
 
 export async function syncFeatures(db, token, orgId, orgLogin) {
+  const unticketRepo = await getUnticketRepoName(db, orgId);
   const issues = await fetchAllPages(
     token,
-    `https://api.github.com/repos/${orgLogin}/unticket/issues`,
+    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(unticketRepo)}/issues`,
     { state: "all", sort: "updated", direction: "desc" }
   );
 
@@ -659,10 +664,10 @@ export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
     await db
       .prepare(
         `INSERT INTO config (org_id, key, data, updated_at)
-         VALUES (?, ?, ?, datetime('now'))
+         VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
          ON CONFLICT(org_id, key) DO UPDATE SET
            data = excluded.data,
-           updated_at = datetime('now')`
+           updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
       )
       .bind(orgId, key, decoded)
       .run();
@@ -727,7 +732,7 @@ export async function bootstrapInstallation(env, orgId, orgLogin, installationId
   }
 
   await db
-    .prepare("UPDATE orgs SET bootstrapped_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE orgs SET bootstrapped_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
     .bind(orgId)
     .run();
 }
@@ -894,7 +899,7 @@ export async function removeMember(db, orgId, login) {
 // remain joinable; UI is expected to filter on archived_at IS NULL.
 export async function markRepoArchived(db, orgId, repo) {
   await db
-    .prepare("UPDATE repos SET archived_at = datetime('now') WHERE org_id = ? AND name = ?")
+    .prepare("UPDATE repos SET archived_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE org_id = ? AND name = ?")
     .bind(orgId, repo)
     .run();
 }
