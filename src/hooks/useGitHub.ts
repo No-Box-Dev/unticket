@@ -9,6 +9,7 @@ import {
   fetchAllPRs,
   fetchAllIssues,
   fetchOrgMembers,
+  fetchTeams,
   fetchSyncStatus,
   triggerSync,
   triggerFeatureSync,
@@ -127,6 +128,16 @@ export function useOrgMembers() {
   return useQuery({
     queryKey: ["orgMembers", selectedOrg],
     queryFn: fetchOrgMembers,
+    enabled: !!selectedOrg,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useGhTeamMemberships() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["ghTeams", selectedOrg],
+    queryFn: fetchTeams,
     enabled: !!selectedOrg,
     staleTime: 10 * 60 * 1000,
   });
