@@ -34,20 +34,20 @@ async function fetchAllPages(token, url, params = {}) {
       if (res.status === 401) {
         throw new Error("GitHub token expired or revoked");
       }
-      if (res.status === 403 || res.status === 429) {
-        const remaining = res.headers.get("X-RateLimit-Remaining");
-        if (remaining === "0" || res.status === 429) {
-          const resetEpoch = res.headers.get("X-RateLimit-Reset");
-          const resetInfo = resetEpoch
-            ? ` Resets at ${new Date(Number(resetEpoch) * 1000).toISOString()}`
-            : "";
-          throw new Error(`GitHub API rate limit exceeded.${resetInfo}`);
-        }
-        // Other 403 (permissions etc.) — skip gracefully
-        break;
+      if (res.status === 429 || (res.status === 403 && res.headers.get("X-RateLimit-Remaining") === "0")) {
+        const resetEpoch = res.headers.get("X-RateLimit-Reset");
+        const resetInfo = resetEpoch
+          ? ` Resets at ${new Date(Number(resetEpoch) * 1000).toISOString()}`
+          : "";
+        throw new Error(`GitHub API rate limit exceeded.${resetInfo}`);
       }
-      if (res.status === 404) break;
-      throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+      // Everything else — permissions 403, 404, transient 5xx — throw rather
+      // than break-with-empty-result. Returning [] here was the cause of
+      // cascade-deletes when a single 403/404 made the reconciler think
+      // "GitHub has zero repos / members / features" and wipe D1. Callers
+      // that legitimately tolerate "missing resource" (e.g. syncTeams on a
+      // user-as-org) wrap the call in try/catch and choose to swallow.
+      throw new Error(`GitHub API error: ${res.status} ${res.statusText} (${url})`);
     }
 
     const data = await res.json();
