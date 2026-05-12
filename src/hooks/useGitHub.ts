@@ -19,7 +19,7 @@ import {
   fetchIssueStats,
   fetchPRStats,
   updateIssueAssignees,
-  fetchUserOrgRole,
+  fetchMe,
   fetchRateLimit,
   updateIssueState,
   fetchIssueDetail,
@@ -107,20 +107,20 @@ export function useAllIssues(repos: string[], since?: string) {
   });
 }
 
-export function useUserOrgRole() {
-  const { selectedOrg } = useAuth();
+export function useMe() {
+  const { selectedOrg, user } = useAuth();
   return useQuery({
-    queryKey: ["userOrgRole", selectedOrg],
-    queryFn: () => fetchUserOrgRole(selectedOrg!),
-    enabled: !!selectedOrg,
+    queryKey: ["me", selectedOrg],
+    queryFn: fetchMe,
+    enabled: !!selectedOrg && !!user,
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }
 
 export function useIsAdmin(): boolean {
-  const { data: role } = useUserOrgRole();
-  return role === "admin";
+  const { data } = useMe();
+  return Boolean(data?.isAdmin);
 }
 
 export function useOrgMembers() {
