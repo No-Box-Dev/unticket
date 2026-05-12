@@ -4,6 +4,7 @@ import { ExternalLink, GitPullRequest } from "lucide-react";
 import { usePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { cn } from "@/lib/cn";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
 
 export function PostsTab() {
@@ -129,7 +130,11 @@ interface PostCardProps {
 function PostCard({ event, actor, project }: PostCardProps) {
   const meta = parsePayload(event.payload_json);
   const actorLabel = actor?.name || actor?.github_login || event.actor_id || "unknown";
-  const projectLabel = (project?.slug || project?.name || event.project_id || "").toUpperCase();
+  const projectKey = (project?.repo || project?.slug || project?.name || "").toLowerCase();
+  const isNoxLink = projectKey === "noxlink";
+  const projectLabel = isNoxLink
+    ? "NoxLink"
+    : (project?.slug || project?.name || event.project_id || "").toUpperCase();
   const trigger = formatTrigger(typeof meta.trigger_type === "string" ? meta.trigger_type : null);
   const model = typeof meta.model === "string" ? meta.model : null;
   const triggerEventId = typeof meta.trigger_event_id === "number" ? meta.trigger_event_id : null;
@@ -147,7 +152,15 @@ function PostCard({ event, actor, project }: PostCardProps) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-stone-900 truncate">{actorLabel}</span>
             {projectLabel && (
-              <span className="text-[10px] font-mono uppercase tracking-wide bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
+              <span
+                className={cn(
+                  "text-[10px] font-mono tracking-wide bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded inline-flex items-center gap-1",
+                  isNoxLink ? "" : "uppercase",
+                )}
+              >
+                {isNoxLink && (
+                  <img src="/icons/noxlink-logo.svg" alt="" className="w-3 h-3 shrink-0" />
+                )}
                 {projectLabel}
               </span>
             )}
