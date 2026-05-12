@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth";
 import { shouldNotRetry, broadcastError } from "@/lib/api";
+import { tryAutoReload } from "@/lib/chunk-reload";
 import { App } from "@/App";
 import "./index.css";
 
@@ -19,31 +20,12 @@ window.addEventListener("error", (e) => {
 });
 
 // Auto-reload when a lazy chunk fails to load — typically after a deploy
-// replaces the chunks the open SPA was holding references to. The first
-// reload picks up the new index.html, but the new chunks may not yet have
-// propagated to every CDN edge, so we allow a few spaced retries before
-// giving up. Tracked in sessionStorage to avoid loops across navigations.
+// replaces the chunks the open SPA was holding references to. tryAutoReload
+// shares a per-session budget with the ErrorBoundary so the two paths can't
+// reload-loop past it.
 window.addEventListener("vite:preloadError", () => {
-  if (shouldAutoReload()) window.location.reload();
+  tryAutoReload();
 });
-
-const RELOAD_KEY = "preloadErrorReloads";
-const MAX_AUTO_RELOADS = 3;
-const MIN_RELOAD_INTERVAL_MS = 5000;
-
-function shouldAutoReload(): boolean {
-  let entry: { count: number; last: number };
-  try {
-    entry = JSON.parse(sessionStorage.getItem(RELOAD_KEY) ?? '{"count":0,"last":0}');
-  } catch {
-    entry = { count: 0, last: 0 };
-  }
-  const now = Date.now();
-  if (entry.count >= MAX_AUTO_RELOADS) return false;
-  if (now - entry.last < MIN_RELOAD_INTERVAL_MS) return false;
-  sessionStorage.setItem(RELOAD_KEY, JSON.stringify({ count: entry.count + 1, last: now }));
-  return true;
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { isChunkLoadError, tryAutoReload } from "@/lib/chunk-reload";
 
 interface Props {
   children: ReactNode;
@@ -8,18 +9,6 @@ interface State {
   hasError: boolean;
   error: Error | null;
   retryCount: number;
-}
-
-const CHUNK_ERROR_PATTERNS = [
-  /Failed to fetch dynamically imported module/i,
-  /Importing a module script failed/i,
-  /error loading dynamically imported module/i,
-  /ChunkLoadError/i,
-];
-
-function isChunkLoadError(error: Error | null): boolean {
-  if (!error) return false;
-  return CHUNK_ERROR_PATTERNS.some((re) => re.test(error.message));
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -32,6 +21,15 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error) {
+    // Stale-chunk error after a deploy → reload. tryAutoReload returns false
+    // only when the per-session budget is exhausted, in which case we leave
+    // the user with the fallback UI below instead of looping forever.
+    if (isChunkLoadError(error)) {
+      tryAutoReload();
+    }
+  }
+
   render() {
     if (this.state.hasError) {
       const chunkError = isChunkLoadError(this.state.error);
@@ -42,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </h2>
           <p className="text-sm text-stone-500 mb-4 max-w-md">
             {chunkError
-              ? "Reload to pick up the latest build. If the issue persists, the new assets may still be propagating — try again in a moment."
+              ? "Auto-reload didn't recover this tab. The new build's assets may still be propagating — please refresh manually in a moment."
               : this.state.error?.message || "An unexpected error occurred while rendering this section."}
           </p>
           <button
