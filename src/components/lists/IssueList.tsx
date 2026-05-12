@@ -1,14 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { usePaginatedIssues } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-
-function daysAgo(date: string): number {
-  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-}
+import { daysAgo, STALE_ISSUE_DAYS } from "@/lib/dates";
+import { SortIcon } from "@/components/ui/SortIcon";
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
@@ -112,20 +110,20 @@ export function IssueList({
                 onClick={() => toggleSort("number")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
               >
-                Issue <SortIcon column="number" activeKey={sortKey} activeDir={sortDir} />
+                Issue <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th
                 onClick={() => toggleSort("title")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
               >
-                Title <SortIcon column="title" activeKey={sortKey} activeDir={sortDir} />
+                Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               {showRepoColumn && (
                 <th
                   onClick={() => toggleSort("repo")}
                   className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                 >
-                  Repo <SortIcon column="repo" activeKey={sortKey} activeDir={sortDir} />
+                  Repo <SortIcon column="repo" activeSortKey={sortKey} activeSortDirection={sortDir} />
                 </th>
               )}
               <th className="px-3 py-2 text-xs font-medium text-stone-500">Labels</th>
@@ -134,7 +132,7 @@ export function IssueList({
                 onClick={() => toggleSort("created_at")}
                 className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
               >
-                Age <SortIcon column="created_at" activeKey={sortKey} activeDir={sortDir} />
+                Age <SortIcon column="created_at" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th className="px-3 py-2 w-8"></th>
             </tr>
@@ -249,7 +247,7 @@ export function IssueList({
                     <td
                       className={cn(
                         "px-3 py-2 text-right tabular-nums",
-                        age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400",
+                        age > STALE_ISSUE_DAYS && !closed ? "text-amber-600 font-medium" : "text-stone-400",
                       )}
                     >
                       {age}d
@@ -284,23 +282,6 @@ export function IssueList({
         </div>
       )}
     </div>
-  );
-}
-
-function SortIcon({
-  column,
-  activeKey,
-  activeDir,
-}: {
-  column: SortKey;
-  activeKey: SortKey;
-  activeDir: "asc" | "desc";
-}) {
-  if (activeKey !== column) return null;
-  return activeDir === "asc" ? (
-    <ChevronUp className="w-3 h-3 inline ml-0.5" />
-  ) : (
-    <ChevronDown className="w-3 h-3 inline ml-0.5" />
   );
 }
 

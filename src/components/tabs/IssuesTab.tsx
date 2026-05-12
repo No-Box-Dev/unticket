@@ -4,18 +4,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
 import { useSettings } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { CircleDot, CircleCheck, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { CircleDot, CircleCheck, ExternalLink, ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
+import { daysAgo, STALE_ISSUE_DAYS } from "@/lib/dates";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { SortIcon } from "@/components/ui/SortIcon";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { AssignDropdown } from "@/components/sprint/AssignDropdown";
-
-function daysAgo(date: string): number {
-  return Math.floor(
-    (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24),
-  );
-}
 
 type SortKey = "number" | "title" | "repo" | "updated_at" | "created_at";
 
@@ -24,15 +20,6 @@ const CRITICAL_LABELS = new Set(["critical"]);
 
 function isCritical(issue: any): boolean {
   return (issue.labels ?? []).some((l: any) => CRITICAL_LABELS.has(l.name?.toLowerCase()));
-}
-
-function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: "asc" | "desc" }) {
-  if (activeSortKey !== column) return null;
-  return activeSortDirection === "asc" ? (
-    <ChevronUp className="w-3 h-3 inline ml-0.5" />
-  ) : (
-    <ChevronDown className="w-3 h-3 inline ml-0.5" />
-  );
 }
 
 const labelColors: Record<string, { bg: string; text: string }> = {
@@ -309,14 +296,14 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
                     onClick={() => toggleCriticalSort("repo")}
                     className="px-3 py-2 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
                   >
-                    Repo {criticalSort.key === "repo" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
+                    Repo <SortIcon column="repo" activeSortKey={criticalSort.key} activeSortDirection={criticalSort.dir} />
                   </th>
                   <th className="px-3 py-2 text-xs font-medium text-stone-500">Assignees</th>
                   <th
                     onClick={() => toggleCriticalSort("age")}
                     className="px-3 py-2 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
                   >
-                    Age {criticalSort.key === "age" && (criticalSort.dir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)}
+                    Age <SortIcon column="age" activeSortKey={criticalSort.key} activeSortDirection={criticalSort.dir} />
                   </th>
                   <th className="px-3 py-2 w-8"></th>
                 </tr>
@@ -667,7 +654,7 @@ function IssueRow({ issue, closed, allPeople, onAssign }: { issue: any; closed: 
       <td
         className={cn(
           "px-3 py-2 text-right tabular-nums",
-          age > 30 && !closed ? "text-amber-600 font-medium" : "text-stone-400  ",
+          age > STALE_ISSUE_DAYS && !closed ? "text-amber-600 font-medium" : "text-stone-400  ",
         )}
       >
         {age}d
