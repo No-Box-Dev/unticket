@@ -24,7 +24,7 @@ export async function onRequestPost(context) {
 
   // Update on GitHub
   const ghRes = await fetch(
-    `https://api.github.com/repos/${orgLogin}/${repo}/issues/${issue_number}`,
+    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(repo)}/issues/${issue_number}`,
     {
       method: "PATCH",
       headers: {

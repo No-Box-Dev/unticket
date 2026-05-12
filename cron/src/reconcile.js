@@ -86,7 +86,7 @@ export async function reconcileOrg(env, db, orgId, orgLogin, installationId) {
     await db
       .prepare(
         `UPDATE reconcile_runs
-           SET finished_at = datetime('now'), duration_ms = ?
+           SET finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), duration_ms = ?
          WHERE id = ?`,
       )
       .bind(Date.now() - startedAtMs, lock)
@@ -95,7 +95,7 @@ export async function reconcileOrg(env, db, orgId, orgLogin, installationId) {
     await db
       .prepare(
         `UPDATE reconcile_runs
-           SET finished_at = datetime('now'), duration_ms = ?, error = ?
+           SET finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), duration_ms = ?, error = ?
          WHERE id = ?`,
       )
       .bind(Date.now() - startedAtMs, String(err?.message ?? err).slice(0, 500), lock)
@@ -113,7 +113,7 @@ async function acquireLock(db, orgId) {
       `SELECT id FROM reconcile_runs
         WHERE org_id = ?
           AND finished_at IS NULL
-          AND started_at > datetime('now', ?)
+          AND started_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)
         LIMIT 1`,
     )
     .bind(orgId, `-${LOCK_WINDOW_MIN} minutes`)
@@ -123,7 +123,7 @@ async function acquireLock(db, orgId) {
   const inserted = await db
     .prepare(
       `INSERT INTO reconcile_runs (org_id, started_at)
-       VALUES (?, datetime('now'))
+       VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
        RETURNING id`,
     )
     .bind(orgId)

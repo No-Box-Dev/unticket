@@ -105,12 +105,12 @@ export async function onRequestGet(context) {
   try {
     // Clean up expired pending tokens (older than 5 minutes)
     await context.env.DB.prepare(
-      "DELETE FROM pending_tokens WHERE created_at < datetime('now', '-5 minutes')"
+      "DELETE FROM pending_tokens WHERE created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')"
     ).run();
 
     // Store the encrypted token with the exchange code
     await context.env.DB.prepare(
-      "INSERT INTO pending_tokens (code, encrypted_token, csrf_state, created_at) VALUES (?, ?, ?, datetime('now'))"
+      "INSERT INTO pending_tokens (code, encrypted_token, csrf_state, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
     ).bind(exchangeCode, encryptedToken, stateParam).run();
   } catch (e) {
     console.error("[unticket] Failed to store exchange code in D1:", e);

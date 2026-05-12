@@ -66,10 +66,10 @@ export async function onRequestPut(context) {
   await context.env.DB
     .prepare(
       `INSERT INTO config (org_id, key, data, updated_at)
-       VALUES (?, ?, ?, datetime('now'))
+       VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
        ON CONFLICT(org_id, key) DO UPDATE SET
          data = excluded.data,
-         updated_at = datetime('now')`
+         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
     )
     .bind(orgId, key, serialized)
     .run();
