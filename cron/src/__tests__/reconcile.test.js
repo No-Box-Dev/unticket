@@ -13,6 +13,7 @@ vi.mock("../../../functions/lib/inactive-repos.js", () => ({
 vi.mock("../../../functions/lib/github-sync.js", () => ({
   syncRepos: vi.fn(),
   syncMembers: vi.fn(),
+  syncTeams: vi.fn(),
   syncFeatures: vi.fn(),
   syncPRs: vi.fn(),
   syncIssues: vi.fn(),
