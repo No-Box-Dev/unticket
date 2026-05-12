@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { usePeople } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues, useOpenIssues } from "@/hooks/useGitHub";
+import { useActiveMembers, useAllPRs, useClosedIssues, useGhTeamMemberships, useOpenIssues } from "@/hooks/useGitHub";
 import { useFeedActors, useFeedEvents } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
@@ -41,6 +41,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   const { data: allPRs } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const { data: openIssues } = useOpenIssues(repoNames);
+  const { data: ghTeams } = useGhTeamMemberships();
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
 
@@ -72,9 +73,10 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         openPRs,
         reviewing,
         assignedIssues,
+        ghTeams: ghTeams?.memberships?.[member.login] ?? [],
       };
     });
-  }, [orgMembers, people, allPRs, openIssues]);
+  }, [orgMembers, people, allPRs, openIssues, ghTeams]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
@@ -274,6 +276,7 @@ interface EngineerSummary {
   openPRs: number;
   reviewing: number;
   assignedIssues: number;
+  ghTeams: string[];
 }
 
 function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
@@ -297,6 +300,19 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
           </div>
         </div>
       </div>
+
+      {engineer.ghTeams.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {engineer.ghTeams.map((team) => (
+            <span
+              key={team}
+              className="text-[10px] font-medium bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded"
+            >
+              {team}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-4 text-xs text-stone-500">
         <CardStat label="Open PRs" value={engineer.openPRs} />
