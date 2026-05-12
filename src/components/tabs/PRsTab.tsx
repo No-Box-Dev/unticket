@@ -102,8 +102,8 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
 
   const byRepo = prStats?.byRepo;
   const repoMax = useMemo(() => {
-    if (!byRepo?.length) return 1;
-    return Math.max(...byRepo.map((r) => r.count), 1);
+    if (!byRepo?.length) return 50;
+    return Math.max(...byRepo.map((r) => r.count), 50);
   }, [byRepo]);
 
   const toggleSort = (key: SortKey) => {
