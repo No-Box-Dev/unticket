@@ -3,31 +3,18 @@ import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenPRs, useMergedPRs, usePRStats } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
+import { GitPullRequest, GitMerge, ExternalLink } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
-
-function daysAgo(date: string): number {
-  return Math.floor(
-    (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24),
-  );
-}
+import { daysAgo, STALE_PR_DAYS } from "@/lib/dates";
+import { SortIcon } from "@/components/ui/SortIcon";
 
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
 
 const card = "bg-white  border border-stone-200  rounded-xl";
-
-function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: SortDir }) {
-  if (activeSortKey !== column) return null;
-  return activeSortDirection === "asc" ? (
-    <ChevronUp className="w-3 h-3 inline ml-0.5" />
-  ) : (
-    <ChevronDown className="w-3 h-3 inline ml-0.5" />
-  );
-}
 
 interface PRsTabProps {
   repoNames: string[];
@@ -277,7 +264,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
             ) : (
               sorted.map((pr) => {
                 const age = daysAgo(pr.created_at);
-                const isStale = age > 7;
+                const isStale = age > STALE_PR_DAYS;
                 const repoName = pr.head.repo?.name ?? "";
                 const onActivate = () => navigate(`/prs/${repoName}/${pr.number}`);
                 return (

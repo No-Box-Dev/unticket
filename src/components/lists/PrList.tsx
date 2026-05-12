@@ -5,10 +5,7 @@ import { GitPullRequest, GitMerge, ExternalLink, ChevronLeft, ChevronRight } fro
 import { usePaginatedPrs } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-
-function daysAgo(date: string): number {
-  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-}
+import { daysAgo, STALE_PR_DAYS } from "@/lib/dates";
 
 export interface PrListFilter {
   state?: "open" | "closed" | "merged" | "all";
@@ -88,7 +85,7 @@ export function PrList({
             ) : (
               (data?.data ?? []).map((pr: any) => {
                 const age = daysAgo(pr.created_at);
-                const isStale = age > 7 && pr.state === "open";
+                const isStale = age > STALE_PR_DAYS && pr.state === "open";
                 const repoName = pr.repo ?? pr.head?.repo?.name ?? "";
                 const author = pr.user?.login ?? "";
                 const isMerged = !!pr.merged_at;
