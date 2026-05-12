@@ -202,6 +202,14 @@ async function narrateMissedMerges(env, db, orgId, orgLogin, repo) {
 }
 
 async function reconcileDeletedMembers(db, orgId, apiMemberLogins) {
+  // Defensive: refuse to interpret an empty API list as "all members deleted".
+  // syncMembers now throws on transient GitHub errors (it doesn't quietly
+  // return []), but a legitimate empty org is rare enough that bailing here
+  // is cheaper than risking another cascade-delete bug down the line.
+  if (!Array.isArray(apiMemberLogins) || apiMemberLogins.length === 0) {
+    console.log(`[unticket-cron] org=${orgId} skipping member-delete reconcile: empty API result`);
+    return;
+  }
   const apiSet = new Set(apiMemberLogins);
   const existing = await db
     .prepare("SELECT login FROM members WHERE org_id = ?")
@@ -215,6 +223,14 @@ async function reconcileDeletedMembers(db, orgId, apiMemberLogins) {
 }
 
 async function reconcileDeletedRepos(db, orgId, apiRepoNames) {
+  // Defensive: same reasoning as reconcileDeletedMembers. An org with zero
+  // repos is so unusual that the cost of leaking a few orphan rows is much
+  // less than the cost of mass-deleting issues + PRs + feature links from a
+  // bad upstream response.
+  if (!Array.isArray(apiRepoNames) || apiRepoNames.length === 0) {
+    console.log(`[unticket-cron] org=${orgId} skipping repo-delete reconcile: empty API result`);
+    return;
+  }
   const apiSet = new Set(apiRepoNames);
   const existing = await db
     .prepare("SELECT name FROM repos WHERE org_id = ?")

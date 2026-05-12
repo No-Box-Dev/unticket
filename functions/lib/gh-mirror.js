@@ -72,7 +72,16 @@ export async function getInstallationRepos(db, installationId) {
   try {
     const arr = JSON.parse(row.repos_json);
     return Array.isArray(arr) ? arr.filter((n) => typeof n === "string") : [];
-  } catch {
+  } catch (err) {
+    // Surfacing the corruption is important: silently returning [] used to
+    // make installations look empty in downstream callers. The webhook
+    // handler (only current caller) will rebuild repos_json from the
+    // add/remove payload on the next install_repositories event, so we
+    // can't realistically throw here without breaking install resilience.
+    console.error(
+      `[unticket gh-mirror] Corrupt repos_json for installation ${installationId}:`,
+      err?.message ?? err,
+    );
     return [];
   }
 }

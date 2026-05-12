@@ -32,10 +32,16 @@ export async function onRequestPost(context) {
     return jsonError("Invalid or expired exchange code", 401);
   }
 
-  // Decrypt the token. Any malformed value (extremely unlikely — migration
-  // 0016 deleted legacy plaintext rows and the new code writes only iv:cipher)
-  // forces the user back through OAuth rather than 500ing.
+  // Distinguish "infra is broken" (ENCRYPTION_KEY missing) from "this token
+  // is bad" (decrypt failed). The old catch-all 401 masked exactly the
+  // ENCRYPTION_KEY-missing failure that caused the May 12 outage: users
+  // saw "Invalid or expired exchange code" instead of a 5xx that would
+  // have surfaced the misconfiguration.
   const encryptionKey = context.env.ENCRYPTION_KEY;
+  if (!encryptionKey) {
+    console.error("[auth/exchange] ENCRYPTION_KEY is not configured");
+    return jsonError("Server misconfigured: ENCRYPTION_KEY missing", 500);
+  }
   let token;
   try {
     token = await decryptToken(row.encrypted_token, encryptionKey);

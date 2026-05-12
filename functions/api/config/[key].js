@@ -28,9 +28,12 @@ export async function onRequestGet(context) {
 
   try {
     return jsonResponse(JSON.parse(row.data));
-  } catch {
-    console.warn(`[unticket] Corrupt config data for key "${key}" (org ${orgId}), returning default`);
-    return jsonResponse(DEFAULTS[key]);
+  } catch (err) {
+    // Returning the default silently masked real corruption — drafts
+    // re-appeared, custom unticketRepo names reverted to "unticket".
+    // Fail loud so the user sees a clear error and fixes the row.
+    console.error(`[unticket] Corrupt config data for key "${key}" (org ${orgId}):`, err?.message ?? err);
+    return errorResponse(`Corrupt config row for "${key}" — repair before continuing`, 500);
   }
 }
 

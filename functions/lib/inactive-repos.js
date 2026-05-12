@@ -20,14 +20,19 @@ export async function getInactiveRepoSet(db, orgId, orgLogin) {
   let unticketRepo = "unticket";
   const settingsData = settingsRow.results?.[0]?.data;
   if (settingsData) {
+    let parsed;
     try {
-      const parsed = JSON.parse(settingsData);
-      for (const r of parsed.draftRepos ?? []) exclude.add(r);
-      if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
-        unticketRepo = parsed.unticketRepo.trim();
-      }
+      parsed = JSON.parse(settingsData);
     } catch (e) {
-      console.warn(`[unticket] Corrupt settings JSON for org ${orgId}:`, e);
+      // Fail loud rather than silently dropping draftRepos and reverting
+      // unticketRepo to "unticket": both would re-expose hidden repos in
+      // every issue/PR surface the moment a corrupt row landed in D1.
+      console.error(`[unticket] Corrupt settings JSON for org ${orgId}:`, e?.message ?? e);
+      throw new Error(`Corrupt settings JSON for org ${orgId} — fix the row in the config table before proceeding`);
+    }
+    for (const r of parsed.draftRepos ?? []) exclude.add(r);
+    if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
+      unticketRepo = parsed.unticketRepo.trim();
     }
   }
   exclude.add(unticketRepo);
@@ -52,13 +57,15 @@ export async function getUnticketRepoName(db, orgId) {
     .bind(orgId)
     .first();
   if (settingsRow?.data) {
+    let parsed;
     try {
-      const parsed = JSON.parse(settingsRow.data);
-      if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
-        return parsed.unticketRepo.trim();
-      }
+      parsed = JSON.parse(settingsRow.data);
     } catch (e) {
-      console.warn(`[unticket] Corrupt settings JSON for org ${orgId}:`, e);
+      console.error(`[unticket] Corrupt settings JSON for org ${orgId}:`, e?.message ?? e);
+      throw new Error(`Corrupt settings JSON for org ${orgId} — fix the row in the config table before proceeding`);
+    }
+    if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
+      return parsed.unticketRepo.trim();
     }
   }
   return "unticket";
