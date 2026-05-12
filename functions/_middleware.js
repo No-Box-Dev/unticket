@@ -202,6 +202,22 @@ export async function onRequest(context) {
        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
   ).bind(orgRow.id, userLogin, encryptedToken).run();
 
+  // Admin bootstrap: the first authenticated user from each org auto-promotes
+  // to admin. The INSERT is a single atomic statement (SELECT … WHERE NOT
+  // EXISTS) so concurrent requests can't both win — SQLite serializes the
+  // writes and the loser sees the row from the winner.
+  const [, adminCheck] = await context.env.DB.batch([
+    context.env.DB.prepare(
+      `INSERT INTO org_admins (org_id, login, granted_at)
+       SELECT ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+       WHERE NOT EXISTS (SELECT 1 FROM org_admins WHERE org_id = ?)`,
+    ).bind(orgRow.id, userLogin, orgRow.id),
+    context.env.DB.prepare(
+      "SELECT 1 AS is_admin FROM org_admins WHERE org_id = ? AND login = ?",
+    ).bind(orgRow.id, userLogin),
+  ]);
+  const isAdmin = (adminCheck.results?.length ?? 0) > 0;
+
   // Probabilistic session cleanup: SESSION_CLEANUP_RATE of requests trigger a sweep
   // of sessions older than 30 days. Keeping this here (vs a cron) means cleanup is
   // free-rolling and self-throttling at request volume.
@@ -218,6 +234,7 @@ export async function onRequest(context) {
   context.data.orgLogin = orgLogin;
   context.data.userLogin = userLogin;
   context.data.token = token;
+  context.data.isAdmin = isAdmin;
 
   return context.next();
 }
