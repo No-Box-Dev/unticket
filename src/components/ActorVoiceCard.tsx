@@ -65,9 +65,9 @@ function ActorVoiceCardInner({ actor }: { actor: FeedActor }) {
     <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-stone-900">Voice & tone</h3>
+          <h3 className="text-sm font-semibold text-stone-900">Feed voice &amp; tone</h3>
           <p className="text-xs text-stone-500 mt-0.5">
-            How this person writes. Used by the narrator across every repo.
+            Shapes how this person sounds in the <span className="font-medium text-stone-600">Feed</span> — applied to every auto-generated post across every repo. Anyone in the org can edit it.
           </p>
         </div>
         <span className="text-[10px] font-mono uppercase tracking-wide text-stone-400">
@@ -77,7 +77,7 @@ function ActorVoiceCardInner({ actor }: { actor: FeedActor }) {
       <textarea
         value={tone}
         onChange={(e) => { setTone(e.target.value); setSaved("idle"); }}
-        placeholder='How this person writes. Examples: "Terse, dry, no hype." or "Speaks in we/our; emphasizes shipping."'
+        placeholder='How this person writes in Feed posts. Examples: "Terse, dry, no hype." or "Speaks in we/our; emphasizes shipping."'
         rows={3}
         className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y"
       />

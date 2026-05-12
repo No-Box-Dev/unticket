@@ -239,6 +239,9 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
           </div>
         </div>
 
+        {/* Feed voice & tone — placed up top so it's easy to find and edit. */}
+        <ActorVoiceCard githubLogin={selected.login} />
+
         {/* Lifetime / recency stat row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <StatCard label="Lifetime PRs" value={lifetimePRs} icon={<GitPullRequest size={14} className="text-stone-400" />} />
@@ -267,9 +270,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             emptyMessage="No open issues currently assigned."
           />
         </div>
-
-        {/* Voice (narrator tone, applied across every repo) */}
-        <ActorVoiceCard githubLogin={selected.login} />
 
         {/* Activity feed */}
         <ActivityFeed items={feed} />
