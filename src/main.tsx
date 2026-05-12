@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth";
 import { shouldNotRetry, broadcastError } from "@/lib/api";
+import { tryAutoReload } from "@/lib/chunk-reload";
 import { App } from "@/App";
 import "./index.css";
 
@@ -19,13 +20,11 @@ window.addEventListener("error", (e) => {
 });
 
 // Auto-reload when a lazy chunk fails to load — typically after a deploy
-// replaces the chunks the open SPA was holding references to. One reload
-// per session: a flag in sessionStorage prevents a loop if the error is
-// not actually deploy-related.
+// replaces the chunks the open SPA was holding references to. tryAutoReload
+// shares a per-session budget with the ErrorBoundary so the two paths can't
+// reload-loop past it.
 window.addEventListener("vite:preloadError", () => {
-  if (sessionStorage.getItem("preloadErrorReloaded") === "1") return;
-  sessionStorage.setItem("preloadErrorReloaded", "1");
-  window.location.reload();
+  tryAutoReload();
 });
 
 const queryClient = new QueryClient({

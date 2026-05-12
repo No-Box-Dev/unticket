@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { isChunkLoadError, tryAutoReload } from "@/lib/chunk-reload";
 
 interface Props {
   children: ReactNode;
@@ -20,29 +21,33 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  handleRetry = () => {
-    if (this.state.retryCount >= 2) {
-      window.location.reload();
-      return;
+  componentDidCatch(error: Error) {
+    // Stale-chunk error after a deploy → reload. tryAutoReload returns false
+    // only when the per-session budget is exhausted, in which case we leave
+    // the user with the fallback UI below instead of looping forever.
+    if (isChunkLoadError(error)) {
+      tryAutoReload();
     }
-    this.setState((prev) => ({ hasError: false, error: null, retryCount: prev.retryCount + 1 }));
-  };
+  }
 
   render() {
     if (this.state.hasError) {
+      const chunkError = isChunkLoadError(this.state.error);
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <h2 className="text-lg font-semibold text-stone-800 mb-2">
-            Something went wrong
+            {chunkError ? "A new version was deployed" : "Something went wrong"}
           </h2>
           <p className="text-sm text-stone-500 mb-4 max-w-md">
-            {this.state.error?.message || "An unexpected error occurred while rendering this section."}
+            {chunkError
+              ? "Auto-reload didn't recover this tab. The new build's assets may still be propagating — please refresh manually in a moment."
+              : this.state.error?.message || "An unexpected error occurred while rendering this section."}
           </p>
           <button
             onClick={this.handleRetry}
             className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 cursor-pointer"
           >
-            Retry
+            {chunkError ? "Reload" : "Retry"}
           </button>
         </div>
       );
@@ -50,4 +55,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+
+  private handleRetry = () => {
+    if (isChunkLoadError(this.state.error) || this.state.retryCount >= 2) {
+      window.location.reload();
+      return;
+    }
+    this.setState((prev) => ({ hasError: false, error: null, retryCount: prev.retryCount + 1 }));
+  };
 }
