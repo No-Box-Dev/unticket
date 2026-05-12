@@ -6,6 +6,7 @@ import { ErrorBoundary } from "../ErrorBoundary";
 // Suppress React error boundary console.error noise in test output
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
+  sessionStorage.clear();
 });
 
 function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
@@ -65,6 +66,63 @@ describe("ErrorBoundary", () => {
 
     await user.click(screen.getByText("Retry"));
     expect(screen.getByText("Recovered")).toBeInTheDocument();
+  });
+
+  it("auto-reloads immediately when a chunk-load error is caught (no user click needed)", () => {
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, reload: reloadMock },
+      writable: true,
+      configurable: true,
+    });
+
+    function ChunkErrorChild(): React.JSX.Element {
+      throw new Error("Failed to fetch dynamically imported module: https://app.unticket.ai/assets/IssuesTab-DNuPGSj7.js");
+    }
+
+    render(
+      <ErrorBoundary>
+        <ChunkErrorChild />
+      </ErrorBoundary>,
+    );
+
+    // componentDidCatch fired tryAutoReload, which called window.location.reload
+    // — without the user clicking anything.
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops auto-reloading once the per-session budget is exhausted and shows the manual fallback", async () => {
+    const user = userEvent.setup();
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, reload: reloadMock },
+      writable: true,
+      configurable: true,
+    });
+
+    // Simulate the budget already being spent: 3 reloads in the recent past.
+    sessionStorage.setItem(
+      "preloadErrorReloads",
+      JSON.stringify({ count: 3, last: Date.now() }),
+    );
+
+    function ChunkErrorChild(): React.JSX.Element {
+      throw new Error("Failed to fetch dynamically imported module: https://app.unticket.ai/assets/PRsTab-XYZ.js");
+    }
+
+    render(
+      <ErrorBoundary>
+        <ChunkErrorChild />
+      </ErrorBoundary>,
+    );
+
+    // Auto-reload was attempted but the budget blocked it.
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(screen.getByText("A new version was deployed")).toBeInTheDocument();
+
+    // The fallback button still works as a manual reload.
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reloadMock).toHaveBeenCalledTimes(1);
   });
 
   it("calls window.location.reload after 3 retries (retryCount >= 2 on third click)", async () => {
