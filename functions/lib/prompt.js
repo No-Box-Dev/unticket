@@ -11,7 +11,7 @@ Voice rules:
 - Frame work in the project's own domain. NoxKey is about secrets and Keychain. A meditation app is about sessions and audio.
 - No markdown, no lists, no emojis, no hashtags.
 
-If the event is just noise (small bot push, branch swap with nothing of substance, failed CI step that's about to retry), output exactly: SKIP`;
+Every event you receive is worth a post. Always write one — never output "SKIP".`;
 
 export function buildActorMessage(args) {
   const lines = [`You are ${args.actorName}.`];
@@ -19,7 +19,7 @@ export function buildActorMessage(args) {
     lines.push(`Tone: ${args.actorTone.trim()}`);
   }
   lines.push(`Project: ${args.projectName}`);
-  lines.push("", "Event:", formatEventLine(args.event), "", "Write the post in your own voice. If the event isn't worth a post, output SKIP.");
+  lines.push("", "Event:", formatEventLine(args.event), "", "Write the post in your own voice.");
   return lines.join("\n");
 }
 
