@@ -2,10 +2,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import { useFeatures, usePeople, useTodos, useSprint, useAllSprintSubIssues } from "@/hooks/useConfigRepo";
+import { useFeatures, usePeople } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
-import { useSidebar } from "@/lib/sidebar";
 import type { TabId } from "@/lib/types";
 
 interface CommandPaletteProps {
@@ -13,7 +12,7 @@ interface CommandPaletteProps {
 }
 
 interface SearchResult {
-  type: "feature" | "person" | "tab" | "todo" | "task" | "role" | "action";
+  type: "feature" | "person" | "tab" | "action";
   label: string;
   detail?: string;
   action: () => void;
@@ -21,13 +20,11 @@ interface SearchResult {
 
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "engineers", label: "People", keywords: "people engineers team members" },
-  { id: "sprint", label: "Sprint", keywords: "sprint features kanban board" },
+  { id: "sprint", label: "Features", keywords: "features kanban board" },
   { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
-  { id: "todos", label: "Todos", keywords: "todos tasks personal kanban" },
   { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
-  { id: "releases", label: "Releases", keywords: "releases history snapshots past sprints" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
 ];
 
@@ -41,17 +38,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const { data: features } = useFeatures();
   const { data: people } = usePeople();
   const { data: orgMembers } = useActiveMembers();
-  const { data: todos } = useTodos();
-  const { data: sprint } = useSprint();
   const [, setSearchParams] = useSearchParams();
-  const { setViewingSprint } = useSidebar();
-
-  // Sprint sub-issues for task/role search
-  const sprintFeatureIds = useMemo(() => {
-    if (!features || !sprint) return [];
-    return features.filter((f) => f.sprint === sprint.number).map((f) => f.id);
-  }, [features, sprint]);
-  const { data: allTasks } = useAllSprintSubIssues(sprintFeatureIds);
 
   // Build people lookup (org members + configured people)
   const allPeople = useMemo(() => {
@@ -67,21 +54,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       };
     });
   }, [people, orgMembers]);
-
-  // Unique roles from tasks
-  const roles = useMemo(() => {
-    if (!allTasks) return [];
-    const roleMap = new Map<number, { number: number; name: string; featureTitle: string; assignees: Set<string>; taskCount: number; doneCount: number }>();
-    for (const t of allTasks) {
-      if (!t.roleNumber) continue;
-      const r = roleMap.get(t.roleNumber) ?? { number: t.roleNumber, name: t.roleName ?? `Role #${t.roleNumber}`, featureTitle: t.featureTitle, assignees: new Set(), taskCount: 0, doneCount: 0 };
-      for (const a of t.assignees) r.assignees.add(a);
-      r.taskCount++;
-      if (t.state === "closed") r.doneCount++;
-      roleMap.set(t.roleNumber, r);
-    }
-    return Array.from(roleMap.values());
-  }, [allTasks]);
 
   // CMD+K to open
   useEffect(() => {
@@ -128,12 +100,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         items.push({
           type: "feature",
           label: f.title,
-          detail: [
-            f.sprint ? `Sprint ${f.sprint}` : "Backlog",
-            f.owners.length > 0 ? f.owners.join(", ") : null,
-          ].filter(Boolean).join(" · "),
+          detail: f.owners.length > 0 ? f.owners.join(", ") : undefined,
           action: () => {
-            setViewingSprint(null);
             setSearchParams({ tab: "sprint", f: String(f.id) }, { replace: true });
             setOpen(false);
           },
@@ -155,61 +123,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
       }
     }
 
-    // Search roles
-    for (const r of roles) {
-      if (items.length >= 30) break;
-      const searchText = `${r.name} ${r.featureTitle} ${Array.from(r.assignees).join(" ")}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "role",
-          label: r.name,
-          detail: `${r.featureTitle} · ${r.doneCount}/${r.taskCount} tasks · ${Array.from(r.assignees).join(", ")}`,
-          action: () => {
-            setViewingSprint(null);
-            onNavigate("sprint");
-            setOpen(false);
-          },
-        });
-      }
-    }
-
-    // Search tasks
-    for (const t of allTasks ?? []) {
-      if (items.length >= 30) break;
-      const searchText = `${t.title} ${t.featureTitle} ${t.assignees.join(" ")} ${t.roleName ?? ""}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "task",
-          label: t.title,
-          detail: [
-            t.featureTitle,
-            t.roleName,
-            t.assignees.join(", "),
-            t.state,
-          ].filter(Boolean).join(" · "),
-          action: () => {
-            setViewingSprint(null);
-            onNavigate("sprint");
-            setOpen(false);
-          },
-        });
-      }
-    }
-
-    // Search todos
-    for (const t of todos ?? []) {
-      if (items.length >= 30) break;
-      const searchText = `${t.title} ${t.owner} ${t.status}`.toLowerCase();
-      if (searchText.includes(q)) {
-        items.push({
-          type: "todo",
-          label: t.title,
-          detail: [t.owner, t.status.replace("_", " ")].filter(Boolean).join(" · "),
-          action: () => { onNavigate("todos"); setOpen(false); },
-        });
-      }
-    }
-
     // Search tabs
     for (const t of TAB_ITEMS) {
       if (t.label.toLowerCase().includes(q) || t.keywords.includes(q)) {
@@ -222,7 +135,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
 
     return items.slice(0, 30);
-  }, [query, features, allPeople, roles, allTasks, todos, onNavigate, setViewingSprint, setSearchParams]);
+  }, [query, features, allPeople, onNavigate, setSearchParams]);
 
   // Keyboard navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -253,9 +166,6 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     feature: "text-accent",
     person: "text-amber-500",
     tab: "text-stone-400  ",
-    todo: "text-purple-500",
-    task: "text-blue-500",
-    role: "text-teal-500",
     action: "text-indigo-500",
   };
 
@@ -271,7 +181,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search features, people, tasks, roles, todos..."
+            placeholder="Search features, people..."
             className="flex-1 text-sm text-stone-800 placeholder:text-stone-400 outline-none bg-transparent"
           />
           <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs text-stone-400 bg-stone-100 rounded border border-stone-200 font-mono">

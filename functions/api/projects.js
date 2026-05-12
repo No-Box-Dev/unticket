@@ -1,17 +1,181 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
+import { getInstallationToken, signAppJwt } from "../lib/github-app";
+import { setInstallationRepos, upsertInstallation } from "../lib/gh-mirror";
+
+const SELECT_COLS =
+  "id, name, slug, org, repo, description, narrator_enabled, archived, archived_at, updated_at";
 
 // GET /api/projects — list projects (narrator scope) for this org.
-// Auto-registered by the webhook (proj_<org>_<repo>) on first event.
+//
+// Source of truth is installations.repos_json, maintained by GitHub App
+// install/repo webhooks. We sync into the projects table on every read so
+// the dashboard reflects the current install set independent of webhook
+// timing. If repos_json is empty (e.g. an installation that predates the
+// webhook fix), we bootstrap by pulling /installation/repositories from
+// GitHub via an installation token.
 export async function onRequestGet(context) {
-  const { orgLogin } = getCtx(context);
+  const { orgLogin, orgId } = getCtx(context);
   if (!orgLogin) return errorResponse("Missing org context", 400);
 
-  const rows = await context.env.DB.prepare(
-    `SELECT id, name, slug, org, repo, description, narrator_enabled, updated_at
-       FROM projects
-      WHERE owner_id = ?
-      ORDER BY name`
+  const db = context.env.DB;
+
+  await ensureInstallationsRow(db, orgLogin, orgId);
+  await discoverInstallationViaApp(context.env, orgLogin);
+  await bootstrapReposIfEmpty(context.env, orgLogin);
+  await syncProjectsFromInstallations(db, orgLogin);
+
+  const rows = await db.prepare(
+    `SELECT ${SELECT_COLS} FROM projects WHERE owner_id = ? ORDER BY archived, COALESCE(org, ''), name`
   ).bind(orgLogin).all();
 
   return jsonResponse({ projects: rows.results ?? [] });
+}
+
+// If `orgs.installation_id` is set but no installations row exists yet
+// (legacy installs from before the upsertInstallation flow), seed one so
+// the rest of the pipeline works.
+async function ensureInstallationsRow(db, orgLogin, orgId) {
+  const existing = await db.prepare(
+    "SELECT installation_id FROM installations WHERE owner_id = ? LIMIT 1"
+  ).bind(orgLogin).first();
+  if (existing) return;
+
+  const org = await db.prepare(
+    "SELECT installation_id FROM orgs WHERE id = ?"
+  ).bind(orgId).first();
+  if (!org?.installation_id) return;
+
+  await upsertInstallation(db, {
+    id: org.installation_id,
+    account: { login: orgLogin, type: "Organization" },
+  });
+}
+
+// Last-resort discovery: if we have no installations row AND no
+// orgs.installation_id, ask GitHub directly with an App JWT. Covers users
+// who installed the app before the install webhook handler shipped.
+async function discoverInstallationViaApp(env, ownerId) {
+  const existing = await env.DB.prepare(
+    "SELECT installation_id FROM installations WHERE owner_id = ? LIMIT 1"
+  ).bind(ownerId).first();
+  if (existing) return;
+
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) return;
+
+  let jwt;
+  try {
+    jwt = await signAppJwt(env);
+  } catch (err) {
+    console.error("[unticket projects] signAppJwt failed:", err);
+    return;
+  }
+
+  const headers = {
+    Authorization: `Bearer ${jwt}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "unticket",
+  };
+
+  // Try org first, then user installation.
+  for (const path of [
+    `/orgs/${encodeURIComponent(ownerId)}/installation`,
+    `/users/${encodeURIComponent(ownerId)}/installation`,
+  ]) {
+    const res = await fetch(`https://api.github.com${path}`, { headers });
+    if (res.status === 404) continue;
+    if (!res.ok) {
+      console.error(`[unticket projects] discover ${path} ${res.status}`);
+      return;
+    }
+    const data = await res.json();
+    if (!data?.id) return;
+    await upsertInstallation(env.DB, {
+      id: data.id,
+      account: data.account || { login: ownerId },
+    });
+    return;
+  }
+}
+
+// For each installation belonging to this owner, if repos_json is empty,
+// fetch the installation's accessible repositories from GitHub once and
+// persist. Bootstrap-only — the webhook keeps it fresh from there.
+async function bootstrapReposIfEmpty(env, ownerId) {
+  const insts = await env.DB.prepare(
+    "SELECT installation_id, repos_json FROM installations WHERE owner_id = ?"
+  ).bind(ownerId).all();
+
+  for (const inst of insts.results ?? []) {
+    if (inst.repos_json && inst.repos_json !== "[]") continue;
+    try {
+      const fullNames = await fetchInstallationRepos(env, inst.installation_id);
+      await setInstallationRepos(env.DB, inst.installation_id, fullNames);
+    } catch (err) {
+      console.error("[unticket projects] bootstrap fetch failed:", inst.installation_id, err);
+    }
+  }
+}
+
+async function fetchInstallationRepos(env, installationId) {
+  const token = await getInstallationToken(env, installationId);
+  const out = [];
+  let page = 1;
+  while (page <= 10) {
+    const res = await fetch(
+      `https://api.github.com/installation/repositories?per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "unticket",
+        },
+      }
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`installation/repositories ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    const repos = Array.isArray(data?.repositories) ? data.repositories : [];
+    for (const r of repos) {
+      if (r?.full_name) out.push(r.full_name);
+    }
+    if (repos.length < 100) break;
+    page++;
+  }
+  return out;
+}
+
+async function syncProjectsFromInstallations(db, ownerId) {
+  const insts = await db.prepare(
+    "SELECT repos_json FROM installations WHERE owner_id = ?"
+  ).bind(ownerId).all();
+
+  const upserts = [];
+  for (const inst of insts.results ?? []) {
+    if (!inst.repos_json) continue;
+    let repos;
+    try {
+      repos = JSON.parse(inst.repos_json);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(repos)) continue;
+
+    for (const fullName of repos) {
+      if (typeof fullName !== "string" || !fullName.includes("/")) continue;
+      const [org, repo] = fullName.split("/", 2);
+      if (!org || !repo) continue;
+      const projectId = `proj_${org}_${repo}`.toLowerCase();
+      upserts.push(
+        db.prepare(
+          `INSERT OR IGNORE INTO projects (id, name, org, repo, owner_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        ).bind(projectId, repo, org, repo, ownerId)
+      );
+    }
+  }
+  if (upserts.length > 0) await db.batch(upserts);
 }

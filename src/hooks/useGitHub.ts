@@ -9,21 +9,25 @@ import {
   fetchAllPRs,
   fetchAllIssues,
   fetchOrgMembers,
+  fetchTeams,
   fetchSyncStatus,
   triggerSync,
+  triggerFeatureSync,
   fetchPaginatedIssues,
+  fetchPaginatedPrs,
   fetchIssueLabels,
   fetchIssueStats,
+  fetchPRStats,
   updateIssueAssignees,
   fetchUserOrgRole,
   fetchRateLimit,
-  parseFeatureFromBranch,
-  fetchLinkedPRs,
-  linkPR,
-  unlinkPR,
   updateIssueState,
+  fetchIssueDetail,
+  fetchPrDetail,
+  fetchIssueBody,
+  fetchPrBody,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PaginatedResponse, IssueStats } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -38,11 +42,12 @@ export function useOrgs() {
   });
 }
 
-export function useRepos() {
+export function useRepos(opts?: { includeAll?: boolean }) {
   const { selectedOrg } = useAuth();
+  const includeAll = opts?.includeAll ?? false;
   return useQuery({
-    queryKey: ["repos", selectedOrg],
-    queryFn: fetchRepos,
+    queryKey: ["repos", selectedOrg, includeAll],
+    queryFn: () => fetchRepos({ includeAll }),
     enabled: !!selectedOrg,
     staleTime: 10 * 60 * 1000,
   });
@@ -128,6 +133,16 @@ export function useOrgMembers() {
   });
 }
 
+export function useGhTeamMemberships() {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["ghTeams", selectedOrg],
+    queryFn: fetchTeams,
+    enabled: !!selectedOrg,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 /** Org members filtered by excludedMembers setting — use this for display. */
 export function useActiveMembers() {
   const { data: orgMembers, isLoading } = useOrgMembers();
@@ -154,6 +169,58 @@ export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
   });
 }
 
+export function usePaginatedPrs(params: PrQueryParams, enabled = true) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prs", selectedOrg, params],
+    queryFn: () => fetchPaginatedPrs(params),
+    enabled: !!selectedOrg && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useIssueDetail(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issueDetail", selectedOrg, repo, number],
+    queryFn: () => fetchIssueDetail(repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function usePrDetail(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prDetail", selectedOrg, repo, number],
+    queryFn: () => fetchPrDetail(repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useIssueBody(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["issueBody", selectedOrg, repo, number],
+    queryFn: () => fetchIssueBody(selectedOrg!, repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
+export function usePrBody(repo: string | undefined, number: number | undefined) {
+  const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["prBody", selectedOrg, repo, number],
+    queryFn: () => fetchPrBody(selectedOrg!, repo!, number!),
+    enabled: !!selectedOrg && !!repo && !!number,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
 export function useIssueLabels() {
   const { selectedOrg } = useAuth();
   return useQuery({
@@ -163,11 +230,21 @@ export function useIssueLabels() {
   });
 }
 
-export function useIssueStats(closedSince?: string, repos?: string[]) {
+export function useIssueStats(repos?: string[]) {
   const { selectedOrg } = useAuth();
   return useQuery<IssueStats>({
-    queryKey: ["issues", selectedOrg, "stats", closedSince, repos],
-    queryFn: () => fetchIssueStats(closedSince, repos),
+    queryKey: ["issues", selectedOrg, "stats", repos],
+    queryFn: () => fetchIssueStats(repos),
+    enabled: !!selectedOrg,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function usePRStats() {
+  const { selectedOrg } = useAuth();
+  return useQuery<PRStats>({
+    queryKey: ["prs", selectedOrg, "stats"],
+    queryFn: fetchPRStats,
     enabled: !!selectedOrg,
     staleTime: 2 * 60 * 1000,
   });
@@ -228,6 +305,17 @@ export function useSyncStatus() {
   });
 }
 
+export function useTriggerFeatureSync() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: triggerFeatureSync,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
+    },
+  });
+}
+
 export function useTriggerSync() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
@@ -244,92 +332,7 @@ export function useTriggerSync() {
       qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });
-    },
-  });
-}
-
-/** Linked PRs for D1 cache — returns source info for each link. */
-export function useLinkedPRs(featureId: number) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["prLinks", selectedOrg, featureId],
-    queryFn: () => fetchLinkedPRs(featureId),
-    enabled: !!selectedOrg && featureId > 0,
-    staleTime: 3 * 60 * 1000,
-  });
-}
-
-/** PRs linked to a feature — merges branch-detected + explicit links, deduped by repo+number. */
-export function usePRsForFeature(featureId: number) {
-  const { selectedOrg } = useAuth();
-  const { data: prLinks } = useLinkedPRs(featureId);
-
-  return useQuery({
-    // Include prLinks in the key so the query re-runs when links change
-    queryKey: ["prsForFeature", selectedOrg, featureId, prLinks ?? []],
-    queryFn: async () => {
-      const all = await fetchAllPRs();
-      // Branch-detected PRs
-      const branchPRs = all.filter((pr) => parseFeatureFromBranch(pr.head.ref) === featureId);
-      // Explicitly linked PRs from D1
-      const explicitPRs = (prLinks ?? [])
-        .map((link) => all.find((pr) => pr.repo === link.pr_repo && pr.number === link.pr_number))
-        .filter(Boolean) as typeof all;
-
-      // Deduplicate by repo+number
-      const seen = new Set<string>();
-      const result: (typeof all[0] & { linkSource?: string })[] = [];
-
-      for (const pr of branchPRs) {
-        const key = `${pr.repo}:${pr.number}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          result.push({ ...pr, linkSource: "branch" });
-        }
-      }
-      for (const pr of explicitPRs) {
-        const key = `${pr.repo}:${pr.number}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          const link = prLinks?.find((l) => l.pr_repo === pr.repo && l.pr_number === pr.number);
-          result.push({ ...pr, linkSource: link?.source ?? "manual" });
-        }
-      }
-
-      return result;
-    },
-    enabled: !!selectedOrg && featureId > 0 && prLinks !== undefined,
-    staleTime: 3 * 60 * 1000,
-  });
-}
-
-/** Link a PR to a feature. */
-export function useLinkPR() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ featureId, prRepo, prNumber }: { featureId: number; prRepo: string; prNumber: number }) =>
-      linkPR(featureId, prRepo, prNumber),
-    onSuccess: (_data, { featureId }) => {
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg, featureId] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg, featureId] });
-    },
-  });
-}
-
-/** Unlink a PR from a feature. */
-export function useUnlinkPR() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ featureId, prRepo, prNumber }: { featureId: number; prRepo: string; prNumber: number }) =>
-      unlinkPR(featureId, prRepo, prNumber),
-    onSuccess: (_data, { featureId }) => {
-      qc.invalidateQueries({ queryKey: ["prLinks", selectedOrg, featureId] });
-      qc.invalidateQueries({ queryKey: ["prsForFeature", selectedOrg, featureId] });
     },
   });
 }
@@ -341,7 +344,7 @@ export function useAssignedIssues(login: string) {
     queryKey: ["assignedIssues", selectedOrg, login],
     queryFn: async () => {
       const res = await fetchPaginatedIssues({ assignee: login, state: "all", pageSize: 200 });
-      // Exclude issues from the unticket repo (those are todos/features/sprint tasks)
+      // Exclude issues from the unticket repo (those are features)
       return res.data.filter((i) => i.repo !== "unticket" && i.repo !== ".unticket");
     },
     enabled: !!selectedOrg && !!login,

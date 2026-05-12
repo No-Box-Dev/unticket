@@ -1,8 +1,25 @@
 import { jsonResponse, errorResponse } from "../lib/db";
-import { upsertIssue, upsertFeature, upsertPR, upsertMember, removeMember } from "../lib/github-sync";
+import {
+  upsertIssue,
+  upsertFeature,
+  upsertPR,
+  upsertMember,
+  removeMember,
+  upsertTeam,
+  removeTeam,
+  addTeamMember,
+  removeTeamMember,
+  bootstrapInstallation,
+  markRepoArchived,
+  removeRepo,
+  renameRepo,
+  touchRepoPushed,
+  syncRepo,
+} from "../lib/github-sync";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
-import { upsertInstallation } from "../lib/gh-mirror";
+import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
+import { getInstallationToken } from "../lib/github-app";
 import { narrateEvent } from "../lib/narrator";
 
 // Verify GitHub webhook signature (HMAC-SHA256)
@@ -68,21 +85,10 @@ export async function onRequestPost(context) {
 
   // App lifecycle events arrive without an organization payload — handle them up front.
   if (event === "installation") {
-    return await handleInstallationEvent(context.env.DB, payload, deliveryId);
+    return await handleInstallationEvent(context, payload, deliveryId);
   }
   if (event === "installation_repositories") {
-    // We don't track per-repo installation scope yet; ack so GitHub stops
-    // retrying, but still log the event for audit (owner derived from the
-    // installation account, not payload.organization, which is absent).
-    const accountLogin = payload.installation?.account?.login;
-    if (accountLogin) {
-      try {
-        await storeEvent(context.env.DB, event, deliveryId, payload, accountLogin);
-      } catch (err) {
-        console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
-      }
-    }
-    return jsonResponse({ ok: true, event, action: payload.action });
+    return await handleInstallationReposEvent(context, payload, deliveryId);
   }
 
   // Look up org
@@ -104,9 +110,21 @@ export async function onRequestPost(context) {
   const db = context.env.DB;
   const action = payload.action;
 
+  // Bump orgs.last_event_at on every webhook write — the reconcile cron
+  // uses this to flag installations that have gone silent (no events for
+  // 24h+). Cheap single UPDATE; failures are logged but never abort.
+  try {
+    await db
+      .prepare("UPDATE orgs SET last_event_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
+      .bind(orgId)
+      .run();
+  } catch (err) {
+    console.error("[unticket webhook] last_event_at bump failed:", err);
+  }
+
   try {
     // Record into the events log first (additive — failure here must not
-    // break the existing sprint-board upserts below). owner_id matches
+    // break the feature/PR/issue upserts below). owner_id matches
     // NoxLink's text convention (org github_login).
     try {
       const stored = await storeEvent(db, event, deliveryId, payload, orgLogin);
@@ -125,6 +143,23 @@ export async function onRequestPost(context) {
     if (event === "issues") {
       const repo = payload.repository?.name;
       if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
+
+      // Issues deleted or transferred away no longer exist in this repo —
+      // remove them from D1 instead of upserting (which would re-insert with
+      // their pre-delete state, leaving stale rows on the dashboard).
+      if (action === "deleted" || action === "transferred") {
+        await db
+          .prepare("DELETE FROM issues WHERE org_id = ? AND repo = ? AND number = ?")
+          .bind(orgId, repo, payload.issue.number)
+          .run();
+        if (repo === "unticket") {
+          await db
+            .prepare("DELETE FROM features WHERE org_id = ? AND number = ?")
+            .bind(orgId, payload.issue.number)
+            .run();
+        }
+        return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number, deleted: true });
+      }
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
@@ -225,7 +260,86 @@ export async function onRequestPost(context) {
       return jsonResponse({ ok: true, event, action, login: member.login });
     }
 
-    // Unhandled event — acknowledge it
+    if (event === "repository") {
+      const repo = payload.repository?.name;
+      if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
+
+      if (action === "archived") {
+        await markRepoArchived(db, orgId, repo);
+      } else if (action === "unarchived") {
+        await db.prepare("UPDATE repos SET archived_at = NULL WHERE org_id = ? AND name = ?").bind(orgId, repo).run();
+      } else if (action === "deleted" || action === "transferred") {
+        await removeRepo(db, orgId, repo);
+      } else if (action === "renamed") {
+        // GitHub fires a repository rename with `changes.repository.name.from`
+        // and the new name at `payload.repository.name`. Rename in place so
+        // issues, PRs, and feature links keep pointing at the live repo
+        // without waiting for a reconcile to repopulate.
+        const oldName = payload.changes?.repository?.name?.from;
+        if (oldName && oldName !== repo) {
+          await renameRepo(db, orgId, oldName, repo);
+        }
+      }
+      return jsonResponse({ ok: true, event, action, repo });
+    }
+
+    if (event === "push") {
+      const repo = payload.repository?.name;
+      if (!repo) return jsonResponse({ ok: true, skipped: "no repo" });
+      // Only the pushed_at update is interesting for the dashboard — the
+      // events row + narrator already handle the feed side.
+      try {
+        await touchRepoPushed(db, orgId, repo);
+      } catch (err) {
+        console.error(`[unticket webhook] touchRepoPushed ${repo} failed:`, err);
+      }
+      return jsonResponse({ ok: true, event, repo });
+    }
+
+    if (event === "team") {
+      const team = payload.team;
+      if (!team?.id) return jsonResponse({ ok: true, skipped: "no team" });
+      if (action === "deleted") {
+        await removeTeam(db, orgId, team.id);
+      } else {
+        await upsertTeam(db, orgId, team);
+      }
+      return jsonResponse({ ok: true, event, action, team: team.slug });
+    }
+
+    if (event === "membership") {
+      const team = payload.team;
+      const member = payload.member;
+      if (!team?.id || !member?.login) {
+        return jsonResponse({ ok: true, skipped: "no team/member in payload" });
+      }
+      // Make sure the team row exists before we touch the membership table —
+      // a `membership` event can land before the corresponding `team.created`.
+      await upsertTeam(db, orgId, team);
+      if (action === "removed") {
+        await removeTeamMember(db, orgId, team.id, member.login);
+      } else {
+        await addTeamMember(db, orgId, team.id, member.login);
+      }
+      return jsonResponse({ ok: true, event, action, team: team.slug, login: member.login });
+    }
+
+    if (event === "organization") {
+      const member = payload.membership?.user ?? payload.user;
+      if (action === "member_added" && member?.login) {
+        await upsertMember(db, orgId, member);
+        return jsonResponse({ ok: true, event, action, login: member.login });
+      }
+      if (action === "member_removed" && member?.login) {
+        await removeMember(db, orgId, member.login);
+        return jsonResponse({ ok: true, event, action, login: member.login });
+      }
+      return jsonResponse({ ok: true, event, action, skipped: "no membership change" });
+    }
+
+    // pull_request_review and other events without dedicated handlers fall
+    // through to here. They've already been recorded via storeEvent +
+    // narrateEvent above, so the Posts feed gets them automatically.
     return jsonResponse({ ok: true, skipped: `unhandled event: ${event}` });
   } catch (e) {
     // Don't leak internal error details to webhook senders. Log server-side only.
@@ -234,7 +348,8 @@ export async function onRequestPost(context) {
   }
 }
 
-async function handleInstallationEvent(db, payload, deliveryId) {
+async function handleInstallationEvent(context, payload, deliveryId) {
+  const db = context.env.DB;
   const action = payload.action;
   const installationId = payload.installation?.id;
   const accountLogin = payload.installation?.account?.login;
@@ -254,12 +369,33 @@ async function handleInstallationEvent(db, payload, deliveryId) {
       ).bind(installationId, accountLogin),
     ]);
     try {
-      await upsertInstallation(db, payload.installation);
+      // installation.created carries the initial repo list in payload.repositories.
+      // Other actions don't, so we pass null and let COALESCE preserve it.
+      const repos = action === "created" && Array.isArray(payload.repositories)
+        ? JSON.stringify(payload.repositories.map((r) => r.full_name).filter(Boolean))
+        : null;
+      await upsertInstallation(db, payload.installation, repos);
       await storeEvent(db, "installation", deliveryId, payload, accountLogin);
     } catch (err) {
       console.error("[unticket webhook] installations sync failed:", err);
     }
-    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
+
+    // Auto-bootstrap: backfill repos+members+features+per-repo issues/PRs.
+    // Run via waitUntil so the webhook returns within GitHub's 10s timeout
+    // even if the bootstrap takes longer for orgs with many repos.
+    // Re-bootstrap on `unsuspend` too — state may have drifted while suspended.
+    const orgRow = await db
+      .prepare("SELECT id FROM orgs WHERE github_login = ?")
+      .bind(accountLogin)
+      .first();
+    if (orgRow?.id) {
+      context.waitUntil(
+        bootstrapInstallation(context.env, orgRow.id, accountLogin, installationId).catch((err) => {
+          console.error(`[unticket bootstrap] failed for ${accountLogin}:`, err?.stack ?? err);
+        })
+      );
+    }
+    return jsonResponse({ ok: true, event: "installation", action, org: accountLogin, bootstrapping: true });
   }
 
   if (action === "deleted" || action === "suspend") {
@@ -276,4 +412,84 @@ async function handleInstallationEvent(db, payload, deliveryId) {
   }
 
   return jsonResponse({ ok: true, event: "installation", skipped: `unhandled action: ${action}` });
+}
+
+// `installation_repositories` fires when an admin grants the App access to
+// new repos (or removes some) post-install. Three responsibilities:
+//   1. Keep installations.repos_json in sync with what GitHub thinks we can
+//      see — that table is the source of truth for `/api/projects`.
+//   2. For added repos, kick off a backfill via syncRepo so issues + PRs
+//      land in D1 within seconds instead of waiting for the next reconcile.
+//   3. Log the event for the feed.
+async function handleInstallationReposEvent(context, payload, deliveryId) {
+  const db = context.env.DB;
+  const installationId = payload.installation?.id;
+  const accountLogin = payload.installation?.account?.login;
+  const action = payload.action;
+
+  if (installationId) {
+    try {
+      const current = new Set(await getInstallationRepos(db, installationId));
+      for (const r of payload.repositories_added ?? []) {
+        if (r?.full_name) current.add(r.full_name);
+      }
+      for (const r of payload.repositories_removed ?? []) {
+        if (r?.full_name) current.delete(r.full_name);
+      }
+      await setInstallationRepos(db, installationId, [...current]);
+    } catch (err) {
+      console.error("[unticket webhook] setInstallationRepos failed:", err);
+    }
+  }
+
+  if (accountLogin) {
+    try {
+      await storeEvent(db, "installation_repositories", deliveryId, payload, accountLogin);
+    } catch (err) {
+      console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
+    }
+  }
+
+  // For removed repos, drop their D1 footprint so they stop appearing in
+  // dashboards. The org-resolution lookup is the same shape used by the
+  // main handler.
+  const orgRow = accountLogin
+    ? await db.prepare("SELECT id FROM orgs WHERE github_login = ?").bind(accountLogin).first()
+    : null;
+
+  if (orgRow?.id && Array.isArray(payload.repositories_removed)) {
+    for (const r of payload.repositories_removed) {
+      const name = r?.name ?? (r?.full_name?.split("/")[1] ?? null);
+      if (!name) continue;
+      try {
+        await removeRepo(db, orgRow.id, name);
+      } catch (err) {
+        console.error(`[unticket webhook] removeRepo ${name} failed:`, err);
+      }
+    }
+  }
+
+  // Backfill added repos out-of-band — keeps the webhook fast and avoids
+  // GitHub's 10s timeout for orgs that grant access to many repos at once.
+  if (orgRow?.id && installationId && Array.isArray(payload.repositories_added) && payload.repositories_added.length > 0) {
+    const repoNames = payload.repositories_added
+      .map((r) => r?.name ?? (r?.full_name?.split("/")[1] ?? null))
+      .filter(Boolean);
+    context.waitUntil((async () => {
+      try {
+        const token = await getInstallationToken(context.env, installationId);
+        for (const repo of repoNames) {
+          try {
+            await syncRepo(db, token, orgRow.id, accountLogin, repo, true);
+          } catch (err) {
+            console.error(`[unticket webhook] backfill repo ${repo} failed:`, err?.message ?? err);
+          }
+        }
+      } catch (err) {
+        console.error(`[unticket webhook] backfill failed for ${accountLogin}:`, err?.stack ?? err);
+      }
+    })());
+  }
+
+  return jsonResponse({ ok: true, event: "installation_repositories", action });
 }

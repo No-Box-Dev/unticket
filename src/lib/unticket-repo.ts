@@ -1,14 +1,13 @@
 import { getOctokit } from "./github";
+import { getUnticketRepoName } from "./unticket-repo-name";
 import type { Person } from "./types";
-
-const REPO_NAME = "unticket";
 
 // ---------- Repo management ----------
 
 export async function ensureUnticketRepo(org: string): Promise<boolean> {
   const ok = getOctokit();
   try {
-    await ok.rest.repos.get({ owner: org, repo: REPO_NAME });
+    await ok.rest.repos.get({ owner: org, repo: getUnticketRepoName() });
     return true;
   } catch (e: unknown) {
     if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 404) {
@@ -29,33 +28,19 @@ config/
   people.json       # Team members: name, role, teams per GitHub login
 plans/
   PLAN-*.md         # Implementation plans per feature (e.g. PLAN-42.md)
-  TODO-*.md         # Implementation plans per todo (e.g. TODO-123.md)
-snapshots/
-  sprint-N.json     # Sprint snapshot saved when a sprint is closed
 CLAUDE.md           # This file
 \`\`\`
 
 ## Features (GitHub Issues in this repo)
 
-Features are tracked as issues with the \`feature\` label.
-- Labels: \`status:{plan,in_progress,demo,tested,production,future}\`
-- Sprints: GitHub Milestones named "Sprint N"
+Features are tracked as issues that carry BOTH the \`unticket\` and \`feature\` labels.
+- Default column ("To Do") = no status label
+- Other columns use \`status:staging\`, \`status:ready\`, \`status:production\`, or \`status:future\`
 - Owners: issue assignees
-- Tasks: sub-issues under feature issues
 
 \`\`\`bash
-gh issue list --repo {org}/unticket --label feature
+gh issue list --repo {org}/unticket --label unticket --label feature
 gh issue view <number> --repo {org}/unticket
-\`\`\`
-
-## Todos (GitHub Issues in this repo)
-
-Personal todos are issues with the \`todo\` label.
-- Labels: \`todo\`, \`todo-status:{backlog,in_progress,done}\`, \`todo-owner:{login}\`, \`todo-feature:{number}\`
-- Closing a todo marks it done; reopening moves it back
-
-\`\`\`bash
-gh issue list --repo {org}/unticket --label todo
 \`\`\`
 
 ## People Config
@@ -94,7 +79,7 @@ export async function createUnticketRepo(org: string): Promise<void> {
 
   await ok.rest.repos.createInOrg({
     org,
-    name: REPO_NAME,
+    name: getUnticketRepoName(),
     description: "unticket.ai plans",
     private: true,
     auto_init: true,
@@ -106,7 +91,7 @@ export async function createUnticketRepo(org: string): Promise<void> {
   // Create CLAUDE.md
   await ok.rest.repos.createOrUpdateFileContents({
     owner: org,
-    repo: REPO_NAME,
+    repo: getUnticketRepoName(),
     path: "CLAUDE.md",
     message: "Initialize CLAUDE.md",
     content: encodeBase64Utf8(CLAUDE_MD),
@@ -115,7 +100,7 @@ export async function createUnticketRepo(org: string): Promise<void> {
   // Create empty plans directory with .gitkeep
   await ok.rest.repos.createOrUpdateFileContents({
     owner: org,
-    repo: REPO_NAME,
+    repo: getUnticketRepoName(),
     path: "plans/.gitkeep",
     message: "Initialize plans directory",
     content: btoa(""),
@@ -143,27 +128,6 @@ export async function savePlanFile(
   await saveFileToUnticket(org, planFilePath(featureId), content, `Update plan for ${featureId}`);
 }
 
-// ---------- Todo plan files ----------
-
-export function todoPlanFilePath(todoId: string): string {
-  return `plans/TODO-${todoId}.md`;
-}
-
-export async function fetchTodoPlanFile(
-  org: string,
-  todoId: string,
-): Promise<{ content: string } | null> {
-  return fetchFileFromUnticket(org, todoPlanFilePath(todoId));
-}
-
-export async function saveTodoPlanFile(
-  org: string,
-  todoId: string,
-  content: string,
-): Promise<void> {
-  await saveFileToUnticket(org, todoPlanFilePath(todoId), content, `Update plan for ${todoId}`);
-}
-
 // ---------- People config ----------
 
 // Canonical path is config/people.json; people.json is legacy fallback for reads only
@@ -185,42 +149,6 @@ export async function fetchPeopleFromRepo(org: string): Promise<Person[]> {
 export async function savePeopleToRepo(org: string, people: Person[]): Promise<void> {
   const content = JSON.stringify(people, null, 2);
   await saveFileToUnticket(org, PEOPLE_PATHS[0], content, "Update people config");
-}
-
-// ---------- Sprint snapshots ----------
-
-export function snapshotFilePath(sprintNumber: number): string {
-  return `snapshots/sprint-${sprintNumber}.json`;
-}
-
-export async function saveSnapshotToRepo(
-  org: string,
-  snapshot: import("./types").SprintSnapshot,
-): Promise<void> {
-  const content = JSON.stringify(snapshot, null, 2);
-  await saveFileToUnticket(org, snapshotFilePath(snapshot.sprintNumber), content, `Snapshot Sprint ${snapshot.sprintNumber}`);
-}
-
-export async function deleteSnapshotFromRepo(
-  org: string,
-  sprintNumber: number,
-): Promise<void> {
-  const ok = getOctokit();
-  const path = snapshotFilePath(sprintNumber);
-  try {
-    const { data } = await ok.rest.repos.getContent({ owner: org, repo: REPO_NAME, path });
-    if ("sha" in data) {
-      await ok.rest.repos.deleteFile({
-        owner: org,
-        repo: REPO_NAME,
-        path,
-        message: `Remove Sprint ${sprintNumber} snapshot`,
-        sha: data.sha,
-      });
-    }
-  } catch {
-    // File doesn't exist — nothing to delete
-  }
 }
 
 // ---------- Base64 helpers (UTF-8 safe) ----------
@@ -253,7 +181,7 @@ async function saveFileToUnticket(
   try {
     const { data } = await ok.rest.repos.getContent({
       owner: org,
-      repo: REPO_NAME,
+      repo: getUnticketRepoName(),
       path,
     });
     if ("sha" in data) {
@@ -268,7 +196,7 @@ async function saveFileToUnticket(
 
   await ok.rest.repos.createOrUpdateFileContents({
     owner: org,
-    repo: REPO_NAME,
+    repo: getUnticketRepoName(),
     path,
     message,
     content: encodeBase64Utf8(content),
@@ -284,7 +212,7 @@ async function fetchFileFromUnticket(
   try {
     const { data } = await ok.rest.repos.getContent({
       owner: org,
-      repo: REPO_NAME,
+      repo: getUnticketRepoName(),
       path,
     });
     if ("content" in data && data.type === "file") {

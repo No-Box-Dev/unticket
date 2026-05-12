@@ -64,7 +64,7 @@ describe("useRepos", () => {
       logout: vi.fn(),
       setSelectedOrg: vi.fn(),
     });
-    mockFetchRepos.mockResolvedValue([{ id: 0, name: "r", full_name: "r", description: null, open_issues_count: 0, pushed_at: null, language: null, visibility: "private" }]);
+    mockFetchRepos.mockResolvedValue([{ id: 0, name: "r", full_name: "r", description: null, open_issues_count: 0, pushed_at: null, language: null, visibility: "private", inactive: false }]);
 
     const { wrapper } = createQueryWrapper();
     const { result } = renderHook(() => useRepos(), { wrapper });

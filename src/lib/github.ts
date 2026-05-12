@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
-import { apiGet, apiPost, apiFetch, ApiError, broadcastError } from "./api";
+import { apiGet, apiPost, ApiError, broadcastError } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -226,12 +226,17 @@ export async function fetchSyncStatus() {
   return apiGet<{ isStale: boolean; lastSync: string | null }>("/api/sync");
 }
 
+export async function triggerFeatureSync() {
+  return apiPost<{ done: true; scope: "features" }>("/api/sync?scope=features");
+}
+
 // ---------- DB-backed API types ----------
 
 interface ApiRepo {
   name: string;
   language: string | null;
   pushed_at: string | null;
+  inactive?: boolean;
 }
 
 interface ApiPR {
@@ -319,8 +324,12 @@ function transformIssue(issue: ApiIssue) {
 
 // ---------- Data fetchers (call our API) ----------
 
-export async function fetchRepos() {
-  const repos = await apiGet<ApiRepo[]>("/api/repos");
+// fetchRepos defaults to ACTIVE repos only. Pass { includeAll: true } from
+// Settings' repo-management UI to see drafts/archived/unticket-repo as well
+// (each row carries an `inactive` flag in that case).
+export async function fetchRepos(opts?: { includeAll?: boolean }) {
+  const query = opts?.includeAll ? "?include=all" : "";
+  const repos = await apiGet<ApiRepo[]>(`/api/repos${query}`);
   return repos.map((r) => ({
     id: 0,
     name: r.name,
@@ -330,6 +339,7 @@ export async function fetchRepos() {
     pushed_at: r.pushed_at,
     language: r.language,
     visibility: "private",
+    inactive: r.inactive ?? false,
   }));
 }
 
@@ -428,6 +438,15 @@ export async function fetchOrgMembers() {
   }));
 }
 
+export interface TeamsResponse {
+  teams: { slug: string; name: string }[];
+  memberships: Record<string, string[]>;
+}
+
+export async function fetchTeams(): Promise<TeamsResponse> {
+  return apiGet<TeamsResponse>("/api/teams");
+}
+
 // ---------- Paginated issues ----------
 
 export interface PaginatedResponse<T> {
@@ -445,10 +464,22 @@ export interface IssueQueryParams {
   assignee?: string;
   assigned?: "true" | "false"; // filter by has-assignee / no-assignee
   label?: string;
+  stale?: boolean;
   sort?: "updated_at" | "created_at" | "number" | "title" | "repo";
   sortDir?: "asc" | "desc";
   closedSince?: string;
   closedBefore?: string;
+}
+
+export interface PrQueryParams {
+  state?: "open" | "closed" | "merged" | "all";
+  page?: number;
+  pageSize?: number;
+  repo?: string;
+  author?: string;
+  draft?: boolean;
+  stale?: boolean;
+  since?: string;
 }
 
 export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
@@ -460,6 +491,7 @@ export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<Pa
   if (params.assignee) qs.set("assignee", params.assignee);
   if (params.assigned) qs.set("assigned", params.assigned);
   if (params.label) qs.set("label", params.label);
+  if (params.stale) qs.set("stale", "1");
   if (params.sort) qs.set("sort", params.sort);
   if (params.sortDir) qs.set("sort_dir", params.sortDir);
   if (params.closedSince) qs.set("closed_since", params.closedSince);
@@ -480,21 +512,126 @@ export async function fetchIssueLabels(): Promise<{ name: string; color: string 
   return apiGet<{ name: string; color: string }[]>("/api/issues?meta=labels");
 }
 
+export async function fetchPaginatedPrs(
+  params: PrQueryParams,
+): Promise<PaginatedResponse<ReturnType<typeof transformPR>>> {
+  const qs = new URLSearchParams();
+  if (params.state) qs.set("state", params.state);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.pageSize) qs.set("page_size", String(params.pageSize));
+  if (params.repo) qs.set("repo", params.repo);
+  if (params.author) qs.set("author", params.author);
+  if (params.draft) qs.set("draft", "1");
+  if (params.stale) qs.set("stale", "1");
+  if (params.since) qs.set("since", params.since);
+
+  const raw = await apiGet<{ data: ApiPR[]; totalCount: number; page: number; pageSize: number }>(
+    `/api/prs?${qs}`,
+  );
+  return {
+    data: raw.data.map(transformPR),
+    totalCount: raw.totalCount,
+    page: raw.page,
+    pageSize: raw.pageSize,
+  };
+}
+
+export async function fetchIssueDetail(repo: string, number: number) {
+  const raw = await apiGet<{ issue: ApiIssue }>(
+    `/api/issues/${encodeURIComponent(repo)}/${number}`,
+  );
+  return transformIssue(raw.issue);
+}
+
+export async function fetchPrDetail(repo: string, number: number) {
+  const raw = await apiGet<{ pr: ApiPR }>(
+    `/api/prs/${encodeURIComponent(repo)}/${number}`,
+  );
+  return transformPR(raw.pr);
+}
+
+export interface IssueBody {
+  body: string | null;
+  comments: number;
+  reactions_total: number;
+}
+
+export async function fetchIssueBody(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<IssueBody> {
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.issues.get({ owner, repo, issue_number: number });
+    return {
+      body: data.body ?? null,
+      comments: data.comments ?? 0,
+      reactions_total: data.reactions?.total_count ?? 0,
+    };
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
+}
+
+export interface PrBody {
+  body: string | null;
+  comments: number;
+  review_comments: number;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  merged: boolean;
+  mergeable: boolean | null;
+}
+
+export async function fetchPrBody(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<PrBody> {
+  try {
+    const ok = getOctokit();
+    const { data } = await ok.rest.pulls.get({ owner, repo, pull_number: number });
+    return {
+      body: data.body ?? null,
+      comments: data.comments ?? 0,
+      review_comments: data.review_comments ?? 0,
+      additions: data.additions ?? 0,
+      deletions: data.deletions ?? 0,
+      changed_files: data.changed_files ?? 0,
+      merged: data.merged ?? false,
+      mergeable: data.mergeable ?? null,
+    };
+  } catch (err) {
+    throw wrapOctokitError(err);
+  }
+}
+
 export interface IssueStats {
   open: number;
   unassigned: number;
   stale: number;
-  closedSprint: number;
-  byRepo: { repo: string; count: number; critical: number }[];
+  byRepo: { repo: string; count: number; critical: number; stale: number }[];
   byLabel: { name: string; color: string; count: number }[];
   closedPerDay: { day: string; count: number; critical: number }[];
 }
 
-export async function fetchIssueStats(closedSince?: string, repos?: string[]): Promise<IssueStats> {
+export async function fetchIssueStats(repos?: string[]): Promise<IssueStats> {
   const params = new URLSearchParams({ meta: "stats" });
-  if (closedSince) params.set("closed_since", closedSince);
   if (repos && repos.length > 0) params.set("repos", repos.join(","));
   return apiGet<IssueStats>(`/api/issues?${params}`);
+}
+
+export interface PRStats {
+  open: number;
+  draft: number;
+  stale: number;
+  byRepo: { repo: string; count: number; draft: number }[];
+}
+
+export async function fetchPRStats(): Promise<PRStats> {
+  return apiGet<PRStats>("/api/prs?meta=stats");
 }
 
 export async function updateIssueAssignees(
@@ -503,33 +640,5 @@ export async function updateIssueAssignees(
   assignees: string[],
 ): Promise<{ assignees: { login: string; avatar_url: string }[] }> {
   return apiPost("/api/assign", { repo, issue_number: issueNumber, assignees });
-}
-
-// ---------- PR-Feature Links ----------
-
-export interface PRLink {
-  pr_repo: string;
-  pr_number: number;
-  source: string;
-  created_at: string;
-}
-
-export async function fetchLinkedPRs(featureNumber: number): Promise<PRLink[]> {
-  return apiGet<PRLink[]>(`/api/pr-links?feature=${featureNumber}`);
-}
-
-export async function linkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
-  await apiPost("/api/pr-links", { feature_number: featureNumber, pr_repo: prRepo, pr_number: prNumber });
-}
-
-export async function unlinkPR(featureNumber: number, prRepo: string, prNumber: number): Promise<void> {
-  const res = await apiFetch(
-    `/api/pr-links?feature=${featureNumber}&pr_repo=${encodeURIComponent(prRepo)}&pr_number=${prNumber}`,
-    { method: "DELETE" },
-  );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError((body as { error?: string }).error ?? `API error: ${res.status}`, res.status);
-  }
 }
 

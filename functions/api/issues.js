@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse } from "../lib/db";
+import { getActiveRepoNames } from "../lib/inactive-repos";
 
 // Allowed sort columns (whitelist to prevent SQL injection)
 const SORT_COLUMNS = {
@@ -16,43 +17,60 @@ const ISSUE_COLUMNS = [
   "assignees_json", "labels_json", "milestone_title", "closed_by",
 ].join(", ");
 
+// Empty stats payload returned when the org has no active repos — keeps the
+// dashboard charts from blowing up while still returning a 200.
+const EMPTY_STATS = {
+  open: 0,
+  unassigned: 0,
+  stale: 0,
+  byRepo: [],
+  byLabel: [],
+  closedPerDay: [],
+};
+
 // GET /api/issues — query cached issues with pagination
 // Query params: state, assignee, repo, repos, label, since, closed_since,
 //               page, page_size, sort, sort_dir, meta
 export async function onRequestGet(context) {
   try {
-  const { orgId } = getCtx(context);
+  const { orgId, orgLogin } = getCtx(context);
   const url = new URL(context.request.url);
+
+  // Active repos only — drafts, archived (platform + GitHub), and the
+  // unticket-config repo are hidden from every issue surface in the app.
+  // Settings' repo-management UI uses /api/repos?include=all instead.
+  const activeRepos = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
+  const activeSql = ` AND repo IN (${activeRepos.map(() => "?").join(",")})`;
 
   // Meta endpoint: return distinct labels
   const meta = url.searchParams.get("meta");
   if (meta === "labels") {
+    if (activeRepos.length === 0) return jsonResponse([]);
     const rows = await context.env.DB.prepare(
       `SELECT DISTINCT json_extract(value, '$.name') AS name,
               json_extract(value, '$.color') AS color
        FROM issues, json_each(labels_json)
-       WHERE org_id = ? AND labels_json != '[]'
+       WHERE org_id = ? AND labels_json != '[]'${activeSql}
        ORDER BY name`
     )
-      .bind(orgId)
+      .bind(orgId, ...activeRepos)
       .all();
     return jsonResponse(rows.results);
   }
 
   if (meta === "stats") {
-    const closedSince = url.searchParams.get("closed_since") || null;
-    const reposParam = url.searchParams.get("repos") || null;
+    if (activeRepos.length === 0) return jsonResponse(EMPTY_STATS);
 
-    let repoFilter = "";
-    const repoBindings = [];
+    const reposParam = url.searchParams.get("repos") || null;
+    let repoSubset = activeRepos;
     if (reposParam) {
-      const repoList = reposParam.split(",").filter(Boolean).slice(0, 95);
-      if (repoList.length > 0) {
-        repoFilter = ` AND repo IN (${repoList.map(() => "?").join(",")})`;
-        repoBindings.push(...repoList);
-      }
+      const requested = new Set(reposParam.split(",").filter(Boolean));
+      repoSubset = activeRepos.filter((r) => requested.has(r));
+      if (repoSubset.length === 0) return jsonResponse(EMPTY_STATS);
     }
 
+    const repoFilter = ` AND repo IN (${repoSubset.map(() => "?").join(",")})`;
+    const repoBindings = repoSubset;
     const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const queries = [
@@ -62,8 +80,6 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND (assignees_json = '[]' OR assignees_json IS NULL)${repoFilter}`).bind(orgId, ...repoBindings),
       // stale open count (created > 30d ago)
       context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'open' AND created_at < ?${repoFilter}`).bind(orgId, staleDate, ...repoBindings),
-      // closed since sprint start
-      context.env.DB.prepare(`SELECT COUNT(*) as c FROM issues WHERE org_id = ? AND state = 'closed'${closedSince ? " AND closed_at >= ?" : ""}${repoFilter}`).bind(orgId, ...(closedSince ? [closedSince] : []), ...repoBindings),
       // by repo (open)
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open'${repoFilter} GROUP BY repo ORDER BY count DESC LIMIT 15`).bind(orgId, ...repoBindings),
       // by label (open)
@@ -74,24 +90,36 @@ export async function onRequestGet(context) {
       context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, ...repoBindings),
       // critical closed per day (last 28 days)
       context.env.DB.prepare(`SELECT date(closed_at) as day, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'closed' AND closed_at >= date('now', '-28 days') AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY day ORDER BY day`).bind(orgId, ...repoBindings),
+      // stale (non-critical) open by repo — critical-and-stale rows count as critical only, never both.
+      context.env.DB.prepare(`SELECT repo, COUNT(*) as count FROM issues WHERE org_id = ? AND state = 'open' AND created_at < ? AND NOT EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = 'critical')${repoFilter} GROUP BY repo`).bind(orgId, staleDate, ...repoBindings),
     ];
 
     const results = await context.env.DB.batch(queries);
 
     // Build critical-by-repo lookup
-    const criticalByRepo = Object.fromEntries((results[7].results ?? []).map((r) => [r.repo, r.count]));
+    const criticalByRepo = Object.fromEntries((results[6].results ?? []).map((r) => [r.repo, r.count]));
     // Build critical-closed-per-day lookup
-    const criticalClosedMap = Object.fromEntries((results[8].results ?? []).map((r) => [r.day, r.count]));
+    const criticalClosedMap = Object.fromEntries((results[7].results ?? []).map((r) => [r.day, r.count]));
+    // Build stale-by-repo lookup (open, >30d, non-critical)
+    const staleByRepo = Object.fromEntries((results[8].results ?? []).map((r) => [r.repo, r.count]));
 
     return jsonResponse({
       open: results[0].results[0]?.c ?? 0,
       unassigned: results[1].results[0]?.c ?? 0,
       stale: results[2].results[0]?.c ?? 0,
-      closedSprint: results[3].results[0]?.c ?? 0,
-      byRepo: results[4].results.map((r) => ({ ...r, critical: criticalByRepo[r.repo] ?? 0 })),
-      byLabel: results[5].results,
-      closedPerDay: results[6].results.map((r) => ({ ...r, critical: criticalClosedMap[r.day] ?? 0 })),
+      byRepo: results[3].results.map((r) => ({
+        ...r,
+        critical: criticalByRepo[r.repo] ?? 0,
+        stale: staleByRepo[r.repo] ?? 0,
+      })),
+      byLabel: results[4].results,
+      closedPerDay: results[5].results.map((r) => ({ ...r, critical: criticalClosedMap[r.day] ?? 0 })),
     });
+  }
+
+  // No active repos → empty page. Avoids `IN ()` which SQLite rejects.
+  if (activeRepos.length === 0) {
+    return jsonResponse({ data: [], totalCount: 0, page: 1, pageSize: 30 });
   }
 
   const state = url.searchParams.get("state");
@@ -103,6 +131,7 @@ export async function onRequestGet(context) {
   const repo = url.searchParams.get("repo");
   const repos = url.searchParams.get("repos"); // comma-separated
   const label = url.searchParams.get("label");
+  const stale = url.searchParams.get("stale") === "1";
   const sort = url.searchParams.get("sort") || "updated_at";
   const sortDir = url.searchParams.get("sort_dir") === "asc" ? "ASC" : "DESC";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
@@ -111,8 +140,27 @@ export async function onRequestGet(context) {
   // Validate sort column
   const sortColumn = SORT_COLUMNS[sort] || "updated_at";
 
-  let where = "WHERE org_id = ?";
-  const bindings = [orgId];
+  // Start with active-only constraint, then intersect with optional repo/repos
+  // filters (drop anything not in the active set).
+  const activeSet = new Set(activeRepos);
+  let repoBindings = activeRepos;
+
+  if (repo) {
+    if (!activeSet.has(repo)) {
+      return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+    }
+    repoBindings = [repo];
+  } else if (repos) {
+    const requested = repos.split(",").filter(Boolean);
+    const intersect = requested.filter((r) => activeSet.has(r));
+    if (intersect.length === 0) {
+      return jsonResponse({ data: [], totalCount: 0, page, pageSize });
+    }
+    repoBindings = intersect;
+  }
+
+  let where = `WHERE org_id = ? AND repo IN (${repoBindings.map(() => "?").join(",")})`;
+  const bindings = [orgId, ...repoBindings];
 
   if (state && state !== "all") {
     where += " AND state = ?";
@@ -141,22 +189,15 @@ export async function onRequestGet(context) {
     bindings.push(since);
   }
 
-  if (repo) {
-    where += " AND repo = ?";
-    bindings.push(repo);
-  }
-
-  if (repos) {
-    const repoList = repos.split(",").filter(Boolean).slice(0, 90); // Cap to stay within D1 bind limits (100 max per stmt)
-    if (repoList.length > 0) {
-      where += ` AND repo IN (${repoList.map(() => "?").join(",")})`;
-      bindings.push(...repoList);
-    }
-  }
-
   if (label) {
     where += " AND EXISTS (SELECT 1 FROM json_each(labels_json) WHERE json_extract(value, '$.name') = ?)";
     bindings.push(label);
+  }
+
+  if (stale) {
+    const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    where += " AND state = 'open' AND created_at < ?";
+    bindings.push(staleDate);
   }
 
   const offset = (page - 1) * pageSize;

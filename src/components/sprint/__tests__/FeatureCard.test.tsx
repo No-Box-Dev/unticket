@@ -8,8 +8,7 @@ const baseFeature: Feature = {
   id: 1,
   title: "Test Feature",
   owners: [],
-  status: "plan",
-  sprint: 1,
+  status: "todo",
 };
 
 const defaultProps = {
@@ -18,7 +17,7 @@ const defaultProps = {
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
-  mode: "sprint" as const,
+  mode: "active" as const,
 };
 
 describe("FeatureCard", () => {
@@ -49,7 +48,7 @@ describe("FeatureCard", () => {
     expect(screen.queryByTitle("Delete")).not.toBeInTheDocument();
   });
 
-  it("shows Move to Backlog button in sprint mode", () => {
+  it("shows Move to Backlog button in active mode", () => {
     render(<FeatureCard {...defaultProps} />);
     expect(screen.getByTitle("Move to Backlog")).toBeInTheDocument();
   });
@@ -59,22 +58,22 @@ describe("FeatureCard", () => {
     render(<FeatureCard {...defaultProps} onUpdate={onUpdate} />);
     await userEvent.click(screen.getByTitle("Move to Backlog"));
     expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "future", sprint: null }),
+      expect.objectContaining({ status: "future" }),
     );
   });
 
-  it("shows Move to Sprint in backlog mode", () => {
-    render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} />);
-    expect(screen.getByTitle("Move to Sprint")).toBeInTheDocument();
+  it("shows Move to To do in backlog mode", () => {
+    render(<FeatureCard {...defaultProps} mode="backlog" />);
+    expect(screen.getByTitle("Move to To do")).toBeInTheDocument();
     expect(screen.queryByTitle("Move to Backlog")).not.toBeInTheDocument();
   });
 
-  it("Move to Sprint button updates sprint and status", async () => {
+  it("Move to To do button updates status", async () => {
     const onUpdate = vi.fn();
-    render(<FeatureCard {...defaultProps} mode="backlog" currentSprint={2} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByTitle("Move to Sprint"));
+    render(<FeatureCard {...defaultProps} mode="backlog" onUpdate={onUpdate} />);
+    await userEvent.click(screen.getByTitle("Move to To do"));
     expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ sprint: 2, status: "plan" }),
+      expect.objectContaining({ status: "todo" }),
     );
   });
 

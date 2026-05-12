@@ -1,20 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRateLimit } from "@/hooks/useGitHub";
-import { useSidebar } from "@/lib/sidebar";
+import { useRateLimit, useTriggerFeatureSync } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
-import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
+import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut, Sparkles, Loader2 } from "lucide-react";
 import type { TabId } from "@/lib/types";
+import { SyncFromGithubMenuItem, SyncFromGithubModal } from "@/components/SyncFromGithub";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
-  { id: "sprint", label: "Sprint" },
+  { id: "sprint", label: "Features" },
   { id: "posts", label: "Feed" },
-  { id: "todos", label: "Todos" },
   { id: "prs", label: "PR" },
   { id: "issues", label: "Issues" },
   { id: "repos", label: "Repos" },
-  { id: "releases", label: "Releases" },
 ];
 
 interface TopNavProps {
@@ -25,9 +23,10 @@ interface TopNavProps {
 export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   const { user, setSelectedOrg, logout } = useAuth();
   const { data: rateLimit } = useRateLimit();
-  const { setViewingSprint } = useSidebar();
+  const syncFeaturesMut = useTriggerFeatureSync();
   const isRateLimited = rateLimit && rateLimit.remaining < rateLimit.limit * 0.2;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,13 +38,12 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   }, []);
 
   const handleNav = (id: TabId) => {
-    if (id === "sprint") setViewingSprint(null);
     onTabChange(id);
   };
 
   return (
     <header className="shrink-0 bg-white border-b border-stone-200 sticky top-0 z-30">
-      <div className="h-14 px-4 sm:px-6 flex items-center justify-between gap-4">
+      <div className="relative h-14 px-4 sm:px-6 flex items-center justify-between gap-4">
         {/* Logo */}
         <button
           onClick={() => handleNav("issues")}
@@ -55,8 +53,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           <span className="font-normal">ticket</span>
         </button>
 
-        {/* Centered nav */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+        {/* Centered nav — absolutely positioned so width of logo/right cluster
+            doesn't shift the visual center off the page midpoint. */}
+        <nav className="hidden md:flex items-center gap-1 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           {NAV_ITEMS.map(({ id, label }) => {
             const isActive = activeTab === id;
             return (
@@ -134,6 +133,29 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
                   <ArrowLeftRight className="w-4 h-4" />
                   Switch Organisation
                 </button>
+                <button
+                  onClick={() => {
+                    if (syncFeaturesMut.isPending) return;
+                    syncFeaturesMut.mutate(undefined, {
+                      onSettled: () => setMenuOpen(false),
+                    });
+                  }}
+                  disabled={syncFeaturesMut.isPending}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {syncFeaturesMut.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {syncFeaturesMut.isPending ? "Syncing features…" : "Sync features"}
+                </button>
+                <SyncFromGithubMenuItem
+                  onTrigger={() => {
+                    setMenuOpen(false);
+                    setSyncOpen(true);
+                  }}
+                />
                 <div className="border-t border-stone-100 my-1" />
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
@@ -166,6 +188,8 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           );
         })}
       </nav>
+
+      <SyncFromGithubModal open={syncOpen} onClose={() => setSyncOpen(false)} />
     </header>
   );
 }

@@ -1,10 +1,74 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Routes, Route } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
 import { LoginPage } from "@/pages/LoginPage";
 import { OrgPickerPage } from "@/pages/OrgPickerPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { Spinner } from "@/components/Spinner";
+
+const IssueDetailPage = lazy(() =>
+  import("@/pages/details/IssueDetailPage").then((m) => ({ default: m.IssueDetailPage })),
+);
+const PrDetailPage = lazy(() =>
+  import("@/pages/details/PrDetailPage").then((m) => ({ default: m.PrDetailPage })),
+);
+const RepoIssuesPage = lazy(() =>
+  import("@/pages/lists/IssueListPages").then((m) => ({ default: m.RepoIssuesPage })),
+);
+const StaleIssuesPage = lazy(() =>
+  import("@/pages/lists/IssueListPages").then((m) => ({ default: m.StaleIssuesPage })),
+);
+const LabelIssuesPage = lazy(() =>
+  import("@/pages/lists/IssueListPages").then((m) => ({ default: m.LabelIssuesPage })),
+);
+const AssigneeIssuesPage = lazy(() =>
+  import("@/pages/lists/IssueListPages").then((m) => ({ default: m.AssigneeIssuesPage })),
+);
+const UnassignedIssuesPage = lazy(() =>
+  import("@/pages/lists/IssueListPages").then((m) => ({ default: m.UnassignedIssuesPage })),
+);
+const RepoPrsPage = lazy(() =>
+  import("@/pages/lists/PrListPages").then((m) => ({ default: m.RepoPrsPage })),
+);
+const AuthorPrsPage = lazy(() =>
+  import("@/pages/lists/PrListPages").then((m) => ({ default: m.AuthorPrsPage })),
+);
+const DraftPrsPage = lazy(() =>
+  import("@/pages/lists/PrListPages").then((m) => ({ default: m.DraftPrsPage })),
+);
+const StalePrsPage = lazy(() =>
+  import("@/pages/lists/PrListPages").then((m) => ({ default: m.StalePrsPage })),
+);
+
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <Spinner className="w-6 h-6 text-accent" />
+    </div>
+  );
+}
+
+function AuthenticatedRoutes() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route path="/issues/:repo/:number" element={<IssueDetailPage />} />
+        <Route path="/prs/:repo/:number" element={<PrDetailPage />} />
+        <Route path="/issues/stale" element={<StaleIssuesPage />} />
+        <Route path="/issues/unassigned" element={<UnassignedIssuesPage />} />
+        <Route path="/issues/repo/:repo" element={<RepoIssuesPage />} />
+        <Route path="/issues/label/:label" element={<LabelIssuesPage />} />
+        <Route path="/issues/assignee/:login" element={<AssigneeIssuesPage />} />
+        <Route path="/prs/stale" element={<StalePrsPage />} />
+        <Route path="/prs/draft" element={<DraftPrsPage />} />
+        <Route path="/prs/repo/:repo" element={<RepoPrsPage />} />
+        <Route path="/prs/author/:login" element={<AuthorPrsPage />} />
+        <Route path="*" element={<DashboardPage />} />
+      </Routes>
+    </Suspense>
+  );
+}
 
 function ErrorBar() {
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
@@ -92,5 +156,5 @@ export function App() {
 
   if (!user) return <><ErrorBar /><LoginPage /></>;
   if (!selectedOrg) return <><ErrorBar /><OrgPickerPage /></>;
-  return <><ErrorBar /><DashboardPage /></>;
+  return <><ErrorBar /><AuthenticatedRoutes /></>;
 }

@@ -6,6 +6,7 @@
 
 import { resolveActorFromGithub } from "./actors";
 import { upsertGhUser } from "./gh-mirror";
+import { narrateEvent } from "./narrator";
 
 export function mapEventType(ghEvent, action, payload) {
   switch (ghEvent) {
@@ -23,6 +24,21 @@ export function mapEventType(ghEvent, action, payload) {
       if (action === "opened") return "github:issue:opened";
       if (action === "closed") return "github:issue:closed";
       return null;
+    case "pull_request_review":
+      if (action === "submitted") {
+        const state = payload.review?.state;
+        if (state === "approved") return "github:pr:review:approved";
+        if (state === "changes_requested") return "github:pr:review:changes_requested";
+        if (state === "commented") return "github:pr:review:commented";
+      }
+      return null;
+    case "repository":
+      if (action === "archived") return "github:repo:archived";
+      if (action === "unarchived") return "github:repo:unarchived";
+      if (action === "deleted") return "github:repo:deleted";
+      if (action === "transferred") return "github:repo:transferred";
+      if (action === "renamed") return "github:repo:renamed";
+      return null;
     case "installation":
       return `github:installation:${action ?? "unknown"}`;
     case "installation_repositories":
@@ -37,6 +53,7 @@ function pickAuthor(ghEvent, payload) {
     ghEvent === "pull_request" ? payload.pull_request?.user :
     ghEvent === "issues" ? payload.issue?.user :
     ghEvent === "release" ? payload.release?.author :
+    ghEvent === "pull_request_review" ? payload.review?.user :
     payload.sender;
   if (!candidate?.login) return null;
   return {
@@ -64,6 +81,16 @@ function buildSummary(type, payload) {
   if (type.startsWith("github:issue:")) {
     const issue = payload.issue;
     if (issue) return `Issue #${issue.number}: ${issue.title}`;
+  }
+  if (type.startsWith("github:pr:review:")) {
+    const pr = payload.pull_request;
+    const state = payload.review?.state ?? "reviewed";
+    if (pr) return `Review (${state}) on PR #${pr.number}: ${pr.title}`;
+  }
+  if (type.startsWith("github:repo:")) {
+    const action = type.split(":")[2];
+    const repo = payload.repository?.full_name ?? payload.repository?.name ?? "?";
+    return `Repository ${action}: ${repo}`;
   }
   if (type.startsWith("github:installation")) {
     return `Installation ${payload.action ?? ""}`.trim();
@@ -97,7 +124,7 @@ function slimPayload(ghEvent, payload) {
       pr: {
         number: pr.number,
         title: pr.title,
-        body: pr.body?.slice(0, 1000),
+        body: pr.body?.slice(0, 16000),
         state: pr.state,
         merged: pr.merged,
         author: pr.user?.login,
@@ -105,6 +132,26 @@ function slimPayload(ghEvent, payload) {
         deletions: pr.deletions,
         changed_files: pr.changed_files,
       },
+    };
+  }
+  if (ghEvent === "pull_request_review" && payload.review) {
+    const pr = payload.pull_request;
+    return {
+      action: payload.action,
+      review: {
+        state: payload.review.state,
+        body: payload.review.body?.slice(0, 16000),
+        author: payload.review.user?.login,
+        submitted_at: payload.review.submitted_at,
+      },
+      pr: pr ? { number: pr.number, title: pr.title, author: pr.user?.login } : null,
+    };
+  }
+  if (ghEvent === "repository") {
+    return {
+      action: payload.action,
+      repo: payload.repository?.full_name ?? payload.repository?.name ?? null,
+      changes: payload.changes ?? null,
     };
   }
   return { action: payload.action };
@@ -151,8 +198,8 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
   const actor = author ? await resolveActorFromGithub(db, ownerId, author) : null;
 
   const result = await db.prepare(
-    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(delivery_id) DO NOTHING`
   ).bind(
     deliveryId || null,
@@ -169,4 +216,74 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
 
   const id = result?.meta?.last_row_id;
   return id ? { id } : null;
+}
+
+// Build & insert a github:pr:merged event row, then kick off narration.
+// Use this from anywhere we observe a merge from GitHub data (backfill,
+// reconcile cron) — webhooks already go through storeEvent + narrateEvent.
+// Idempotent via the caller-provided deliveryId.
+//
+// `pr` is the GitHub Pulls API shape (or a synthesized equivalent). At
+// minimum: { number, title, user: { login, id, avatar_url, type }, merged_at }.
+export async function recordMergedPr(env, args) {
+  const { ownerId, projectId, org, repo, deliveryId, source, pr } = args;
+  if (!pr?.number || !pr.user?.login || !pr.merged_at) return null;
+
+  if (pr.user.id != null) {
+    try {
+      await upsertGhUser(env.DB, {
+        id: pr.user.id,
+        login: pr.user.login,
+        avatar_url: pr.user.avatar_url ?? null,
+        type: pr.user.type === "Bot" ? "Bot" : "User",
+        name: pr.user.name ?? null,
+      });
+    } catch (err) {
+      console.error("[unticket events] upsertGhUser failed:", err);
+    }
+  }
+
+  const actor = await resolveActorFromGithub(env.DB, ownerId, {
+    login: pr.user.login,
+    id: pr.user.id ?? null,
+    avatar_url: pr.user.avatar_url ?? null,
+    type: pr.user.type === "Bot" ? "Bot" : "User",
+    name: null,
+  });
+  if (!actor) return null;
+
+  const result = await env.DB.prepare(
+    `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
+     VALUES (?, ?, 'github:pr:merged', ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(delivery_id) DO NOTHING`
+  ).bind(
+    deliveryId,
+    source,
+    actor.id,
+    projectId,
+    org,
+    repo,
+    `PR #${pr.number}: ${pr.title}`,
+    JSON.stringify({
+      action: "merged",
+      pr: {
+        number: pr.number,
+        title: pr.title,
+        body: pr.body?.slice(0, 16000) ?? null,
+        state: pr.state ?? "closed",
+        merged: true,
+        author: pr.user.login,
+        additions: pr.additions ?? null,
+        deletions: pr.deletions ?? null,
+        changed_files: pr.changed_files ?? null,
+      },
+    }),
+    ownerId,
+    pr.merged_at,
+  ).run();
+
+  const eventId = result.meta?.last_row_id;
+  if (!eventId) return null;
+  await narrateEvent(env, eventId);
+  return { id: eventId };
 }

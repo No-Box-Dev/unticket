@@ -1,5 +1,8 @@
 import { getSyncState, setSyncState } from "./db";
 import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
+import { filterInactive } from "./inactive-repos";
+import { getInstallationToken } from "./github-app";
+import { upsertGhUser } from "./gh-mirror";
 
 // Paginated GitHub API fetcher
 const MAX_PAGES = 50; // Safety limit to prevent Worker CPU timeout
@@ -78,6 +81,8 @@ export async function syncRepos(db, token, orgId, orgLogin) {
   }
 
   await setSyncState(db, orgId, "repos");
+
+  return repos.map((r) => r.name);
 }
 
 // ---------- Sync PRs ----------
@@ -138,6 +143,27 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
         )
       )
     );
+  }
+
+  // Mirror PR authors into gh_users so the cron's missed-merge narration
+  // path can resolve login → user_id (resolveActorFromGithub requires id).
+  // Webhook handlers already upsert; this fills the gap for PRs that only
+  // ever arrive via the sync API (e.g. a missed webhook delivery).
+  const seenUserIds = new Set();
+  for (const pr of prs) {
+    if (!pr.user?.id || seenUserIds.has(pr.user.id)) continue;
+    seenUserIds.add(pr.user.id);
+    try {
+      await upsertGhUser(db, {
+        id: pr.user.id,
+        login: pr.user.login,
+        avatar_url: pr.user.avatar_url ?? null,
+        type: pr.user.type === "Bot" ? "Bot" : "User",
+        name: null,
+      });
+    } catch (err) {
+      console.error("[unticket sync] upsertGhUser failed:", err?.message ?? err);
+    }
   }
 
   // Auto-detect feature links from branch names + PR bodies
@@ -277,6 +303,33 @@ export async function syncIssues(db, token, orgId, orgLogin, repo, since) {
     );
   }
 
+  // Reconcile: on a full sync the GitHub response is the authoritative list.
+  // Delete D1 rows for issues GitHub no longer returns — those were
+  // transferred to another repo or deleted, and were leaving phantom
+  // "open" rows that skewed the by-repo chart.
+  if (!since) {
+    const fetchedNumbers = new Set(issues.map((i) => i.number));
+    const existing = await db
+      .prepare("SELECT number FROM issues WHERE org_id = ? AND repo = ?")
+      .bind(orgId, repo)
+      .all();
+    const stale = existing.results
+      .map((r) => r.number)
+      .filter((n) => !fetchedNumbers.has(n));
+    if (stale.length > 0) {
+      const CHUNK = 90;
+      for (let i = 0; i < stale.length; i += CHUNK) {
+        const chunk = stale.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => "?").join(", ");
+        await db
+          .prepare(`DELETE FROM issues WHERE org_id = ? AND repo = ? AND number IN (${placeholders})`)
+          .bind(orgId, repo, ...chunk)
+          .run();
+      }
+      console.log(`[unticket] syncIssues: deleted ${stale.length} stale issues from D1 for ${repo}`);
+    }
+  }
+
   // Only advance sync timestamp if we got data or this is a fresh sync
   if (issues.length > 0 || !since) {
     await setSyncState(db, orgId, `issues:${repo}`);
@@ -306,26 +359,174 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   }
 
   await setSyncState(db, orgId, "members");
+
+  return members.map((m) => m.login);
+}
+
+// ---------- Sync Teams ----------
+//
+// Full reconcile each tick: GitHub orgs rarely have >100 teams, and per-team
+// member lists are short. Deletions are handled by clearing rows for teams
+// no longer in the API response. Errors are swallowed (403/404 = the
+// installation lacks the `members:read` permission, or the org is a user).
+
+export async function syncTeams(db, token, orgId, orgLogin) {
+  let teams;
+  try {
+    teams = await fetchAllPages(token, `https://api.github.com/orgs/${orgLogin}/teams`);
+  } catch (err) {
+    console.error(`[unticket sync] syncTeams ${orgLogin} failed:`, err?.message ?? err);
+    return [];
+  }
+
+  const teamRows = teams.map((t) => ({ id: t.id, slug: t.slug, name: t.name }));
+
+  const teamStmt = db.prepare(
+    `INSERT INTO teams (org_id, github_id, slug, name, updated_at)
+     VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+     ON CONFLICT(org_id, github_id) DO UPDATE SET
+       slug = excluded.slug,
+       name = excluded.name,
+       updated_at = excluded.updated_at`
+  );
+
+  if (teamRows.length > 0) {
+    await db.batch(teamRows.map((t) => teamStmt.bind(orgId, t.id, t.slug, t.name)));
+  }
+
+  const keepIds = new Set(teamRows.map((t) => t.id));
+  const existing = await db
+    .prepare("SELECT github_id FROM teams WHERE org_id = ?")
+    .bind(orgId)
+    .all();
+  const toDelete = (existing.results ?? [])
+    .map((r) => r.github_id)
+    .filter((id) => !keepIds.has(id));
+  if (toDelete.length > 0) {
+    const placeholders = toDelete.map(() => "?").join(",");
+    await db.batch([
+      db.prepare(`DELETE FROM teams WHERE org_id = ? AND github_id IN (${placeholders})`).bind(orgId, ...toDelete),
+      db.prepare(`DELETE FROM team_memberships WHERE org_id = ? AND team_github_id IN (${placeholders})`).bind(orgId, ...toDelete),
+    ]);
+  }
+
+  const membershipStmt = db.prepare(
+    `INSERT INTO team_memberships (org_id, team_github_id, login)
+     VALUES (?, ?, ?)
+     ON CONFLICT(org_id, team_github_id, login) DO NOTHING`
+  );
+
+  for (const team of teamRows) {
+    let members;
+    try {
+      members = await fetchAllPages(
+        token,
+        `https://api.github.com/orgs/${orgLogin}/teams/${team.slug}/members`,
+      );
+    } catch (err) {
+      console.error(`[unticket sync] syncTeams members ${team.slug} failed:`, err?.message ?? err);
+      continue;
+    }
+
+    const seenLogins = new Set(members.map((m) => m.login).filter(Boolean));
+
+    if (members.length > 0) {
+      const ops = members
+        .filter((m) => m.login)
+        .map((m) => membershipStmt.bind(orgId, team.id, m.login));
+      for (let i = 0; i < ops.length; i += 50) {
+        await db.batch(ops.slice(i, i + 50));
+      }
+    }
+
+    const existingMembers = await db
+      .prepare("SELECT login FROM team_memberships WHERE org_id = ? AND team_github_id = ?")
+      .bind(orgId, team.id)
+      .all();
+    const staleLogins = (existingMembers.results ?? [])
+      .map((r) => r.login)
+      .filter((login) => !seenLogins.has(login));
+    if (staleLogins.length > 0) {
+      const ph = staleLogins.map(() => "?").join(",");
+      await db
+        .prepare(`DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ? AND login IN (${ph})`)
+        .bind(orgId, team.id, ...staleLogins)
+        .run();
+    }
+  }
+
+  await setSyncState(db, orgId, "teams");
+
+  return teamRows.map((t) => t.slug);
+}
+
+// Webhook helpers — call from the team / membership webhook handlers.
+
+export async function upsertTeam(db, orgId, team) {
+  if (!team?.id) return;
+  await db
+    .prepare(
+      `INSERT INTO teams (org_id, github_id, slug, name, updated_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+       ON CONFLICT(org_id, github_id) DO UPDATE SET
+         slug = excluded.slug,
+         name = excluded.name,
+         updated_at = excluded.updated_at`
+    )
+    .bind(orgId, team.id, team.slug, team.name)
+    .run();
+}
+
+export async function removeTeam(db, orgId, githubId) {
+  if (!githubId) return;
+  await db.batch([
+    db.prepare("DELETE FROM teams WHERE org_id = ? AND github_id = ?").bind(orgId, githubId),
+    db.prepare("DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ?").bind(orgId, githubId),
+  ]);
+}
+
+export async function addTeamMember(db, orgId, teamGithubId, login) {
+  if (!teamGithubId || !login) return;
+  await db
+    .prepare(
+      `INSERT INTO team_memberships (org_id, team_github_id, login)
+       VALUES (?, ?, ?)
+       ON CONFLICT(org_id, team_github_id, login) DO NOTHING`
+    )
+    .bind(orgId, teamGithubId, login)
+    .run();
+}
+
+export async function removeTeamMember(db, orgId, teamGithubId, login) {
+  if (!teamGithubId || !login) return;
+  await db
+    .prepare(
+      "DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ? AND login = ?"
+    )
+    .bind(orgId, teamGithubId, login)
+    .run();
 }
 
 // ---------- Sync Features (unticket repo issues) ----------
+//
+// Always does a full sync. The unticket repo is small (<100 issues) so the
+// `since` cursor saved next to nothing, but it broke reconciliation: an
+// incremental sync can't know which D1 rows no longer exist on GitHub.
 
-export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
-  const since = force ? null : (await getSyncState(db, orgId, "features"))?.lastSynced;
-  const params = { state: "all", sort: "updated", direction: "desc" };
-  if (since) params.since = since;
-
+export async function syncFeatures(db, token, orgId, orgLogin) {
   const issues = await fetchAllPages(
     token,
     `https://api.github.com/repos/${orgLogin}/unticket/issues`,
-    params
+    { state: "all", sort: "updated", direction: "desc" }
   );
 
-  // Only sync issues with the "feature" label (filter out PRs, todos, roles, tasks)
-  const features = issues.filter((i) =>
-    !i.pull_request &&
-    (i.labels ?? []).some((l) => (typeof l === "string" ? l : l.name) === "feature")
-  );
+  // Only sync issues that carry BOTH the "unticket" and "feature" labels
+  // (filter out PRs, todos, roles, tasks, and legacy single-label items).
+  const features = issues.filter((i) => {
+    if (i.pull_request) return false;
+    const names = (i.labels ?? []).map((l) => (typeof l === "string" ? l : l.name));
+    return names.includes("unticket") && names.includes("feature");
+  });
 
   console.log(`[unticket] syncFeatures: ${issues.length} total issues, ${features.length} features (org=${orgLogin})`);
 
@@ -384,32 +585,28 @@ export async function syncFeatures(db, token, orgId, orgLogin, force = false) {
     }
   }
 
-  // Only advance sync timestamp if we got data or this is a fresh sync
-  if (features.length > 0 || !since) {
-    await setSyncState(db, orgId, "features");
-  }
-  // Clean up non-feature issues that were previously synced into the features table
-  // (before the label filter was added). Only run on full syncs.
-  if (!since && features.length > 0) {
-    const featureNumbers = features.map((f) => f.number);
-    // Delete any features in D1 for this org that aren't in the current feature set
-    const existing = await db
-      .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
-      .bind(orgId)
-      .all();
-    const toDelete = existing.results
-      .filter((r) => !featureNumbers.includes(r.number))
-      .map((r) => r.number);
-    if (toDelete.length > 0) {
-      console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} non-feature issues from D1`);
-      for (let i = 0; i < toDelete.length; i += 50) {
-        const batch = toDelete.slice(i, i + 50);
-        await db.batch(
-          batch.map((num) =>
-            db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, num)
-          )
-        );
-      }
+  await setSyncState(db, orgId, "features");
+
+  // Reconcile D1 against the unticket repo. Drops any open rows whose issue
+  // number isn't in the current feature set — including legacy rows synced
+  // from earlier repo sources.
+  const featureNumbers = new Set(features.map((f) => f.number));
+  const existing = await db
+    .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
+    .bind(orgId)
+    .all();
+  const toDelete = existing.results
+    .filter((r) => !featureNumbers.has(r.number))
+    .map((r) => r.number);
+  if (toDelete.length > 0) {
+    console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} stale features from D1 (org=${orgLogin})`);
+    for (let i = 0; i < toDelete.length; i += 50) {
+      const batch = toDelete.slice(i, i + 50);
+      await db.batch(
+        batch.map((num) =>
+          db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, num)
+        )
+      );
     }
   }
 
@@ -438,7 +635,7 @@ export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
 
   if (!repoRes.ok) return;
 
-  const files = ["sprint", "features", "people", "settings"];
+  const files = ["features", "people", "settings"];
 
   for (const key of files) {
     const fileRes = await fetch(
@@ -474,11 +671,12 @@ export async function migrateUnticketConfig(db, token, orgId, orgLogin) {
 
 // ---------- syncInit: lightweight init (repos + members + config migration) ----------
 
-export async function syncInit(db, token, orgId, orgLogin, force = false) {
+export async function syncInit(db, token, orgId, orgLogin) {
   await migrateUnticketConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
-  await syncFeatures(db, token, orgId, orgLogin, force);
+  await syncTeams(db, token, orgId, orgLogin);
+  await syncFeatures(db, token, orgId, orgLogin);
 
   const repoRows = await db
     .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
@@ -486,6 +684,52 @@ export async function syncInit(db, token, orgId, orgLogin, force = false) {
     .all();
 
   return repoRows.results.map((r) => r.name);
+}
+
+// ---------- bootstrapInstallation: full backfill on install webhook ----------
+//
+// Fired from the `installation` webhook when a new install (or unsuspend)
+// arrives. Pulls everything we need for an empty dashboard so the user
+// never has to click Sync. Marks `orgs.bootstrapped_at` on success; the
+// dashboard polls this to switch from "setting up" to "ready".
+//
+// Pulls in dependency order: repos → members → features → per-repo issues+PRs.
+// Per-repo work uses the existing incremental syncRepo (force=true to ensure
+// a clean slate on first install). Reconciliation cron (Slice 3) catches any
+// repos added later via installation_repositories.
+export async function bootstrapInstallation(env, orgId, orgLogin, installationId) {
+  const db = env.DB;
+  const token = await getInstallationToken(env, installationId);
+
+  await syncRepos(db, token, orgId, orgLogin);
+  await syncMembers(db, token, orgId, orgLogin);
+  await syncTeams(db, token, orgId, orgLogin);
+  await syncFeatures(db, token, orgId, orgLogin);
+
+  const repoRows = await db
+    .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
+    .bind(orgId)
+    .all();
+  const repoNames = await filterInactive(
+    db,
+    orgId,
+    orgLogin,
+    repoRows.results.map((r) => r.name),
+  );
+
+  for (const repo of repoNames) {
+    try {
+      await syncRepo(db, token, orgId, orgLogin, repo, true);
+    } catch (err) {
+      // Don't abort the whole bootstrap on one bad repo — cron will retry.
+      console.error(`[unticket] bootstrap repo ${repo} failed:`, err?.message ?? err);
+    }
+  }
+
+  await db
+    .prepare("UPDATE orgs SET bootstrapped_at = datetime('now') WHERE id = ?")
+    .bind(orgId)
+    .run();
 }
 
 // ---------- syncRepo: sync PRs + issues for a single repo ----------
@@ -549,9 +793,9 @@ export async function upsertIssue(db, orgId, repo, issue, closedBy = null) {
 }
 
 export async function upsertFeature(db, orgId, issue) {
-  // Only upsert if the issue has the "feature" label
+  // Only upsert if the issue carries BOTH "unticket" and "feature" labels.
   const labels = (issue.labels ?? []).map((l) => (typeof l === "string" ? l : l.name));
-  if (!labels.includes("feature")) {
+  if (!labels.includes("unticket") || !labels.includes("feature")) {
     // Not a feature — remove from features table if it was previously tracked
     await db.prepare("DELETE FROM features WHERE org_id = ? AND number = ?").bind(orgId, issue.number).run();
     return;
@@ -643,6 +887,56 @@ export async function removeMember(db, orgId, login) {
   await db
     .prepare("DELETE FROM members WHERE org_id = ? AND login = ?")
     .bind(orgId, login)
+    .run();
+}
+
+// Mark a repo as archived on GitHub. Keeps the row so historical issues/PRs
+// remain joinable; UI is expected to filter on archived_at IS NULL.
+export async function markRepoArchived(db, orgId, repo) {
+  await db
+    .prepare("UPDATE repos SET archived_at = datetime('now') WHERE org_id = ? AND name = ?")
+    .bind(orgId, repo)
+    .run();
+}
+
+// Drop a repo and all of its dependent rows. Used when GitHub fires
+// `repository.deleted` or `repository.transferred` — the repo is no
+// longer accessible under this org, so its issues and PRs go with it.
+// Renames go through `renameRepo` instead so historical rows are kept.
+export async function removeRepo(db, orgId, repo) {
+  await db.batch([
+    db.prepare("DELETE FROM issues WHERE org_id = ? AND repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM pull_requests WHERE org_id = ? AND repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ?").bind(orgId, repo),
+    db.prepare("DELETE FROM repos WHERE org_id = ? AND name = ?").bind(orgId, repo),
+  ]);
+}
+
+// Rename a repo across every table that stores `repo` as plain text.
+// GitHub's `repository.renamed` event carries `changes.repository.name.from`
+// and the new name on `repository.name`. Doing the rename in place keeps
+// history (issues, PRs, feature links) intact rather than dropping it
+// and waiting for the next reconcile to refetch.
+export async function renameRepo(db, orgId, fromName, toName) {
+  if (!fromName || !toName || fromName === toName) return;
+  await db.batch([
+    db.prepare("UPDATE repos SET name = ? WHERE org_id = ? AND name = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE issues SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE pull_requests SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE pr_feature_links SET pr_repo = ? WHERE org_id = ? AND pr_repo = ?").bind(toName, orgId, fromName),
+  ]);
+}
+
+// Update repos.pushed_at from a `push` webhook so the repo list ordering
+// (sort: pushed_at desc) stays accurate without waiting for a reconcile.
+// ISO 8601 to match the format `syncRepos` copies from GitHub responses —
+// mixing space and ISO formats in the same column breaks ORDER BY DESC.
+export async function touchRepoPushed(db, orgId, repo) {
+  await db
+    .prepare(
+      "UPDATE repos SET pushed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE org_id = ? AND name = ?"
+    )
+    .bind(orgId, repo)
     .run();
 }
 

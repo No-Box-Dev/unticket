@@ -65,24 +65,37 @@ export async function onRequestPost(context) {
     .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
     .slice(0, BACKFILL_MAX_PRS);
 
-  if (todo.length === 0) {
+  // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
+  // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
+  // natural moment to retry: the user is asking for a refresh anyway.
+  const fallbackIds = await findFallbackNarrativeIds(db, orgLogin, project.id);
+
+  if (todo.length === 0 && fallbackIds.length === 0) {
     return jsonResponse({
       ok: true,
       found: prs.length,
       queued: 0,
       skipped: prs.length,
+      renarrated: 0,
       days,
       message: "All PRs already backfilled.",
     });
   }
 
-  const work = processBackfill(context.env, {
-    projectId: project.id,
-    org: project.org,
-    repo: project.repo,
-    ownerId: orgLogin,
-    prs: todo,
-  });
+  const work = (async () => {
+    if (todo.length > 0) {
+      await processBackfill(context.env, {
+        projectId: project.id,
+        org: project.org,
+        repo: project.repo,
+        ownerId: orgLogin,
+        prs: todo,
+      });
+    }
+    if (fallbackIds.length > 0) {
+      await renarrateFallbacks(context.env, fallbackIds);
+    }
+  })();
   context.waitUntil(work.catch((err) => console.error("[unticket backfill] failed:", err)));
 
   return jsonResponse({
@@ -90,8 +103,33 @@ export async function onRequestPost(context) {
     found: prs.length,
     queued: todo.length,
     skipped: prs.length - todo.length,
+    renarrated: fallbackIds.length,
     days,
   });
+}
+
+async function findFallbackNarrativeIds(db, ownerId, projectId) {
+  const rows = await db.prepare(
+    `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+       FROM events
+      WHERE owner_id = ? AND project_id = ?
+        AND type = 'narrative'
+        AND json_extract(payload_json, '$.model') = 'fallback'`
+  ).bind(ownerId, projectId).all();
+  return (rows.results ?? [])
+    .map((r) => ({ id: r.id, triggerEventId: r.trigger_event_id }))
+    .filter((r) => r.triggerEventId != null);
+}
+
+async function renarrateFallbacks(env, fallbacks) {
+  for (const { id, triggerEventId } of fallbacks) {
+    try {
+      await env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+      await narrateEvent(env, triggerEventId);
+    } catch (err) {
+      console.error(`[unticket backfill] re-narrate trigger ${triggerEventId} failed:`, err);
+    }
+  }
 }
 
 async function fetchRecentPrs(env, installationId, org, repo, days) {
@@ -150,8 +188,7 @@ async function backfillOnePr(env, args, pr) {
       ? "github:pr:closed"
       : "github:pr:opened";
 
-  const anchor = prAnchor(pr);
-  const createdAt = anchor.replace("T", " ").replace(/Z$/, "").slice(0, 19);
+  const createdAt = prAnchor(pr);
 
   const result = await env.DB.prepare(
     `INSERT INTO events (delivery_id, source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)

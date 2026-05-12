@@ -6,10 +6,10 @@ import {
   patchActor,
   fetchProjects,
   fetchEvents,
-  fetchNotes,
-  putNote,
-  deleteNote,
+  fetchEvent,
   backfillProjectPrs,
+  archiveProject,
+  unarchiveProject,
   type FeedActor,
   type EventQuery,
 } from "@/lib/noxlink-api";
@@ -44,29 +44,35 @@ export function useFeedProjects() {
   });
 }
 
-export function useFeedEvents(q: EventQuery = {}) {
+export function useFeedEvent(id: number | null, enabled = true) {
   const { selectedOrg } = useAuth();
+  return useQuery({
+    queryKey: ["noxlink", "event", selectedOrg, id],
+    queryFn: () => fetchEvent(id!),
+    enabled: !!selectedOrg && id != null && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useFeedEvents(q: EventQuery = {}, opts: { enabled?: boolean } = {}) {
+  const { selectedOrg } = useAuth();
+  const enabled = (opts.enabled ?? true) && !!selectedOrg;
   return useQuery({
     queryKey: ["noxlink", "events", selectedOrg, q],
     queryFn: () => fetchEvents(q),
-    enabled: !!selectedOrg,
+    enabled,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
 }
 
-export function usePosts(limit = 50) {
-  return useFeedEvents({ type: "narrative", limit });
-}
+// Only show narratives that came from a "shipped" event. Keep this list in
+// sync with NARRATABLE_TYPES in functions/lib/narrator.js — the server uses
+// it to skip narration entirely so we don't pay tokens for posts we'd hide.
+export const POST_TRIGGER_TYPES = ["github:pr:merged"];
 
-export function useActorNotes(actorId: string | null) {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["noxlink", "notes", selectedOrg, actorId],
-    queryFn: () => fetchNotes({ actorId: actorId! }),
-    enabled: !!selectedOrg && !!actorId,
-    staleTime: 30_000,
-  });
+export function usePosts(limit = 50) {
+  return useFeedEvents({ type: "narrative", limit, triggerTypes: POST_TRIGGER_TYPES });
 }
 
 export function usePatchActor() {
@@ -82,30 +88,6 @@ export function usePatchActor() {
   });
 }
 
-export function usePutNote() {
-  const qc = useQueryClient();
-  const { selectedOrg } = useAuth();
-  return useMutation({
-    mutationFn: ({ actorId, projectId, note }: { actorId: string; projectId: string; note: string }) =>
-      putNote(actorId, projectId, note),
-    onSuccess: (_data, { actorId }) => {
-      qc.invalidateQueries({ queryKey: ["noxlink", "notes", selectedOrg, actorId] });
-    },
-  });
-}
-
-export function useDeleteNote() {
-  const qc = useQueryClient();
-  const { selectedOrg } = useAuth();
-  return useMutation({
-    mutationFn: ({ actorId, projectId }: { actorId: string; projectId: string }) =>
-      deleteNote(actorId, projectId),
-    onSuccess: (_data, { actorId }) => {
-      qc.invalidateQueries({ queryKey: ["noxlink", "notes", selectedOrg, actorId] });
-    },
-  });
-}
-
 export function useBackfillProjectPrs() {
   const qc = useQueryClient();
   const { selectedOrg } = useAuth();
@@ -116,6 +98,18 @@ export function useBackfillProjectPrs() {
       // Posts will appear out-of-band via narrateEvent. Invalidate so the
       // Feed picks them up on next refetch.
       qc.invalidateQueries({ queryKey: ["noxlink", "events", selectedOrg] });
+    },
+  });
+}
+
+export function useSetProjectArchived() {
+  const qc = useQueryClient();
+  const { selectedOrg } = useAuth();
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      archived ? archiveProject(id) : unarchiveProject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["noxlink", "projects", selectedOrg] });
     },
   });
 }

@@ -1,0 +1,167 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
+import { cn } from "@/lib/cn";
+
+interface SyncFromGithubMenuItemProps {
+  onTrigger: () => void;
+}
+
+export function SyncFromGithubMenuItem({ onTrigger }: SyncFromGithubMenuItemProps) {
+  return (
+    <button
+      onClick={onTrigger}
+      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer"
+    >
+      <RefreshCw className="w-4 h-4" />
+      Sync from GitHub
+    </button>
+  );
+}
+
+interface SyncFromGithubModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function SyncFromGithubModal({ open, onClose }: SyncFromGithubModalProps) {
+  const qc = useQueryClient();
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+  const [syncedRepos, setSyncedRepos] = useState<string[]>([]);
+  const runningRef = useRef(false);
+
+  const runSync = useCallback(async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    setProgress(null);
+    setSyncedRepos([]);
+    let lastSyncingRepo: string | null = null;
+
+    try {
+      await triggerSyncWithProgress((status) => {
+        setProgress(status);
+        if (status.phase === "syncing" && status.repo) {
+          if (lastSyncingRepo) {
+            setSyncedRepos((prev) =>
+              prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
+            );
+          }
+          lastSyncingRepo = status.repo;
+        }
+        if (status.phase === "done") {
+          if (lastSyncingRepo) {
+            setSyncedRepos((prev) =>
+              prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
+            );
+          }
+          qc.invalidateQueries({ queryKey: ["issues"] });
+          qc.invalidateQueries({ queryKey: ["prs"] });
+          qc.invalidateQueries({ queryKey: ["repos"] });
+          qc.invalidateQueries({ queryKey: ["labels"] });
+          qc.invalidateQueries({ queryKey: ["members"] });
+        }
+      }, true);
+    } finally {
+      runningRef.current = false;
+    }
+  }, [qc]);
+
+  useEffect(() => {
+    if (open) {
+      runSync();
+    }
+  }, [open, runSync]);
+
+  if (!open) return null;
+
+  const done = progress?.phase === "done";
+  const error = progress?.phase === "error";
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <h3 className="text-sm font-semibold text-stone-800">
+            {done ? "Sync Complete" : error ? "Sync Failed" : "Syncing from GitHub"}
+          </h3>
+          {(done || error) && (
+            <button
+              onClick={onClose}
+              className="text-stone-400 hover:text-stone-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {progress && progress.total > 0 && (
+            <div>
+              <div className="flex justify-between text-xs text-stone-500 mb-1">
+                <span>
+                  {done
+                    ? "All repos synced"
+                    : `Syncing repo ${Math.min(syncedRepos.length + 1, progress.total)} of ${progress.total}`}
+                </span>
+                <span>
+                  {Math.round(((done ? progress.total : syncedRepos.length) / progress.total) * 100)}%
+                </span>
+              </div>
+              <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    error ? "bg-red-500" : "bg-accent",
+                  )}
+                  style={{
+                    width: `${((done ? progress.total : syncedRepos.length) / progress.total) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {progress?.phase === "init" && (
+            <div className="flex items-center gap-2 text-xs text-stone-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Initializing sync...
+            </div>
+          )}
+          {error && (
+            <div className="flex items-center gap-2 text-xs text-red-600">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {progress.error}
+            </div>
+          )}
+          {progress?.phase === "syncing" && progress.repo && (
+            <div className="flex items-center gap-2 text-xs text-stone-600">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+              <span className="font-medium">{progress.repo}</span>
+            </div>
+          )}
+          {syncedRepos.length > 0 && (
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {syncedRepos.map((repo) => (
+                <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
+                  <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                  {repo}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {(done || error) && (
+          <div className="px-5 py-3 border-t border-stone-100">
+            <button
+              onClick={onClose}
+              className="w-full px-4 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}

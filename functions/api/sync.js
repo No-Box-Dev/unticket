@@ -1,5 +1,6 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
-import { syncInit, syncRepo } from "../lib/github-sync";
+import { syncInit, syncRepo, syncFeatures } from "../lib/github-sync";
+import { filterInactive } from "../lib/inactive-repos";
 
 // In-memory rate limit for ?force=true (one full re-sync per org per 5 min)
 // Force re-syncs hit the GitHub API hard, so deny rapid re-triggers.
@@ -15,6 +16,18 @@ export async function onRequestPost(context) {
   const url = new URL(context.request.url);
   const cursor = url.searchParams.get("cursor");
   const force = url.searchParams.get("force") === "true";
+  const scope = url.searchParams.get("scope");
+
+  if (scope === "features") {
+    try {
+      await syncFeatures(context.env.DB, token, orgId, orgLogin);
+      return jsonResponse({ done: true, scope: "features" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sync failed";
+      console.error("[sync features] error:", message, e instanceof Error ? e.stack : undefined);
+      return errorResponse("Feature sync failed. Please try again later.", 500);
+    }
+  }
 
   // Rate-limit ?force=true on initial call (no cursor) only.
   // Subsequent cursor calls in the same re-sync chain pass through.
@@ -39,24 +52,10 @@ export async function onRequestPost(context) {
   try {
     if (!cursor) {
       // Phase 1: init (repos list, members, config migration)
-      let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin, force);
+      let repoNames = await syncInit(context.env.DB, token, orgId, orgLogin);
 
-      // Filter to core repos only (exclude draftRepos from settings)
-      const settingsRow = await context.env.DB
-        .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
-        .bind(orgId)
-        .first();
-      if (settingsRow?.data) {
-        try {
-          const settings = JSON.parse(settingsRow.data);
-          const draftSet = new Set(settings.draftRepos ?? []);
-          if (draftSet.size > 0) {
-            repoNames = repoNames.filter((n) => !draftSet.has(n));
-          }
-        } catch (e) {
-          console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, syncing all repos:`, e);
-        }
-      }
+      // Filter out drafts (settings) and archived projects (platform inactive)
+      repoNames = await filterInactive(context.env.DB, orgId, orgLogin, repoNames);
 
       if (repoNames.length === 0) {
         return jsonResponse({ done: true, repos: 0 });
@@ -73,23 +72,16 @@ export async function onRequestPost(context) {
     // Phase 2: sync one repo
     await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force);
 
-    // Find next repo (filtered by core repos)
-    const [repoRows, settingsRow2] = await context.env.DB.batch([
-      context.env.DB.prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name").bind(orgId),
-      context.env.DB.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
-    ]);
-    let repoNames = repoRows.results.map((r) => r.name);
-    if (settingsRow2.results?.[0]?.data) {
-      try {
-        const settings = JSON.parse(settingsRow2.results[0].data);
-        const draftSet = new Set(settings.draftRepos ?? []);
-        if (draftSet.size > 0) {
-          repoNames = repoNames.filter((n) => !draftSet.has(n));
-        }
-      } catch (e) {
-        console.warn(`[unticket] Corrupt settings JSON for org ${orgId}, including all repos in cursor:`, e);
-      }
-    }
+    // Find next repo (filtered by active repos)
+    const repoRows = await context.env.DB
+      .prepare("SELECT name FROM repos WHERE org_id = ? ORDER BY name")
+      .bind(orgId).all();
+    let repoNames = await filterInactive(
+      context.env.DB,
+      orgId,
+      orgLogin,
+      repoRows.results.map((r) => r.name),
+    );
     const currentIdx = repoNames.indexOf(cursor);
     const nextRepo = currentIdx >= 0 && currentIdx < repoNames.length - 1
       ? repoNames[currentIdx + 1]
@@ -111,6 +103,7 @@ export async function onRequestPost(context) {
     return errorResponse("Sync failed. Please try again later.", 500);
   }
 }
+
 
 // GET /api/sync — check sync freshness
 export async function onRequestGet(context) {

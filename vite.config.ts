@@ -83,7 +83,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://gitpulse-rm8.pages.dev",
+        target: "https://app.unticket.ai",
         changeOrigin: true,
         // Don't proxy the OAuth callback — handled by oauthDevProxy above
         bypass(req) {

@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useMemo, useCallback } from "react";
-import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
-import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useOpenPRs, useMergedPRs, usePRStats } from "@/hooks/useGitHub";
+import { useFeedProjects } from "@/hooks/useNoxlink";
+import { GitPullRequest, GitMerge, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { useQueryClient } from "@tanstack/react-query";
-import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 
 function daysAgo(date: string): number {
   return Math.floor(
@@ -17,6 +17,8 @@ function daysAgo(date: string): number {
 
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
+
+const card = "bg-white  border border-stone-200  rounded-xl";
 
 function SortIcon({ column, activeSortKey, activeSortDirection }: { column: SortKey; activeSortKey: SortKey; activeSortDirection: SortDir }) {
   if (activeSortKey !== column) return null;
@@ -35,46 +37,22 @@ interface PRsTabProps {
 type PRView = "open" | "merged";
 
 export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
-  const qc = useQueryClient();
+  const navigate = useNavigate();
   const [view, setView] = useState<PRView>("open");
-  const { data: openPRs, isLoading: openLoading, isFetching: openFetching } = useOpenPRs(repoNames);
-  const { data: mergedPRs, isLoading: mergedLoading, isFetching: mergedFetching } = useMergedPRs(repoNames);
+  const { data: feedProjects } = useFeedProjects();
+  const archivedRepos = useMemo(
+    () => new Set((feedProjects ?? []).filter((p) => p.archived && p.repo).map((p) => p.repo!)),
+    [feedProjects],
+  );
+  const activeRepoNames = useMemo(
+    () => repoNames.filter((n) => !archivedRepos.has(n)),
+    [repoNames, archivedRepos],
+  );
+  const { data: openPRs, isLoading: openLoading } = useOpenPRs(activeRepoNames);
+  const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(activeRepoNames);
+  const { data: prStats } = usePRStats();
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
-
-  const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
-  const [syncedRepos, setSyncedRepos] = useState<string[]>([]);
-
-  const isFetching = view === "open" ? openFetching : mergedFetching;
-
-  const startSync = useCallback(async () => {
-    setSyncModalOpen(true);
-    setSyncProgress(null);
-    setSyncedRepos([]);
-    let lastSyncingRepo: string | null = null;
-
-    await triggerSyncWithProgress((status) => {
-      setSyncProgress(status);
-      if (status.phase === "syncing" && status.repo) {
-        if (lastSyncingRepo) {
-          setSyncedRepos((prev) =>
-            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
-          );
-        }
-        lastSyncingRepo = status.repo;
-      }
-      if (status.phase === "done") {
-        if (lastSyncingRepo) {
-          setSyncedRepos((prev) =>
-            prev.includes(lastSyncingRepo!) ? prev : [...prev, lastSyncingRepo!],
-          );
-        }
-        qc.invalidateQueries({ queryKey: ["prs"] });
-        qc.invalidateQueries({ queryKey: ["repos"] });
-      }
-    });
-  }, [qc]);
 
   const prs = view === "open" ? openPRs : mergedPRs;
   const isLoading = view === "open" ? openLoading : mergedLoading;
@@ -101,6 +79,9 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
 
   const filtered = useMemo(() => {
     let list = prs ?? [];
+    if (archivedRepos.size > 0) {
+      list = list.filter((pr: any) => !archivedRepos.has(pr.head.repo?.name));
+    }
     if (personFilter.length > 0) {
       list = list.filter((pr: any) => personFilter.includes(pr.user?.login));
     }
@@ -108,7 +89,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       list = list.filter((pr: any) => pr.head.repo?.name === repoFilter);
     }
     return list;
-  }, [prs, personFilter, repoFilter]);
+  }, [prs, personFilter, repoFilter, archivedRepos]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -132,6 +113,12 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     return list;
   }, [filtered, sortKey, sortDir]);
 
+  const byRepo = prStats?.byRepo;
+  const repoMax = useMemo(() => {
+    if (!byRepo?.length) return 1;
+    return Math.max(...byRepo.map((r) => r.count), 1);
+  }, [byRepo]);
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -141,90 +128,50 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     }
   };
 
-  const syncDone = syncProgress?.phase === "done";
-  const syncError = syncProgress?.phase === "error";
-
   return (
-    <div className="space-y-4">
-      {/* Sync Modal */}
-      {syncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <h3 className="text-sm font-semibold text-stone-800">
-                {syncDone ? "Sync Complete" : syncError ? "Sync Failed" : "Syncing from GitHub"}
-              </h3>
-              {(syncDone || syncError) && (
-                <button
-                  onClick={() => setSyncModalOpen(false)}
-                  className="text-stone-400 hover:text-stone-600 cursor-pointer"
+    <div className="space-y-6" data-tab="prs">
+      {/* Open PRs by Repo */}
+      <div className={cn(card, "p-5")}>
+        <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open PRs by Repo</h3>
+        {!prStats?.byRepo?.length ? (
+          <p className="text-xs text-stone-400">No data</p>
+        ) : (
+          <div className="space-y-2">
+            {prStats.byRepo.map((r) => {
+              const ready = Math.max(0, r.count - r.draft);
+              const draftPct = r.draft > 0 ? (r.draft / repoMax) * 100 : 0;
+              const readyPct = (ready / repoMax) * 100;
+              return (
+                <Link
+                  key={r.repo}
+                  to={`/prs/repo/${r.repo}`}
+                  className="flex items-center gap-3 -mx-2 px-2 py-0.5 rounded hover:bg-stone-50 group"
+                  title={`Open PRs in ${r.repo}`}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {syncProgress && syncProgress.total > 0 && (
-                <div>
-                  <div className="flex justify-between text-xs text-stone-500 mb-1">
-                    <span>{syncDone ? "All repos synced" : `Syncing repo ${Math.min(syncedRepos.length + 1, syncProgress.total)} of ${syncProgress.total}`}</span>
-                    <span>{Math.round(((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100)}%</span>
+                  <span className="text-xs text-stone-600 w-28 truncate shrink-0 group-hover:text-accent" title={`${r.repo} — ${r.count} open`}>{r.repo}</span>
+                  <div className="flex-1 h-5 bg-stone-100 rounded overflow-hidden flex">
+                    {ready > 0 && (
+                      <div
+                        className="h-full bg-stone-400 transition-all duration-300"
+                        style={{ width: `${readyPct}%` }}
+                        title={`${ready} ready for review`}
+                      />
+                    )}
+                    {r.draft > 0 && (
+                      <div
+                        className="h-full bg-stone-300 transition-all duration-300"
+                        style={{ width: `${draftPct}%` }}
+                        title={`${r.draft} draft`}
+                      />
+                    )}
                   </div>
-                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-300",
-                        syncError ? "bg-red-500" : "bg-accent",
-                      )}
-                      style={{
-                        width: `${((syncDone ? syncProgress.total : syncedRepos.length) / syncProgress.total) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {syncProgress?.phase === "init" && (
-                <div className="flex items-center gap-2 text-xs text-stone-500">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Initializing sync...
-                </div>
-              )}
-              {syncError && (
-                <div className="flex items-center gap-2 text-xs text-red-600">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {syncProgress.error}
-                </div>
-              )}
-              {syncProgress?.phase === "syncing" && syncProgress.repo && (
-                <div className="flex items-center gap-2 text-xs text-stone-600">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                  <span className="font-medium">{syncProgress.repo}</span>
-                </div>
-              )}
-              {syncedRepos.length > 0 && (
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {syncedRepos.map((repo) => (
-                    <div key={repo} className="flex items-center gap-2 text-xs text-stone-500">
-                      <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                      {repo}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {(syncDone || syncError) && (
-              <div className="px-5 py-3 border-t border-stone-100">
-                <button
-                  onClick={() => setSyncModalOpen(false)}
-                  className="w-full px-4 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            )}
+                  <span className="text-xs font-medium text-stone-700 w-8 text-right tabular-nums shrink-0">{r.count}</span>
+                </Link>
+              );
+            })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* View toggle + Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -270,18 +217,6 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           ]}
           placeholder="All Repos"
         />
-
-        <button
-          onClick={startSync}
-          disabled={syncModalOpen}
-          className={cn(
-            "flex items-center gap-1.5 text-xs text-stone-500  hover:text-accent cursor-pointer",
-            syncModalOpen && "opacity-50 cursor-not-allowed",
-          )}
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin")} />
-          Sync from GitHub
-        </button>
 
         <span className="text-xs text-stone-400 ml-auto">
           {sorted.length} of {(prs ?? []).length} PRs
@@ -344,10 +279,22 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                 const age = daysAgo(pr.created_at);
                 const isStale = age > 7;
                 const repoName = pr.head.repo?.name ?? "";
+                const onActivate = () => navigate(`/prs/${repoName}/${pr.number}`);
                 return (
                   <tr
                     key={pr.id}
-                    className={cn("hover:bg-stone-50  ", isStale && "bg-amber-50  ")}
+                    onClick={onActivate}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onActivate();
+                      }
+                    }}
+                    tabIndex={0}
+                    className={cn(
+                      "hover:bg-stone-50 cursor-pointer focus:bg-stone-50 focus:outline-none",
+                      isStale && "bg-amber-50",
+                    )}
                   >
                     <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
@@ -361,7 +308,16 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                             )}
                           />
                         )}
-                        {repoName}#{pr.number}
+                        {repoName && (
+                          <Link
+                            to={`/prs/repo/${repoName}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-accent hover:underline"
+                          >
+                            {repoName}
+                          </Link>
+                        )}
+                        #{pr.number}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 max-w-md">
@@ -377,7 +333,17 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                         {pr.head.ref} → {pr.base.ref}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-stone-500">{pr.user?.login}</td>
+                    <td className="px-4 py-2.5 text-stone-500">
+                      {pr.user?.login ? (
+                        <Link
+                          to={`/prs/author/${pr.user.login}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-accent hover:underline"
+                        >
+                          {pr.user.login}
+                        </Link>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-2.5 text-stone-500 text-xs">
                       {(pr.requested_reviewers ?? []).length > 0
                         ? (pr.requested_reviewers ?? []).map((r: any) => r.login).join(", ")
@@ -396,6 +362,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
                         href={pr.html_url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="text-stone-300 hover:text-accent"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />

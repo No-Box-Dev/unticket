@@ -15,6 +15,10 @@ import {
   fetchOpenIssues,
   fetchClosedIssues,
   fetchOrgMembers,
+  fetchPaginatedIssues,
+  fetchPaginatedPrs,
+  fetchIssueDetail,
+  fetchPrDetail,
 } from "../github";
 
 const mockApiGet = vi.mocked(apiGet);
@@ -79,6 +83,7 @@ describe("fetchRepos", () => {
         pushed_at: "2026-01-01",
         language: "TypeScript",
         visibility: "private",
+        inactive: false,
       },
     ]);
   });
@@ -193,6 +198,101 @@ describe("fetchClosedIssues", () => {
     expect(mockApiGet).toHaveBeenCalledWith(
       expect.stringContaining("closed_since=2026-01-10"),
     );
+  });
+});
+
+// ---------- fetchPaginatedIssues ----------
+
+describe("fetchPaginatedIssues", () => {
+  it("serializes stale=1 query flag", async () => {
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+    await fetchPaginatedIssues({ state: "open", stale: true });
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("stale=1"));
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("state=open"));
+  });
+
+  it("omits stale flag when false", async () => {
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+    await fetchPaginatedIssues({ state: "open" });
+    expect(mockApiGet).not.toHaveBeenCalledWith(expect.stringContaining("stale="));
+  });
+
+  it("passes repos as comma-separated list", async () => {
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+    await fetchPaginatedIssues({ repos: ["a", "b", "c"] });
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("repos=a%2Cb%2Cc"));
+  });
+});
+
+// ---------- fetchPaginatedPrs ----------
+
+describe("fetchPaginatedPrs", () => {
+  it("serializes draft=1 and stale=1 query flags", async () => {
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+    await fetchPaginatedPrs({ state: "open", draft: true, stale: true });
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("draft=1"));
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("stale=1"));
+  });
+
+  it("omits flags when false", async () => {
+    mockApiGet.mockResolvedValue({ data: [], totalCount: 0, page: 1, pageSize: 30 });
+    await fetchPaginatedPrs({ state: "open" });
+    const call = mockApiGet.mock.calls[0][0] as string;
+    expect(call).not.toContain("draft=");
+    expect(call).not.toContain("stale=");
+  });
+});
+
+// ---------- fetchIssueDetail / fetchPrDetail ----------
+
+describe("fetchIssueDetail", () => {
+  it("calls /api/issues/:repo/:number and transforms result", async () => {
+    mockApiGet.mockResolvedValue({
+      issue: {
+        id: 99, repo: "my-repo", number: 7, title: "T", state: "open",
+        author: "alice", author_avatar: "https://img/alice",
+        created_at: "2026-01-01", updated_at: "2026-01-02", closed_at: null,
+        html_url: "https://github.com/org/my-repo/issues/7",
+        assignees: [{ login: "bob" }], labels: [{ name: "bug", color: "ff0000" }],
+        milestone_title: null, closed_by: null,
+      },
+    });
+    const issue = await fetchIssueDetail("my-repo", 7);
+    expect(mockApiGet).toHaveBeenCalledWith("/api/issues/my-repo/7");
+    expect(issue.user).toEqual({ login: "alice", avatar_url: "https://img/alice" });
+    expect(issue.assignees).toEqual([{ login: "bob", avatar_url: "" }]);
+  });
+
+  it("url-encodes repo names containing special characters", async () => {
+    mockApiGet.mockResolvedValue({
+      issue: {
+        id: 1, repo: "repo.dot", number: 1, title: "T", state: "open",
+        author: null, author_avatar: null,
+        created_at: "2026-01-01", updated_at: "2026-01-02", closed_at: null,
+        html_url: "x", assignees: [], labels: [], milestone_title: null, closed_by: null,
+      },
+    });
+    await fetchIssueDetail("repo.dot", 1);
+    expect(mockApiGet).toHaveBeenCalledWith("/api/issues/repo.dot/1");
+  });
+});
+
+describe("fetchPrDetail", () => {
+  it("calls /api/prs/:repo/:number and transforms result", async () => {
+    mockApiGet.mockResolvedValue({
+      pr: {
+        id: 99, repo: "r", number: 12, title: "PR", state: "open",
+        author: "alice", author_avatar: "",
+        draft: true, head_ref: "feat", base_ref: "main",
+        merged_at: null, created_at: "2026-01-01", updated_at: "2026-01-02",
+        html_url: "https://github.com/org/r/pull/12",
+        requested_reviewers: [{ login: "bob" }], labels: [],
+      },
+    });
+    const pr = await fetchPrDetail("r", 12);
+    expect(mockApiGet).toHaveBeenCalledWith("/api/prs/r/12");
+    expect(pr.draft).toBe(true);
+    expect(pr.head.repo).toEqual({ name: "r", full_name: "r" });
   });
 });
 

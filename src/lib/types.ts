@@ -49,19 +49,15 @@ export type TabId =
   | "sprint"
   | "prs"
   | "issues"
-  | "todos"
   | "posts"
   | "repos"
   | "engineers"
-  | "releases"
   | "settings";
 
 export interface NavFilter {
   person?: string;
   view?: string;
 }
-
-export type TodoStatus = "backlog" | "in_progress" | "review" | "done";
 
 /** PR where the user is a requested reviewer */
 export interface ReviewPR {
@@ -87,87 +83,30 @@ export interface AssignedIssue {
   created_at: string;
 }
 
-export interface Todo {
-  id: number;              // GitHub issue number
-  globalId: number;        // GitHub global issue ID
-  title: string;
-  owner: string;           // GitHub login
-  status: TodoStatus;      // derived from labels
-  createdAt: string;       // from GitHub created_at
-  closedAt?: string;       // from GitHub closed_at (when done)
-  featureId?: number;      // linked feature issue number
-  html_url: string;        // GitHub issue URL
-}
-
 // unticket config repo types
 
-export type FeatureStatus = "plan" | "in_progress" | "demo" | "tested" | "production" | "future" | "scoping" | "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
+export type FeatureStatus = "todo" | "staging" | "ready" | "production" | "future";
 
-/** Ordered feature statuses for kanban boards (excludes "future" which is backlog-only, and scoping statuses). */
-export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["plan", "in_progress", "demo", "tested", "production"];
-
-/** Scoping board statuses in column order. */
-export type ScopingStatus = "idea" | "client_scoping" | "technical_scoping" | "medical_scoping" | "planned" | "deferred";
-export const SCOPING_STATUS_ORDER: ScopingStatus[] = ["idea", "client_scoping", "technical_scoping", "medical_scoping", "planned", "deferred"];
+/** Ordered feature statuses for the kanban board (excludes "future" which is hidden from the board). */
+export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["todo", "staging", "ready", "production"];
 
 /** Tailwind background color class for each feature status dot/indicator (muted palette). */
 export const STATUS_COLORS: Record<FeatureStatus, string> = {
-  plan: "bg-status-plan",
-  in_progress: "bg-status-progress",
-  demo: "bg-status-demo",
-  tested: "bg-status-tested",
+  todo: "bg-status-plan",
+  staging: "bg-status-progress",
+  ready: "bg-status-tested",
   production: "bg-status-production",
   future: "bg-status-future",
-  scoping: "bg-status-scoping",
-  idea: "bg-status-idea",
-  client_scoping: "bg-status-client",
-  technical_scoping: "bg-status-technical",
-  medical_scoping: "bg-status-medical",
-  planned: "bg-status-planned",
-  deferred: "bg-status-deferred",
-};
-
-/** Status type for personal todos (kanban). */
-export const TODO_STATUS_DOTS: Record<TodoStatus, string> = {
-  backlog: "bg-stone-400",
-  in_progress: "bg-status-progress",
-  review: "bg-status-demo",
-  done: "bg-status-production",
 };
 
 /** Human-readable display label for each feature status. */
 export const STATUS_LABELS: Record<FeatureStatus, string> = {
-  plan: "Plan",
-  in_progress: "In Progress",
-  demo: "Demo",
-  tested: "Tested",
-  production: "In Production",
+  todo: "To do",
+  staging: "Testing on staging",
+  ready: "Ready for production",
+  production: "On production",
   future: "Future",
-  scoping: "Scoping",
-  idea: "Idea",
-  client_scoping: "Client Scoping",
-  technical_scoping: "Technical Scoping",
-  medical_scoping: "Medical Scoping",
-  planned: "Planned",
-  deferred: "Deferred",
 };
-
-export interface PersonRole {
-  id: number;        // GitHub global issue ID
-  number: number;    // issue number
-  title: string;
-  assignee: string | null;
-  state: "open" | "closed";
-  html_url: string;
-}
-
-export interface SprintConfig {
-  number: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-  focus: string;
-}
 
 export interface StatusHistoryEntry {
   status: FeatureStatus;
@@ -184,7 +123,6 @@ export interface Feature {
   title: string;
   owners: string[];
   status: FeatureStatus;
-  sprint: number | null;
   plan?: string;
   url?: string;
   updatedAt?: string;
@@ -203,65 +141,7 @@ export interface Person {
 export interface OrgSettings {
   draftRepos?: string[];
   excludedMembers?: string[];
-}
-
-// Sprint snapshots
-export interface SprintSnapshot {
-  sprintNumber: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-  focus: string;
-  metrics: {
-    prsMerged: number;
-    issuesCreated: number;
-    issuesClosed: number;
-    featuresCompleted: number;
-    featuresCarriedOver: number;
-    tasksDone: number;
-    tasksOpen: number;
-    rolesCompleted: number;
-    totalRoles: number;
-  };
-  features: {
-    title: string;
-    status: FeatureStatus;
-    owners: string[];
-  }[];
-  /** Per-engineer breakdown saved at sprint close */
-  engineers?: {
-    login: string;
-    tasksDone: number;
-    tasksOpen: number;
-    prsMerged: number;
-    issuesClosed: number;
-  }[];
-  /** Personal todos completed during this sprint */
-  todosCompleted?: {
-    title: string;
-    owner: string;
-    closedAt: string;
-    featureId?: number;
-  }[];
-  /** All PRs merged during this sprint */
-  prsMerged?: {
-    number: number;
-    title: string;
-    repo: string;
-    author: string;
-    mergedAt: string;
-    url?: string;
-  }[];
-  /** All issues closed during this sprint */
-  issuesClosed?: {
-    number: number;
-    title: string;
-    repo: string;
-    closedBy?: string;
-    closedAt: string;
-    url?: string;
-  }[];
-  createdAt: string;
+  unticketRepo?: string;
 }
 
 // Extended issue info with repo context

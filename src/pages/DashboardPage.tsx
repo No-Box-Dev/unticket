@@ -1,29 +1,34 @@
-import { useMemo, useCallback, lazy, Suspense } from "react";
+import { useMemo, useCallback, useEffect, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useRepos } from "@/hooks/useGitHub";
+import { useSettings } from "@/hooks/useConfigRepo";
+import { setUnticketRepoName } from "@/lib/unticket-repo-name";
 import { TopNav } from "@/components/TopNav";
 import { Spinner } from "@/components/Spinner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { BootstrapOverlay } from "@/components/BootstrapOverlay";
 import type { TabId, NavFilter } from "@/lib/types";
 
 const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ default: m.SprintTab })));
 const PRsTab = lazy(() => import("@/components/tabs/PRsTab").then(m => ({ default: m.PRsTab })));
 const IssuesTab = lazy(() => import("@/components/tabs/IssuesTab").then(m => ({ default: m.IssuesTab })));
-const TodoTab = lazy(() => import("@/components/tabs/TodoTab").then(m => ({ default: m.TodoTab })));
 const PostsTab = lazy(() => import("@/components/tabs/PostsTab").then(m => ({ default: m.PostsTab })));
 const ReposTab = lazy(() => import("@/components/tabs/ReposTab").then(m => ({ default: m.ReposTab })));
 const EngineersTab = lazy(() => import("@/components/tabs/EngineersTab").then(m => ({ default: m.EngineersTab })));
-const ReleasesTab = lazy(() => import("@/components/tabs/ReleasesTab").then(m => ({ default: m.ReleasesTab })));
 const SettingsTab = lazy(() => import("@/components/tabs/SettingsTab").then(m => ({ default: m.SettingsTab })));
 
-const VALID_TABS = new Set<string>(["sprint", "prs", "issues", "todos", "posts", "repos", "engineers", "releases", "settings"]);
+const VALID_TABS = new Set<string>(["sprint", "prs", "issues", "posts", "repos", "engineers", "settings"]);
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: repos } = useRepos();
+  const { data: settings } = useSettings();
+  useEffect(() => {
+    setUnticketRepoName(settings?.unticketRepo);
+  }, [settings?.unticketRepo]);
   const repoNames = useMemo(
     () => repos?.map((r) => r.name) ?? [],
     [repos],
@@ -32,9 +37,7 @@ export function DashboardPage() {
   const tabParam = searchParams.get("tab");
   const activeTab: TabId = tabParam && VALID_TABS.has(tabParam) ? tabParam as TabId : "issues";
   const rawF = searchParams.get("f");
-  const rawS = searchParams.get("s");
   const featureId = rawF ? (Number.isFinite(Number(rawF)) ? Number(rawF) : undefined) : undefined;
-  const sprintNum = rawS ? (Number.isFinite(Number(rawS)) ? Number(rawS) : undefined) : undefined;
   const personParam = searchParams.get("person") ?? undefined;
   const viewParam = searchParams.get("view") ?? undefined;
 
@@ -52,6 +55,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-stone-50">
+      <BootstrapOverlay />
       <CommandPalette onNavigate={handleTabChange} />
       <TopNav activeTab={activeTab} onTabChange={handleTabChange} />
 
@@ -59,9 +63,8 @@ export function DashboardPage() {
         <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-accent" /></div>}>
           <ErrorBoundary key={activeTab}>
             {activeTab === "settings" && <SettingsTab />}
-            {activeTab === "sprint" && <SprintTab repoNames={repoNames} navFilter={navFilter} urlFeatureId={featureId} urlSprintNum={sprintNum} onUrlChange={(f, s) => {
+            {activeTab === "sprint" && <SprintTab navFilter={navFilter} urlFeatureId={featureId} onUrlChange={(f) => {
               const params: Record<string, string> = { tab: "sprint" };
-              if (s != null) params.s = String(s);
               if (f != null) params.f = String(f);
               if (personParam) params.person = personParam;
               if (viewParam) params.view = viewParam;
@@ -69,11 +72,9 @@ export function DashboardPage() {
             }} />}
             {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
-            {activeTab === "todos" && <TodoTab />}
             {activeTab === "posts" && <PostsTab />}
             {activeTab === "repos" && <ReposTab />}
             {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
-            {activeTab === "releases" && <ReleasesTab />}
           </ErrorBoundary>
         </Suspense>
       </main>

@@ -25,12 +25,14 @@ export async function getSyncState(db, orgId, resource) {
 }
 
 export async function setSyncState(db, orgId, resource, etag) {
+  // ISO 8601 with trailing Z — GitHub's `since` param rejects the
+  // space-separated format that `datetime('now')` produces.
   await db
     .prepare(
       `INSERT INTO sync_state (org_id, resource, last_synced, etag)
-       VALUES (?, ?, datetime('now'), ?)
+       VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?)
        ON CONFLICT(org_id, resource) DO UPDATE SET
-         last_synced = datetime('now'),
+         last_synced = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
          etag = excluded.etag`
     )
     .bind(orgId, resource, etag ?? null)

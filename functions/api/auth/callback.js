@@ -3,6 +3,21 @@ import { encryptToken } from "../../lib/crypto";
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
   const code = url.searchParams.get("code");
+  const setupAction = url.searchParams.get("setup_action");
+
+  // GitHub App post-install redirect: no OAuth state, just installation_id +
+  // setup_action=install. The installation itself fires an `installation`
+  // webhook that captures repos_json; here we only need to bounce the user
+  // back into the app.
+  if (setupAction === "install" || setupAction === "update") {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `${url.origin}/?install=ok`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   if (!code) {
     return new Response(JSON.stringify({ error: "Missing code" }), {

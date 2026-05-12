@@ -1,5 +1,4 @@
 import { getCtx, jsonResponse } from "../lib/db";
-import { syncFeatures } from "../lib/github-sync";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const FEATURE_COLUMNS = [
@@ -15,17 +14,8 @@ export async function onRequestGet(context) {
   const url = new URL(context.request.url);
   const state = url.searchParams.get("state") || "open";
 
-  let query = `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ?`;
-  const bindings = [orgId];
-
-  if (state !== "all") {
-    query += " AND state = ?";
-    bindings.push(state);
-  }
-
-  query += " ORDER BY number ASC";
-
-  const rows = await context.env.DB.prepare(query).bind(...bindings).all();
+  const query = `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ? AND state = ? ORDER BY number ASC`;
+  const rows = await context.env.DB.prepare(query).bind(orgId, state).all();
 
   const data = rows.results.map((row) => ({
     ...row,
@@ -101,11 +91,4 @@ export async function onRequestDelete(context) {
     .run();
 
   return jsonResponse({ ok: true });
-}
-
-// POST /api/features — sync features from unticket repo
-export async function onRequestPost(context) {
-  const { orgId, token, orgLogin } = getCtx(context);
-  const result = await syncFeatures(context.env.DB, token, orgId, orgLogin);
-  return jsonResponse({ ok: true, ...result });
 }

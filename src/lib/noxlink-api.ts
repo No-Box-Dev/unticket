@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost, apiPut, apiDelete } from "./api";
+import { apiGet, apiPatch, apiPost, apiDelete } from "./api";
 
 export interface FeedActor {
   id: string;
@@ -21,6 +21,8 @@ export interface FeedProject {
   repo: string | null;
   description: string | null;
   narrator_enabled: 0 | 1;
+  archived: 0 | 1;
+  archived_at: string | null;
   updated_at: string | null;
 }
 
@@ -36,13 +38,6 @@ export interface FeedEvent {
   summary: string | null;
   payload_json: string | null;
   created_at: string;
-}
-
-export interface FeedNote {
-  actor_id: string;
-  project_id: string;
-  note: string;
-  updated_at: string;
 }
 
 export const fetchActors = () =>
@@ -62,6 +57,7 @@ export interface BackfillResult {
   found: number;
   queued: number;
   skipped: number;
+  renarrated: number;
   days: number;
   message?: string;
 }
@@ -72,13 +68,28 @@ export const backfillProjectPrs = (id: string, days = 3) =>
     { days },
   );
 
+export const archiveProject = (id: string) =>
+  apiPost<{ ok: true; id: string; archived: boolean }>(
+    `/api/projects/${encodeURIComponent(id)}/archive`,
+    {},
+  );
+
+export const unarchiveProject = (id: string) =>
+  apiDelete<{ ok: true; id: string; archived: boolean }>(
+    `/api/projects/${encodeURIComponent(id)}/archive`,
+  );
+
 export interface EventQuery {
   type?: string;
   limit?: number;
   before?: number;
   projectId?: string;
   actorId?: string;
+  triggerTypes?: string[];
 }
+
+export const fetchEvent = (id: number) =>
+  apiGet<{ event: FeedEvent }>(`/api/events/${id}`).then((r) => r.event);
 
 export const fetchEvents = (q: EventQuery = {}) => {
   const params = new URLSearchParams();
@@ -87,26 +98,8 @@ export const fetchEvents = (q: EventQuery = {}) => {
   if (q.before) params.set("before", String(q.before));
   if (q.projectId) params.set("project_id", q.projectId);
   if (q.actorId) params.set("actor_id", q.actorId);
+  if (q.triggerTypes?.length) params.set("trigger_types", q.triggerTypes.join(","));
   const qs = params.toString();
   return apiGet<{ events: FeedEvent[] }>(`/api/events${qs ? `?${qs}` : ""}`).then((r) => r.events);
 };
 
-export const fetchNotes = (params: { actorId?: string; projectId?: string } = {}) => {
-  const qs = new URLSearchParams();
-  if (params.actorId) qs.set("actor_id", params.actorId);
-  if (params.projectId) qs.set("project_id", params.projectId);
-  const q = qs.toString();
-  return apiGet<{ notes: FeedNote[] }>(`/api/notes${q ? `?${q}` : ""}`).then((r) => r.notes);
-};
-
-export const putNote = (actorId: string, projectId: string, note: string) =>
-  apiPut<{ ok: boolean; deleted?: boolean }>("/api/notes", {
-    actor_id: actorId,
-    project_id: projectId,
-    note,
-  });
-
-export const deleteNote = (actorId: string, projectId: string) => {
-  const qs = new URLSearchParams({ actor_id: actorId, project_id: projectId });
-  return apiDelete<{ ok: boolean }>(`/api/notes?${qs.toString()}`);
-};

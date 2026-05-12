@@ -1,15 +1,6 @@
 import { apiGet, apiPut } from "./api";
-import { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile, fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
-import type { SprintConfig, Person, OrgSettings, SprintSnapshot } from "./types";
-
-// Sprint
-export async function fetchSprint(): Promise<SprintConfig | null> {
-  return apiGet<SprintConfig | null>("/api/config/sprint");
-}
-
-export async function saveSprint(sprint: SprintConfig) {
-  await apiPut("/api/config/sprint", sprint);
-}
+import { fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
+import type { Person, OrgSettings } from "./types";
 
 // People (GitHub-backed via unticket repo)
 export async function fetchPeople(org: string): Promise<Person[]> {
@@ -42,38 +33,12 @@ export async function saveAgentRules(rules: string[]) {
   await apiPut("/api/config/agentRules", rules);
 }
 
-// Sprint Snapshots
-export async function fetchSprintSnapshots(): Promise<SprintSnapshot[]> {
-  const data = await apiGet<SprintSnapshot[]>("/api/config/sprintSnapshots");
-  return data ?? [];
-}
-
-export async function saveSprintSnapshots(snapshots: SprintSnapshot[]) {
-  await apiPut("/api/config/sprintSnapshots", snapshots);
-}
-
 // Config repo management — D1 is always available
 export async function ensureConfigRepo(): Promise<boolean> {
   return true;
 }
 
 export async function createConfigRepo(): Promise<void> {
-  // Seed D1 with defaults
-  // Start next Monday, run 2 weeks
-  const now = new Date();
-  const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
-  const start = new Date(now.getTime() + daysUntilMonday * 86400000);
-  const end = new Date(start.getTime() + 13 * 86400000);
-  await apiPut("/api/config/sprint", {
-    number: 1,
-    name: "Getting Started",
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
-    focus: "Set up your first sprint",
-  });
   await apiPut("/api/config/people", []);
   await apiPut("/api/config/settings", {});
 }
-
-// Re-export plan helpers
-export { fetchTodoPlanFile, todoPlanFilePath, saveTodoPlanFile };
