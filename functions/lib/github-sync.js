@@ -363,6 +363,150 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   return members.map((m) => m.login);
 }
 
+// ---------- Sync Teams ----------
+//
+// Full reconcile each tick: GitHub orgs rarely have >100 teams, and per-team
+// member lists are short. Deletions are handled by clearing rows for teams
+// no longer in the API response. Errors are swallowed (403/404 = the
+// installation lacks the `members:read` permission, or the org is a user).
+
+export async function syncTeams(db, token, orgId, orgLogin) {
+  let teams;
+  try {
+    teams = await fetchAllPages(token, `https://api.github.com/orgs/${orgLogin}/teams`);
+  } catch (err) {
+    console.error(`[unticket sync] syncTeams ${orgLogin} failed:`, err?.message ?? err);
+    return [];
+  }
+
+  const teamRows = teams.map((t) => ({ id: t.id, slug: t.slug, name: t.name }));
+
+  const teamStmt = db.prepare(
+    `INSERT INTO teams (org_id, github_id, slug, name, updated_at)
+     VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+     ON CONFLICT(org_id, github_id) DO UPDATE SET
+       slug = excluded.slug,
+       name = excluded.name,
+       updated_at = excluded.updated_at`
+  );
+
+  if (teamRows.length > 0) {
+    await db.batch(teamRows.map((t) => teamStmt.bind(orgId, t.id, t.slug, t.name)));
+  }
+
+  const keepIds = new Set(teamRows.map((t) => t.id));
+  const existing = await db
+    .prepare("SELECT github_id FROM teams WHERE org_id = ?")
+    .bind(orgId)
+    .all();
+  const toDelete = (existing.results ?? [])
+    .map((r) => r.github_id)
+    .filter((id) => !keepIds.has(id));
+  if (toDelete.length > 0) {
+    const placeholders = toDelete.map(() => "?").join(",");
+    await db.batch([
+      db.prepare(`DELETE FROM teams WHERE org_id = ? AND github_id IN (${placeholders})`).bind(orgId, ...toDelete),
+      db.prepare(`DELETE FROM team_memberships WHERE org_id = ? AND team_github_id IN (${placeholders})`).bind(orgId, ...toDelete),
+    ]);
+  }
+
+  const membershipStmt = db.prepare(
+    `INSERT INTO team_memberships (org_id, team_github_id, login)
+     VALUES (?, ?, ?)
+     ON CONFLICT(org_id, team_github_id, login) DO NOTHING`
+  );
+
+  for (const team of teamRows) {
+    let members;
+    try {
+      members = await fetchAllPages(
+        token,
+        `https://api.github.com/orgs/${orgLogin}/teams/${team.slug}/members`,
+      );
+    } catch (err) {
+      console.error(`[unticket sync] syncTeams members ${team.slug} failed:`, err?.message ?? err);
+      continue;
+    }
+
+    const seenLogins = new Set(members.map((m) => m.login).filter(Boolean));
+
+    if (members.length > 0) {
+      const ops = members
+        .filter((m) => m.login)
+        .map((m) => membershipStmt.bind(orgId, team.id, m.login));
+      for (let i = 0; i < ops.length; i += 50) {
+        await db.batch(ops.slice(i, i + 50));
+      }
+    }
+
+    const existingMembers = await db
+      .prepare("SELECT login FROM team_memberships WHERE org_id = ? AND team_github_id = ?")
+      .bind(orgId, team.id)
+      .all();
+    const staleLogins = (existingMembers.results ?? [])
+      .map((r) => r.login)
+      .filter((login) => !seenLogins.has(login));
+    if (staleLogins.length > 0) {
+      const ph = staleLogins.map(() => "?").join(",");
+      await db
+        .prepare(`DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ? AND login IN (${ph})`)
+        .bind(orgId, team.id, ...staleLogins)
+        .run();
+    }
+  }
+
+  await setSyncState(db, orgId, "teams");
+
+  return teamRows.map((t) => t.slug);
+}
+
+// Webhook helpers — call from the team / membership webhook handlers.
+
+export async function upsertTeam(db, orgId, team) {
+  if (!team?.id) return;
+  await db
+    .prepare(
+      `INSERT INTO teams (org_id, github_id, slug, name, updated_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+       ON CONFLICT(org_id, github_id) DO UPDATE SET
+         slug = excluded.slug,
+         name = excluded.name,
+         updated_at = excluded.updated_at`
+    )
+    .bind(orgId, team.id, team.slug, team.name)
+    .run();
+}
+
+export async function removeTeam(db, orgId, githubId) {
+  if (!githubId) return;
+  await db.batch([
+    db.prepare("DELETE FROM teams WHERE org_id = ? AND github_id = ?").bind(orgId, githubId),
+    db.prepare("DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ?").bind(orgId, githubId),
+  ]);
+}
+
+export async function addTeamMember(db, orgId, teamGithubId, login) {
+  if (!teamGithubId || !login) return;
+  await db
+    .prepare(
+      `INSERT INTO team_memberships (org_id, team_github_id, login)
+       VALUES (?, ?, ?)
+       ON CONFLICT(org_id, team_github_id, login) DO NOTHING`
+    )
+    .bind(orgId, teamGithubId, login)
+    .run();
+}
+
+export async function removeTeamMember(db, orgId, teamGithubId, login) {
+  if (!teamGithubId || !login) return;
+  await db
+    .prepare(
+      "DELETE FROM team_memberships WHERE org_id = ? AND team_github_id = ? AND login = ?"
+    )
+    .bind(orgId, teamGithubId, login)
+    .run();
+}
+
 // ---------- Sync Features (unticket repo issues) ----------
 //
 // Always does a full sync. The unticket repo is small (<100 issues) so the
@@ -531,6 +675,7 @@ export async function syncInit(db, token, orgId, orgLogin) {
   await migrateUnticketConfig(db, token, orgId, orgLogin);
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
+  await syncTeams(db, token, orgId, orgLogin);
   await syncFeatures(db, token, orgId, orgLogin);
 
   const repoRows = await db
@@ -558,6 +703,7 @@ export async function bootstrapInstallation(env, orgId, orgLogin, installationId
 
   await syncRepos(db, token, orgId, orgLogin);
   await syncMembers(db, token, orgId, orgLogin);
+  await syncTeams(db, token, orgId, orgLogin);
   await syncFeatures(db, token, orgId, orgLogin);
 
   const repoRows = await db

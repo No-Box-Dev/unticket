@@ -14,6 +14,7 @@
 import {
   syncRepos,
   syncMembers,
+  syncTeams,
   syncFeatures,
   syncPRs,
   syncIssues,
@@ -56,6 +57,7 @@ export async function reconcileOrg(env, db, orgId, orgLogin, installationId) {
     ]);
     await reconcileDeletedMembers(db, orgId, apiMembers);
     await reconcileDeletedRepos(db, orgId, apiRepos);
+    await syncTeams(db, token, orgId, orgLogin);
     await syncFeatures(db, token, orgId, orgLogin);
 
     // Issues + PRs per active repo with incremental `since` cursor.

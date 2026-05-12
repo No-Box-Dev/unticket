@@ -5,6 +5,10 @@ import {
   upsertPR,
   upsertMember,
   removeMember,
+  upsertTeam,
+  removeTeam,
+  addTeamMember,
+  removeTeamMember,
   bootstrapInstallation,
   markRepoArchived,
   removeRepo,
@@ -290,6 +294,47 @@ export async function onRequestPost(context) {
         console.error(`[unticket webhook] touchRepoPushed ${repo} failed:`, err);
       }
       return jsonResponse({ ok: true, event, repo });
+    }
+
+    if (event === "team") {
+      const team = payload.team;
+      if (!team?.id) return jsonResponse({ ok: true, skipped: "no team" });
+      if (action === "deleted") {
+        await removeTeam(db, orgId, team.id);
+      } else {
+        await upsertTeam(db, orgId, team);
+      }
+      return jsonResponse({ ok: true, event, action, team: team.slug });
+    }
+
+    if (event === "membership") {
+      const team = payload.team;
+      const member = payload.member;
+      if (!team?.id || !member?.login) {
+        return jsonResponse({ ok: true, skipped: "no team/member in payload" });
+      }
+      // Make sure the team row exists before we touch the membership table —
+      // a `membership` event can land before the corresponding `team.created`.
+      await upsertTeam(db, orgId, team);
+      if (action === "removed") {
+        await removeTeamMember(db, orgId, team.id, member.login);
+      } else {
+        await addTeamMember(db, orgId, team.id, member.login);
+      }
+      return jsonResponse({ ok: true, event, action, team: team.slug, login: member.login });
+    }
+
+    if (event === "organization") {
+      const member = payload.membership?.user ?? payload.user;
+      if (action === "member_added" && member?.login) {
+        await upsertMember(db, orgId, member);
+        return jsonResponse({ ok: true, event, action, login: member.login });
+      }
+      if (action === "member_removed" && member?.login) {
+        await removeMember(db, orgId, member.login);
+        return jsonResponse({ ok: true, event, action, login: member.login });
+      }
+      return jsonResponse({ ok: true, event, action, skipped: "no membership change" });
     }
 
     // pull_request_review and other events without dedicated handlers fall
