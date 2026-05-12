@@ -54,12 +54,13 @@ export function useFeedEvent(id: number | null, enabled = true) {
   });
 }
 
-export function useFeedEvents(q: EventQuery = {}) {
+export function useFeedEvents(q: EventQuery = {}, opts: { enabled?: boolean } = {}) {
   const { selectedOrg } = useAuth();
+  const enabled = (opts.enabled ?? true) && !!selectedOrg;
   return useQuery({
     queryKey: ["noxlink", "events", selectedOrg, q],
     queryFn: () => fetchEvents(q),
-    enabled: !!selectedOrg,
+    enabled,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

@@ -227,7 +227,7 @@ function PrDetails({
         </div>
       )}
       {body ? (
-        <div className="text-xs text-stone-600 whitespace-pre-wrap break-words max-h-72 overflow-y-auto">
+        <div className="text-xs text-stone-600 whitespace-pre-wrap break-words">
           {body}
         </div>
       ) : (
