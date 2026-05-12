@@ -19,14 +19,31 @@ window.addEventListener("error", (e) => {
 });
 
 // Auto-reload when a lazy chunk fails to load — typically after a deploy
-// replaces the chunks the open SPA was holding references to. One reload
-// per session: a flag in sessionStorage prevents a loop if the error is
-// not actually deploy-related.
+// replaces the chunks the open SPA was holding references to. The first
+// reload picks up the new index.html, but the new chunks may not yet have
+// propagated to every CDN edge, so we allow a few spaced retries before
+// giving up. Tracked in sessionStorage to avoid loops across navigations.
 window.addEventListener("vite:preloadError", () => {
-  if (sessionStorage.getItem("preloadErrorReloaded") === "1") return;
-  sessionStorage.setItem("preloadErrorReloaded", "1");
-  window.location.reload();
+  if (shouldAutoReload()) window.location.reload();
 });
+
+const RELOAD_KEY = "preloadErrorReloads";
+const MAX_AUTO_RELOADS = 3;
+const MIN_RELOAD_INTERVAL_MS = 5000;
+
+function shouldAutoReload(): boolean {
+  let entry: { count: number; last: number };
+  try {
+    entry = JSON.parse(sessionStorage.getItem(RELOAD_KEY) ?? '{"count":0,"last":0}');
+  } catch {
+    entry = { count: 0, last: 0 };
+  }
+  const now = Date.now();
+  if (entry.count >= MAX_AUTO_RELOADS) return false;
+  if (now - entry.last < MIN_RELOAD_INTERVAL_MS) return false;
+  sessionStorage.setItem(RELOAD_KEY, JSON.stringify({ count: entry.count + 1, last: now }));
+  return true;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

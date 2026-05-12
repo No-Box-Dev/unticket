@@ -67,6 +67,32 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("Recovered")).toBeInTheDocument();
   });
 
+  it("shows the deploy-update copy and reloads immediately for chunk-load errors", async () => {
+    const user = userEvent.setup();
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, reload: reloadMock },
+      writable: true,
+      configurable: true,
+    });
+
+    function ChunkErrorChild(): React.JSX.Element {
+      throw new Error("Failed to fetch dynamically imported module: https://app.unticket.ai/assets/IssuesTab-DNuPGSj7.js");
+    }
+
+    render(
+      <ErrorBoundary>
+        <ChunkErrorChild />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText("A new version was deployed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
   it("calls window.location.reload after 3 retries (retryCount >= 2 on third click)", async () => {
     const user = userEvent.setup();
     const reloadMock = vi.fn();
