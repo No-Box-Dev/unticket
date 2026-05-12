@@ -32,9 +32,17 @@ export async function onRequestPost(context) {
     return jsonError("Invalid or expired exchange code", 401);
   }
 
-  // Decrypt the token
+  // Decrypt the token. Any malformed value (extremely unlikely — migration
+  // 0016 deleted legacy plaintext rows and the new code writes only iv:cipher)
+  // forces the user back through OAuth rather than 500ing.
   const encryptionKey = context.env.ENCRYPTION_KEY;
-  const token = await decryptToken(row.encrypted_token, encryptionKey);
+  let token;
+  try {
+    token = await decryptToken(row.encrypted_token, encryptionKey);
+  } catch (err) {
+    console.error("[auth/exchange] decryptToken failed:", err?.message ?? err);
+    return jsonError("Invalid or expired exchange code", 401);
+  }
 
   return new Response(JSON.stringify({ token }), {
     status: 200,
