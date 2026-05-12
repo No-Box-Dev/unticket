@@ -111,15 +111,19 @@ export async function fetchOrgs() {
   }
 }
 
-export async function fetchUserOrgRole(org: string): Promise<"admin" | "member"> {
-  try {
-    const ok = getOctokit();
-    const { data } = await ok.rest.orgs.getMembershipForAuthenticatedUser({ org });
-    return data.role === "admin" ? "admin" : "member";
-  } catch (err) {
-    console.warn("[unticket.ai] Failed to fetch org role, defaulting to member:", err);
-    return "member";
-  }
+export interface MeResponse {
+  login: string;
+  org: string;
+  isAdmin: boolean;
+}
+
+// App-level identity + admin flag. Backed by `/api/me`, which reads the
+// `org_admins` table populated by the middleware bootstrap (first user from
+// each org auto-promotes to admin). This replaced an Octokit call against
+// `/orgs/{org}/memberships/{user}` — GitHub org role and app-level admin are
+// no longer coupled.
+export async function fetchMe(): Promise<MeResponse> {
+  return apiGet<MeResponse>("/api/me");
 }
 
 // ---------- Sync ----------
