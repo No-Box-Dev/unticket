@@ -571,6 +571,178 @@ function extractActivityTitle(e: FeedEvent, payload: any): string {
   return stripped || e.summary;
 }
 
+// ---------- Repo PRs sub-page ----------
+
+function RepoPrsSubPage({
+  repoName,
+  onBack,
+  openPRs,
+  mergedPRs,
+}: {
+  repoName: string;
+  onBack: () => void;
+  openPRs: ListPanelItem[];
+  mergedPRs: ListPanelItem[];
+}) {
+  const [view, setView] = useState<"open" | "merged">("open");
+  const items = view === "open" ? openPRs : mergedPRs;
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        {repoName}
+      </button>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-stone-900 font-display">PRs</h2>
+        <div className="flex items-center rounded-lg border border-stone-200 overflow-hidden">
+          <button
+            onClick={() => setView("open")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+              view === "open" ? "bg-stone-800 text-white" : "bg-white text-stone-500 hover:bg-stone-50",
+            )}
+          >
+            Open ({openPRs.length})
+          </button>
+          <button
+            onClick={() => setView("merged")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer border-l border-stone-200",
+              view === "merged" ? "bg-stone-800 text-white" : "bg-white text-stone-500 hover:bg-stone-50",
+            )}
+          >
+            Merged ({mergedPRs.length})
+          </button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-sm text-stone-400">
+          No {view === "open" ? "open" : "merged"} PRs.
+        </div>
+      ) : (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <ol className="divide-y divide-stone-100">
+            {items.map((item) => (
+              <li key={`pr:${item.repo}#${item.number}`}>
+                <Link to={`/prs/${item.repo}/${item.number}`} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 group">
+                  <GitPullRequest size={14} className={cn("shrink-0", item.draft ? "text-stone-400" : "text-green-600")} />
+                  <span className="text-xs text-stone-400 shrink-0 font-mono">#{item.number}</span>
+                  <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
+                  <span className="text-xs text-stone-400 shrink-0">{formatRelative(item.timestamp)}</span>
+                  <a
+                    href={item.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
+                    title="Open on GitHub"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Repo Issues sub-page ----------
+
+function RepoIssuesSubPage({
+  repoName,
+  onBack,
+  openIssues,
+  closedIssues,
+}: {
+  repoName: string;
+  onBack: () => void;
+  openIssues: ListPanelItem[];
+  closedIssues: ListPanelItem[];
+}) {
+  const [view, setView] = useState<"open" | "closed">("open");
+  const items = view === "open" ? openIssues : closedIssues;
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        {repoName}
+      </button>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-stone-900 font-display">Issues</h2>
+        <div className="flex items-center rounded-lg border border-stone-200 overflow-hidden">
+          <button
+            onClick={() => setView("open")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+              view === "open" ? "bg-stone-800 text-white" : "bg-white text-stone-500 hover:bg-stone-50",
+            )}
+          >
+            Open ({openIssues.length})
+          </button>
+          <button
+            onClick={() => setView("closed")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer border-l border-stone-200",
+              view === "closed" ? "bg-stone-800 text-white" : "bg-white text-stone-500 hover:bg-stone-50",
+            )}
+          >
+            Closed ({closedIssues.length})
+          </button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-sm text-stone-400">
+          No {view === "open" ? "open" : "closed"} issues.
+        </div>
+      ) : (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <ol className="divide-y divide-stone-100">
+            {items.map((item) => (
+              <li key={`issue:${item.repo}#${item.number}`}>
+                <Link to={`/issues/${item.repo}/${item.number}`} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 group">
+                  {view === "open" ? (
+                    <Circle size={14} className="text-stone-400 shrink-0" />
+                  ) : (
+                    <CircleCheck size={14} className="text-stone-400 shrink-0" />
+                  )}
+                  <span className="text-xs text-stone-400 shrink-0 font-mono">#{item.number}</span>
+                  <span className="text-sm text-stone-700 truncate flex-1">{item.title}</span>
+                  <span className="text-xs text-stone-400 shrink-0">{formatRelative(item.timestamp)}</span>
+                  <a
+                    href={item.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-stone-300 opacity-0 group-hover:opacity-100 shrink-0 hover:text-accent"
+                    title="Open on GitHub"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Main Component ----------
 
 export function ReposTab({ repoNames }: { repoNames: string[] }) {
@@ -580,6 +752,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
   const { data: closedIssues } = useClosedIssues(repoNames);
 
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [subPage, setSubPage] = useState<"prs" | "issues" | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [days, setDays] = useState(3);
 
@@ -660,6 +833,37 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
   const closedCount = useMemo(() => {
     if (!selected?.repo) return 0;
     return (closedIssues ?? []).filter((i: any) => i.repo === selected.repo).length;
+  }, [selected, closedIssues]);
+
+  const detailMergedPRs = useMemo<ListPanelItem[]>(() => {
+    if (!selected?.repo) return [];
+    return (allPRs ?? [])
+      .filter((pr: any) => pr.repo === selected.repo && pr.merged_at)
+      .map((pr: any) => ({
+        kind: "pr" as const,
+        repo: pr.repo,
+        number: pr.number,
+        title: pr.title,
+        html_url: pr.html_url,
+        timestamp: pr.merged_at ?? pr.updated_at ?? pr.created_at,
+        draft: pr.draft,
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [selected, allPRs]);
+
+  const detailClosedIssues = useMemo<ListPanelItem[]>(() => {
+    if (!selected?.repo) return [];
+    return (closedIssues ?? [])
+      .filter((i: any) => i.repo === selected.repo)
+      .map((i: any) => ({
+        kind: "issue" as const,
+        repo: i.repo,
+        number: i.number,
+        title: i.title,
+        html_url: i.html_url,
+        timestamp: i.closed_at ?? i.updated_at,
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [selected, closedIssues]);
 
   // Loading / error / empty
@@ -743,7 +947,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
     return (
       <div className="space-y-4">
         <button
-          onClick={() => setSelectedRepo(null)}
+          onClick={() => { setSelectedRepo(null); setSubPage(null); }}
           className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -758,10 +962,35 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
     ? `https://github.com/${selected.org}/${selected.repo}`
     : null;
 
+  // ---- Sub-page: PRs ----
+  if (subPage === "prs") {
+    const [openPRs, mergedPRs] = [detailOpenPRs, detailMergedPRs];
+    return (
+      <RepoPrsSubPage
+        repoName={selected.repo || selected.name}
+        onBack={() => setSubPage(null)}
+        openPRs={openPRs}
+        mergedPRs={mergedPRs}
+      />
+    );
+  }
+
+  // ---- Sub-page: Issues ----
+  if (subPage === "issues") {
+    return (
+      <RepoIssuesSubPage
+        repoName={selected.repo || selected.name}
+        onBack={() => setSubPage(null)}
+        openIssues={detailOpenIssues}
+        closedIssues={detailClosedIssues}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <button
-        onClick={() => setSelectedRepo(null)}
+        onClick={() => { setSelectedRepo(null); setSubPage(null); }}
         className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -816,16 +1045,24 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
 
       {/* Quick stats (inline, matching grid card style) */}
       <div className="bg-white border border-stone-200 rounded-xl px-4 py-3 flex items-center gap-6">
-        <CardStat label="Open PRs" value={detailOpenPRs.length} />
-        <CardStat label="Open Issues" value={detailOpenIssues.length} />
+        <button type="button" onClick={() => setSubPage("prs")} className="cursor-pointer hover:opacity-70 transition-opacity">
+          <CardStat label="Open PRs" value={detailOpenPRs.length} />
+        </button>
+        <button type="button" onClick={() => setSubPage("issues")} className="cursor-pointer hover:opacity-70 transition-opacity">
+          <CardStat label="Open Issues" value={detailOpenIssues.length} />
+        </button>
         <CardStat label="Merged PRs" value={mergedCount} />
         <CardStat label="Closed Issues" value={closedCount} />
       </div>
 
       {/* Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <ItemListPanel title="Open PRs" count={detailOpenPRs.length} items={detailOpenPRs} emptyMessage="No open PRs." />
-        <ItemListPanel title="Open Issues" count={detailOpenIssues.length} items={detailOpenIssues} emptyMessage="No open issues." />
+        <div className="cursor-pointer" onClick={() => setSubPage("prs")}>
+          <ItemListPanel title="Open PRs" count={detailOpenPRs.length} items={detailOpenPRs} emptyMessage="No open PRs." />
+        </div>
+        <div className="cursor-pointer" onClick={() => setSubPage("issues")}>
+          <ItemListPanel title="Open Issues" count={detailOpenIssues.length} items={detailOpenIssues} emptyMessage="No open issues." />
+        </div>
       </div>
 
       {/* Activity Feed */}
