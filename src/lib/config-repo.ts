@@ -23,16 +23,6 @@ export async function saveSettings(settings: OrgSettings) {
   await apiPut("/api/config/settings", settings);
 }
 
-// Agent Rules
-export async function fetchAgentRules(): Promise<string[]> {
-  const data = await apiGet<string[]>("/api/config/agentRules");
-  return data ?? [];
-}
-
-export async function saveAgentRules(rules: string[]) {
-  await apiPut("/api/config/agentRules", rules);
-}
-
 // Config repo management — D1 is always available
 export async function ensureConfigRepo(): Promise<boolean> {
   return true;

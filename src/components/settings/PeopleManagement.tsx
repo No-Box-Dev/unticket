@@ -7,6 +7,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 interface OrgMember {
   login: string;
   avatar_url: string;
+  kind?: "human" | "bot";
 }
 
 interface Props {
@@ -34,6 +35,7 @@ export function PeopleManagement({ people, savePeople, orgMembers, settings, sav
       name: person?.name ?? m.login,
       role: person?.role ?? "",
       active: !excluded.has(m.login),
+      kind: m.kind ?? "human",
     };
   });
 
@@ -145,6 +147,9 @@ export function PeopleManagement({ people, savePeople, orgMembers, settings, sav
                     <span className="text-sm font-medium text-stone-800 truncate">
                       {member.name}
                     </span>
+                    {member.kind === "bot" && (
+                      <span className="text-[9px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full shrink-0">Bot</span>
+                    )}
                     {member.name !== member.login && (
                       <span className="text-xs text-stone-400 shrink-0">@{member.login}</span>
                     )}

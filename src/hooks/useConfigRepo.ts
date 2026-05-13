@@ -5,8 +5,6 @@ import {
   savePeople,
   fetchSettings,
   saveSettings,
-  fetchAgentRules,
-  saveAgentRules,
   ensureConfigRepo,
   createConfigRepo,
 } from "@/lib/config-repo";
@@ -148,33 +146,6 @@ export function useSaveSettings() {
       if (context?.previous) qc.setQueryData(["settings", selectedOrg], context.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["settings", selectedOrg] }),
-  });
-}
-
-export function useAgentRules() {
-  const { selectedOrg } = useAuth();
-  return useQuery({
-    queryKey: ["agentRules", selectedOrg],
-    queryFn: fetchAgentRules,
-    enabled: !!selectedOrg,
-  });
-}
-
-export function useSaveAgentRules() {
-  const { selectedOrg } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (rules: string[]) => saveAgentRules(rules),
-    onMutate: async (rules) => {
-      await qc.cancelQueries({ queryKey: ["agentRules", selectedOrg] });
-      const previous = qc.getQueryData<string[]>(["agentRules", selectedOrg]);
-      qc.setQueryData(["agentRules", selectedOrg], rules);
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) qc.setQueryData(["agentRules", selectedOrg], context.previous);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["agentRules", selectedOrg] }),
   });
 }
 

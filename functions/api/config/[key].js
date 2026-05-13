@@ -1,12 +1,11 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 
-const VALID_KEYS = ["features", "people", "settings", "agentRules"];
+const VALID_KEYS = ["features", "people", "settings"];
 
 const DEFAULTS = {
   features: [],
   people: [],
   settings: null,
-  agentRules: [],
 };
 
 // GET /api/config/:key
