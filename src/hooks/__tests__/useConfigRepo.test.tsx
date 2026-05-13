@@ -9,8 +9,6 @@ vi.mock("@/lib/config-repo", () => ({
   fetchSettings: vi.fn(),
   saveSettings: vi.fn(),
   ensureConfigRepo: vi.fn(),
-  fetchAgentRules: vi.fn(),
-  saveAgentRules: vi.fn(),
 }));
 
 vi.mock("@/lib/github-features", () => ({
