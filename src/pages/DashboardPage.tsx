@@ -73,7 +73,7 @@ export function DashboardPage() {
             {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "posts" && <PostsTab />}
-            {activeTab === "repos" && <ReposTab />}
+            {activeTab === "repos" && <ReposTab repoNames={repoNames} />}
             {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
           </ErrorBoundary>
         </Suspense>
