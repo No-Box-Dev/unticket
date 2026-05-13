@@ -163,6 +163,16 @@ export async function onRequestPost(context) {
 
       const closedBy = (action === "closed" && payload.sender?.login) ? payload.sender.login : null;
       await upsertIssue(db, orgId, repo, payload.issue, closedBy);
+
+      // Auto-register issue author as member so they appear in People page.
+      if (payload.issue?.user?.login) {
+        try {
+          await upsertMember(db, orgId, payload.issue.user, payload.issue.user.type === "Bot" ? "bot" : "human");
+        } catch (err) {
+          console.error("[unticket webhook] upsertMember from issue failed:", err?.message ?? err);
+        }
+      }
+
       // Also upsert into features table if this is a unticket repo issue
       if (repo === "unticket") {
         await upsertFeature(db, orgId, payload.issue);
@@ -192,6 +202,16 @@ export async function onRequestPost(context) {
       // Map merged PRs: GitHub sends action=closed with merged=true
       const pr = payload.pull_request;
       await upsertPR(db, orgId, repo, pr);
+
+      // Auto-register PR author as member so they appear in People page.
+      if (pr.user?.login) {
+        try {
+          await upsertMember(db, orgId, pr.user, pr.user.type === "Bot" ? "bot" : "human");
+        } catch (err) {
+          console.error("[unticket webhook] upsertMember from PR failed:", err?.message ?? err);
+        }
+      }
+
       // Auto-detect feature links from branch name + PR body
       const linkStmt = db.prepare(
         `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)

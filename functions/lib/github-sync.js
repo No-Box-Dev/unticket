@@ -170,6 +170,20 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
     }
   }
 
+  // Register PR authors as members so they appear in the People page.
+  // Bots (Dependabot, Renovate, etc.) are never GitHub org members,
+  // so this is the only path that adds them.
+  const seenAuthorLogins = new Set();
+  for (const pr of prs) {
+    if (!pr.user?.login || seenAuthorLogins.has(pr.user.login)) continue;
+    seenAuthorLogins.add(pr.user.login);
+    try {
+      await upsertMember(db, orgId, pr.user, pr.user.type === "Bot" ? "bot" : "human");
+    } catch (err) {
+      console.error("[unticket sync] upsertMember from PR author failed:", err?.message ?? err);
+    }
+  }
+
   // Auto-detect feature links from branch names + PR bodies
   const linkStmt = db.prepare(
     `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
@@ -349,8 +363,8 @@ export async function syncMembers(db, token, orgId, orgLogin) {
   );
 
   const stmt = db.prepare(
-    `INSERT INTO members (org_id, login, avatar_url)
-     VALUES (?, ?, ?)
+    `INSERT INTO members (org_id, login, avatar_url, kind)
+     VALUES (?, ?, ?, 'human')
      ON CONFLICT(org_id, login) DO UPDATE SET
        avatar_url = excluded.avatar_url`
   );
@@ -876,15 +890,16 @@ export async function upsertPR(db, orgId, repo, pr) {
     .run();
 }
 
-export async function upsertMember(db, orgId, member) {
+export async function upsertMember(db, orgId, member, kind = "human") {
   await db
     .prepare(
-      `INSERT INTO members (org_id, login, avatar_url)
-       VALUES (?, ?, ?)
+      `INSERT INTO members (org_id, login, avatar_url, kind)
+       VALUES (?, ?, ?, ?)
        ON CONFLICT(org_id, login) DO UPDATE SET
-         avatar_url = excluded.avatar_url`
+         avatar_url = excluded.avatar_url,
+         kind = excluded.kind`
     )
-    .bind(orgId, member.login, member.avatar_url ?? null)
+    .bind(orgId, member.login, member.avatar_url ?? null, kind)
     .run();
 }
 

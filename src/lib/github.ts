@@ -283,6 +283,7 @@ interface ApiIssue {
 interface ApiMember {
   login: string;
   avatar_url: string | null;
+  kind: "human" | "bot";
 }
 
 // ---------- Transform API → Octokit-compatible shapes ----------
@@ -429,7 +430,8 @@ export async function fetchOrgMembers() {
     login: m.login,
     avatar_url: m.avatar_url ?? "",
     id: 0,
-    type: "User" as const,
+    type: (m.kind === "bot" ? "Bot" : "User") as "Bot" | "User",
+    kind: m.kind,
   }));
 }
 
