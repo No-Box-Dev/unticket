@@ -74,6 +74,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         reviewing,
         assignedIssues,
         ghTeams: ghTeams?.memberships?.[member.login] ?? [],
+        kind: member.kind ?? (member.type === "Bot" ? "bot" : "human"),
       };
     });
   }, [orgMembers, people, allPRs, openIssues, ghTeams]);
@@ -175,6 +176,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
   // Default landing: grid of cards. Click a card → set selectedLogin → detail view.
   if (!selectedLogin) {
     const sorted = [...engineers].sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "bot" ? 1 : -1;
       const ax = a.openPRs + a.reviewing + a.assignedIssues;
       const bx = b.openPRs + b.reviewing + b.assignedIssues;
       if (bx !== ax) return bx - ax;
@@ -215,7 +217,12 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
             </div>
           )}
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-stone-900 font-display truncate">{selected.name}</h2>
+            <h2 className="text-lg font-bold text-stone-900 font-display truncate flex items-center gap-2">
+              <span className="truncate">{selected.name}</span>
+              {selected.kind === "bot" && (
+                <span className="text-[10px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full shrink-0">Bot</span>
+              )}
+            </h2>
             {(selected.role || selected.team) && (
               <p className="text-sm text-stone-400 truncate">{[selected.role, selected.team].filter(Boolean).join(" · ")}</p>
             )}
@@ -294,7 +301,12 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-stone-900 truncate">{engineer.name}</div>
+          <div className="text-sm font-semibold text-stone-900 truncate flex items-center gap-1.5">
+            <span className="truncate">{engineer.name}</span>
+            {engineer.kind === "bot" && (
+              <span className="text-[9px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full shrink-0">Bot</span>
+            )}
+          </div>
           <div className="text-xs text-stone-400 truncate">
             {[engineer.role, engineer.team].filter(Boolean).join(" · ") || `@${engineer.login}`}
           </div>

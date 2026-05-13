@@ -15,12 +15,19 @@ export const DEFAULT_ACTOR_TONE =
   `aside when the change is mundane. Speak to readers, not coworkers — no "we just," ` +
   `no "the team."`;
 
+const DEFAULT_BOT_TONE =
+  `First-person, precise and matter-of-fact. State what was done and why in one or two ` +
+  `sentences. Name the dependency, version, file, or vulnerability — no vague "updates" ` +
+  `or "improvements." No filler phrases, no enthusiasm, no emoji. ` +
+  `Think changelog entry written by someone who has infinite patience but zero sentiment.`;
+
 export async function resolveActorFromGithub(db, ownerId, author) {
   if (!author?.login || author.id == null) return null;
   const login = author.login.toLowerCase();
   const githubUserId = String(author.id);
   const newId = `actor_${login}`;
   const kind = author.type === "Bot" ? "bot" : "human";
+  const defaultTone = kind === "bot" ? DEFAULT_BOT_TONE : DEFAULT_ACTOR_TONE;
 
   const existing = await db.prepare(
     "SELECT id FROM actors WHERE owner_id = ? AND github_user_id = ?"
@@ -62,7 +69,7 @@ export async function resolveActorFromGithub(db, ownerId, author) {
     githubUserId,
     author.name || author.login,
     author.avatar_url ?? null,
-    DEFAULT_ACTOR_TONE,
+    defaultTone,
     kind,
     ownerId,
   ).run();
