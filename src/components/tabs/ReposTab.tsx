@@ -814,12 +814,12 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Open Issues" value={detailOpenIssues.length} icon={<Circle size={14} className="text-stone-400" />} />
-        <StatCard label="Open PRs" value={detailOpenPRs.length} icon={<GitPullRequest size={14} className="text-stone-400" />} />
-        <StatCard label="Merged PRs" value={mergedCount} icon={<GitMerge size={14} className="text-stone-400" />} />
-        <StatCard label="Closed Issues" value={closedCount} icon={<CircleCheck size={14} className="text-stone-400" />} />
+      {/* Quick stats (inline, matching grid card style) */}
+      <div className="bg-white border border-stone-200 rounded-xl px-4 py-3 flex items-center gap-6">
+        <CardStat label="Open PRs" value={detailOpenPRs.length} />
+        <CardStat label="Open Issues" value={detailOpenIssues.length} />
+        <CardStat label="Merged PRs" value={mergedCount} />
+        <CardStat label="Closed Issues" value={closedCount} />
       </div>
 
       {/* Lists */}
@@ -830,6 +830,14 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
 
       {/* Activity Feed */}
       <RepoActivityFeed projectId={selected.id} />
+
+      {/* Lifetime stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="Open Issues" value={detailOpenIssues.length} icon={<Circle size={14} className="text-stone-400" />} />
+        <StatCard label="Open PRs" value={detailOpenPRs.length} icon={<GitPullRequest size={14} className="text-stone-400" />} />
+        <StatCard label="Merged PRs" value={mergedCount} icon={<GitMerge size={14} className="text-stone-400" />} />
+        <StatCard label="Closed Issues" value={closedCount} icon={<CircleCheck size={14} className="text-stone-400" />} />
+      </div>
     </div>
   );
 }
