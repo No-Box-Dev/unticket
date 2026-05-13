@@ -284,6 +284,7 @@ interface EngineerSummary {
   reviewing: number;
   assignedIssues: number;
   ghTeams: string[];
+  kind: "human" | "bot";
 }
 
 function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
