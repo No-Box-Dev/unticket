@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
   fetchActors,
@@ -6,6 +6,7 @@ import {
   patchActor,
   fetchProjects,
   fetchEvents,
+  fetchEventsPage,
   fetchEvent,
   backfillProjectPrs,
   archiveProject,
@@ -73,6 +74,37 @@ export const POST_TRIGGER_TYPES = ["github:pr:merged"];
 
 export function usePosts(limit = 50) {
   return useFeedEvents({ type: "narrative", limit, triggerTypes: POST_TRIGGER_TYPES });
+}
+
+export interface PostsFilter {
+  actorId?: string;
+  projectId?: string;
+  pageSize?: number;
+}
+
+export function useInfinitePosts(filter: PostsFilter = {}) {
+  const { selectedOrg } = useAuth();
+  const pageSize = filter.pageSize ?? 25;
+  const actorId = filter.actorId || undefined;
+  const projectId = filter.projectId || undefined;
+  return useInfiniteQuery({
+    queryKey: ["noxlink", "posts", selectedOrg, { actorId, projectId, pageSize }],
+    queryFn: ({ pageParam }) =>
+      fetchEventsPage({
+        type: "narrative",
+        triggerTypes: POST_TRIGGER_TYPES,
+        limit: pageSize,
+        actorId,
+        projectId,
+        before: pageParam ?? undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) =>
+      last.events.length < pageSize ? undefined : (last.nextCursor ?? undefined),
+    enabled: !!selectedOrg,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 }
 
 export function usePatchActor() {
