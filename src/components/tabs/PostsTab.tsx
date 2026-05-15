@@ -1,17 +1,23 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, GitPullRequest } from "lucide-react";
-import { usePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
+import { useInfinitePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
 
+const PAGE_SIZE = 25;
+
 export function PostsTab() {
-  const posts = usePosts(50);
   const actors = useFeedActors();
   const projects = useFeedProjects();
   const [actorFilter, setActorFilter] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
+  const posts = useInfinitePosts({
+    actorId: actorFilter || undefined,
+    projectId: projectFilter || undefined,
+    pageSize: PAGE_SIZE,
+  });
 
   const actorById = useMemo(() => {
     const m = new Map<string, FeedActor>();
@@ -28,7 +34,10 @@ export function PostsTab() {
   // Dropdowns list every known person/repo, not just those with posts in the
   // current window — so a teammate who hasn't shipped yet is still selectable
   // (and you can confirm "yep, nothing from them yet" via the empty state).
-  const events = posts.data ?? [];
+  const events = useMemo<FeedEvent[]>(
+    () => posts.data?.pages.flatMap((p) => p.events) ?? [],
+    [posts.data],
+  );
 
   const actorOptions = useMemo(() => {
     const opts = (actors.data ?? [])
@@ -45,15 +54,6 @@ export function PostsTab() {
     return [{ value: "", label: "All repos" }, ...opts];
   }, [projects.data]);
 
-  const filteredEvents = useMemo(() => {
-    if (!actorFilter && !projectFilter) return events;
-    return events.filter((e) => {
-      if (actorFilter && e.actor_id !== actorFilter) return false;
-      if (projectFilter && e.project_id !== projectFilter) return false;
-      return true;
-    });
-  }, [events, actorFilter, projectFilter]);
-
   if (posts.isLoading || actors.isLoading || projects.isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -69,6 +69,8 @@ export function PostsTab() {
       </div>
     );
   }
+
+  const hasFilters = !!(actorFilter || projectFilter);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -87,7 +89,7 @@ export function PostsTab() {
           placeholder="All repos"
           className="min-w-[160px]"
         />
-        {(actorFilter || projectFilter) && (
+        {hasFilters && (
           <button
             type="button"
             onClick={() => { setActorFilter(""); setProjectFilter(""); }}
@@ -100,21 +102,36 @@ export function PostsTab() {
 
       {events.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
-          No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here.
-        </div>
-      ) : filteredEvents.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
-          No posts match the current filters.
+          {hasFilters
+            ? "No posts match the current filters."
+            : "No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here."}
         </div>
       ) : (
-        filteredEvents.map((event) => (
-          <PostCard
-            key={event.id}
-            event={event}
-            actor={event.actor_id ? actorById.get(event.actor_id) ?? null : null}
-            project={event.project_id ? projectById.get(event.project_id) ?? null : null}
-          />
-        ))
+        <>
+          {events.map((event) => (
+            <PostCard
+              key={event.id}
+              event={event}
+              actor={event.actor_id ? actorById.get(event.actor_id) ?? null : null}
+              project={event.project_id ? projectById.get(event.project_id) ?? null : null}
+            />
+          ))}
+          <div className="flex justify-center pt-2 pb-6">
+            {posts.hasNextPage ? (
+              <button
+                type="button"
+                onClick={() => posts.fetchNextPage()}
+                disabled={posts.isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-stone-900 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {posts.isFetchingNextPage && <Spinner size="sm" />}
+                {posts.isFetchingNextPage ? "Loading…" : "Load more"}
+              </button>
+            ) : (
+              <div className="text-xs text-stone-400">End of feed</div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

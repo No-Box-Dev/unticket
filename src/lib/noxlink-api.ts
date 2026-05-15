@@ -82,24 +82,35 @@ export const unarchiveProject = (id: string) =>
 export interface EventQuery {
   type?: string;
   limit?: number;
-  before?: number;
+  before?: string;
   projectId?: string;
   actorId?: string;
   triggerTypes?: string[];
 }
 
+export interface EventsPage {
+  events: FeedEvent[];
+  nextCursor: string | null;
+}
+
 export const fetchEvent = (id: number) =>
   apiGet<{ event: FeedEvent }>(`/api/events/${id}`).then((r) => r.event);
 
-export const fetchEvents = (q: EventQuery = {}) => {
+function buildEventsUrl(q: EventQuery): string {
   const params = new URLSearchParams();
   if (q.type) params.set("type", q.type);
   if (q.limit) params.set("limit", String(q.limit));
-  if (q.before) params.set("before", String(q.before));
+  if (q.before) params.set("before", q.before);
   if (q.projectId) params.set("project_id", q.projectId);
   if (q.actorId) params.set("actor_id", q.actorId);
   if (q.triggerTypes?.length) params.set("trigger_types", q.triggerTypes.join(","));
   const qs = params.toString();
-  return apiGet<{ events: FeedEvent[] }>(`/api/events${qs ? `?${qs}` : ""}`).then((r) => r.events);
-};
+  return `/api/events${qs ? `?${qs}` : ""}`;
+}
+
+export const fetchEvents = (q: EventQuery = {}) =>
+  apiGet<EventsPage>(buildEventsUrl(q)).then((r) => r.events);
+
+export const fetchEventsPage = (q: EventQuery = {}) =>
+  apiGet<EventsPage>(buildEventsUrl(q));
 
