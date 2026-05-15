@@ -3,7 +3,7 @@ import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
 import { FEATURE_STATUS_ORDER, STATUS_COLORS } from "@/lib/types";
 import type { Feature, FeatureStatus } from "@/lib/types";
-import { GripVertical, Archive, ArrowUpFromLine, Trash2 } from "lucide-react";
+import { GripVertical, Archive, ArrowUpFromLine, Trash2, GitPullRequest } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -77,6 +77,12 @@ export function FeatureCard({
       {/* Row 2: tags + people + hover actions */}
       <div className="flex items-center gap-2 mt-1.5 ml-6 flex-wrap">
         <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
+        {feature.linkedPRs && feature.linkedPRs.length > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-stone-400 bg-stone-100 rounded-full px-1.5 py-0">
+            <GitPullRequest className="w-2.5 h-2.5" />
+            {feature.linkedPRs.length}
+          </span>
+        )}
         <AssignDropdown
           owners={feature.owners}
           allPeople={allPeople}
