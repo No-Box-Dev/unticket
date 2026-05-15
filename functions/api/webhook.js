@@ -21,6 +21,12 @@ import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { getInstallationToken } from "../lib/github-app";
 import { narrateEvent } from "../lib/narrator";
+import { matchPRToFeatures } from "../lib/feature-matcher";
+
+// Webhook actions that should trigger the LLM matcher when no deterministic
+// link is found. Reviews / comments / labels are excluded — they don't change
+// the PR body or branch, so re-running the matcher wouldn't help.
+const LLM_MATCH_ACTIONS = new Set(["opened", "edited", "synchronize", "reopened", "ready_for_review"]);
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -227,6 +233,18 @@ export async function onRequestPost(context) {
         linkBatch.push(linkStmt.bind(orgId, num, repo, pr.number, "body"));
       }
       if (linkBatch.length > 0) await db.batch(linkBatch);
+
+      // LLM fallback: if no deterministic link was found and this is an
+      // open/edit/synchronize event, ask the matcher out-of-band. One PR
+      // event = at most one LLM call; the matcher's own attempt cache
+      // dedupes repeated webhooks for the same PR.
+      if (linkBatch.length === 0 && LLM_MATCH_ACTIONS.has(action)) {
+        context.waitUntil(
+          matchPRToFeatures(context.env, orgId, repo, pr).catch((err) => {
+            console.error(`[unticket feature-matcher] webhook ${repo}#${pr.number} failed:`, err?.message ?? err);
+          })
+        );
+      }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
     }
 

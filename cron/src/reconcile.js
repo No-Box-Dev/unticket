@@ -65,7 +65,7 @@ export async function reconcileOrg(env, db, orgId, orgLogin, installationId) {
     const activeRepos = apiRepos.filter((name) => !inactive.has(name));
     for (const repo of activeRepos) {
       try {
-        await syncPRs(db, token, orgId, orgLogin, repo, await sinceCursor(db, orgId, `prs:${repo}`));
+        await syncPRs(db, token, orgId, orgLogin, repo, await sinceCursor(db, orgId, `prs:${repo}`), env);
       } catch (err) {
         console.error(`[unticket-cron] org=${orgLogin} repo=${repo} PRs failed:`, err?.message ?? err);
       }
