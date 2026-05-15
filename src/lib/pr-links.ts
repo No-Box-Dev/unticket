@@ -51,3 +51,20 @@ export async function unlinkPR(
   }
   return res.json();
 }
+
+export interface BackfillMatchesResult {
+  ok: boolean;
+  scanned: number;
+  queued: number;
+  repos?: number;
+  capped?: boolean;
+  days: number;
+  force: boolean;
+}
+
+export function backfillFeatureMatches(
+  days: number,
+  force: boolean,
+): Promise<BackfillMatchesResult> {
+  return apiPost("/api/features/backfill-matches", { days, force });
+}
