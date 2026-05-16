@@ -38,13 +38,12 @@ export async function onRequestPost(context) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
 
   const repoRows = await db
-    .prepare("SELECT name FROM repos WHERE org_id = ? AND (archived_at IS NULL)")
+    .prepare("SELECT name FROM repos WHERE org_id = ?")
     .bind(orgId)
     .all();
+  const allRepoNames = (repoRows.results ?? []).map((r) => r.name);
   const inactive = await getInactiveRepoSet(db, orgId, orgLogin);
-  const activeRepos = (repoRows.results ?? [])
-    .map((r) => r.name)
-    .filter((name) => !inactive.has(name));
+  const activeRepos = allRepoNames.filter((name) => !inactive.has(name));
 
   const candidates = [];
   let prsSeen = 0;
@@ -81,6 +80,7 @@ export async function onRequestPost(context) {
       scanned: 0,
       queued: 0,
       repos: activeRepos.length,
+      reposInTable: allRepoNames.length,
       prsSeen,
       prsLinked,
       errors,
@@ -119,6 +119,7 @@ export async function onRequestPost(context) {
     scanned: candidates.length,
     queued: candidates.length,
     repos: activeRepos.length,
+    reposInTable: allRepoNames.length,
     prsSeen,
     prsLinked,
     errors,
