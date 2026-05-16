@@ -57,7 +57,16 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
     .catch(() => null);
   if (existing) return null;
 
-  const features = await fetchCandidateFeatures(db, orgId);
+  // A PR can only belong to a feature that already existed when the PR
+  // was opened. Without a creation timestamp on the PR we have no anchor,
+  // so we refuse to guess rather than risk anachronistic links.
+  const prCreatedMs = pr.created_at ? Date.parse(pr.created_at) : NaN;
+  if (!Number.isFinite(prCreatedMs)) {
+    await recordAttempt(db, orgId, repo, pr.number, "no_pr_created_at", null);
+    return null;
+  }
+
+  const features = await fetchCandidateFeatures(db, orgId, prCreatedMs);
   if (features.length === 0) {
     await recordAttempt(db, orgId, repo, pr.number, "no_features", null);
     return null;
@@ -98,10 +107,10 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
   return featureNumber;
 }
 
-async function fetchCandidateFeatures(db, orgId) {
+async function fetchCandidateFeatures(db, orgId, prCreatedMs) {
   const rows = await db
     .prepare(
-      `SELECT number, title, labels_json
+      `SELECT number, title, labels_json, created_at
        FROM features
        WHERE org_id = ? AND state = 'open'
        ORDER BY number ASC`,
@@ -110,6 +119,11 @@ async function fetchCandidateFeatures(db, orgId) {
     .all();
   return (rows.results ?? [])
     .filter((f) => !hasLabel(f.labels_json, "status:future"))
+    .filter((f) => {
+      const featureCreatedMs = f.created_at ? Date.parse(f.created_at) : NaN;
+      if (!Number.isFinite(featureCreatedMs)) return false;
+      return featureCreatedMs <= prCreatedMs;
+    })
     .map((f) => ({ number: f.number, title: f.title }));
 }
 
