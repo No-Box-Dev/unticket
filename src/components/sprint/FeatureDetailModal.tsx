@@ -5,7 +5,7 @@ import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
 import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
 import { withStatusTransition } from "@/lib/github-features";
-import { useLinkPR, useUnlinkPR } from "@/hooks/usePRLinks";
+import { useLinkPR, useUnlinkPR, useLinkedPRs } from "@/hooks/usePRLinks";
 import type { Feature, FeatureStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: FeatureStatus[] = ["todo", "staging", "ready", "production", "future"];
@@ -29,6 +29,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
 
   const linkMutation = useLinkPR();
   const unlinkMutation = useUnlinkPR();
+  const { data: richLinks } = useLinkedPRs(feature.id);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasUnsavedChanges = useRef(false);
@@ -290,30 +291,72 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
 
             {draft.linkedPRs && draft.linkedPRs.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {draft.linkedPRs.map((pr) => (
-                  <span
-                    key={`${pr.repo}-${pr.number}`}
-                    className="group/pr inline-flex items-center gap-1 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors"
-                  >
-                    <Link
-                      to={`/prs/${pr.repo}/${pr.number}`}
-                      className="flex items-center gap-1 px-2 py-0.5 text-xs text-stone-700 hover:text-accent"
+              <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200 overflow-hidden">
+                {draft.linkedPRs.map((pr) => {
+                  const rich = richLinks?.find(
+                    (r) => r.pr_repo === pr.repo && r.pr_number === pr.number,
+                  );
+                  const title = rich?.pr_title ?? `${pr.repo}#${pr.number}`;
+                  const author = rich?.pr_author ?? null;
+                  const avatar = rich?.pr_author_avatar ?? null;
+                  const merged = !!rich?.pr_merged_at;
+                  const state = rich?.pr_state ?? null;
+                  const stateLabel = merged ? "Merged" : state === "closed" ? "Closed" : state === "open" ? "Open" : null;
+                  const stateClass = merged
+                    ? "text-purple-600 bg-purple-50"
+                    : state === "closed"
+                      ? "text-red-600 bg-red-50"
+                      : state === "open"
+                        ? "text-green-600 bg-green-50"
+                        : "text-stone-500 bg-stone-100";
+                  return (
+                    <li
+                      key={`${pr.repo}-${pr.number}`}
+                      className="group/pr flex items-center gap-3 px-3 py-2 hover:bg-stone-50"
                     >
-                      <GitPullRequest className="w-3 h-3" />
-                      {pr.repo}#{pr.number}
-                    </Link>
-                    <button
-                      onClick={() => handleUnlinkPR(pr.repo, pr.number)}
-                      disabled={unlinkMutation.isPending}
-                      className="pr-1.5 text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover/pr:opacity-100 transition-opacity"
-                      title="Unlink PR"
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
-              </div>
+                      <GitPullRequest className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      <Link
+                        to={`/prs/${pr.repo}/${pr.number}`}
+                        className="flex-1 min-w-0 text-xs"
+                      >
+                        <div className="flex items-baseline gap-1.5 min-w-0">
+                          <span className="text-stone-800 font-medium truncate hover:text-accent">
+                            {title}
+                          </span>
+                          <span className="text-stone-400 shrink-0">
+                            {pr.repo}#{pr.number}
+                          </span>
+                        </div>
+                        {author && (
+                          <div className="flex items-center gap-1.5 mt-0.5 text-stone-500">
+                            {avatar && (
+                              <img
+                                src={avatar}
+                                alt=""
+                                className="w-3.5 h-3.5 rounded-full"
+                              />
+                            )}
+                            <span>{author}</span>
+                          </div>
+                        )}
+                      </Link>
+                      {stateLabel && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${stateClass}`}>
+                          {stateLabel}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleUnlinkPR(pr.repo, pr.number)}
+                        disabled={unlinkMutation.isPending}
+                        className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover/pr:opacity-100 transition-opacity shrink-0 disabled:opacity-30"
+                        title="Unlink PR"
+                      >
+                        <X size={13} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
               !showAddPR && (
                 <span className="text-xs text-stone-400">No linked PRs.</span>

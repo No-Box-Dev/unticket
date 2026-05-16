@@ -129,6 +129,10 @@ export async function onRequestPost(context) {
   });
 }
 
+// We page on `sort=updated&direction=desc` (the only useful descending order
+// GitHub gives us — `sort=created` is supported but not for `state=all`), but
+// keep ONLY PRs created or merged inside the window. A 73-day-old PR with a
+// recent comment has a fresh updated_at; we don't want to re-match those.
 async function fetchPRsUpdatedSince(token, orgLogin, repo, cutoffIso) {
   const url = `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(repo)}/pulls?state=all&sort=updated&direction=desc&per_page=100`;
   const res = await fetch(url, {
@@ -144,8 +148,13 @@ async function fetchPRsUpdatedSince(token, orgLogin, repo, cutoffIso) {
   const all = await res.json();
   const cutoffMs = new Date(cutoffIso).getTime();
   return all.filter((pr) => {
-    const updatedMs = new Date(pr.updated_at).getTime();
-    return Number.isFinite(updatedMs) && updatedMs >= cutoffMs;
+    const createdMs = new Date(pr.created_at).getTime();
+    if (Number.isFinite(createdMs) && createdMs >= cutoffMs) return true;
+    if (pr.merged_at) {
+      const mergedMs = new Date(pr.merged_at).getTime();
+      if (Number.isFinite(mergedMs) && mergedMs >= cutoffMs) return true;
+    }
+    return false;
   });
 }
 
