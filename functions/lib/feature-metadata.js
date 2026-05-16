@@ -101,5 +101,9 @@ export function parseFeaturesFromBody(body) {
   for (const m of body.matchAll(/\bunticket#(\d+)/gi)) {
     nums.add(Number(m[1]));
   }
+  // GitHub closing keywords: "Fixes/Closes/Resolves unticket#N" or "org/unticket#N"
+  for (const m of body.matchAll(/(?:fixes|closes|resolves)\s+(?:[\w-]+\/)?unticket#(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
   return [...nums];
 }

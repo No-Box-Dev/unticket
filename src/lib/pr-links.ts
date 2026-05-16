@@ -1,0 +1,70 @@
+import { apiGet, apiPost, apiFetch } from "./api";
+
+export interface PRLinkRow {
+  pr_repo: string;
+  pr_number: number;
+  source: string;
+  created_at: string;
+}
+
+export interface FeatureLinkRow {
+  feature_number: number;
+  feature_title: string | null;
+  source: string;
+  created_at: string;
+}
+
+export function fetchLinkedPRs(featureNumber: number): Promise<PRLinkRow[]> {
+  return apiGet<PRLinkRow[]>(`/api/pr-links?feature=${featureNumber}`);
+}
+
+export function fetchLinkedFeatures(repo: string, number: number): Promise<FeatureLinkRow[]> {
+  return apiGet<FeatureLinkRow[]>(
+    `/api/pr-links?pr_repo=${encodeURIComponent(repo)}&pr_number=${number}`,
+  );
+}
+
+export async function linkPR(
+  featureNumber: number,
+  prRepo: string,
+  prNumber: number,
+): Promise<{ ok: boolean }> {
+  return apiPost("/api/pr-links", {
+    feature_number: featureNumber,
+    pr_repo: prRepo,
+    pr_number: prNumber,
+  });
+}
+
+export async function unlinkPR(
+  featureNumber: number,
+  prRepo: string,
+  prNumber: number,
+): Promise<{ ok: boolean }> {
+  const res = await apiFetch(
+    `/api/pr-links?feature=${featureNumber}&pr_repo=${encodeURIComponent(prRepo)}&pr_number=${prNumber}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as { error?: string }).error ?? `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface BackfillMatchesResult {
+  ok: boolean;
+  scanned: number;
+  queued: number;
+  repos?: number;
+  capped?: boolean;
+  days: number;
+  force: boolean;
+}
+
+export function backfillFeatureMatches(
+  days: number,
+  force: boolean,
+): Promise<BackfillMatchesResult> {
+  return apiPost("/api/features/backfill-matches", { days, force });
+}

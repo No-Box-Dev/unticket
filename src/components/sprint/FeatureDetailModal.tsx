@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ExternalLink, Pencil, Save } from "lucide-react";
+import { Link } from "react-router-dom";
+import { X, ExternalLink, Pencil, Save, GitPullRequest, Plus, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
 import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
 import { withStatusTransition } from "@/lib/github-features";
+import { useLinkPR, useUnlinkPR } from "@/hooks/usePRLinks";
 import type { Feature, FeatureStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: FeatureStatus[] = ["todo", "staging", "ready", "production", "future"];
@@ -21,6 +23,12 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [showAddPR, setShowAddPR] = useState(false);
+  const [addPRRepo, setAddPRRepo] = useState("");
+  const [addPRNumber, setAddPRNumber] = useState("");
+
+  const linkMutation = useLinkPR();
+  const unlinkMutation = useUnlinkPR();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasUnsavedChanges = useRef(false);
@@ -62,6 +70,44 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
       }
     }
     onClose();
+  }
+
+  function handleLinkPR() {
+    const num = parseInt(addPRNumber, 10);
+    if (!addPRRepo.trim() || !Number.isFinite(num) || num <= 0) return;
+    linkMutation.mutate(
+      { featureNumber: draft.id, prRepo: addPRRepo.trim(), prNumber: num },
+      {
+        onSuccess: () => {
+          const existing = draft.linkedPRs ?? [];
+          if (!existing.some((l) => l.repo === addPRRepo.trim() && l.number === num)) {
+            setDraft((d) => ({
+              ...d,
+              linkedPRs: [...(d.linkedPRs ?? []), { repo: addPRRepo.trim(), number: num }],
+            }));
+          }
+          setShowAddPR(false);
+          setAddPRRepo("");
+          setAddPRNumber("");
+        },
+      },
+    );
+  }
+
+  function handleUnlinkPR(prRepo: string, prNumber: number) {
+    unlinkMutation.mutate(
+      { featureNumber: draft.id, prRepo, prNumber },
+      {
+        onSuccess: () => {
+          setDraft((d) => ({
+            ...d,
+            linkedPRs: (d.linkedPRs ?? []).filter(
+              (l) => !(l.repo === prRepo && l.number === prNumber),
+            ),
+          }));
+        },
+      },
+    );
   }
 
   const plan = draft.plan ?? "";
@@ -193,6 +239,85 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Linked PRs */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-stone-500">Linked PRs</span>
+              {!showAddPR && (
+                <button
+                  onClick={() => setShowAddPR(true)}
+                  className="text-xs text-stone-400 hover:text-accent flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={12} />
+                  Link PR
+                </button>
+              )}
+            </div>
+
+            {showAddPR && (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  value={addPRRepo}
+                  onChange={(e) => setAddPRRepo(e.target.value)}
+                  placeholder="repo name"
+                  className="w-32 rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:border-accent"
+                />
+                <span className="text-stone-300 text-xs">#</span>
+                <input
+                  value={addPRNumber}
+                  onChange={(e) => setAddPRNumber(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123"
+                  className="w-20 rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:border-accent"
+                />
+                <button
+                  onClick={handleLinkPR}
+                  disabled={linkMutation.isPending || !addPRRepo.trim() || !addPRNumber}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent/90 cursor-pointer disabled:opacity-40"
+                >
+                  <Link2 size={11} />
+                  Link
+                </button>
+                <button
+                  onClick={() => { setShowAddPR(false); setAddPRRepo(""); setAddPRNumber(""); }}
+                  className="text-xs text-stone-400 hover:text-stone-600 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {draft.linkedPRs && draft.linkedPRs.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {draft.linkedPRs.map((pr) => (
+                  <span
+                    key={`${pr.repo}-${pr.number}`}
+                    className="group/pr inline-flex items-center gap-1 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors"
+                  >
+                    <Link
+                      to={`/prs/${pr.repo}/${pr.number}`}
+                      className="flex items-center gap-1 px-2 py-0.5 text-xs text-stone-700 hover:text-accent"
+                    >
+                      <GitPullRequest className="w-3 h-3" />
+                      {pr.repo}#{pr.number}
+                    </Link>
+                    <button
+                      onClick={() => handleUnlinkPR(pr.repo, pr.number)}
+                      disabled={unlinkMutation.isPending}
+                      className="pr-1.5 text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover/pr:opacity-100 transition-opacity"
+                      title="Unlink PR"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              !showAddPR && (
+                <span className="text-xs text-stone-400">No linked PRs.</span>
+              )
             )}
           </div>
 

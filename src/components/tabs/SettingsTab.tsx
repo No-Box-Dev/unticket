@@ -5,9 +5,10 @@ import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
+import { backfillFeatureMatches } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
-import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { GitPullRequest, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
@@ -125,6 +126,9 @@ export function SettingsTab() {
 
       {/* Posts backfill */}
       <PostsBackfillSection />
+
+      {/* Feature-match backfill */}
+      <FeatureMatchBackfillSection />
 
       {/* About */}
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
@@ -286,6 +290,112 @@ function PostsBackfillSection() {
           <p className="text-stone-400">
             Narrative cards stream in as Zhipu finishes each PR — refresh the Posts tab in a few seconds.
           </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureMatchBackfillSection() {
+  const qc = useQueryClient();
+  const [running, setRunning] = useState(false);
+  const [days, setDays] = useState(14);
+  const [force, setForce] = useState(false);
+  const [result, setResult] = useState<{
+    scanned: number;
+    queued: number;
+    repos?: number;
+    capped?: boolean;
+    error?: string;
+  } | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await backfillFeatureMatches(days, force);
+      setResult({
+        scanned: res.scanned,
+        queued: res.queued,
+        repos: res.repos,
+        capped: res.capped,
+      });
+      qc.invalidateQueries({ queryKey: ["features"] });
+      qc.invalidateQueries({ queryKey: ["linkedPRs"] });
+      qc.invalidateQueries({ queryKey: ["linkedFeatures"] });
+    } catch (err) {
+      setResult({
+        scanned: 0,
+        queued: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <h2 className="text-sm font-semibold text-stone-900">PR → Feature Backfill</h2>
+      <p className="text-xs text-stone-400">
+        Sweep recent PRs across every active repo and ask the LLM to match any
+        that aren't linked to a feature yet. Each PR is checked at most once
+        per week; toggle "Force" to bypass that cache after you've added new
+        features.
+      </p>
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-xs text-stone-600 flex items-center gap-2">
+          Days:
+          <input
+            type="number"
+            min={1}
+            max={30}
+            value={days}
+            onChange={(e) =>
+              setDays(Math.max(1, Math.min(30, Number(e.target.value) || 14)))
+            }
+            disabled={running}
+            className="w-16 px-2 py-1 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:opacity-50"
+          />
+        </label>
+        <label className="text-xs text-stone-600 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            disabled={running}
+          />
+          Force re-check
+        </label>
+        <button
+          onClick={handleRun}
+          disabled={running}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+        >
+          {running ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <GitPullRequest size={14} />
+          )}
+          {running ? "Scanning..." : "Run backfill"}
+        </button>
+      </div>
+      {result && !running && (
+        <div className="text-xs space-y-1">
+          {result.error ? (
+            <p className="text-red-500">{result.error}</p>
+          ) : (
+            <>
+              <p className="text-green-600">
+                Queued {result.queued} PR{result.queued === 1 ? "" : "s"} for matching
+                across {result.repos ?? 0} repo{result.repos === 1 ? "" : "s"}
+                {result.capped && " (capped at 50 — run again for more)"}.
+              </p>
+              <p className="text-stone-400">
+                Links appear on feature cards as the LLM finishes each PR — refresh in a few seconds.
+              </p>
+            </>
+          )}
         </div>
       )}
     </div>
