@@ -5,6 +5,12 @@ export interface PRLinkRow {
   pr_number: number;
   source: string;
   created_at: string;
+  pr_title?: string | null;
+  pr_author?: string | null;
+  pr_author_avatar?: string | null;
+  pr_state?: string | null;
+  pr_merged_at?: string | null;
+  pr_html_url?: string | null;
 }
 
 export interface FeatureLinkRow {
