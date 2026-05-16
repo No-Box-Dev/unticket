@@ -14,6 +14,9 @@ interface D1FeatureRow {
   labels: { name: string; color: string }[];
   html_url: string | null;
   updated_at?: string;
+  // Hydrated server-side from pr_feature_links — authoritative because the
+  // LLM matcher writes to the table but not to the issue body metadata.
+  linkedPRs?: LinkedPR[];
 }
 
 const UNTICKET_LABEL = "unticket";
@@ -130,7 +133,7 @@ async function syncIssueToD1(data: any): Promise<void> {
 // ---------- D1-backed fetch (no GitHub API calls) ----------
 
 function d1RowToFeature(row: D1FeatureRow): Feature {
-  return issueToFeature({
+  const feature = issueToFeature({
     number: row.number,
     title: row.title,
     body: row.body,
@@ -139,6 +142,10 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
     html_url: row.html_url,
     updated_at: row.updated_at,
   });
+  // Server-hydrated linkedPRs from pr_feature_links wins over body metadata
+  // so LLM matches (which only land in the table) show up on cards.
+  if (row.linkedPRs) feature.linkedPRs = row.linkedPRs;
+  return feature;
 }
 
 export async function fetchFeaturesFromD1(): Promise<Feature[]> {
