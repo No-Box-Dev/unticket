@@ -57,6 +57,9 @@ export interface BackfillMatchesResult {
   scanned: number;
   queued: number;
   repos?: number;
+  prsSeen?: number;
+  prsLinked?: number;
+  errors?: string[];
   capped?: boolean;
   days: number;
   force: boolean;
