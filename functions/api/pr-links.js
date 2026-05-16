@@ -15,7 +15,9 @@ export async function onRequestGet(context) {
   const prRepo = url.searchParams.get("pr_repo");
   const prNumber = url.searchParams.get("pr_number");
 
-  // Feature → PRs lookup
+  // Feature → PRs lookup. Joins pull_requests so the detail modal can render
+  // a real list (title + author + state) instead of bare repo#number chips.
+  // pr_title etc. will be null for links whose PR row hasn't been synced yet.
   if (feature) {
     const featureNumber = Number(feature);
     if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
@@ -24,7 +26,17 @@ export async function onRequestGet(context) {
 
     const rows = await context.env.DB
       .prepare(
-        "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
+        `SELECT pfl.pr_repo, pfl.pr_number, pfl.source, pfl.created_at,
+                pr.title AS pr_title, pr.author AS pr_author,
+                pr.author_avatar AS pr_author_avatar, pr.state AS pr_state,
+                pr.merged_at AS pr_merged_at, pr.html_url AS pr_html_url
+           FROM pr_feature_links pfl
+           LEFT JOIN pull_requests pr
+             ON pr.org_id = pfl.org_id
+            AND pr.repo = pfl.pr_repo
+            AND pr.number = pfl.pr_number
+          WHERE pfl.org_id = ? AND pfl.feature_number = ?
+          ORDER BY pfl.created_at ASC`,
       )
       .bind(orgId, featureNumber)
       .all();
