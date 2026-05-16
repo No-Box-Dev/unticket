@@ -141,9 +141,9 @@ describe("reconcileOrg", () => {
 
     await reconcileOrg(env, db, 1, "acme", 99);
 
-    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10T12:00:00Z");
+    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10T12:00:00Z", env);
     expect(syncIssues).toHaveBeenCalledWith(db, "install-token", 1, "acme", "app", "2026-05-10T11:00:00Z");
-    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "core", null);
+    expect(syncPRs).toHaveBeenCalledWith(db, "install-token", 1, "acme", "core", null, env);
     expect(syncIssues).toHaveBeenCalledWith(db, "install-token", 1, "acme", "core", null);
   });
 

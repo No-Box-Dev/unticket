@@ -3,6 +3,7 @@ import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } f
 import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
+import { matchPRToFeatures } from "./feature-matcher";
 
 // Paginated GitHub API fetcher.
 // MAX_PAGES caps any single resource sync at 5000 items (50 pages × 100/page).
@@ -91,7 +92,7 @@ export async function syncRepos(db, token, orgId, orgLogin) {
 
 // ---------- Sync PRs ----------
 
-export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
+export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = null) {
   const params = {
     state: "all",
     sort: "updated",
@@ -200,6 +201,20 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since) {
   }
   for (let i = 0; i < allLinks.length; i += 50) {
     await db.batch(allLinks.slice(i, i + 50));
+  }
+
+  // LLM matcher backfill: for PRs without any deterministic link, ask the
+  // LLM about each one. The matcher's own attempt cache (pr_match_attempts)
+  // makes this idempotent — a re-sync won't re-ask about a PR we've already
+  // matched (or already rejected within the TTL).
+  if (env?.ZHIPU_API_KEY) {
+    for (const pr of prs) {
+      try {
+        await matchPRToFeatures(env, orgId, repo, { ...pr, base: { repo: { name: repo } } });
+      } catch (err) {
+        console.warn(`[unticket] feature-matcher ${repo}#${pr.number} failed: ${err?.message ?? err}`);
+      }
+    }
   }
 
   // Only advance sync timestamp if we got data or this is a fresh sync
@@ -738,7 +753,7 @@ export async function bootstrapInstallation(env, orgId, orgLogin, installationId
 
   for (const repo of repoNames) {
     try {
-      await syncRepo(db, token, orgId, orgLogin, repo, true);
+      await syncRepo(db, token, orgId, orgLogin, repo, true, env);
     } catch (err) {
       // Don't abort the whole bootstrap on one bad repo — cron will retry.
       console.error(`[unticket] bootstrap repo ${repo} failed:`, err?.message ?? err);
@@ -753,10 +768,10 @@ export async function bootstrapInstallation(env, orgId, orgLogin, installationId
 
 // ---------- syncRepo: sync PRs + issues for a single repo ----------
 
-export async function syncRepo(db, token, orgId, orgLogin, repo, force = false) {
+export async function syncRepo(db, token, orgId, orgLogin, repo, force = false, env = null) {
   try {
     const prSince = force ? null : (await getSyncState(db, orgId, `prs:${repo}`))?.lastSynced;
-    await syncPRs(db, token, orgId, orgLogin, repo, prSince);
+    await syncPRs(db, token, orgId, orgLogin, repo, prSince, env);
   } catch (err) {
     console.error(`[unticket] syncRepo PRs failed for ${repo}:`, err?.message ?? err);
     throw err;

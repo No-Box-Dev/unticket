@@ -5,12 +5,16 @@
 const ENDPOINT = "https://api.z.ai/api/anthropic/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const MODEL = "glm-5";
-const MAX_TOKENS = 220;
+const DEFAULT_MAX_TOKENS = 220;
 const TIMEOUT_MS = 30_000;
 
 export const NARRATOR_MODEL = MODEL;
+export const ZHIPU_MODEL = MODEL;
 
-export async function completeNarrative(apiKey, system, user) {
+// Generic Zhipu completion. Returns raw text or null on failure. Callers
+// that need post-processing (quote stripping for narratives, JSON parsing
+// for the feature matcher) handle it themselves.
+export async function complete(apiKey, { system, user, maxTokens = DEFAULT_MAX_TOKENS, tag = "llm" }) {
   if (!apiKey) return null;
 
   const controller = new AbortController();
@@ -26,7 +30,7 @@ export async function completeNarrative(apiKey, system, user) {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: MAX_TOKENS,
+        max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -34,18 +38,17 @@ export async function completeNarrative(apiKey, system, user) {
     });
 
     if (!res.ok) {
-      console.warn(`[narrator] Zhipu returned ${res.status}`);
+      console.warn(`[${tag}] Zhipu returned ${res.status}`);
       return null;
     }
     const body = await res.json();
-    const text = (body.content ?? []).find((b) => b?.type === "text")?.text;
-    return sanitize(text);
+    return (body.content ?? []).find((b) => b?.type === "text")?.text ?? null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (err instanceof Error && err.name === "AbortError") {
-      console.warn(`[narrator] Zhipu request aborted after ${TIMEOUT_MS}ms`);
+      console.warn(`[${tag}] Zhipu request aborted after ${TIMEOUT_MS}ms`);
     } else {
-      console.warn(`[narrator] Zhipu request failed: ${msg}`);
+      console.warn(`[${tag}] Zhipu request failed: ${msg}`);
     }
     return null;
   } finally {
@@ -53,7 +56,12 @@ export async function completeNarrative(apiKey, system, user) {
   }
 }
 
-function sanitize(text) {
+export async function completeNarrative(apiKey, system, user) {
+  const text = await complete(apiKey, { system, user, tag: "narrator" });
+  return sanitizeNarrative(text);
+}
+
+function sanitizeNarrative(text) {
   if (typeof text !== "string") return null;
   let t = text.trim();
   if (!t) return null;

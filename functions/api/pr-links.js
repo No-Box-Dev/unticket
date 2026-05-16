@@ -7,26 +7,56 @@ import {
 } from "../lib/feature-metadata";
 
 // GET /api/pr-links?feature=42 — query D1 cache for linked PRs
+// GET /api/pr-links?pr_repo=X&pr_number=Y — reverse: features linked to a PR
 export async function onRequestGet(context) {
   const { orgId } = getCtx(context);
   const url = new URL(context.request.url);
   const feature = url.searchParams.get("feature");
+  const prRepo = url.searchParams.get("pr_repo");
+  const prNumber = url.searchParams.get("pr_number");
 
-  if (!feature) return errorResponse("feature query param required", 400);
-  // Number() is strict — rejects "123abc" / "1.5"; parseInt would accept them.
-  const featureNumber = Number(feature);
-  if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
-    return errorResponse("feature must be a positive integer", 400);
+  // Feature → PRs lookup
+  if (feature) {
+    const featureNumber = Number(feature);
+    if (!Number.isInteger(featureNumber) || featureNumber <= 0) {
+      return errorResponse("feature must be a positive integer", 400);
+    }
+
+    const rows = await context.env.DB
+      .prepare(
+        "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
+      )
+      .bind(orgId, featureNumber)
+      .all();
+
+    return jsonResponse(rows.results);
   }
 
-  const rows = await context.env.DB
-    .prepare(
-      "SELECT pr_repo, pr_number, source, created_at FROM pr_feature_links WHERE org_id = ? AND feature_number = ? ORDER BY created_at ASC"
-    )
-    .bind(orgId, featureNumber)
-    .all();
+  // PR → Features reverse lookup
+  if (prRepo && prNumber) {
+    const prNum = Number(prNumber);
+    if (!Number.isInteger(prNum) || prNum <= 0) {
+      return errorResponse("pr_number must be a positive integer", 400);
+    }
+    if (!/^[\w.-]+$/.test(prRepo)) {
+      return errorResponse("pr_repo must be a valid repo name", 400);
+    }
 
-  return jsonResponse(rows.results);
+    const rows = await context.env.DB
+      .prepare(
+        `SELECT pfl.feature_number, pfl.source, pfl.created_at, f.title as feature_title
+         FROM pr_feature_links pfl
+         LEFT JOIN features f ON f.org_id = pfl.org_id AND f.number = pfl.feature_number
+         WHERE pfl.org_id = ? AND pfl.pr_repo = ? AND pfl.pr_number = ?
+         ORDER BY pfl.created_at ASC`
+      )
+      .bind(orgId, prRepo, prNum)
+      .all();
+
+    return jsonResponse(rows.results);
+  }
+
+  return errorResponse("Provide ?feature=N or ?pr_repo=X&pr_number=Y", 400);
 }
 
 // POST /api/pr-links — link a PR to a feature (D1 first, then GitHub metadata)

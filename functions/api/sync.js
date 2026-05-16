@@ -93,7 +93,7 @@ export async function onRequestPost(context) {
     }
 
     // Phase 2: sync one repo
-    await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force);
+    await syncRepo(context.env.DB, token, orgId, orgLogin, cursor, force, context.env);
 
     // Find next repo (filtered by active repos)
     const repoRows = await context.env.DB
