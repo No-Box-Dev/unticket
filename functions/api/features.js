@@ -9,18 +9,44 @@ const FEATURE_COLUMNS = [
 
 // GET /api/features — return cached features from D1
 // Query params: state (default: open)
+//
+// Hydrates `linkedPRs` from the `pr_feature_links` table (not the body
+// metadata) because the LLM matcher writes to the table only and never
+// touches the issue body. The table is the union of manual + deterministic
+// + LLM matches; the body metadata only covers manual + deterministic.
 export async function onRequestGet(context) {
   const { orgId } = getCtx(context);
   const url = new URL(context.request.url);
   const state = url.searchParams.get("state") || "open";
 
-  const query = `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ? AND state = ? ORDER BY number ASC`;
-  const rows = await context.env.DB.prepare(query).bind(orgId, state).all();
+  const [featureRows, linkRows] = await context.env.DB.batch([
+    context.env.DB
+      .prepare(
+        `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ? AND state = ? ORDER BY number ASC`,
+      )
+      .bind(orgId, state),
+    context.env.DB
+      .prepare(
+        "SELECT feature_number, pr_repo, pr_number FROM pr_feature_links WHERE org_id = ?",
+      )
+      .bind(orgId),
+  ]);
 
-  const data = rows.results.map((row) => ({
+  const linksByFeature = new Map();
+  for (const link of linkRows.results ?? []) {
+    let arr = linksByFeature.get(link.feature_number);
+    if (!arr) {
+      arr = [];
+      linksByFeature.set(link.feature_number, arr);
+    }
+    arr.push({ repo: link.pr_repo, number: link.pr_number });
+  }
+
+  const data = featureRows.results.map((row) => ({
     ...row,
     assignees: JSON.parse(row.assignees_json || "[]"),
     labels: JSON.parse(row.labels_json || "[]"),
+    linkedPRs: linksByFeature.get(row.number) ?? [],
   }));
 
   return jsonResponse(data);
