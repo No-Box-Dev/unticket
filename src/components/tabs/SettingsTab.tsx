@@ -305,6 +305,7 @@ function FeatureMatchBackfillSection() {
     scanned: number;
     queued: number;
     repos?: number;
+    reposInTable?: number;
     prsSeen?: number;
     prsLinked?: number;
     errors?: string[];
@@ -321,6 +322,7 @@ function FeatureMatchBackfillSection() {
         scanned: res.scanned,
         queued: res.queued,
         repos: res.repos,
+        reposInTable: res.reposInTable,
         prsSeen: res.prsSeen,
         prsLinked: res.prsLinked,
         errors: res.errors,
@@ -393,8 +395,11 @@ function FeatureMatchBackfillSection() {
           ) : (
             <>
               <p className={result.queued > 0 ? "text-green-600" : "text-stone-600"}>
-                Scanned {result.repos ?? 0} repo{result.repos === 1 ? "" : "s"}, saw{" "}
-                {result.prsSeen ?? 0} PR{result.prsSeen === 1 ? "" : "s"} in the last {days} days
+                Scanned {result.repos ?? 0} active repo{result.repos === 1 ? "" : "s"}
+                {typeof result.reposInTable === "number" &&
+                  result.reposInTable !== result.repos &&
+                  ` (of ${result.reposInTable} in D1)`}
+                , saw {result.prsSeen ?? 0} PR{result.prsSeen === 1 ? "" : "s"} in the last {days} days
                 {typeof result.prsLinked === "number" && result.prsLinked > 0 &&
                   ` (${result.prsLinked} already linked)`}
                 . Queued {result.queued} for matching
