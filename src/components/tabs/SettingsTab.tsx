@@ -305,6 +305,9 @@ function FeatureMatchBackfillSection() {
     scanned: number;
     queued: number;
     repos?: number;
+    prsSeen?: number;
+    prsLinked?: number;
+    errors?: string[];
     capped?: boolean;
     error?: string;
   } | null>(null);
@@ -318,6 +321,9 @@ function FeatureMatchBackfillSection() {
         scanned: res.scanned,
         queued: res.queued,
         repos: res.repos,
+        prsSeen: res.prsSeen,
+        prsLinked: res.prsLinked,
+        errors: res.errors,
         capped: res.capped,
       });
       qc.invalidateQueries({ queryKey: ["features"] });
@@ -386,14 +392,26 @@ function FeatureMatchBackfillSection() {
             <p className="text-red-500">{result.error}</p>
           ) : (
             <>
-              <p className="text-green-600">
-                Queued {result.queued} PR{result.queued === 1 ? "" : "s"} for matching
-                across {result.repos ?? 0} repo{result.repos === 1 ? "" : "s"}
+              <p className={result.queued > 0 ? "text-green-600" : "text-stone-600"}>
+                Scanned {result.repos ?? 0} repo{result.repos === 1 ? "" : "s"}, saw{" "}
+                {result.prsSeen ?? 0} PR{result.prsSeen === 1 ? "" : "s"} in the last {days} days
+                {typeof result.prsLinked === "number" && result.prsLinked > 0 &&
+                  ` (${result.prsLinked} already linked)`}
+                . Queued {result.queued} for matching
                 {result.capped && " (capped at 50 — run again for more)"}.
               </p>
-              <p className="text-stone-400">
-                Links appear on feature cards as the LLM finishes each PR — refresh in a few seconds.
-              </p>
+              {result.errors && result.errors.length > 0 && (
+                <div className="text-red-500 space-y-0.5">
+                  {result.errors.map((e, i) => (
+                    <p key={i}>{e}</p>
+                  ))}
+                </div>
+              )}
+              {result.queued > 0 && (
+                <p className="text-stone-400">
+                  Links appear on feature cards as the LLM finishes each PR — refresh in a few seconds.
+                </p>
+              )}
             </>
           )}
         </div>

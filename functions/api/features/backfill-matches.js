@@ -47,18 +47,25 @@ export async function onRequestPost(context) {
     .filter((name) => !inactive.has(name));
 
   const candidates = [];
+  let prsSeen = 0;
+  let prsLinked = 0;
+  const errors = [];
   for (const repo of activeRepos) {
     let prs;
     try {
       prs = await fetchPRsUpdatedSince(token, orgLogin, repo, cutoff);
     } catch (err) {
-      console.error(`[unticket backfill-matches] fetch ${repo} failed:`, err?.message ?? err);
+      const msg = err?.message ?? String(err);
+      console.error(`[unticket backfill-matches] fetch ${repo} failed:`, msg);
+      errors.push(`${repo}: ${msg}`);
       continue;
     }
     if (prs.length === 0) continue;
+    prsSeen += prs.length;
 
     const numbers = prs.map((p) => p.number);
     const linked = await fetchLinkedNumbers(db, orgId, repo, numbers);
+    prsLinked += linked.size;
 
     for (const pr of prs) {
       if (linked.has(pr.number)) continue;
@@ -69,7 +76,17 @@ export async function onRequestPost(context) {
   }
 
   if (candidates.length === 0) {
-    return jsonResponse({ ok: true, scanned: 0, queued: 0, days, force });
+    return jsonResponse({
+      ok: true,
+      scanned: 0,
+      queued: 0,
+      repos: activeRepos.length,
+      prsSeen,
+      prsLinked,
+      errors,
+      days,
+      force,
+    });
   }
 
   if (force) {
@@ -102,6 +119,9 @@ export async function onRequestPost(context) {
     scanned: candidates.length,
     queued: candidates.length,
     repos: activeRepos.length,
+    prsSeen,
+    prsLinked,
+    errors,
     capped: candidates.length >= MAX_PRS_PER_RUN,
     days,
     force,
