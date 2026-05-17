@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
-  useRepos: vi.fn(),
   useOrgMembers: vi.fn(),
 }));
 vi.mock("@/hooks/useConfigRepo", () => ({
@@ -32,7 +31,7 @@ vi.mock("@tanstack/react-query", () => {
 
 import { SettingsTab } from "../SettingsTab";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
+import { useOrgMembers } from "@/hooks/useGitHub";
 import {
   useSettings,
   useSaveSettings,
@@ -42,7 +41,6 @@ import {
 import { useFeedProjects } from "@/hooks/useNoxlink";
 
 const mAuth = useAuth as unknown as ReturnType<typeof vi.fn>;
-const mRepos = useRepos as unknown as ReturnType<typeof vi.fn>;
 const mOrgMembers = useOrgMembers as unknown as ReturnType<typeof vi.fn>;
 const mSettings = useSettings as unknown as ReturnType<typeof vi.fn>;
 const mSaveSettings = useSaveSettings as unknown as ReturnType<typeof vi.fn>;
@@ -56,14 +54,8 @@ beforeEach(() => {
     selectedOrg: "acme",
     logout: vi.fn(),
   });
-  mRepos.mockReturnValue({
-    data: [
-      { id: 1, name: "api", language: "TypeScript" },
-      { id: 2, name: "web", language: "TypeScript" },
-    ],
-  });
   mOrgMembers.mockReturnValue({ data: [] });
-  mSettings.mockReturnValue({ data: { draftRepos: [], excludedMembers: [] } });
+  mSettings.mockReturnValue({ data: { excludedMembers: [] } });
   mSaveSettings.mockReturnValue({
     mutate: vi.fn(),
     mutateAsync: vi.fn(),
@@ -84,23 +76,6 @@ describe("SettingsTab", () => {
     expect(screen.getByText("Account")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("@alice")).toBeInTheDocument();
-  });
-
-  it("renders Tracked Repositories count from useRepos data", () => {
-    render(<SettingsTab />);
-    expect(screen.getByText(/Tracked Repositories \(2\)/)).toBeInTheDocument();
-    expect(screen.getByText("api")).toBeInTheDocument();
-    expect(screen.getByText("web")).toBeInTheDocument();
-  });
-
-  it("clicking a repo button toggles its draft state via saveSettings", () => {
-    const save = vi.fn();
-    mSaveSettings.mockReturnValue({ mutate: save, mutateAsync: vi.fn(), isPending: false });
-    render(<SettingsTab />);
-    fireEvent.click(screen.getByText("api"));
-    expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({ draftRepos: ["api"] }),
-    );
   });
 
   it("renders the GitHub App install section", () => {

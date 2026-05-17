@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
+import { useOrgMembers } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
@@ -13,7 +13,6 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
   const { user, selectedOrg, logout } = useAuth();
-  const { data: repos } = useRepos({ includeAll: true });
   const { data: settings } = useSettings();
   const saveSettings = useSaveSettings();
   const { data: people } = usePeople();
@@ -61,48 +60,6 @@ export function SettingsTab() {
           saveSettings={saveSettings}
         />
       )}
-
-      {/* Tracked repos */}
-      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900">
-          Tracked Repositories ({repos?.length ?? 0})
-        </h2>
-        <p className="text-xs text-stone-400">
-          All repositories in {selectedOrg} are tracked by default. Mark repos as
-          draft to hide their issues from the Issues view.
-        </p>
-        <div className="grid grid-cols-2 gap-1.5 max-h-60 overflow-y-auto">
-          {repos?.map((repo) => {
-            const isDraft = settings?.draftRepos?.includes(repo.name) ?? false;
-            return (
-              <button
-                key={repo.id}
-                onClick={() => {
-                  if (!settings) return;
-                  const current = settings.draftRepos ?? [];
-                  const next = isDraft
-                    ? current.filter((r) => r !== repo.name)
-                    : [...current, repo.name];
-                  saveSettings.mutate({ ...settings, draftRepos: next });
-                }}
-                className={`text-xs text-left px-2 py-1 rounded cursor-pointer transition-colors ${
-                  isDraft
-                    ? "bg-stone-100  text-stone-400  "
-                    : "bg-stone-50  text-stone-600  hover:bg-stone-100  "
-                }`}
-              >
-                {repo.name}
-                {isDraft && (
-                  <span className="ml-1 text-stone-300">(draft)</span>
-                )}
-                {!isDraft && repo.language && (
-                  <span className="text-stone-300 ml-1">({repo.language})</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* GitHub App installation */}
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">

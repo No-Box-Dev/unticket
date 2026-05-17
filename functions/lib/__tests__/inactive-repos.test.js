@@ -71,15 +71,14 @@ describe("getInactiveRepoSet", () => {
     expect(set.has("unticket")).toBe(false);
   });
 
-  it("merges draftRepos, project archives, and GitHub archives", async () => {
+  it("merges project archives, GitHub archives, and the unticket repo", async () => {
     const db = makeDb({
-      settings: { draftRepos: ["draft-a", "draft-b"] },
       archivedProjects: ["archived-proj"],
       ghArchivedRepos: ["gh-archived"],
     });
     const set = await getInactiveRepoSet(db, 1, "acme");
     expect([...set].sort()).toEqual(
-      ["archived-proj", "draft-a", "draft-b", "gh-archived", "unticket"].sort(),
+      ["archived-proj", "gh-archived", "unticket"].sort(),
     );
   });
 
@@ -134,7 +133,7 @@ describe("filterInactive", () => {
   });
 
   it("removes excluded repos from the list", async () => {
-    const db = makeDb({ settings: { draftRepos: ["draft"] } });
+    const db = makeDb({ archivedProjects: ["draft"] });
     const out = await filterInactive(db, 1, "acme", ["api", "draft", "web", "unticket"]);
     expect(out).toEqual(["api", "web"]);
   });
@@ -143,10 +142,9 @@ describe("filterInactive", () => {
 describe("getActiveRepoNames", () => {
   it("returns repos minus everything in the inactive set", async () => {
     const db = makeDb({
-      settings: { draftRepos: ["draft-a"] },
       archivedProjects: ["arc"],
       ghArchivedRepos: ["gh"],
-      allRepos: ["api", "web", "draft-a", "arc", "gh", "unticket"],
+      allRepos: ["api", "web", "arc", "gh", "unticket"],
     });
     const out = await getActiveRepoNames(db, 1, "acme");
     expect(out.sort()).toEqual(["api", "web"]);

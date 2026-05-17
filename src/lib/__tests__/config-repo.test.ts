@@ -38,10 +38,10 @@ describe("fetchPeople (GitHub-backed)", () => {
 });
 
 describe("fetchSettings", () => {
-  it("normalizes draftRepos to []", async () => {
-    mockApiGet.mockResolvedValue({});
+  it("returns the API response as-is", async () => {
+    mockApiGet.mockResolvedValue({ unticketRepo: "config" });
     const result = await fetchSettings();
-    expect(result!.draftRepos).toEqual([]);
+    expect(result).toEqual({ unticketRepo: "config" });
   });
 
   it("returns null when API returns null", async () => {

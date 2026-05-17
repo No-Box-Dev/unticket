@@ -13,10 +13,7 @@ export async function savePeople(org: string, people: Person[]): Promise<void> {
 
 // Settings
 export async function fetchSettings(): Promise<OrgSettings | null> {
-  const settings = await apiGet<OrgSettings | null>("/api/config/settings");
-  if (!settings) return null;
-  settings.draftRepos = settings.draftRepos ?? [];
-  return settings;
+  return apiGet<OrgSettings | null>("/api/config/settings");
 }
 
 export async function saveSettings(settings: OrgSettings) {
