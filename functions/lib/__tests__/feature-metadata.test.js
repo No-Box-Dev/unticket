@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   parseFeatureMetadata,
   serializeFeatureMetadata,
-  parseFeaturesFromBody,
   readFeatureIssue,
   updateFeatureBody,
 } from "../feature-metadata.js";
@@ -87,52 +86,6 @@ describe("serializeFeatureMetadata", () => {
     // single trailing newline is stable across further roundtrips.
     expect(content.trimEnd()).toBe("Plan content");
     expect(metadata).toEqual(original);
-  });
-});
-
-describe("parseFeaturesFromBody", () => {
-  it("returns [] for empty body", () => {
-    expect(parseFeaturesFromBody("")).toEqual([]);
-    expect(parseFeaturesFromBody(null)).toEqual([]);
-    expect(parseFeaturesFromBody(undefined)).toEqual([]);
-  });
-
-  it("matches 'Part of org/unticket#N' and 'Part of unticket#N'", () => {
-    expect(parseFeaturesFromBody("Part of acme/unticket#12")).toEqual([12]);
-    expect(parseFeaturesFromBody("Part of unticket#7")).toEqual([7]);
-  });
-
-  it("matches 'Feature #N' and 'Feature: #N'", () => {
-    expect(parseFeaturesFromBody("Feature #99")).toEqual([99]);
-    expect(parseFeaturesFromBody("Feature: #100")).toEqual([100]);
-  });
-
-  it("matches standalone unticket#N references", () => {
-    expect(parseFeaturesFromBody("See unticket#42 for details")).toEqual([42]);
-  });
-
-  it("matches closing keywords (fixes/closes/resolves)", () => {
-    expect(parseFeaturesFromBody("Fixes unticket#5")).toEqual([5]);
-    expect(parseFeaturesFromBody("Closes acme/unticket#6")).toEqual([6]);
-    expect(parseFeaturesFromBody("resolves unticket#7")).toEqual([7]);
-  });
-
-  it("is case-insensitive", () => {
-    expect(parseFeaturesFromBody("FIXES UNTICKET#3")).toEqual([3]);
-  });
-
-  it("dedupes overlapping matches across rules", () => {
-    const body = "Part of unticket#10. Also fixes acme/unticket#10. See unticket#10.";
-    expect(parseFeaturesFromBody(body).sort()).toEqual([10]);
-  });
-
-  it("collects multiple distinct feature numbers", () => {
-    const body = "Part of unticket#1 and fixes unticket#2 and Feature #3";
-    expect(parseFeaturesFromBody(body).sort((a, b) => a - b)).toEqual([1, 2, 3]);
-  });
-
-  it("ignores unrelated # references like other-repo#42", () => {
-    expect(parseFeaturesFromBody("See api-backend#42 for context")).toEqual([]);
   });
 });
 

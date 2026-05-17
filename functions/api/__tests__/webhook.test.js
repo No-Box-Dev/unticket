@@ -23,8 +23,6 @@ vi.mock("../../lib/github-sync.js", () => ({
 }));
 vi.mock("../../lib/feature-metadata.js", () => ({
   parseFeatureMetadata: vi.fn(() => ({ content: "", metadata: { linkedPRs: [] } })),
-  parseFeatureFromBranch: vi.fn(() => null),
-  parseFeaturesFromBody: vi.fn(() => []),
 }));
 vi.mock("../../lib/events.js", () => ({
   storeEvent: vi.fn(async () => ({ id: 1 })),

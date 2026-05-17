@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../feature-metadata.js", () => ({
   parseFeatureMetadata: vi.fn(() => ({ metadata: {} })),
-  parseFeatureFromBranch: vi.fn(() => null),
-  parseFeaturesFromBody: vi.fn(() => []),
 }));
 vi.mock("../inactive-repos.js", () => ({
   filterInactive: vi.fn(async (_db, _o, _l, names) => names),
@@ -45,7 +43,6 @@ import {
   syncMembers,
   syncRepo,
 } from "../github-sync.js";
-import { parseFeatureFromBranch, parseFeaturesFromBody } from "../feature-metadata.js";
 
 function makeDb(rowsForSql = {}) {
   // rowsForSql: { sqlSubstring: row | rows }
@@ -416,10 +413,8 @@ describe("syncRepo orchestration", () => {
   });
 });
 
-describe("syncPRs feature-link extraction", () => {
-  it("creates branch + body feature links per PR", async () => {
-    parseFeatureFromBranch.mockReturnValue(42);
-    parseFeaturesFromBody.mockReturnValue([43]);
+describe("syncPRs LLM matcher invocation", () => {
+  it("invokes matchPRToFeatures for each PR when ZHIPU_API_KEY is set", async () => {
     fetch.mockResolvedValueOnce({
       ok: true, headers: { get: () => null },
       json: async () => [
@@ -431,18 +426,49 @@ describe("syncPRs feature-link extraction", () => {
           base: { ref: "main" },
           merged_at: null, created_at: "a", updated_at: "b",
           html_url: "u", requested_reviewers: [], labels: [],
-          body: "Implements #43",
+          body: "Implements feature 42",
+        },
+        {
+          number: 2, title: "y", state: "open",
+          user: { login: "octo", id: 1, avatar_url: "a", type: "User" },
+          draft: false,
+          head: { ref: "feat/43-y" },
+          base: { ref: "main" },
+          merged_at: null, created_at: "a", updated_at: "b",
+          html_url: "u", requested_reviewers: [], labels: [],
+          body: null,
         },
       ],
     });
+    const { matchPRToFeatures } = await import("../feature-matcher.js");
+    matchPRToFeatures.mockResolvedValue(null);
     const db = makeDb();
-    // Imports inside the source modules are already mocked at top.
     const { syncPRs } = await import("../github-sync.js");
-    await syncPRs(db, "tok", "org-1", "no-box-dev", "api", null);
-    const linkBatch = db._calls.batches.find((b) =>
-      b.some((s) => s.sql.includes("INSERT INTO pr_feature_links")),
-    );
-    expect(linkBatch).toBeDefined();
-    expect(linkBatch).toHaveLength(2);  // branch + body
+    await syncPRs(db, "tok", "org-1", "no-box-dev", "api", null, { ZHIPU_API_KEY: "k" });
+    expect(matchPRToFeatures).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not invoke the matcher when ZHIPU_API_KEY is missing", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true, headers: { get: () => null },
+      json: async () => [
+        {
+          number: 1, title: "x", state: "open",
+          user: { login: "octo", id: 1, avatar_url: "a", type: "User" },
+          draft: false,
+          head: { ref: "feat/42-x" },
+          base: { ref: "main" },
+          merged_at: null, created_at: "a", updated_at: "b",
+          html_url: "u", requested_reviewers: [], labels: [],
+          body: null,
+        },
+      ],
+    });
+    const { matchPRToFeatures } = await import("../feature-matcher.js");
+    matchPRToFeatures.mockReset();
+    const db = makeDb();
+    const { syncPRs } = await import("../github-sync.js");
+    await syncPRs(db, "tok", "org-1", "no-box-dev", "api", null, null);
+    expect(matchPRToFeatures).not.toHaveBeenCalled();
   });
 });
