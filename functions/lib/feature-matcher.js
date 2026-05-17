@@ -13,12 +13,22 @@ import { complete } from "./llm.js";
 const MAX_TOKENS = 64;
 const ATTEMPT_TTL_HOURS = 168; // one week — keeps a re-sync cheap
 
-const SYSTEM_PROMPT = `You match a pull request to AT MOST ONE open feature it belongs to.
+const SYSTEM_PROMPT = `You decide whether a pull request belongs to ONE specific open feature.
 
-Rules:
-- If the PR clearly addresses ONE feature, return that feature's number.
-- If the PR addresses zero features, or you are not sure, return null.
-- NEVER return more than one feature, even if multiple seem related.
+The bar for matching is HIGH. Return a feature number ONLY when the PR text contains explicit, concrete evidence that it implements that feature. Acceptable evidence:
+- The PR title, branch name, or body explicitly references the feature number (e.g. "#42", "feature 42", "closes #42", "fixes #42").
+- The PR title, branch name, or body contains DISTINCTIVE keywords from the feature's title or labels — words specific enough that they would not appear in unrelated PRs.
+- The PR body explicitly describes implementing this feature's scope.
+
+An additional supporting signal (NOT sufficient on its own):
+- The PR author is one of the feature's assignees. This pushes a borderline call toward a match, but the PR text must still show topical relevance. Author-assignee overlap alone, with no scope evidence, is NOT enough — people work on multiple features.
+
+What is NOT evidence:
+- Generic shared words like "fix", "update", "refactor", "settings", "auth", "ui", "api", "test", "cleanup".
+- Loose topical overlap or "feels related". If you are pattern-matching on vibes, return null.
+- A PR that touches the same area of the codebase as a feature, without explicitly addressing it.
+
+If two or more candidate features could plausibly fit, return null. If you are not at least 90% confident, return null. When in doubt, return null — a missed match is cheap, a wrong match is expensive.
 
 Reply with ONLY valid JSON in this exact format:
 {"feature_number": 42}
@@ -110,7 +120,7 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
 async function fetchCandidateFeatures(db, orgId, prCreatedMs) {
   const rows = await db
     .prepare(
-      `SELECT number, title, labels_json, created_at
+      `SELECT number, title, labels_json, assignees_json, created_at
        FROM features
        WHERE org_id = ? AND state = 'open'
        ORDER BY number ASC`,
@@ -124,7 +134,12 @@ async function fetchCandidateFeatures(db, orgId, prCreatedMs) {
       if (!Number.isFinite(featureCreatedMs)) return false;
       return featureCreatedMs <= prCreatedMs;
     })
-    .map((f) => ({ number: f.number, title: f.title }));
+    .map((f) => ({
+      number: f.number,
+      title: f.title,
+      labels: distinctiveLabels(f.labels_json),
+      assignees: assigneeLogins(f.assignees_json),
+    }));
 }
 
 function hasLabel(json, name) {
@@ -137,11 +152,52 @@ function hasLabel(json, name) {
   }
 }
 
+// Labels useful for matching — drop housekeeping labels that every feature
+// carries (unticket, feature) and the status:* lifecycle labels, which say
+// nothing about scope.
+function distinctiveLabels(json) {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    if (!Array.isArray(v)) return [];
+    return v
+      .map((l) => l?.name)
+      .filter((n) => typeof n === "string" && n)
+      .filter((n) => n !== "unticket" && n !== "feature" && !n.startsWith("status:"));
+  } catch {
+    return [];
+  }
+}
+
+function assigneeLogins(json) {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    if (!Array.isArray(v)) return [];
+    return v.map((a) => a?.login).filter((l) => typeof l === "string" && l);
+  } catch {
+    return [];
+  }
+}
+
 function buildUserMessage(repo, pr, features) {
-  const featuresText = features.map((f) => `- #${f.number}: ${f.title}`).join("\n");
+  const author = pr.user?.login ?? null;
+  const featuresText = features
+    .map((f) => {
+      const parts = [];
+      if (f.labels.length) parts.push(`labels: ${f.labels.join(", ")}`);
+      if (f.assignees.length) {
+        const marked = f.assignees.map((a) => (author && a === author ? `${a} (PR author)` : a));
+        parts.push(`assignees: ${marked.join(", ")}`);
+      }
+      const meta = parts.length ? ` [${parts.join("; ")}]` : "";
+      return `- #${f.number}: ${f.title}${meta}`;
+    })
+    .join("\n");
   const branch = pr.head?.ref ?? "unknown";
   const body = (pr.body ?? "").slice(0, 800);
-  return `Open features:\n${featuresText}\n\nPull request:\nPR #${pr.number} in ${repo} on branch "${branch}": ${pr.title}\nDescription: ${body || "(empty)"}`;
+  const authorLine = author ? `PR author: ${author}\n` : "";
+  return `Open features:\n${featuresText}\n\nPull request:\n${authorLine}PR #${pr.number} in ${repo} on branch "${branch}": ${pr.title}\nDescription: ${body || "(empty)"}`;
 }
 
 function parseFeatureNumber(text, features) {

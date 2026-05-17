@@ -260,4 +260,57 @@ describe("matchPRToFeatures — successful match side effects", () => {
     await matchPRToFeatures(ENV(db), 1, "api", { ...PR, body: null });
     expect(complete.mock.calls[0][1].user).toContain("Description: (empty)");
   });
+
+  it("includes the PR author + flags feature assignees matching the author", async () => {
+    const featureWithAuthor = {
+      number: 42,
+      title: "Login button",
+      labels_json: "[]",
+      assignees_json: JSON.stringify([{ login: "alice" }, { login: "bob" }]),
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const otherFeature = {
+      number: 43,
+      title: "Settings refresh",
+      labels_json: "[]",
+      assignees_json: JSON.stringify([{ login: "carol" }]),
+      created_at: "2026-05-12T00:00:00Z",
+    };
+    const db = makeDb({ features: [featureWithAuthor, otherFeature] });
+    complete.mockResolvedValue('{"feature_number":42}');
+    await matchPRToFeatures(ENV(db), 1, "api", { ...PR, user: { login: "alice" } });
+    const userMessage = complete.mock.calls[0][1].user;
+    expect(userMessage).toContain("PR author: alice");
+    expect(userMessage).toContain("alice (PR author)");
+    expect(userMessage).toContain("bob");
+    expect(userMessage).toContain("carol");
+    // Only the matching assignee gets the (PR author) marker
+    expect(userMessage).not.toContain("bob (PR author)");
+    expect(userMessage).not.toContain("carol (PR author)");
+  });
+
+  it("omits the PR author line + marker when pr.user is missing", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    complete.mockResolvedValue('{"feature_number":42}');
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const userMessage = complete.mock.calls[0][1].user;
+    expect(userMessage).not.toContain("PR author:");
+    expect(userMessage).not.toContain("(PR author)");
+  });
+
+  it("tolerates malformed assignees_json (no assignee section emitted)", async () => {
+    const bad = {
+      number: 42,
+      title: "Login button",
+      labels_json: "[]",
+      assignees_json: "not json",
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const db = makeDb({ features: [bad] });
+    complete.mockResolvedValue('{"feature_number":42}');
+    await matchPRToFeatures(ENV(db), 1, "api", { ...PR, user: { login: "alice" } });
+    const userMessage = complete.mock.calls[0][1].user;
+    expect(userMessage).toContain("#42");
+    expect(userMessage).not.toContain("assignees:");
+  });
 });
