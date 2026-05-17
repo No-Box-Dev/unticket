@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
-import { backfillFeatureMatches } from "@/lib/pr-links";
+import { backfillFeatureMatches, unlinkAllPRs, type UnlinkAllResult } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
-import { GitPullRequest, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
@@ -312,6 +312,36 @@ function FeatureMatchBackfillSection() {
     capped?: boolean;
     error?: string;
   } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkResult, setUnlinkResult] = useState<
+    (UnlinkAllResult & { error?: string }) | null
+  >(null);
+
+  async function handleUnlinkAll() {
+    setConfirmOpen(false);
+    setUnlinking(true);
+    setUnlinkResult(null);
+    try {
+      const res = await unlinkAllPRs();
+      setUnlinkResult(res);
+      qc.invalidateQueries({ queryKey: ["features"] });
+      qc.invalidateQueries({ queryKey: ["linkedPRs"] });
+      qc.invalidateQueries({ queryKey: ["linkedFeatures"] });
+    } catch (err) {
+      setUnlinkResult({
+        ok: false,
+        featuresAffected: 0,
+        featuresCleared: 0,
+        linksDeleted: 0,
+        attemptsCleared: 0,
+        errors: [],
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setUnlinking(false);
+    }
+  }
 
   async function handleRun() {
     setRunning(true);
@@ -421,6 +451,62 @@ function FeatureMatchBackfillSection() {
           )}
         </div>
       )}
+
+      <div className="pt-4 border-t border-stone-200 space-y-3">
+        <div>
+          <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wide">Danger zone</h3>
+          <p className="text-xs text-stone-400 mt-1">
+            Remove every PR↔feature link across the org. Clears
+            <code className="px-1 py-0.5 bg-stone-100 rounded mx-1">linkedPRs</code>
+            from every feature issue body, wipes the link table, and resets the
+            matcher's PR cache so the next backfill re-checks every PR. There is
+            no undo — links you added manually will be gone too.
+          </p>
+        </div>
+        <button
+          onClick={() => setConfirmOpen(true)}
+          disabled={unlinking || running}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 disabled:opacity-50 cursor-pointer"
+        >
+          {unlinking ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          {unlinking ? "Unlinking..." : "Unlink all PRs"}
+        </button>
+        {unlinkResult && !unlinking && (
+          <div className="text-xs space-y-1">
+            {unlinkResult.error ? (
+              <p className="text-red-500">{unlinkResult.error}</p>
+            ) : (
+              <>
+                <p className="text-stone-600">
+                  Cleared {unlinkResult.featuresCleared}/{unlinkResult.featuresAffected} feature
+                  {unlinkResult.featuresAffected === 1 ? "" : "s"}, deleted{" "}
+                  {unlinkResult.linksDeleted} link
+                  {unlinkResult.linksDeleted === 1 ? "" : "s"} and{" "}
+                  {unlinkResult.attemptsCleared} cached match attempt
+                  {unlinkResult.attemptsCleared === 1 ? "" : "s"}.
+                </p>
+                {unlinkResult.errors.length > 0 && (
+                  <div className="text-red-500 space-y-0.5">
+                    {unlinkResult.errors.map((e, i) => (
+                      <p key={i}>{e}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        variant="danger"
+        title="Unlink every PR from every feature?"
+        message="This wipes every PR↔feature link in the org — including ones you added manually — and resets the matcher's cache. There is no undo. Re-run the backfill afterwards to rebuild matches."
+        confirmLabel="Unlink all"
+        onConfirm={handleUnlinkAll}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
