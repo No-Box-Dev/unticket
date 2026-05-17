@@ -1,8 +1,10 @@
 name: Deploy to Cloudflare Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -11,6 +13,9 @@ concurrency:
 
 jobs:
   deploy:
+    # On workflow_run, only deploy if CI succeeded. workflow_dispatch has no
+    # parent run, so the conclusion check is skipped for manual triggers.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -78,3 +78,16 @@ export function backfillFeatureMatches(
 ): Promise<BackfillMatchesResult> {
   return apiPost("/api/features/backfill-matches", { days, force });
 }
+
+export interface UnlinkAllResult {
+  ok: boolean;
+  featuresAffected: number;
+  featuresCleared: number;
+  linksDeleted: number;
+  attemptsCleared: number;
+  errors: string[];
+}
+
+export function unlinkAllPRs(): Promise<UnlinkAllResult> {
+  return apiPost("/api/pr-links/unlink-all", { confirm: "UNLINK_ALL" });
+}
