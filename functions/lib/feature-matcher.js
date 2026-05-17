@@ -1,39 +1,53 @@
-// LLM-powered PR-to-Feature matcher. One call per PR, against the
-// current open feature list (excluding the backlog). Returns at most ONE
-// feature — the LLM is instructed to return null when unsure, and we
-// reject hallucinated feature numbers that don't exist on the org.
+// LLM-powered PR-to-feature matcher. One call per PR, against the current
+// open-feature list (excluding the backlog). Supports MULTI-feature matches.
+//
+// One prompt, full context. The prompt enumerates the matching rules in
+// plain English so the LLM has the same rubric a code pipeline would. The
+// raw response is persisted so prompt iteration is data-driven, not blind.
 //
 // Idempotency: every call records into pr_match_attempts so a re-sync
 // doesn't re-ask the LLM about the same PR. Webhook is the primary
-// trigger (one PR event → one call); sync/cron backfill anything the
-// webhook missed.
+// trigger; sync / cron backfill anything the webhook missed.
 
 import { complete } from "./llm.js";
+import { parseFeatureMetadata } from "./feature-metadata.js";
 
-const MAX_TOKENS = 64;
-const ATTEMPT_TTL_HOURS = 168; // one week — keeps a re-sync cheap
+const MAX_TOKENS = 800;
+const ATTEMPT_TTL_HOURS = 168;
+const PR_BODY_LIMIT = 1200;
+const FEATURE_BODY_LIMIT = 400;
+const CANDIDATE_CAP = 30;
+const RAW_RESPONSE_LIMIT = 2000;
+const MAX_RETURNED_MATCHES = 5;
 
-const SYSTEM_PROMPT = `You decide whether a pull request belongs to ONE specific open feature.
+const SYSTEM_PROMPT = `You match a pull request to zero or more open features it implements.
 
-The bar for matching is HIGH. Return a feature number ONLY when the PR text contains explicit, concrete evidence that it implements that feature. Acceptable evidence:
-- The PR title, branch name, or body explicitly references the feature number (e.g. "#42", "feature 42", "closes #42", "fixes #42").
-- The PR title, branch name, or body contains DISTINCTIVE keywords from the feature's title or labels — words specific enough that they would not appear in unrelated PRs.
+Match a feature if you have at least one CONCRETE piece of evidence:
+- The PR body, title, or branch name explicitly references the feature number (e.g. "#42", "closes #42", "unticket#42", "feat/42-foo").
+- The PR title or branch contains DISTINCTIVE keywords from the feature's title, body, or labels — words specific enough that they would not appear in unrelated PRs.
 - The PR body explicitly describes implementing this feature's scope.
+- The PR author is one of the feature's assignees AND the PR title / branch / body shows topical overlap with the feature.
 
-An additional supporting signal (NOT sufficient on its own):
-- The PR author is one of the feature's assignees. This pushes a borderline call toward a match, but the PR text must still show topical relevance. Author-assignee overlap alone, with no scope evidence, is NOT enough — people work on multiple features.
+NOT evidence:
+- Generic shared words: "fix", "update", "refactor", "settings", "auth", "ui", "api", "test", "cleanup".
+- Topical similarity or "feels related" — if you are pattern-matching on vibes, do not match.
+- Touching the same area of the codebase as a feature, without explicitly addressing it.
+- Author being an assignee, ALONE, without scope evidence — people work on multiple features.
 
-What is NOT evidence:
-- Generic shared words like "fix", "update", "refactor", "settings", "auth", "ui", "api", "test", "cleanup".
-- Loose topical overlap or "feels related". If you are pattern-matching on vibes, return null.
-- A PR that touches the same area of the codebase as a feature, without explicitly addressing it.
+A PR can implement MULTIPLE features. Return all that satisfy the rules above. Each match must have its own evidence.
 
-If two or more candidate features could plausibly fit, return null. If you are not at least 90% confident, return null. When in doubt, return null — a missed match is cheap, a wrong match is expensive.
+Each evidence string must QUOTE the source text verbatim, e.g. 'PR body contains: "fixes #42"' or 'feature title contains: "login button"'. Quoted-substring evidence is harder to fabricate than paraphrased evidence.
 
 Reply with ONLY valid JSON in this exact format:
-{"feature_number": 42}
-or
-{"feature_number": null}`;
+{"matches": [
+  {"feature_number": 42, "evidence": ["...", "..."]},
+  {"feature_number": 43, "evidence": ["..."]}
+]}
+
+Empty matches array if nothing qualifies:
+{"matches": []}
+
+Length budget: at most 5 matches, at most 3 evidence items per match, at most 80 characters per evidence string.`;
 
 export async function matchPRToFeatures(env, orgId, repo, pr) {
   if (!env?.ZHIPU_API_KEY) return null;
@@ -41,7 +55,6 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
 
   const db = env.DB;
 
-  // Skip if already attempted within the TTL.
   const prior = await db
     .prepare(
       "SELECT attempted_at FROM pr_match_attempts WHERE org_id = ? AND pr_repo = ? AND pr_number = ?",
@@ -56,8 +69,7 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
     }
   }
 
-  // Skip if the PR already has any link — manual / branch / body / comment
-  // links are more authoritative than an LLM guess.
+  // Manual / metadata-sync links are more authoritative than an LLM guess.
   const existing = await db
     .prepare(
       "SELECT 1 FROM pr_feature_links WHERE org_id = ? AND pr_repo = ? AND pr_number = ? LIMIT 1",
@@ -67,18 +79,17 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
     .catch(() => null);
   if (existing) return null;
 
-  // A PR can only belong to a feature that already existed when the PR
-  // was opened. Without a creation timestamp on the PR we have no anchor,
-  // so we refuse to guess rather than risk anachronistic links.
+  // A PR can only belong to a feature that existed when the PR was opened.
+  // Without a PR creation timestamp we refuse to guess.
   const prCreatedMs = pr.created_at ? Date.parse(pr.created_at) : NaN;
   if (!Number.isFinite(prCreatedMs)) {
-    await recordAttempt(db, orgId, repo, pr.number, "no_pr_created_at", null);
+    await recordAttempt(db, orgId, repo, pr.number, "no_pr_created_at", null, null);
     return null;
   }
 
   const features = await fetchCandidateFeatures(db, orgId, prCreatedMs);
   if (features.length === 0) {
-    await recordAttempt(db, orgId, repo, pr.number, "no_features", null);
+    await recordAttempt(db, orgId, repo, pr.number, "no_features", null, null);
     return null;
   }
 
@@ -89,57 +100,70 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
     tag: "feature-matcher",
   });
 
-  const featureNumber = parseFeatureNumber(text, features);
-  if (featureNumber == null) {
-    await recordAttempt(db, orgId, repo, pr.number, "no_match", null);
+  const matches = parseMatches(text, features);
+  const rawTrunc = typeof text === "string" ? text.slice(0, RAW_RESPONSE_LIMIT) : null;
+
+  if (matches.length === 0) {
+    await recordAttempt(db, orgId, repo, pr.number, "no_match", null, rawTrunc);
     return null;
   }
 
+  const linkStmt = db.prepare(
+    `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
+     VALUES (?, ?, ?, ?, 'llm')
+     ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`,
+  );
+  const attemptStmt = db.prepare(
+    `INSERT INTO pr_match_attempts (org_id, pr_repo, pr_number, attempted_at, result, feature_number, raw_response)
+     VALUES (?, ?, ?, datetime('now'), 'match', ?, ?)
+     ON CONFLICT(org_id, pr_repo, pr_number) DO UPDATE SET
+       attempted_at = excluded.attempted_at,
+       result = excluded.result,
+       feature_number = excluded.feature_number,
+       raw_response = excluded.raw_response`,
+  );
+
   await db.batch([
-    db
-      .prepare(
-        `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-         VALUES (?, ?, ?, ?, 'llm')
-         ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`,
-      )
-      .bind(orgId, featureNumber, repo, pr.number),
-    db
-      .prepare(
-        `INSERT INTO pr_match_attempts (org_id, pr_repo, pr_number, attempted_at, result, feature_number)
-         VALUES (?, ?, ?, datetime('now'), 'match', ?)
-         ON CONFLICT(org_id, pr_repo, pr_number) DO UPDATE SET
-           attempted_at = excluded.attempted_at,
-           result = excluded.result,
-           feature_number = excluded.feature_number`,
-      )
-      .bind(orgId, repo, pr.number, featureNumber),
+    ...matches.map((m) => linkStmt.bind(orgId, m.featureNumber, repo, pr.number)),
+    attemptStmt.bind(orgId, repo, pr.number, matches[0].featureNumber, rawTrunc),
   ]);
-  return featureNumber;
+  return matches[0].featureNumber;
 }
 
 async function fetchCandidateFeatures(db, orgId, prCreatedMs) {
   const rows = await db
     .prepare(
-      `SELECT number, title, labels_json, assignees_json, created_at
+      `SELECT number, title, body, labels_json, assignees_json, created_at
        FROM features
        WHERE org_id = ? AND state = 'open'
-       ORDER BY number ASC`,
+       ORDER BY created_at DESC`,
     )
     .bind(orgId)
     .all();
-  return (rows.results ?? [])
+  const filtered = (rows.results ?? [])
     .filter((f) => !hasLabel(f.labels_json, "status:future"))
     .filter((f) => {
       const featureCreatedMs = f.created_at ? Date.parse(f.created_at) : NaN;
       if (!Number.isFinite(featureCreatedMs)) return false;
       return featureCreatedMs <= prCreatedMs;
     })
-    .map((f) => ({
-      number: f.number,
-      title: f.title,
-      labels: distinctiveLabels(f.labels_json),
-      assignees: assigneeLogins(f.assignees_json),
-    }));
+    .slice(0, CANDIDATE_CAP);
+  return filtered.map((f) => ({
+    number: f.number,
+    title: f.title,
+    body: stripMetadata(f.body),
+    labels: distinctiveLabels(f.labels_json),
+    assignees: assigneeLogins(f.assignees_json),
+  }));
+}
+
+function stripMetadata(body) {
+  if (!body) return "";
+  try {
+    return parseFeatureMetadata(body).content ?? "";
+  } catch {
+    return body;
+  }
 }
 
 function hasLabel(json, name) {
@@ -152,9 +176,6 @@ function hasLabel(json, name) {
   }
 }
 
-// Labels useful for matching — drop housekeeping labels that every feature
-// carries (unticket, feature) and the status:* lifecycle labels, which say
-// nothing about scope.
 function distinctiveLabels(json) {
   if (!json) return [];
   try {
@@ -180,56 +201,93 @@ function assigneeLogins(json) {
   }
 }
 
+function prLabelNames(labels) {
+  if (!Array.isArray(labels)) return [];
+  return labels
+    .map((l) => (typeof l === "string" ? l : l?.name))
+    .filter((n) => typeof n === "string" && n);
+}
+
 function buildUserMessage(repo, pr, features) {
   const author = pr.user?.login ?? null;
-  const featuresText = features
-    .map((f) => {
-      const parts = [];
-      if (f.labels.length) parts.push(`labels: ${f.labels.join(", ")}`);
-      if (f.assignees.length) {
-        const marked = f.assignees.map((a) => (author && a === author ? `${a} (PR author)` : a));
-        parts.push(`assignees: ${marked.join(", ")}`);
-      }
-      const meta = parts.length ? ` [${parts.join("; ")}]` : "";
-      return `- #${f.number}: ${f.title}${meta}`;
-    })
-    .join("\n");
   const branch = pr.head?.ref ?? "unknown";
-  const body = (pr.body ?? "").slice(0, 800);
-  const authorLine = author ? `PR author: ${author}\n` : "";
-  return `Open features:\n${featuresText}\n\nPull request:\n${authorLine}PR #${pr.number} in ${repo} on branch "${branch}": ${pr.title}\nDescription: ${body || "(empty)"}`;
+  const base = pr.base?.ref ?? null;
+  const labels = prLabelNames(pr.labels);
+  const body = (pr.body ?? "").slice(0, PR_BODY_LIMIT);
+
+  const prLines = [`PR #${pr.number} in ${repo} on branch "${branch}":`];
+  prLines.push(`Title: ${pr.title ?? ""}`);
+  if (author) prLines.push(`Author: ${author}`);
+  if (base) prLines.push(`Base branch: ${base}`);
+  if (labels.length) prLines.push(`Labels: ${labels.join(", ")}`);
+  prLines.push("Body:");
+  prLines.push(body || "(empty)");
+
+  const featureBlocks = features.map((f) => {
+    const lines = [`- #${f.number}: ${f.title}`];
+    if (f.labels.length) lines.push(`  Labels: ${f.labels.join(", ")}`);
+    if (f.assignees.length) {
+      const marked = f.assignees.map((a) => (author && a === author ? `${a} (PR author)` : a));
+      lines.push(`  Assignees: ${marked.join(", ")}`);
+    }
+    const trimmedBody = f.body.slice(0, FEATURE_BODY_LIMIT).trim();
+    if (trimmedBody) lines.push(`  Body: ${trimmedBody}`);
+    return lines.join("\n");
+  });
+
+  return `${prLines.join("\n")}\n\nOpen features:\n${featureBlocks.join("\n\n")}`;
 }
 
-function parseFeatureNumber(text, features) {
-  if (typeof text !== "string") return null;
+function parseMatches(text, candidates) {
+  if (typeof text !== "string") return [];
   const trimmed = text.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return [];
+  // GLM-5 often wraps JSON in ```json ... ``` fences despite the prompt
+  // saying "reply with ONLY valid JSON". Extract the outer object instead
+  // of trusting bare JSON.parse().
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start === -1 || end <= start) return [];
   let parsed;
   try {
-    parsed = JSON.parse(trimmed);
+    parsed = JSON.parse(trimmed.slice(start, end + 1));
   } catch {
-    return null;
+    return [];
   }
-  const num = parsed?.feature_number;
-  if (num === null) return null;
-  if (!Number.isInteger(num) || num <= 0) return null;
-  // Reject hallucinated feature numbers.
-  if (!features.some((f) => f.number === num)) return null;
-  return num;
+  const list = Array.isArray(parsed?.matches) ? parsed.matches : null;
+  if (!list) return [];
+
+  const candidateNumbers = new Set(candidates.map((c) => c.number));
+  const seen = new Set();
+  const out = [];
+  for (const m of list) {
+    const num = m?.feature_number;
+    if (!Number.isInteger(num) || num <= 0) continue;
+    if (!candidateNumbers.has(num)) continue;
+    if (seen.has(num)) continue;
+    seen.add(num);
+    const evidence = Array.isArray(m?.evidence)
+      ? m.evidence.filter((e) => typeof e === "string" && e.trim())
+      : [];
+    out.push({ featureNumber: num, evidence });
+    if (out.length >= MAX_RETURNED_MATCHES) break;
+  }
+  return out;
 }
 
-async function recordAttempt(db, orgId, repo, prNumber, result, featureNumber) {
+async function recordAttempt(db, orgId, repo, prNumber, result, featureNumber, rawResponse) {
   try {
     await db
       .prepare(
-        `INSERT INTO pr_match_attempts (org_id, pr_repo, pr_number, attempted_at, result, feature_number)
-         VALUES (?, ?, ?, datetime('now'), ?, ?)
+        `INSERT INTO pr_match_attempts (org_id, pr_repo, pr_number, attempted_at, result, feature_number, raw_response)
+         VALUES (?, ?, ?, datetime('now'), ?, ?, ?)
          ON CONFLICT(org_id, pr_repo, pr_number) DO UPDATE SET
            attempted_at = excluded.attempted_at,
            result = excluded.result,
-           feature_number = excluded.feature_number`,
+           feature_number = excluded.feature_number,
+           raw_response = excluded.raw_response`,
       )
-      .bind(orgId, repo, prNumber, result, featureNumber)
+      .bind(orgId, repo, prNumber, result, featureNumber, rawResponse)
       .run();
   } catch (err) {
     console.warn(`[feature-matcher] recordAttempt failed: ${err?.message ?? err}`);

@@ -16,16 +16,16 @@ import {
   touchRepoPushed,
   syncRepo,
 } from "../lib/github-sync";
-import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "../lib/feature-metadata";
+import { parseFeatureMetadata } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { getInstallationToken } from "../lib/github-app";
 import { narrateEvent } from "../lib/narrator";
 import { matchPRToFeatures } from "../lib/feature-matcher";
 
-// Webhook actions that should trigger the LLM matcher when no deterministic
-// link is found. Reviews / comments / labels are excluded — they don't change
-// the PR body or branch, so re-running the matcher wouldn't help.
+// Webhook actions that should trigger the LLM matcher. Reviews / labels are
+// excluded — they don't change the PR body, branch, or title, so re-running
+// the matcher wouldn't reveal new evidence.
 const LLM_MATCH_ACTIONS = new Set(["opened", "edited", "synchronize", "reopened", "ready_for_review"]);
 
 // Verify GitHub webhook signature (HMAC-SHA256)
@@ -218,27 +218,10 @@ export async function onRequestPost(context) {
         }
       }
 
-      // Auto-detect feature links from branch name + PR body
-      const linkStmt = db.prepare(
-        `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-      );
-      const linkBatch = [];
-      const featureNumber = parseFeatureFromBranch(pr.head?.ref);
-      if (featureNumber) {
-        linkBatch.push(linkStmt.bind(orgId, featureNumber, repo, pr.number, "branch"));
-      }
-      for (const num of parseFeaturesFromBody(pr.body)) {
-        linkBatch.push(linkStmt.bind(orgId, num, repo, pr.number, "body"));
-      }
-      if (linkBatch.length > 0) await db.batch(linkBatch);
-
-      // LLM fallback: if no deterministic link was found and this is an
-      // open/edit/synchronize event, ask the matcher out-of-band. One PR
-      // event = at most one LLM call; the matcher's own attempt cache
-      // dedupes repeated webhooks for the same PR.
-      if (linkBatch.length === 0 && LLM_MATCH_ACTIONS.has(action)) {
+      // Ask the LLM matcher out-of-band. The matcher reads the PR body /
+      // branch / title itself and skips PRs that already have a link, so
+      // we don't need a deterministic pre-pass.
+      if (LLM_MATCH_ACTIONS.has(action)) {
         context.waitUntil(
           matchPRToFeatures(context.env, orgId, repo, pr).catch((err) => {
             console.error(`[unticket feature-matcher] webhook ${repo}#${pr.number} failed:`, err?.message ?? err);
@@ -246,43 +229,6 @@ export async function onRequestPost(context) {
         );
       }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
-    }
-
-    // PR comments: detect feature links like "Part of unticket#42"
-    if (event === "issue_comment" && payload.issue?.pull_request) {
-      const repo = payload.repository?.name;
-      const prNumber = payload.issue.number;
-
-      if (action === "deleted") {
-        // Clean up any links that were created from this comment's source
-        if (repo) {
-          await db.prepare(
-            "DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ? AND pr_number = ? AND source = 'comment'"
-          ).bind(orgId, repo, prNumber).run();
-        }
-        return jsonResponse({ ok: true, event: "pr_comment", action, cleaned: true });
-      }
-
-      // For created or edited comments, re-sync links
-      const commentBody = payload.comment?.body;
-      if (repo && commentBody) {
-        if (action === "edited") {
-          // Remove old comment-sourced links for this PR, then re-add
-          await db.prepare(
-            "DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ? AND pr_number = ? AND source = 'comment'"
-          ).bind(orgId, repo, prNumber).run();
-        }
-        const featureNums = parseFeaturesFromBody(commentBody);
-        if (featureNums.length > 0) {
-          const linkStmt = db.prepare(
-            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-             VALUES (?, ?, ?, ?, 'comment')
-             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-          );
-          await db.batch(featureNums.map((num) => linkStmt.bind(orgId, num, repo, prNumber)));
-        }
-      }
-      return jsonResponse({ ok: true, event: "pr_comment", action, linked: true });
     }
 
     if (event === "member") {

@@ -75,35 +75,3 @@ export async function updateFeatureBody(token, orgLogin, number, body) {
   return res.json();
 }
 
-export { parseFeatureFromBranch } from "./branch-parser";
-
-/**
- * Extract feature numbers from a PR body/description.
- * Matches:
- *   - Part of org/unticket#42
- *   - Part of unticket#42
- *   - Feature #42 / Feature: #42
- *   - unticket#42 (standalone reference)
- * Returns deduplicated array of feature numbers.
- */
-export function parseFeaturesFromBody(body) {
-  if (!body) return [];
-  const nums = new Set();
-  // "Part of org/unticket#N" or "Part of unticket#N"
-  for (const m of body.matchAll(/part\s+of\s+(?:[\w-]+\/)?unticket#(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  // "Feature #N" or "Feature: #N"
-  for (const m of body.matchAll(/feature[:\s]+#(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  // Standalone "unticket#N"
-  for (const m of body.matchAll(/\bunticket#(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  // GitHub closing keywords: "Fixes/Closes/Resolves unticket#N" or "org/unticket#N"
-  for (const m of body.matchAll(/(?:fixes|closes|resolves)\s+(?:[\w-]+\/)?unticket#(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  return [...nums];
-}
