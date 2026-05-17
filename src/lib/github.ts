@@ -469,6 +469,8 @@ export interface PrQueryParams {
   draft?: boolean;
   stale?: boolean;
   since?: string;
+  sort?: "updated_at" | "created_at" | "number" | "title" | "repo" | "author";
+  sortDir?: "asc" | "desc";
 }
 
 export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
@@ -513,6 +515,8 @@ export async function fetchPaginatedPrs(
   if (params.draft) qs.set("draft", "1");
   if (params.stale) qs.set("stale", "1");
   if (params.since) qs.set("since", params.since);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.sortDir) qs.set("sort_dir", params.sortDir);
 
   const raw = await apiGet<{ data: ApiPR[]; totalCount: number; page: number; pageSize: number }>(
     `/api/prs?${qs}`,

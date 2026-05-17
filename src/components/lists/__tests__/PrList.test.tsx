@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/hooks/useGitHub", () => ({
@@ -137,5 +137,48 @@ describe("PrList", () => {
     });
     renderList({ pageSize: 30 });
     expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
+  });
+
+  it("passes sort=updated_at desc to the hook by default", () => {
+    mockHook.mockReturnValue({ data: { data: [], totalCount: 0 }, isLoading: false, isFetching: false });
+    renderList();
+    const call = mockHook.mock.calls[0][0];
+    expect(call.sort).toBe("updated_at");
+    expect(call.sortDir).toBe("desc");
+  });
+
+  it("toggles sort direction when clicking the active sort header", () => {
+    mockHook.mockReturnValue({ data: { data: [], totalCount: 0 }, isLoading: false, isFetching: false });
+    renderList();
+    // First click on Age switches sort key to created_at desc
+    fireEvent.click(screen.getByText("Age"));
+    let last = mockHook.mock.calls.at(-1)![0];
+    expect(last.sort).toBe("created_at");
+    expect(last.sortDir).toBe("desc");
+    // Second click flips direction
+    fireEvent.click(screen.getByText("Age"));
+    last = mockHook.mock.calls.at(-1)![0];
+    expect(last.sort).toBe("created_at");
+    expect(last.sortDir).toBe("asc");
+  });
+
+  it("renders the Open/Merged toggle when filter.state is 'all' and defaults to open", () => {
+    mockHook.mockReturnValue({ data: { data: [], totalCount: 0 }, isLoading: false, isFetching: false });
+    render(
+      <MemoryRouter>
+        <PrList filter={{ state: "all" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.getByText("Merged")).toBeInTheDocument();
+    expect(mockHook.mock.calls[0][0].state).toBe("open");
+    fireEvent.click(screen.getByText("Merged"));
+    expect(mockHook.mock.calls.at(-1)![0].state).toBe("merged");
+  });
+
+  it("does not render the Open/Merged toggle when filter pins state", () => {
+    mockHook.mockReturnValue({ data: { data: [], totalCount: 0 }, isLoading: false, isFetching: false });
+    renderList({ filter: { state: "open" } });
+    expect(screen.queryByText("Merged")).not.toBeInTheDocument();
   });
 });
