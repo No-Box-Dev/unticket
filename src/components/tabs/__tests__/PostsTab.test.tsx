@@ -1,0 +1,103 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+vi.mock("@/hooks/useNoxlink", () => ({
+  useFeedActors: vi.fn(),
+  useFeedProjects: vi.fn(),
+  useInfinitePosts: vi.fn(),
+  useFeedEvent: vi.fn(),
+}));
+
+import { PostsTab } from "../PostsTab";
+import {
+  useFeedActors,
+  useFeedProjects,
+  useInfinitePosts,
+} from "@/hooks/useNoxlink";
+
+const mActors = useFeedActors as unknown as ReturnType<typeof vi.fn>;
+const mProjects = useFeedProjects as unknown as ReturnType<typeof vi.fn>;
+const mPosts = useInfinitePosts as unknown as ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  mActors.mockReset();
+  mProjects.mockReset();
+  mPosts.mockReset();
+});
+
+function renderTab() {
+  return render(
+    <MemoryRouter>
+      <PostsTab />
+    </MemoryRouter>,
+  );
+}
+
+describe("PostsTab", () => {
+  it("renders a spinner while loading", () => {
+    mActors.mockReturnValue({ data: undefined, isLoading: true });
+    mProjects.mockReturnValue({ data: undefined, isLoading: true });
+    mPosts.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    const { container } = renderTab();
+    expect(container.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  it("renders the empty state when there are no posts", () => {
+    mActors.mockReturnValue({ data: [], isLoading: false });
+    mProjects.mockReturnValue({ data: [], isLoading: false });
+    mPosts.mockReturnValue({
+      data: { pages: [{ events: [] }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+    });
+    renderTab();
+    expect(screen.getByText(/No posts yet/)).toBeInTheDocument();
+  });
+
+  it("renders a post card with summary and actor label", () => {
+    mActors.mockReturnValue({
+      data: [{ id: "a1", name: "Alice", github_login: "alice", avatar_url: null }],
+      isLoading: false,
+    });
+    mProjects.mockReturnValue({
+      data: [{ id: "p1", slug: "api", name: "api", repo: "api", archived: false }],
+      isLoading: false,
+    });
+    mPosts.mockReturnValue({
+      data: {
+        pages: [
+          {
+            events: [
+              {
+                id: 1,
+                actor_id: "a1",
+                project_id: "p1",
+                summary: "Shipped a new feature",
+                payload_json: "{}",
+                created_at: new Date().toISOString(),
+                org: "x",
+                repo: "api",
+              },
+            ],
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+    });
+    renderTab();
+    expect(screen.getByText("Shipped a new feature")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("renders 'Failed to load feed' on error", () => {
+    mActors.mockReturnValue({ data: [], isLoading: false });
+    mProjects.mockReturnValue({ data: [], isLoading: false });
+    mPosts.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    renderTab();
+    expect(screen.getByText(/Failed to load feed/)).toBeInTheDocument();
+  });
+});
