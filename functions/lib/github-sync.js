@@ -1,5 +1,5 @@
 import { getSyncState, setSyncState } from "./db";
-import { parseFeatureMetadata, parseFeatureFromBranch, parseFeaturesFromBody } from "./feature-metadata";
+import { parseFeatureMetadata } from "./feature-metadata";
 import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
@@ -185,28 +185,11 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
     }
   }
 
-  // Auto-detect feature links from branch names + PR bodies
-  const linkStmt = db.prepare(
-    `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-  );
-  const allLinks = [];
-  for (const pr of prs) {
-    const branchNum = parseFeatureFromBranch(pr.head?.ref);
-    if (branchNum) allLinks.push(linkStmt.bind(orgId, branchNum, repo, pr.number, "branch"));
-    for (const num of parseFeaturesFromBody(pr.body)) {
-      allLinks.push(linkStmt.bind(orgId, num, repo, pr.number, "body"));
-    }
-  }
-  for (let i = 0; i < allLinks.length; i += 50) {
-    await db.batch(allLinks.slice(i, i + 50));
-  }
-
-  // LLM matcher backfill: for PRs without any deterministic link, ask the
-  // LLM about each one. The matcher's own attempt cache (pr_match_attempts)
-  // makes this idempotent — a re-sync won't re-ask about a PR we've already
-  // matched (or already rejected within the TTL).
+  // LLM matcher: ask the matcher about each PR. The matcher reads the PR
+  // body / branch / title and decides which features (if any) the PR
+  // implements. Its own attempt cache (pr_match_attempts) makes this
+  // idempotent — a re-sync won't re-ask about a PR we've already matched
+  // (or rejected) within the TTL.
   if (env?.ZHIPU_API_KEY) {
     for (const pr of prs) {
       try {

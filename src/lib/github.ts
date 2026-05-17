@@ -416,11 +416,6 @@ export async function updateIssueState(repo: string, issueNumber: number, state:
   });
 }
 
-// Re-exported from the server-side parser so the regex lives in one place
-// (functions/lib/branch-parser.js). Vite happily imports the .js across the
-// runtime boundary; the function is signature-compatible.
-export { parseFeatureFromBranch } from "../../functions/lib/branch-parser";
-
 export async function fetchOrgMembers() {
   const members = await apiGet<ApiMember[]>("/api/members");
   return members.map((m) => ({

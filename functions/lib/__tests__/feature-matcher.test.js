@@ -7,12 +7,11 @@ vi.mock("../llm.js", () => ({
 import { matchPRToFeatures } from "../feature-matcher.js";
 import { complete } from "../llm.js";
 
-// ---- D1 stub: dispatch keyed by SQL substring. Tests configure:
-//   prior:       row returned for pr_match_attempts SELECT
-//   existing:    row returned for pr_feature_links SELECT
-//   features:    rows returned for the features SELECT
-//   shouldThrow: SQL substrings → Error message, simulates D1 failures
-
+// D1 stub. Dispatches reads by SQL substring:
+//   prior       → row for pr_match_attempts SELECT
+//   existing    → row for pr_feature_links SELECT
+//   features    → rows for the features SELECT
+//   shouldThrow → SQL substring → Error message, simulates D1 failures
 function makeDb({ prior = null, existing = null, features = [], shouldThrow = {} } = {}) {
   const calls = { firsts: [], runs: [], batches: [] };
 
@@ -64,12 +63,17 @@ const PR = {
   body: "Closes the auth flow.",
   created_at: "2026-05-15T10:00:00Z",
   head: { ref: "feat/42-add-login" },
+  base: { ref: "main" },
 };
 
 const FEATURE_ROWS = [
-  { number: 42, title: "Login button", labels_json: "[]", created_at: "2026-05-10T00:00:00Z" },
-  { number: 43, title: "Settings refresh", labels_json: "[]", created_at: "2026-05-12T00:00:00Z" },
+  { number: 42, title: "Login button", body: "Adds a login button to the navbar.", labels_json: "[]", assignees_json: "[]", created_at: "2026-05-10T00:00:00Z" },
+  { number: 43, title: "Settings refresh", body: "Reworks the settings page.", labels_json: "[]", assignees_json: "[]", created_at: "2026-05-12T00:00:00Z" },
 ];
+
+function singleMatch(num, evidence = ["PR title contains: \"login button\""]) {
+  return JSON.stringify({ matches: [{ feature_number: num, evidence }] });
+}
 
 beforeEach(() => complete.mockReset());
 afterEach(() => vi.restoreAllMocks());
@@ -102,7 +106,7 @@ describe("matchPRToFeatures — TTL skip", () => {
       prior: { attempted_at: old },
       features: FEATURE_ROWS,
     });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     const result = await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(result).toBe(42);
     expect(complete).toHaveBeenCalled();
@@ -113,7 +117,7 @@ describe("matchPRToFeatures — TTL skip", () => {
       prior: { attempted_at: "not a date" },
       features: FEATURE_ROWS,
     });
-    complete.mockResolvedValue('{"feature_number":null}');
+    complete.mockResolvedValue(JSON.stringify({ matches: [] }));
     await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(complete).toHaveBeenCalled();
   });
@@ -123,7 +127,7 @@ describe("matchPRToFeatures — TTL skip", () => {
       shouldThrow: { "FROM pr_match_attempts": "D1 boom" },
       features: FEATURE_ROWS,
     });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     const result = await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(result).toBe(42);
   });
@@ -147,18 +151,17 @@ describe("matchPRToFeatures — date anchor (PR vs feature creation)", () => {
   });
 
   it("filters out features that didn't exist when the PR was opened", async () => {
-    const future = { number: 99, title: "Future feature", labels_json: "[]", created_at: "2026-06-01T00:00:00Z" };
+    const future = { number: 99, title: "Future feature", body: "", labels_json: "[]", assignees_json: "[]", created_at: "2026-06-01T00:00:00Z" };
     const db = makeDb({ features: [future, ...FEATURE_ROWS] });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", PR);
-    // The system message includes only candidates created before the PR.
     const userMessage = complete.mock.calls[0][1].user;
     expect(userMessage).not.toContain("#99");
     expect(userMessage).toContain("#42");
   });
 
   it("returns null + records 'no_features' when no candidates survive filtering", async () => {
-    const futureOnly = { number: 99, title: "x", labels_json: "[]", created_at: "2026-06-01T00:00:00Z" };
+    const futureOnly = { number: 99, title: "x", body: "", labels_json: "[]", assignees_json: "[]", created_at: "2026-06-01T00:00:00Z" };
     const db = makeDb({ features: [futureOnly] });
     expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
     expect(complete).not.toHaveBeenCalled();
@@ -169,11 +172,13 @@ describe("matchPRToFeatures — date anchor (PR vs feature creation)", () => {
     const backlogFeature = {
       number: 50,
       title: "Backlog item",
+      body: "",
       labels_json: JSON.stringify([{ name: "status:future" }]),
+      assignees_json: "[]",
       created_at: "2026-05-01T00:00:00Z",
     };
     const db = makeDb({ features: [backlogFeature, ...FEATURE_ROWS] });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(complete.mock.calls[0][1].user).not.toContain("#50");
   });
@@ -182,11 +187,13 @@ describe("matchPRToFeatures — date anchor (PR vs feature creation)", () => {
     const malformed = {
       number: 60,
       title: "Bad labels",
+      body: "",
       labels_json: "not json",
+      assignees_json: "[]",
       created_at: "2026-05-01T00:00:00Z",
     };
     const db = makeDb({ features: [malformed] });
-    complete.mockResolvedValue('{"feature_number":60}');
+    complete.mockResolvedValue(singleMatch(60));
     const result = await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(result).toBe(60);
   });
@@ -195,28 +202,28 @@ describe("matchPRToFeatures — date anchor (PR vs feature creation)", () => {
 describe("matchPRToFeatures — LLM response parsing", () => {
   it("returns the matched feature when the LLM picks a valid candidate", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":43}');
+    complete.mockResolvedValue(singleMatch(43));
     expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBe(43);
   });
 
-  it("returns null + records 'no_match' when the LLM returns null", async () => {
+  it("returns null + records 'no_match' when the LLM returns an empty matches array", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":null}');
+    complete.mockResolvedValue(JSON.stringify({ matches: [] }));
     expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
     expect(db._calls.runs.some((r) => r.binds.includes("no_match"))).toBe(true);
   });
 
-  it("rejects hallucinated feature numbers (LLM returns one not in candidates)", async () => {
+  it("rejects hallucinated feature numbers (LLM picks one not in candidates)", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":9999}');
+    complete.mockResolvedValue(singleMatch(9999));
     expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
     expect(db._calls.runs.some((r) => r.binds.includes("no_match"))).toBe(true);
   });
 
-  it("rejects non-integer / zero / negative LLM responses", async () => {
+  it("rejects non-integer / zero / negative feature numbers in matches", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    for (const bad of ["{\"feature_number\":1.5}", "{\"feature_number\":0}", "{\"feature_number\":-3}"]) {
-      complete.mockResolvedValueOnce(bad);
+    for (const bad of [1.5, 0, -3]) {
+      complete.mockResolvedValueOnce(JSON.stringify({ matches: [{ feature_number: bad, evidence: [] }] }));
       expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
     }
   });
@@ -228,43 +235,142 @@ describe("matchPRToFeatures — LLM response parsing", () => {
       expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
     }
   });
+
+  it("rejects responses without a matches array", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    complete.mockResolvedValue(JSON.stringify({ feature_number: 42 }));
+    expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBeNull();
+  });
+
+  it("dedupes repeat feature_numbers in the LLM response", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    complete.mockResolvedValue(JSON.stringify({
+      matches: [
+        { feature_number: 42, evidence: ["a"] },
+        { feature_number: 42, evidence: ["b"] },
+        { feature_number: 43, evidence: ["c"] },
+      ],
+    }));
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const linkInserts = db._calls.batches[0].filter((s) => s.sql.includes("INSERT INTO pr_feature_links"));
+    expect(linkInserts).toHaveLength(2);
+  });
+
+  it("caps the number of returned matches at 5", async () => {
+    const manyFeatures = Array.from({ length: 10 }, (_, i) => ({
+      number: 100 + i,
+      title: `F${i}`,
+      body: "",
+      labels_json: "[]",
+      assignees_json: "[]",
+      created_at: "2026-05-01T00:00:00Z",
+    }));
+    const db = makeDb({ features: manyFeatures });
+    complete.mockResolvedValue(JSON.stringify({
+      matches: manyFeatures.map((f) => ({ feature_number: f.number, evidence: ["e"] })),
+    }));
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const linkInserts = db._calls.batches[0].filter((s) => s.sql.includes("INSERT INTO pr_feature_links"));
+    expect(linkInserts).toHaveLength(5);
+  });
 });
 
-describe("matchPRToFeatures — successful match side effects", () => {
-  it("writes the link + attempt rows in a single batch", async () => {
+describe("matchPRToFeatures — multi-match writes", () => {
+  it("inserts one pr_feature_links row per match, plus one pr_match_attempts row, in a single batch", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(JSON.stringify({
+      matches: [
+        { feature_number: 42, evidence: ["t1"] },
+        { feature_number: 43, evidence: ["t2"] },
+      ],
+    }));
     await matchPRToFeatures(ENV(db), 1, "api", PR);
     expect(db._calls.batches).toHaveLength(1);
-    const sqls = db._calls.batches[0].map((s) => s.sql);
-    expect(sqls.some((s) => s.includes("INSERT INTO pr_feature_links"))).toBe(true);
-    expect(sqls.some((s) => s.includes("INSERT INTO pr_match_attempts"))).toBe(true);
-    expect(sqls.some((s) => s.includes("'llm'"))).toBe(true);
+    const batch = db._calls.batches[0];
+    const linkInserts = batch.filter((s) => s.sql.includes("INSERT INTO pr_feature_links"));
+    const attemptInserts = batch.filter((s) => s.sql.includes("INSERT INTO pr_match_attempts"));
+    expect(linkInserts).toHaveLength(2);
+    expect(attemptInserts).toHaveLength(1);
+    expect(linkInserts[0].sql).toContain("'llm'");
+    // First match's feature_number is persisted in the attempts row for back-compat.
+    expect(attemptInserts[0].binds[3]).toBe(42);
   });
 
-  it("passes branch + truncated body to the LLM in the user message", async () => {
+  it("returns the first matched feature number", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    complete.mockResolvedValue(JSON.stringify({
+      matches: [
+        { feature_number: 43, evidence: ["t"] },
+        { feature_number: 42, evidence: ["t"] },
+      ],
+    }));
+    expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBe(43);
+  });
+});
+
+describe("matchPRToFeatures — raw response persistence", () => {
+  it("stores the LLM's raw response on a successful match", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const raw = singleMatch(42, ["evidence"]);
+    complete.mockResolvedValue(raw);
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const attemptInsert = db._calls.batches[0].find((s) => s.sql.includes("INSERT INTO pr_match_attempts"));
+    expect(attemptInsert.binds[4]).toBe(raw);
+  });
+
+  it("stores the LLM's raw response on a no_match outcome", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const raw = JSON.stringify({ matches: [] });
+    complete.mockResolvedValue(raw);
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const attemptRun = db._calls.runs.find((r) => r.binds.includes("no_match"));
+    expect(attemptRun).toBeDefined();
+    expect(attemptRun.binds).toContain(raw);
+  });
+
+  it("truncates raw_response at 2000 chars", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const longRaw = "x".repeat(5000);
+    complete.mockResolvedValue(longRaw);
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const attemptRun = db._calls.runs.find((r) => r.binds.includes("no_match"));
+    expect(attemptRun.binds.some((b) => typeof b === "string" && b.length === 2000)).toBe(true);
+  });
+});
+
+describe("matchPRToFeatures — user message shape", () => {
+  it("includes the branch, base branch, author, labels, and a truncated body", async () => {
     const longBody = "x".repeat(2000);
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":42}');
-    await matchPRToFeatures(ENV(db), 1, "api", { ...PR, body: longBody });
+    complete.mockResolvedValue(singleMatch(42));
+    await matchPRToFeatures(ENV(db), 1, "api", {
+      ...PR,
+      body: longBody,
+      labels: [{ name: "auth" }, { name: "ui" }],
+      user: { login: "alice" },
+    });
     const userMessage = complete.mock.calls[0][1].user;
-    expect(userMessage).toContain('feat/42-add-login');
-    // Body capped at 800 chars
-    const descMatch = userMessage.match(/Description: (x+)/);
-    expect(descMatch?.[1].length).toBe(800);
+    expect(userMessage).toContain("feat/42-add-login");
+    expect(userMessage).toContain("Base branch: main");
+    expect(userMessage).toContain("Author: alice");
+    expect(userMessage).toContain("Labels: auth, ui");
+    // Body capped at 1200 chars
+    const bodyMatch = userMessage.match(/Body:\n(x+)/);
+    expect(bodyMatch?.[1].length).toBe(1200);
   });
 
-  it("falls back to (empty) when the PR body is missing", async () => {
+  it("falls back to '(empty)' when the PR body is missing", async () => {
     const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", { ...PR, body: null });
-    expect(complete.mock.calls[0][1].user).toContain("Description: (empty)");
+    expect(complete.mock.calls[0][1].user).toContain("(empty)");
   });
 
-  it("includes the PR author + flags feature assignees matching the author", async () => {
+  it("flags feature assignees matching the PR author and includes feature bodies", async () => {
     const featureWithAuthor = {
       number: 42,
       title: "Login button",
+      body: "Adds a login button to the navbar.",
       labels_json: "[]",
       assignees_json: JSON.stringify([{ login: "alice" }, { login: "bob" }]),
       created_at: "2026-05-10T00:00:00Z",
@@ -272,29 +378,91 @@ describe("matchPRToFeatures — successful match side effects", () => {
     const otherFeature = {
       number: 43,
       title: "Settings refresh",
+      body: "Reworks the settings page.",
       labels_json: "[]",
       assignees_json: JSON.stringify([{ login: "carol" }]),
       created_at: "2026-05-12T00:00:00Z",
     };
     const db = makeDb({ features: [featureWithAuthor, otherFeature] });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", { ...PR, user: { login: "alice" } });
     const userMessage = complete.mock.calls[0][1].user;
-    expect(userMessage).toContain("PR author: alice");
     expect(userMessage).toContain("alice (PR author)");
     expect(userMessage).toContain("bob");
     expect(userMessage).toContain("carol");
-    // Only the matching assignee gets the (PR author) marker
     expect(userMessage).not.toContain("bob (PR author)");
     expect(userMessage).not.toContain("carol (PR author)");
+    expect(userMessage).toContain("login button");
+    expect(userMessage).toContain("settings page");
   });
 
-  it("omits the PR author line + marker when pr.user is missing", async () => {
-    const db = makeDb({ features: FEATURE_ROWS });
-    complete.mockResolvedValue('{"feature_number":42}');
+  it("strips the unticket:metadata block from feature bodies", async () => {
+    const feature = {
+      number: 42,
+      title: "Login button",
+      body: "Real plan content\n\n<!-- unticket:metadata\n" +
+        JSON.stringify({ linkedPRs: [{ repo: "api", number: 7 }] }) +
+        "\n-->",
+      labels_json: "[]",
+      assignees_json: "[]",
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const db = makeDb({ features: [feature] });
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", PR);
     const userMessage = complete.mock.calls[0][1].user;
-    expect(userMessage).not.toContain("PR author:");
+    expect(userMessage).toContain("Real plan content");
+    expect(userMessage).not.toContain("unticket:metadata");
+    expect(userMessage).not.toContain("linkedPRs");
+  });
+
+  it("truncates feature bodies at 400 chars", async () => {
+    const feature = {
+      number: 42,
+      title: "Long plan",
+      body: "y".repeat(2000),
+      labels_json: "[]",
+      assignees_json: "[]",
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const db = makeDb({ features: [feature] });
+    complete.mockResolvedValue(singleMatch(42));
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const userMessage = complete.mock.calls[0][1].user;
+    const featureBody = userMessage.match(/Body: (y+)/g)?.pop();
+    expect(featureBody).toBeDefined();
+    expect(featureBody.replace(/^Body: /, "").length).toBe(400);
+  });
+
+  it("includes distinctive feature labels but drops housekeeping ones", async () => {
+    const feature = {
+      number: 42,
+      title: "Login button",
+      body: "",
+      labels_json: JSON.stringify([
+        { name: "feature" },
+        { name: "unticket" },
+        { name: "status:staging" },
+        { name: "auth" },
+        { name: "ui" },
+      ]),
+      assignees_json: "[]",
+      created_at: "2026-05-10T00:00:00Z",
+    };
+    const db = makeDb({ features: [feature] });
+    complete.mockResolvedValue(singleMatch(42));
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const userMessage = complete.mock.calls[0][1].user;
+    expect(userMessage).toMatch(/Labels: auth, ui|Labels: ui, auth/);
+    expect(userMessage).not.toContain("status:staging");
+  });
+
+  it("omits the Author line + marker when pr.user is missing", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    complete.mockResolvedValue(singleMatch(42));
+    await matchPRToFeatures(ENV(db), 1, "api", PR);
+    const userMessage = complete.mock.calls[0][1].user;
+    expect(userMessage).not.toContain("Author:");
     expect(userMessage).not.toContain("(PR author)");
   });
 
@@ -302,15 +470,39 @@ describe("matchPRToFeatures — successful match side effects", () => {
     const bad = {
       number: 42,
       title: "Login button",
+      body: "",
       labels_json: "[]",
       assignees_json: "not json",
       created_at: "2026-05-10T00:00:00Z",
     };
     const db = makeDb({ features: [bad] });
-    complete.mockResolvedValue('{"feature_number":42}');
+    complete.mockResolvedValue(singleMatch(42));
     await matchPRToFeatures(ENV(db), 1, "api", { ...PR, user: { login: "alice" } });
     const userMessage = complete.mock.calls[0][1].user;
     expect(userMessage).toContain("#42");
-    expect(userMessage).not.toContain("assignees:");
+    expect(userMessage).not.toContain("Assignees:");
+  });
+});
+
+describe("matchPRToFeatures — candidate cap", () => {
+  it("caps candidates at 30, keeping the most recent features", async () => {
+    const features = Array.from({ length: 40 }, (_, i) => ({
+      number: 1000 + i,
+      title: `Feature ${i}`,
+      body: "",
+      labels_json: "[]",
+      assignees_json: "[]",
+      // Returning ORDER BY created_at DESC, simulate that order in the stub:
+      created_at: new Date(2026, 0, 1 + (40 - i)).toISOString(),
+    }));
+    const db = makeDb({ features });
+    complete.mockResolvedValue(JSON.stringify({ matches: [] }));
+    await matchPRToFeatures(ENV(db), 1, "api", { ...PR, created_at: "2027-01-01T00:00:00Z" });
+    const userMessage = complete.mock.calls[0][1].user;
+    const featureCount = (userMessage.match(/^- #/gm) ?? []).length;
+    expect(featureCount).toBe(30);
+    // Last (oldest) features should be excluded.
+    expect(userMessage).toContain("#1000");
+    expect(userMessage).not.toContain("#1039");
   });
 });
