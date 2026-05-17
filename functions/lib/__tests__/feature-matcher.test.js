@@ -256,6 +256,27 @@ describe("matchPRToFeatures — LLM response parsing", () => {
     expect(linkInserts).toHaveLength(2);
   });
 
+  it("tolerates GLM-style ```json ... ``` code fences around the response", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const fenced = "```json\n" + JSON.stringify({ matches: [{ feature_number: 42, evidence: ["e"] }] }) + "\n```";
+    complete.mockResolvedValue(fenced);
+    expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBe(42);
+  });
+
+  it("tolerates bare ``` ... ``` fences (no language tag)", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const fenced = "```\n" + JSON.stringify({ matches: [{ feature_number: 43, evidence: ["e"] }] }) + "\n```";
+    complete.mockResolvedValue(fenced);
+    expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBe(43);
+  });
+
+  it("tolerates a prose preamble before the JSON object", async () => {
+    const db = makeDb({ features: FEATURE_ROWS });
+    const prose = 'Here is the answer:\n' + JSON.stringify({ matches: [{ feature_number: 42, evidence: ["e"] }] });
+    complete.mockResolvedValue(prose);
+    expect(await matchPRToFeatures(ENV(db), 1, "api", PR)).toBe(42);
+  });
+
   it("caps the number of returned matches at 5", async () => {
     const manyFeatures = Array.from({ length: 10 }, (_, i) => ({
       number: 100 + i,

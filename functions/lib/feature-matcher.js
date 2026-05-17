@@ -242,9 +242,15 @@ function parseMatches(text, candidates) {
   if (typeof text !== "string") return [];
   const trimmed = text.trim();
   if (!trimmed) return [];
+  // GLM-5 often wraps JSON in ```json ... ``` fences despite the prompt
+  // saying "reply with ONLY valid JSON". Extract the outer object instead
+  // of trusting bare JSON.parse().
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start === -1 || end <= start) return [];
   let parsed;
   try {
-    parsed = JSON.parse(trimmed);
+    parsed = JSON.parse(trimmed.slice(start, end + 1));
   } catch {
     return [];
   }
