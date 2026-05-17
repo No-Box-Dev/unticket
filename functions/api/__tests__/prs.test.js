@@ -107,4 +107,29 @@ describe("GET /api/prs", () => {
     expect(dataStmt.binds).toContain("alice");
     expect(dataStmt.binds).toContain("2025-01-01");
   });
+
+  it("defaults to ORDER BY updated_at DESC when no sort param is given", async () => {
+    getActiveRepoNames.mockResolvedValue(["api"]);
+    const db = makeDb({ batchResults: [{ results: [{ count: 0 }] }, { results: [] }] });
+    await onRequestGet(makeCtx({ db }));
+    const dataStmt = db._calls.batch[0][1];
+    expect(dataStmt.sql).toMatch(/ORDER BY updated_at DESC/);
+  });
+
+  it("honors allow-listed sort columns and direction", async () => {
+    getActiveRepoNames.mockResolvedValue(["api"]);
+    const db = makeDb({ batchResults: [{ results: [{ count: 0 }] }, { results: [] }] });
+    await onRequestGet(makeCtx({ db, url: "http://x/api/prs?sort=created_at&sort_dir=asc" }));
+    const dataStmt = db._calls.batch[0][1];
+    expect(dataStmt.sql).toMatch(/ORDER BY created_at ASC/);
+  });
+
+  it("falls back to updated_at when sort column is not allow-listed", async () => {
+    getActiveRepoNames.mockResolvedValue(["api"]);
+    const db = makeDb({ batchResults: [{ results: [{ count: 0 }] }, { results: [] }] });
+    await onRequestGet(makeCtx({ db, url: "http://x/api/prs?sort=DROP%20TABLE&sort_dir=desc" }));
+    const dataStmt = db._calls.batch[0][1];
+    expect(dataStmt.sql).toMatch(/ORDER BY updated_at DESC/);
+    expect(dataStmt.sql).not.toMatch(/DROP/);
+  });
 });

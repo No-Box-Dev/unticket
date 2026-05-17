@@ -6,6 +6,11 @@ import { usePaginatedPrs } from "@/hooks/useGitHub";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
 import { daysAgo, STALE_PR_DAYS } from "@/lib/dates";
+import { SortIcon } from "@/components/ui/SortIcon";
+
+type SortKey = "number" | "title" | "author" | "created_at" | "updated_at";
+type SortDir = "asc" | "desc";
+type StateView = "open" | "merged";
 
 export interface PrListFilter {
   state?: "open" | "closed" | "merged" | "all";
@@ -33,9 +38,32 @@ export function PrList({
 }: PrListProps) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Only show the Open/Merged toggle when the parent didn't pin a state.
+  // Drafts / stale pages pin state="open" so the toggle would be confusing.
+  const showStateToggle = filter.state === "all" || filter.state === undefined;
+  const [stateView, setStateView] = useState<StateView>("open");
+  const effectiveState = showStateToggle ? stateView : filter.state;
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+    setPage(1);
+  };
+
+  const changeStateView = (next: StateView) => {
+    setStateView(next);
+    setPage(1);
+  };
 
   const { data, isLoading, isFetching } = usePaginatedPrs({
-    state: filter.state,
+    state: effectiveState,
     page,
     pageSize,
     repo: filter.repo,
@@ -43,6 +71,8 @@ export function PrList({
     draft: filter.draft,
     stale: filter.stale,
     since: filter.since,
+    sort: sortKey,
+    sortDir,
   });
 
   const total = data?.totalCount ?? 0;
@@ -50,9 +80,37 @@ export function PrList({
 
   return (
     <div>
-      {(title || total > 0) && (
-        <div className="flex items-center justify-between mb-3">
+      {(title || total > 0 || showStateToggle) && (
+        <div className="flex items-center justify-between gap-3 mb-3">
           {title && <h3 className="text-sm font-semibold text-stone-800">{title}</h3>}
+          {showStateToggle && (
+            <div className="flex items-center rounded-lg border border-stone-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => changeStateView("open")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+                  stateView === "open"
+                    ? "bg-stone-800 text-white"
+                    : "bg-white text-stone-500 hover:bg-stone-50",
+                )}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                onClick={() => changeStateView("merged")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer border-l border-stone-200",
+                  stateView === "merged"
+                    ? "bg-stone-800 text-white"
+                    : "bg-white text-stone-500 hover:bg-stone-50",
+                )}
+              >
+                Merged
+              </button>
+            </div>
+          )}
           <span className="text-xs text-stone-400 ml-auto">{total} {total === 1 ? "PR" : "PRs"}</span>
         </div>
       )}
@@ -61,11 +119,31 @@ export function PrList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone-100 text-left">
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">PR</th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Title</th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Author</th>
+              <th
+                onClick={() => toggleSort("number")}
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+              >
+                PR <SortIcon column="number" activeSortKey={sortKey} activeSortDirection={sortDir} />
+              </th>
+              <th
+                onClick={() => toggleSort("title")}
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+              >
+                Title <SortIcon column="title" activeSortKey={sortKey} activeSortDirection={sortDir} />
+              </th>
+              <th
+                onClick={() => toggleSort("author")}
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 cursor-pointer hover:text-stone-700"
+              >
+                Author <SortIcon column="author" activeSortKey={sortKey} activeSortDirection={sortDir} />
+              </th>
               <th className="px-4 py-2.5 text-xs font-medium text-stone-500">Reviewers</th>
-              <th className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right">Age</th>
+              <th
+                onClick={() => toggleSort("created_at")}
+                className="px-4 py-2.5 text-xs font-medium text-stone-500 text-right cursor-pointer hover:text-stone-700"
+              >
+                Age <SortIcon column="created_at" activeSortKey={sortKey} activeSortDirection={sortDir} />
+              </th>
               <th className="px-4 py-2.5 w-8"></th>
             </tr>
           </thead>
