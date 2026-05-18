@@ -38,9 +38,10 @@ function formatRelative(iso: string): string {
 export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
-  const { data: allPRs } = useAllPRs(repoNames);
+  const { data: allPRs, isLoading: allPRsLoading } = useAllPRs(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
-  const { data: openIssues } = useOpenIssues(repoNames);
+  const { data: openIssues, isLoading: openIssuesLoading } = useOpenIssues(repoNames);
+  const statsLoading = allPRsLoading || openIssuesLoading;
   const { data: ghTeams } = useGhTeamMemberships();
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
@@ -186,7 +187,7 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {sorted.map((eng) => (
-          <PersonCard key={eng.login} engineer={eng} onSelect={() => setSelectedLogin(eng.login)} />
+          <PersonCard key={eng.login} engineer={eng} onSelect={() => setSelectedLogin(eng.login)} statsLoading={statsLoading} />
         ))}
       </div>
     );
@@ -287,7 +288,7 @@ interface EngineerSummary {
   kind: "human" | "bot";
 }
 
-function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelect: () => void }) {
+function PersonCard({ engineer, onSelect, statsLoading }: { engineer: EngineerSummary; onSelect: () => void; statsLoading?: boolean }) {
   return (
     <button
       onClick={onSelect}
@@ -328,18 +329,22 @@ function PersonCard({ engineer, onSelect }: { engineer: EngineerSummary; onSelec
       )}
 
       <div className="flex items-center gap-4 text-xs text-stone-500">
-        <CardStat label="Open PRs" value={engineer.openPRs} />
-        <CardStat label="Reviewing" value={engineer.reviewing} />
-        <CardStat label="Assigned Issues" value={engineer.assignedIssues} />
+        <CardStat label="Open PRs" value={engineer.openPRs} loading={statsLoading} />
+        <CardStat label="Reviewing" value={engineer.reviewing} loading={statsLoading} />
+        <CardStat label="Assigned Issues" value={engineer.assignedIssues} loading={statsLoading} />
       </div>
     </button>
   );
 }
 
-function CardStat({ label, value }: { label: string; value: number | string }) {
+function CardStat({ label, value, loading }: { label: string; value: number | string; loading?: boolean }) {
   return (
     <div className="flex items-baseline gap-1">
-      <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
+      {loading ? (
+        <Spinner size="sm" />
+      ) : (
+        <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
+      )}
       <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
     </div>
   );

@@ -112,10 +112,14 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
   );
 }
 
-function CardStat({ label, value }: { label: string; value: number | string }) {
+function CardStat({ label, value, loading }: { label: string; value: number | string; loading?: boolean }) {
   return (
     <div className="flex items-baseline gap-1">
-      <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
+      {loading ? (
+        <Spinner size="sm" />
+      ) : (
+        <span className="text-sm font-semibold text-stone-800 font-display">{value}</span>
+      )}
       <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
     </div>
   );
@@ -179,7 +183,7 @@ function ItemListPanel({
 
 // ---------- Repo Card (grid view) ----------
 
-function RepoCard({ repo, onSelect }: { repo: RepoSummary; onSelect: () => void }) {
+function RepoCard({ repo, onSelect, statsLoading }: { repo: RepoSummary; onSelect: () => void; statsLoading?: boolean }) {
   const setArchived = useSetProjectArchived();
   const isArchived = !!repo.archived;
 
@@ -225,8 +229,8 @@ function RepoCard({ repo, onSelect }: { repo: RepoSummary; onSelect: () => void 
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 text-xs text-stone-500">
-          <CardStat label="Open PRs" value={repo.openPRs} />
-          <CardStat label="Issues" value={repo.openIssues} />
+          <CardStat label="Open PRs" value={repo.openPRs} loading={statsLoading} />
+          <CardStat label="Issues" value={repo.openIssues} loading={statsLoading} />
         </div>
         <button
           type="button"
@@ -747,9 +751,10 @@ function RepoIssuesSubPage({
 
 export function ReposTab({ repoNames }: { repoNames: string[] }) {
   const projects = useFeedProjects();
-  const { data: allPRs } = useAllPRs(repoNames);
-  const { data: openIssues } = useOpenIssues(repoNames);
+  const { data: allPRs, isLoading: allPRsLoading } = useAllPRs(repoNames);
+  const { data: openIssues, isLoading: openIssuesLoading } = useOpenIssues(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
+  const statsLoading = allPRsLoading || openIssuesLoading;
 
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [subPage, setSubPage] = useState<"prs" | "issues" | null>(null);
@@ -916,7 +921,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {active.map((r) => (
-            <RepoCard key={r.id} repo={r} onSelect={() => setSelectedRepo(r.repo ?? r.name)} />
+            <RepoCard key={r.id} repo={r} onSelect={() => setSelectedRepo(r.repo ?? r.name)} statsLoading={statsLoading} />
           ))}
         </div>
 
@@ -932,7 +937,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
             {showArchived && (
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {archived.map((r) => (
-                  <RepoCard key={r.id} repo={r} onSelect={() => setSelectedRepo(r.repo ?? r.name)} />
+                  <RepoCard key={r.id} repo={r} onSelect={() => setSelectedRepo(r.repo ?? r.name)} statsLoading={statsLoading} />
                 ))}
               </div>
             )}

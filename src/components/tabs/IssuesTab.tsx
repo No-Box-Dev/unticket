@@ -102,7 +102,7 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
   }, [repoFilter, repoList]);
 
   // Stats for dashboard cards + charts (reactive to repo filter)
-  const { data: stats } = useIssueStats(filteredRepos);
+  const { data: stats, isLoading: statsLoading } = useIssueStats(filteredRepos);
 
   // Critical issues query (all open, unfiltered by repo/assignee)
   const { data: criticalData } = usePaginatedIssues({
@@ -189,7 +189,9 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
         {/* Issues by Repo */}
         <div className={cn(card, "p-5")}>
           <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open Issues by Repo</h3>
-          {!stats?.byRepo?.length ? (
+          {statsLoading ? (
+            <div className="py-4"><Spinner className="mx-auto" /></div>
+          ) : !stats?.byRepo?.length ? (
             <p className="text-xs text-stone-400">No data</p>
           ) : (
             <div className="space-y-2">
@@ -430,8 +432,8 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
             ))}
           </select>
 
-          <span className="text-xs text-stone-400 ml-auto">
-            {openTotal} open, {closedTotal} closed
+          <span className="text-xs text-stone-400 ml-auto flex items-center gap-1.5">
+            {isLoading ? <Spinner size="sm" /> : `${openTotal} open, ${closedTotal} closed`}
           </span>
         </div>
 
