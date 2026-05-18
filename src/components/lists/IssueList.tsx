@@ -94,10 +94,12 @@ export function IssueList({
 
   return (
     <div>
-      {(title || total > 0) && (
+      {(title || total > 0 || isLoading) && (
         <div className="flex items-center justify-between mb-3">
           {title && <h3 className="text-sm font-semibold text-stone-800">{title}</h3>}
-          <span className="text-xs text-stone-400 ml-auto">{total} {total === 1 ? "issue" : "issues"}</span>
+          <span className="text-xs text-stone-400 ml-auto flex items-center gap-1.5">
+            {isLoading ? <Spinner size="sm" /> : `${total} ${total === 1 ? "issue" : "issues"}`}
+          </span>
         </div>
       )}
 

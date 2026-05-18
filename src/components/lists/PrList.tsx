@@ -80,7 +80,7 @@ export function PrList({
 
   return (
     <div>
-      {(title || total > 0 || showStateToggle) && (
+      {(title || total > 0 || showStateToggle || isLoading) && (
         <div className="flex items-center justify-between gap-3 mb-3">
           {title && <h3 className="text-sm font-semibold text-stone-800">{title}</h3>}
           {showStateToggle && (
@@ -111,7 +111,9 @@ export function PrList({
               </button>
             </div>
           )}
-          <span className="text-xs text-stone-400 ml-auto">{total} {total === 1 ? "PR" : "PRs"}</span>
+          <span className="text-xs text-stone-400 ml-auto flex items-center gap-1.5">
+            {isLoading ? <Spinner size="sm" /> : `${total} ${total === 1 ? "PR" : "PRs"}`}
+          </span>
         </div>
       )}
 

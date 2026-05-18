@@ -37,7 +37,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   );
   const { data: openPRs, isLoading: openLoading } = useOpenPRs(activeRepoNames);
   const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(activeRepoNames);
-  const { data: prStats } = usePRStats();
+  const { data: prStats, isLoading: prStatsLoading } = usePRStats();
   const [personFilter, setPersonFilter] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
@@ -120,7 +120,9 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       {/* Open PRs by Repo */}
       <div className={cn(card, "p-5")}>
         <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">Open PRs by Repo</h3>
-        {!prStats?.byRepo?.length ? (
+        {prStatsLoading ? (
+          <div className="py-4"><Spinner className="mx-auto" /></div>
+        ) : !prStats?.byRepo?.length ? (
           <p className="text-xs text-stone-400">No data</p>
         ) : (
           <div className="space-y-2">
@@ -205,8 +207,8 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           placeholder="All Repos"
         />
 
-        <span className="text-xs text-stone-400 ml-auto">
-          {sorted.length} of {(prs ?? []).length} PRs
+        <span className="text-xs text-stone-400 ml-auto flex items-center gap-1.5">
+          {isLoading ? <Spinner size="sm" /> : `${sorted.length} of ${(prs ?? []).length} PRs`}
         </span>
       </div>
 
