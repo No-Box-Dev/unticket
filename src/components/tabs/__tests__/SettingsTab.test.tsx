@@ -5,6 +5,7 @@ vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
   useRepos: vi.fn(),
   useOrgMembers: vi.fn(),
+  useIsAdmin: vi.fn(() => false),
 }));
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/pr-links", () => ({
 }));
 vi.mock("@/lib/github", () => ({
   triggerSyncWithProgress: vi.fn(),
+  triggerEventsBackfillWithProgress: vi.fn(),
 }));
 vi.mock("@tanstack/react-query", () => {
   const qc = { invalidateQueries: vi.fn() };
@@ -32,7 +34,7 @@ vi.mock("@tanstack/react-query", () => {
 
 import { SettingsTab } from "../SettingsTab";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
+import { useRepos, useOrgMembers, useIsAdmin } from "@/hooks/useGitHub";
 import {
   useSettings,
   useSaveSettings,
@@ -49,6 +51,7 @@ const mSaveSettings = useSaveSettings as unknown as ReturnType<typeof vi.fn>;
 const mPeople = usePeople as unknown as ReturnType<typeof vi.fn>;
 const mSavePeople = useSavePeople as unknown as ReturnType<typeof vi.fn>;
 const mProjects = useFeedProjects as unknown as ReturnType<typeof vi.fn>;
+const mIsAdmin = useIsAdmin as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mAuth.mockReturnValue({
@@ -113,5 +116,18 @@ describe("SettingsTab", () => {
     render(<SettingsTab />);
     expect(screen.getByText("Data Sync")).toBeInTheDocument();
     expect(screen.getByText("Full Re-sync")).toBeInTheDocument();
+  });
+
+  it("hides Live Activity Backfill section for non-admins", () => {
+    mIsAdmin.mockReturnValue(false);
+    render(<SettingsTab />);
+    expect(screen.queryByText("Live Activity Backfill")).not.toBeInTheDocument();
+  });
+
+  it("shows Live Activity Backfill section for admins", () => {
+    mIsAdmin.mockReturnValue(true);
+    render(<SettingsTab />);
+    expect(screen.getByText("Live Activity Backfill")).toBeInTheDocument();
+    expect(screen.getByText("Backfill activity events")).toBeInTheDocument();
   });
 });

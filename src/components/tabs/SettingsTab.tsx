@@ -1,14 +1,18 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRepos, useOrgMembers } from "@/hooks/useGitHub";
+import { useRepos, useOrgMembers, useIsAdmin } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { backfillFeatureMatches, unlinkAllPRs, type UnlinkAllResult } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
-import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
+import {
+  triggerSyncWithProgress,
+  triggerEventsBackfillWithProgress,
+  type SyncProgress,
+} from "@/lib/github";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Activity, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function SettingsTab() {
@@ -124,6 +128,9 @@ export function SettingsTab() {
       {/* Full Re-sync */}
       <FullResyncSection />
 
+      {/* Live Activity Backfill — admin only */}
+      <ActivityEventsBackfillSection />
+
       {/* Posts backfill */}
       <PostsBackfillSection />
 
@@ -187,6 +194,70 @@ function FullResyncSection() {
       {progress?.phase === "done" && !syncing && (
         <p className="text-xs text-green-600">
           Re-synced {progress.synced} repositories. Data refreshed.
+        </p>
+      )}
+      {progress?.phase === "error" && !syncing && (
+        <p className="text-xs text-red-500">{progress.error}</p>
+      )}
+    </div>
+  );
+}
+
+function ActivityEventsBackfillSection() {
+  const qc = useQueryClient();
+  const isAdmin = useIsAdmin();
+  const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  if (!isAdmin) return null;
+
+  async function handleBackfill() {
+    setSyncing(true);
+    setProgress(null);
+    await triggerEventsBackfillWithProgress((p) => setProgress(p));
+    setSyncing(false);
+    qc.invalidateQueries({ queryKey: ["noxlink", "events"] });
+    qc.invalidateQueries({ queryKey: ["noxlink", "actors"] });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-stone-900">Live Activity Backfill</h2>
+        <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
+          admin
+        </span>
+      </div>
+      <p className="text-xs text-stone-400">
+        Re-derive missing PR, issue, review, release and push events from GitHub
+        for every tracked repo (last 30 days). Use this if Live activity on the
+        Engineers tab is missing recent activity for a teammate — for example
+        after a deploy gap or webhook outage.
+      </p>
+      <button
+        onClick={handleBackfill}
+        disabled={syncing}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+      >
+        {syncing ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Activity size={14} />
+        )}
+        {syncing
+          ? progress?.phase === "init"
+            ? "Initializing..."
+            : progress?.phase === "syncing"
+              ? `Backfilling ${progress.repo} (${progress.synced}/${progress.total})`
+              : progress?.phase === "done"
+                ? "Done!"
+                : "Backfilling..."
+          : "Backfill activity events"}
+      </button>
+      {progress?.phase === "done" && !syncing && (
+        <p className="text-xs text-green-600">
+          Backfilled events across {progress.synced} repositor
+          {progress.synced === 1 ? "y" : "ies"}. Refresh the Engineers tab to see results.
         </p>
       )}
       {progress?.phase === "error" && !syncing && (
