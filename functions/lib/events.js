@@ -154,6 +154,22 @@ function slimPayload(ghEvent, payload) {
       changes: payload.changes ?? null,
     };
   }
+  if (ghEvent === "issues" && payload.issue) {
+    // Carry issue.number through so the reconcile path can dedup against
+    // webhook-stored rows by `json_extract($.issue.number)`. Pre-existing
+    // rows (slimmed to just `{action}`) get the 5-min created_at fallback
+    // in event-reconcile.js.
+    const issue = payload.issue;
+    return {
+      action: payload.action,
+      issue: {
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        author: issue.user?.login ?? null,
+      },
+    };
+  }
   return { action: payload.action };
 }
 
