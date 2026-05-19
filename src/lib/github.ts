@@ -227,6 +227,55 @@ export async function fetchSyncStatus() {
   return apiGet<{ isStale: boolean; lastSync: string | null }>("/api/sync");
 }
 
+// Admin-only: backfill missing rows in the events table for every active
+// repo. Same cursor-batched shape as triggerSyncWithProgress, just hits
+// /api/sync-events. Used by Settings → Live Activity Backfill.
+export async function triggerEventsBackfillWithProgress(
+  onProgress: (status: SyncProgress) => void,
+  signal?: AbortSignal,
+) {
+  let init: SyncResponse;
+  try {
+    onProgress({ phase: "init", synced: 0, total: 0 });
+    init = await apiPost<SyncResponse>("/api/sync-events");
+  } catch (err) {
+    if (signal?.aborted) return;
+    const msg = err instanceof Error ? err.message : "Backfill failed";
+    if (!(err instanceof ApiError)) broadcastError(msg);
+    onProgress({ phase: "error", synced: 0, total: 0, error: msg });
+    return;
+  }
+
+  if (init.done) {
+    onProgress({ phase: "done", synced: 0, total: 0 });
+    return;
+  }
+
+  const repos = init.repoList ?? (init.cursor ? [init.cursor] : []);
+  const total = repos.length;
+  const failed: string[] = [];
+  let synced = 0;
+
+  for (const repo of repos) {
+    if (signal?.aborted) return;
+    onProgress({ phase: "syncing", repo, synced, total, failed: [...failed] });
+    try {
+      await apiPost<SyncResponse>(
+        `/api/sync-events?cursor=${encodeURIComponent(repo)}`,
+      );
+      synced++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[unticket] event backfill failed for ${repo}:`, msg);
+      failed.push(repo);
+    }
+  }
+
+  if (!signal?.aborted) {
+    onProgress({ phase: "done", synced, total, failed });
+  }
+}
+
 export async function triggerFeatureSync() {
   return apiPost<{ done: true; scope: "features" }>("/api/sync?scope=features");
 }
