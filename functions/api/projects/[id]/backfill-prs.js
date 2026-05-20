@@ -12,8 +12,9 @@ const BACKFILL_MAX_PRS = 25;
 
 export async function onRequestPost(context) {
   try {
-    const { orgLogin } = getCtx(context);
+    const { orgLogin, isAdmin } = getCtx(context);
     if (!orgLogin) return errorResponse("Missing org context", 400);
+    if (!isAdmin) return errorResponse("Admin required", 403);
     const { id } = context.params;
     if (!id) return errorResponse("Missing project id", 400);
 

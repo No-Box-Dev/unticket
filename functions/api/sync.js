@@ -35,11 +35,19 @@ async function markForceSync(db, orgId) {
 // cursor=repoName → sync that repo, return next repo as cursor
 // No more repos → { done: true }
 export async function onRequestPost(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
+  const { orgId, orgLogin, token, isAdmin } = getCtx(context);
   const url = new URL(context.request.url);
   const cursor = url.searchParams.get("cursor");
   const force = url.searchParams.get("force") === "true";
   const scope = url.searchParams.get("scope");
+
+  // `force=true` (the "Full Re-sync" button) wipes the incremental sync
+  // timestamp and re-fetches every PR/issue in the org. That's expensive and
+  // rate-limited, so non-admins can't trigger it. Normal `cursor`-driven
+  // syncs (Issues / PRs tabs) remain available to every member.
+  if (force && !isAdmin) {
+    return errorResponse("Admin required for full re-sync", 403);
+  }
 
   if (scope === "features") {
     try {
