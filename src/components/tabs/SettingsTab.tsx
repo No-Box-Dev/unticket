@@ -12,8 +12,9 @@ import {
   type SyncProgress,
 } from "@/lib/github";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Activity, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Activity, AlertTriangle, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet } from "@/lib/api";
 
 export function SettingsTab() {
   const { user, selectedOrg, logout } = useAuth();
@@ -130,6 +131,9 @@ export function SettingsTab() {
 
       {/* Live Activity Backfill — admin only */}
       <ActivityEventsBackfillSection />
+
+      {/* Recent background failures — admin only */}
+      <RecentFailuresSection />
 
       {/* Posts backfill */}
       <PostsBackfillSection />
@@ -582,3 +586,78 @@ function FeatureMatchBackfillSection() {
   );
 }
 
+type OpFailure = {
+  id: number;
+  op: string;
+  delivery_id: string | null;
+  error: string;
+  occurred_at: string;
+};
+
+function RecentFailuresSection() {
+  const isAdmin = useIsAdmin();
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["op-failures"],
+    queryFn: () => apiGet<{ failures: OpFailure[] }>("/api/op-failures?limit=25"),
+    enabled: isAdmin,
+    staleTime: 30_000,
+  });
+
+  if (!isAdmin) return null;
+
+  const failures = data?.failures ?? [];
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-stone-900">Background failures</h2>
+        <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
+          admin
+        </span>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="ml-auto text-xs text-stone-500 hover:text-stone-700 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+        >
+          {isFetching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          Refresh
+        </button>
+      </div>
+      <p className="text-xs text-stone-400">
+        Errors swallowed by background workers — narration, PR matching, install
+        bootstraps, backfills. The webhook still returned 200, but the
+        follow-up work failed. Use this when a post never appears or shows the
+        generic fallback.
+      </p>
+      {isLoading ? (
+        <div className="text-xs text-stone-400 inline-flex items-center gap-2">
+          <Loader2 size={12} className="animate-spin" /> Loading…
+        </div>
+      ) : isError ? (
+        <p className="text-xs text-red-500">Failed to load failures.</p>
+      ) : failures.length === 0 ? (
+        <p className="text-xs text-stone-400">No recent failures.</p>
+      ) : (
+        <ul className="divide-y divide-stone-100 text-xs">
+          {failures.map((f) => (
+            <li key={f.id} className="py-2 space-y-0.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                <span className="font-mono text-stone-700">{f.op}</span>
+                {f.delivery_id && (
+                  <span className="text-stone-400 truncate">{f.delivery_id}</span>
+                )}
+                <span className="ml-auto text-stone-400 shrink-0">
+                  {new Date(f.occurred_at + "Z").toLocaleString()}
+                </span>
+              </div>
+              <pre className="text-stone-500 whitespace-pre-wrap break-words font-mono text-[11px] leading-tight pl-5">
+                {f.error}
+              </pre>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
