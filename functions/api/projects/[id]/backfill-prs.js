@@ -10,102 +10,109 @@ import { narrateEvent } from "../../../lib/narrator";
 const BACKFILL_MAX_PRS = 25;
 
 export async function onRequestPost(context) {
-  const { orgLogin } = getCtx(context);
-  if (!orgLogin) return errorResponse("Missing org context", 400);
-  const { id } = context.params;
-  if (!id) return errorResponse("Missing project id", 400);
-
-  let body;
   try {
-    body = await context.request.json();
-  } catch {
-    body = {};
-  }
-  const days = Math.max(1, Math.min(30, Number(body?.days) || 3));
+    const { orgLogin } = getCtx(context);
+    if (!orgLogin) return errorResponse("Missing org context", 400);
+    const { id } = context.params;
+    if (!id) return errorResponse("Missing project id", 400);
 
-  const db = context.env.DB;
+    let body;
+    try {
+      body = await context.request.json();
+    } catch {
+      body = {};
+    }
+    const days = Math.max(1, Math.min(30, Number(body?.days) || 3));
 
-  const project = await db.prepare(
-    "SELECT id, name, org, repo, owner_id FROM projects WHERE id = ? AND owner_id = ?"
-  ).bind(id, orgLogin).first();
-  if (!project) return errorResponse(`Unknown project ${id}`, 404);
-  if (!project.org || !project.repo) return errorResponse("Project has no org/repo", 400);
+    const db = context.env.DB;
 
-  const inst = await db.prepare(
-    "SELECT installation_id FROM installations WHERE owner_id = ? AND account_login = ?"
-  ).bind(orgLogin, project.org).first();
-  if (!inst) return errorResponse(`No installation for org ${project.org}`, 404);
+    const project = await db.prepare(
+      "SELECT id, name, org, repo, owner_id FROM projects WHERE id = ? AND owner_id = ?"
+    ).bind(id, orgLogin).first();
+    if (!project) return errorResponse(`Unknown project ${id}`, 404);
+    if (!project.org || !project.repo) return errorResponse("Project has no org/repo", 400);
 
-  let prs;
-  try {
-    prs = await fetchRecentPrs(context.env, inst.installation_id, project.org, project.repo, days);
-  } catch (err) {
-    return errorResponse(`Failed to fetch PRs: ${err instanceof Error ? err.message : String(err)}`, 502);
-  }
+    const inst = await db.prepare(
+      "SELECT installation_id FROM installations WHERE owner_id = ? AND account_login = ?"
+    ).bind(orgLogin, project.org).first();
+    if (!inst) return errorResponse(`No installation for org ${project.org}`, 404);
 
-  if (prs.length === 0) {
-    return jsonResponse({
-      ok: true,
-      found: 0,
-      queued: 0,
-      skipped: 0,
-      days,
-      message: `No PRs in the last ${days} day(s).`,
-    });
-  }
+    let prs;
+    try {
+      prs = await fetchRecentPrs(context.env, inst.installation_id, project.org, project.repo, days);
+    } catch (err) {
+      return errorResponse(`Failed to fetch PRs: ${err instanceof Error ? err.message : String(err)}`, 502);
+    }
 
-  const existing = await db.prepare(
-    `SELECT delivery_id FROM events
-      WHERE owner_id = ? AND project_id = ? AND source = 'github-backfill'
-        AND delivery_id LIKE ?`
-  ).bind(orgLogin, project.id, `backfill:${project.id}:pr-%`).all();
-  const seen = new Set((existing.results ?? []).map((r) => r.delivery_id));
+    if (prs.length === 0) {
+      return jsonResponse({
+        ok: true,
+        found: 0,
+        queued: 0,
+        skipped: 0,
+        days,
+        message: `No PRs in the last ${days} day(s).`,
+      });
+    }
 
-  const todo = prs
-    .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
-    .slice(0, BACKFILL_MAX_PRS);
+    const existing = await db.prepare(
+      `SELECT delivery_id FROM events
+        WHERE owner_id = ? AND project_id = ? AND source = 'github-backfill'
+          AND delivery_id LIKE ?`
+    ).bind(orgLogin, project.id, `backfill:${project.id}:pr-%`).all();
+    const seen = new Set((existing.results ?? []).map((r) => r.delivery_id));
 
-  // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
-  // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
-  // natural moment to retry: the user is asking for a refresh anyway.
-  const fallbackIds = await findFallbackNarrativeIds(db, orgLogin, project.id);
+    const todo = prs
+      .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
+      .slice(0, BACKFILL_MAX_PRS);
 
-  if (todo.length === 0 && fallbackIds.length === 0) {
+    // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
+    // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
+    // natural moment to retry: the user is asking for a refresh anyway.
+    const fallbackIds = await findFallbackNarrativeIds(db, orgLogin, project.id);
+
+    if (todo.length === 0 && fallbackIds.length === 0) {
+      return jsonResponse({
+        ok: true,
+        found: prs.length,
+        queued: 0,
+        skipped: prs.length,
+        renarrated: 0,
+        days,
+        message: "All PRs already backfilled.",
+      });
+    }
+
+    const work = (async () => {
+      if (todo.length > 0) {
+        await processBackfill(context.env, {
+          projectId: project.id,
+          org: project.org,
+          repo: project.repo,
+          ownerId: orgLogin,
+          prs: todo,
+        });
+      }
+      if (fallbackIds.length > 0) {
+        await renarrateFallbacks(context.env, fallbackIds);
+      }
+    })();
+    context.waitUntil(work.catch((err) => console.error("[unticket backfill] failed:", err)));
+
     return jsonResponse({
       ok: true,
       found: prs.length,
-      queued: 0,
-      skipped: prs.length,
-      renarrated: 0,
+      queued: todo.length,
+      skipped: prs.length - todo.length,
+      renarrated: fallbackIds.length,
       days,
-      message: "All PRs already backfilled.",
     });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[unticket backfill] unhandled error:", message, stack);
+    return errorResponse(`Backfill failed: ${message}`, 500);
   }
-
-  const work = (async () => {
-    if (todo.length > 0) {
-      await processBackfill(context.env, {
-        projectId: project.id,
-        org: project.org,
-        repo: project.repo,
-        ownerId: orgLogin,
-        prs: todo,
-      });
-    }
-    if (fallbackIds.length > 0) {
-      await renarrateFallbacks(context.env, fallbackIds);
-    }
-  })();
-  context.waitUntil(work.catch((err) => console.error("[unticket backfill] failed:", err)));
-
-  return jsonResponse({
-    ok: true,
-    found: prs.length,
-    queued: todo.length,
-    skipped: prs.length - todo.length,
-    renarrated: fallbackIds.length,
-    days,
-  });
 }
 
 async function findFallbackNarrativeIds(db, ownerId, projectId) {
