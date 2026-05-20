@@ -60,11 +60,10 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
-**`unticket` repo (features as issues + plan files):**
-- `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`
+**`unticket` repo (features as issues):**
 - Default repo name is `unticket`; users can override via Settings (`settings.unticketRepo`)
-- Feature plans: `plans/PLAN-{featureId}.md` (e.g. `PLAN-42.md`)
-- CLI access: `gh api repos/{org}/unticket/contents/plans/ --jq '.[].name'`
+- Resolved by `src/lib/unticket-repo-name.ts` (`getUnticketRepoName`)
+- CLI access: `gh issue list --repo {org}/unticket --label unticket --label feature`
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
