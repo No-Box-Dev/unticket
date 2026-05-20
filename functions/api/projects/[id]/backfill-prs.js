@@ -55,11 +55,17 @@ export async function onRequestPost(context) {
       });
     }
 
+    // Build exact delivery_id candidates and dedupe via IN(...). Avoids a LIKE
+    // pattern over project.id, whose literal `_` characters (e.g.
+    // `proj_n1healthcare_authentication-service`) blow past D1's
+    // "LIKE or GLOB pattern too complex" threshold.
+    const candidateIds = prs.map((pr) => `backfill:${project.id}:pr-${pr.number}`);
+    const placeholders = candidateIds.map(() => "?").join(",");
     const existing = await db.prepare(
       `SELECT delivery_id FROM events
         WHERE owner_id = ? AND project_id = ? AND source = 'github-backfill'
-          AND delivery_id LIKE ?`
-    ).bind(orgLogin, project.id, `backfill:${project.id}:pr-%`).all();
+          AND delivery_id IN (${placeholders})`
+    ).bind(orgLogin, project.id, ...candidateIds).all();
     const seen = new Set((existing.results ?? []).map((r) => r.delivery_id));
 
     const todo = prs
