@@ -39,7 +39,7 @@ export function usePeople() {
   const { selectedOrg } = useAuth();
   return useQuery({
     queryKey: ["people", selectedOrg],
-    queryFn: () => fetchPeople(selectedOrg!),
+    queryFn: fetchPeople,
     enabled: !!selectedOrg,
   });
 }
@@ -117,7 +117,7 @@ export function useSavePeople() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (people: Person[]) => savePeople(selectedOrg!, people),
+    mutationFn: (people: Person[]) => savePeople(people),
     onMutate: async (people) => {
       await qc.cancelQueries({ queryKey: ["people", selectedOrg] });
       const previous = qc.getQueryData<Person[]>(["people", selectedOrg]);

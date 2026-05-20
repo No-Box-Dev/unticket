@@ -5,35 +5,44 @@ vi.mock("@/lib/api", () => ({
   apiPut: vi.fn(),
 }));
 
-vi.mock("@/lib/unticket-repo", () => ({
-  fetchPeopleFromRepo: vi.fn(),
-  savePeopleToRepo: vi.fn(),
-}));
-
 import { apiGet, apiPut } from "@/lib/api";
-import { fetchPeopleFromRepo } from "@/lib/unticket-repo";
 import {
   fetchPeople,
+  savePeople,
   fetchSettings,
   createConfigRepo,
 } from "../config-repo";
 
 const mockApiGet = vi.mocked(apiGet);
 const mockApiPut = vi.mocked(apiPut);
-const mockFetchPeopleFromRepo = vi.mocked(fetchPeopleFromRepo);
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("fetchPeople (GitHub-backed)", () => {
-  it("delegates to fetchPeopleFromRepo", async () => {
-    mockFetchPeopleFromRepo.mockResolvedValue([
+describe("fetchPeople (D1-backed)", () => {
+  it("reads from /api/config/people", async () => {
+    mockApiGet.mockResolvedValue([
       { github: "alice", name: "Alice", role: "dev", team: "Backend" },
     ]);
-    const result = await fetchPeople("test-org");
-    expect(mockFetchPeopleFromRepo).toHaveBeenCalledWith("test-org");
+    const result = await fetchPeople();
+    expect(mockApiGet).toHaveBeenCalledWith("/api/config/people");
     expect(result[0].team).toEqual("Backend");
+  });
+
+  it("returns [] when the row is missing", async () => {
+    mockApiGet.mockResolvedValue(null);
+    const result = await fetchPeople();
+    expect(result).toEqual([]);
+  });
+});
+
+describe("savePeople (D1-backed)", () => {
+  it("writes to /api/config/people", async () => {
+    mockApiPut.mockResolvedValue(undefined);
+    const people = [{ github: "alice", name: "Alice", role: "dev", team: "Backend" }];
+    await savePeople(people);
+    expect(mockApiPut).toHaveBeenCalledWith("/api/config/people", people);
   });
 });
 
