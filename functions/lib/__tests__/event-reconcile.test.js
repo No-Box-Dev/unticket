@@ -308,7 +308,14 @@ describe("reconcileRepoEvents — D1 issue backfill", () => {
 });
 
 describe("reconcileRepoEvents — GitHub /events backfill", () => {
+  // Dynamic timestamp inside any reasonable lookback window. fetchRepoEvents
+  // filters by Date.now() − lookbackHours, so hardcoded dates rot the moment
+  // they fall outside the window (this bit us on 2026-05-20 with the previous
+  // hardcoded 2026-05-19T10:00:00Z literals).
+  const recent = () => new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
   it("translates and inserts a PullRequestReviewEvent", async () => {
+    const ts = recent();
     global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => [
@@ -318,10 +325,10 @@ describe("reconcileRepoEvents — GitHub /events backfill", () => {
           actor: { login: "dan", id: 9, avatar_url: "d.png" },
           payload: {
             action: "submitted",
-            review: { state: "approved", body: "lgtm", submitted_at: "2026-05-19T10:00:00Z" },
+            review: { state: "approved", body: "lgtm", submitted_at: ts },
             pull_request: { number: 12, title: "wip" },
           },
-          created_at: "2026-05-19T10:00:00Z",
+          created_at: ts,
         },
       ],
     });
@@ -358,7 +365,7 @@ describe("reconcileRepoEvents — GitHub /events backfill", () => {
           type: "PullRequestEvent",
           actor: { login: "a", id: 1 },
           payload: { action: "opened", pull_request: { number: 1, title: "x" } },
-          created_at: "2026-05-19T10:00:00Z",
+          created_at: recent(),
         },
       ],
     });
@@ -380,7 +387,7 @@ describe("reconcileRepoEvents — GitHub /events backfill", () => {
           type: "PushEvent",
           actor: { login: "renovate[bot]", id: 555 },
           payload: { ref: "refs/heads/main", commits: [] },
-          created_at: "2026-05-19T10:00:00Z",
+          created_at: recent(),
         },
       ],
     });
