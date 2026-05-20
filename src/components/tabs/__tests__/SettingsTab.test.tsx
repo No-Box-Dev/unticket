@@ -29,7 +29,16 @@ vi.mock("@/lib/github", () => ({
 }));
 vi.mock("@tanstack/react-query", () => {
   const qc = { invalidateQueries: vi.fn() };
-  return { useQueryClient: () => qc };
+  return {
+    useQueryClient: () => qc,
+    useQuery: () => ({
+      data: { failures: [] },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    }),
+  };
 });
 
 import { SettingsTab } from "../SettingsTab";
