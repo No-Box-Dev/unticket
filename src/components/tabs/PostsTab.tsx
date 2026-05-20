@@ -200,9 +200,17 @@ function PostCard({ event, actor, project }: PostCardProps) {
         <PrDetails triggerEventId={triggerEventId} fallbackOrg={event.org} fallbackRepo={event.repo} />
       )}
 
-      {model && (
+      {model === "fallback" ? (
+        <div
+          className="mt-3 inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded-full border border-amber-300 bg-amber-50 text-amber-800"
+          title="LLM unavailable when this post was generated — showing the raw event summary instead. Re-run Posts Backfill once the LLM is reachable to regenerate."
+        >
+          <span aria-hidden>⚠</span>
+          LLM unavailable — generic summary
+        </div>
+      ) : model ? (
         <div className="mt-3 text-xs font-mono text-stone-400">{model}</div>
-      )}
+      ) : null}
     </article>
   );
 }
