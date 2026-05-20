@@ -24,6 +24,7 @@ export function SettingsTab() {
   const { data: people } = usePeople();
   const savePeople = useSavePeople();
   const { data: orgMembers } = useOrgMembers();
+  const isAdmin = useIsAdmin();
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -126,29 +127,23 @@ export function SettingsTab() {
         </a>
       </div>
 
-      {/* Full Re-sync */}
-      <FullResyncSection />
-
-      {/* Live Activity Backfill — admin only */}
-      <ActivityEventsBackfillSection />
-
-      {/* Recent background failures — admin only */}
-      <RecentFailuresSection />
-
-      {/* Posts backfill */}
-      <PostsBackfillSection />
-
-      {/* Feature-match backfill */}
-      <FeatureMatchBackfillSection />
-
-      {/* About */}
-      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-stone-900">About unticket.ai</h2>
-        <p className="text-xs text-stone-400">
-          AI-powered project management dashboard for GitHub organisations.
-          Your token is stored locally and sent securely to our API for GitHub operations.
-        </p>
-      </div>
+      {isAdmin && (
+        <section className="space-y-3 pt-4 border-t border-stone-200">
+          <div className="flex items-center gap-2 px-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Admin tools
+            </h2>
+            <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
+              admin
+            </span>
+          </div>
+          <FullResyncSection />
+          <ActivityEventsBackfillSection />
+          <PostsBackfillSection />
+          <FeatureMatchBackfillSection />
+          <RecentFailuresSection />
+        </section>
+      )}
     </div>
   );
 }
@@ -169,11 +164,11 @@ function FullResyncSection() {
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-      <h2 className="text-sm font-semibold text-stone-900">Data Sync</h2>
+      <h2 className="text-sm font-semibold text-stone-900">Full Re-sync</h2>
       <p className="text-xs text-stone-400">
-        Run a full re-sync to fetch all historical PRs and issues from GitHub.
-        This ignores the incremental sync timestamp and re-fetches everything.
-        Use this to backfill data that was missed during initial setup.
+        Re-fetch every historical PR and issue from GitHub, ignoring the
+        incremental sync timestamp. Use this to backfill data missed during
+        initial setup or after an extended webhook outage.
       </p>
       <button
         onClick={handleResync}
@@ -209,11 +204,8 @@ function FullResyncSection() {
 
 function ActivityEventsBackfillSection() {
   const qc = useQueryClient();
-  const isAdmin = useIsAdmin();
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
-
-  if (!isAdmin) return null;
 
   async function handleBackfill() {
     setSyncing(true);
@@ -226,12 +218,7 @@ function ActivityEventsBackfillSection() {
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-stone-900">Live Activity Backfill</h2>
-        <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
-          admin
-        </span>
-      </div>
+      <h2 className="text-sm font-semibold text-stone-900">Live Activity Backfill</h2>
       <p className="text-xs text-stone-400">
         Re-derive missing PR, issue, review, release and push events from GitHub
         for every tracked repo (last 30 days). Use this if Live activity on the
@@ -595,15 +582,11 @@ type OpFailure = {
 };
 
 function RecentFailuresSection() {
-  const isAdmin = useIsAdmin();
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["op-failures"],
     queryFn: () => apiGet<{ failures: OpFailure[] }>("/api/op-failures?limit=25"),
-    enabled: isAdmin,
     staleTime: 30_000,
   });
-
-  if (!isAdmin) return null;
 
   const failures = data?.failures ?? [];
 
@@ -611,9 +594,6 @@ function RecentFailuresSection() {
     <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold text-stone-900">Background failures</h2>
-        <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
-          admin
-        </span>
         <button
           onClick={() => refetch()}
           disabled={isFetching}

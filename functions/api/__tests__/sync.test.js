@@ -30,11 +30,11 @@ function makeDb({ firstResult = null, allResult = [] } = {}) {
   };
 }
 
-function makeCtx({ db, url = "http://x/api/sync", method = "POST" }) {
+function makeCtx({ db, url = "http://x/api/sync", method = "POST", isAdmin = true }) {
   return {
     request: new Request(url, { method }),
     env: { DB: db },
-    data: { orgId: 1, orgLogin: "acme", token: "tok" },
+    data: { orgId: 1, orgLogin: "acme", token: "tok", isAdmin },
   };
 }
 
