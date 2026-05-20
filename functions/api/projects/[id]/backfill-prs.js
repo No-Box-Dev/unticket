@@ -2,6 +2,7 @@ import { getCtx, jsonResponse, errorResponse } from "../../../lib/db";
 import { getInstallationToken } from "../../../lib/github-app";
 import { resolveActorFromGithub } from "../../../lib/actors";
 import { narrateEvent } from "../../../lib/narrator";
+import { recordFailure } from "../../../lib/op-failures";
 
 // POST /api/projects/:id/backfill-prs  body: { days?: number (1..30, default 3) }
 // Generates first-person posts for the last N days of PRs in the project's repo,
@@ -103,7 +104,17 @@ export async function onRequestPost(context) {
         await renarrateFallbacks(context.env, fallbackIds);
       }
     })();
-    context.waitUntil(work.catch((err) => console.error("[unticket backfill] failed:", err)));
+    context.waitUntil(
+      work.catch(async (err) => {
+        console.error("[unticket backfill] failed:", err);
+        await recordFailure(db, {
+          ownerId: orgLogin,
+          op: "backfillPrs",
+          deliveryId: project.id,
+          error: err,
+        });
+      })
+    );
 
     return jsonResponse({
       ok: true,

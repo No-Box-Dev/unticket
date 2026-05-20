@@ -22,6 +22,7 @@ import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "
 import { getInstallationToken } from "../lib/github-app";
 import { narrateEvent } from "../lib/narrator";
 import { matchPRToFeatures } from "../lib/feature-matcher";
+import { recordFailure } from "../lib/op-failures";
 
 // Webhook actions that should trigger the LLM matcher. Reviews / labels are
 // excluded — they don't change the PR body, branch, or title, so re-running
@@ -137,8 +138,14 @@ export async function onRequestPost(context) {
       if (stored?.id) {
         // Narrate out-of-band so the webhook returns immediately.
         context.waitUntil(
-          narrateEvent(context.env, stored.id).catch((err) => {
+          narrateEvent(context.env, stored.id).catch(async (err) => {
             console.error("[unticket narrator] narrateEvent failed:", err);
+            await recordFailure(db, {
+              ownerId: orgLogin,
+              op: "narrateEvent",
+              deliveryId,
+              error: err,
+            });
           })
         );
       }
@@ -223,8 +230,14 @@ export async function onRequestPost(context) {
       // we don't need a deterministic pre-pass.
       if (LLM_MATCH_ACTIONS.has(action)) {
         context.waitUntil(
-          matchPRToFeatures(context.env, orgId, repo, pr).catch((err) => {
+          matchPRToFeatures(context.env, orgId, repo, pr).catch(async (err) => {
             console.error(`[unticket feature-matcher] webhook ${repo}#${pr.number} failed:`, err?.message ?? err);
+            await recordFailure(db, {
+              ownerId: orgLogin,
+              op: "matchPRToFeatures",
+              deliveryId: `${repo}#${pr.number}`,
+              error: err,
+            });
           })
         );
       }
@@ -374,8 +387,14 @@ async function handleInstallationEvent(context, payload, deliveryId) {
       .first();
     if (orgRow?.id) {
       context.waitUntil(
-        bootstrapInstallation(context.env, orgRow.id, accountLogin, installationId).catch((err) => {
+        bootstrapInstallation(context.env, orgRow.id, accountLogin, installationId).catch(async (err) => {
           console.error(`[unticket bootstrap] failed for ${accountLogin}:`, err?.stack ?? err);
+          await recordFailure(db, {
+            ownerId: accountLogin,
+            op: "bootstrapInstallation",
+            deliveryId,
+            error: err,
+          });
         })
       );
     }
@@ -467,10 +486,22 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
             await syncRepo(db, token, orgRow.id, accountLogin, repo, true);
           } catch (err) {
             console.error(`[unticket webhook] backfill repo ${repo} failed:`, err?.message ?? err);
+            await recordFailure(db, {
+              ownerId: accountLogin,
+              op: "syncRepo",
+              deliveryId: repo,
+              error: err,
+            });
           }
         }
       } catch (err) {
         console.error(`[unticket webhook] backfill failed for ${accountLogin}:`, err?.stack ?? err);
+        await recordFailure(db, {
+          ownerId: accountLogin,
+          op: "installationReposBackfill",
+          deliveryId,
+          error: err,
+        });
       }
     })());
   }
