@@ -121,22 +121,25 @@ describe("SettingsTab", () => {
     expect(screen.getByText(/Install or manage Unticket/i)).toBeInTheDocument();
   });
 
-  it("renders the Data Sync section with a Full Re-sync button", () => {
-    render(<SettingsTab />);
-    expect(screen.getByText("Data Sync")).toBeInTheDocument();
-    expect(screen.getByText("Full Re-sync")).toBeInTheDocument();
-  });
-
-  it("hides Live Activity Backfill section for non-admins", () => {
+  it("hides all admin tools for non-admins", () => {
     mIsAdmin.mockReturnValue(false);
     render(<SettingsTab />);
+    expect(screen.queryByText("Admin tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Full Re-sync")).not.toBeInTheDocument();
     expect(screen.queryByText("Live Activity Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("Posts Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("PR → Feature Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("Background failures")).not.toBeInTheDocument();
   });
 
-  it("shows Live Activity Backfill section for admins", () => {
+  it("shows all admin tools for admins", () => {
     mIsAdmin.mockReturnValue(true);
     render(<SettingsTab />);
+    expect(screen.getByText("Admin tools")).toBeInTheDocument();
+    expect(screen.getAllByText("Full Re-sync").length).toBeGreaterThan(0);
     expect(screen.getByText("Live Activity Backfill")).toBeInTheDocument();
-    expect(screen.getByText("Backfill activity events")).toBeInTheDocument();
+    expect(screen.getByText("Posts Backfill")).toBeInTheDocument();
+    expect(screen.getByText("PR → Feature Backfill")).toBeInTheDocument();
+    expect(screen.getByText("Background failures")).toBeInTheDocument();
   });
 });

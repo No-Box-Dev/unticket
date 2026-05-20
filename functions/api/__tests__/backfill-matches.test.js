@@ -47,7 +47,7 @@ function makeCtx({ db, body = {}, env = {}, waitUntil = vi.fn() }) {
   return {
     request: req,
     env: { DB: db, ZHIPU_API_KEY: "k", ...env },
-    data: { orgId: 1, orgLogin: "acme", token: "tok" },
+    data: { orgId: 1, orgLogin: "acme", token: "tok", isAdmin: true },
     waitUntil,
   };
 }

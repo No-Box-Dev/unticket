@@ -68,12 +68,13 @@ function makeContext({
   orgId = 1,
   orgLogin = "acme",
   token = "tok",
+  isAdmin = true,
   body = { confirm: "UNLINK_ALL" },
 }) {
   return {
     request: makeRequest(body),
     env: { DB: db },
-    data: { orgId, orgLogin, token },
+    data: { orgId, orgLogin, token, isAdmin },
   };
 }
 
@@ -112,7 +113,7 @@ describe("POST /api/pr-links/unlink-all — guards", () => {
       method: "POST",
       body: "not json",
     });
-    const res = await onRequestPost({ request: req, env: { DB: db }, data: { orgId: 1, orgLogin: "acme", token: "tok" } });
+    const res = await onRequestPost({ request: req, env: { DB: db }, data: { orgId: 1, orgLogin: "acme", token: "tok", isAdmin: true } });
     expect(res.status).toBe(400);
   });
 });
