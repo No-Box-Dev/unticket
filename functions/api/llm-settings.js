@@ -18,7 +18,7 @@
 
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { encryptToken } from "../lib/crypto";
-import { complete } from "../lib/llm";
+import { probeCompletion } from "../lib/llm";
 import {
   PROVIDER_ANTHROPIC,
   PROVIDER_OPENAI_COMPATIBLE,
@@ -57,6 +57,59 @@ function checkAndRecordPutAttempt(orgId) {
 function maskKey(key) {
   if (typeof key !== "string" || key.length < 4) return "••••";
   return `••••${key.slice(-4)}`;
+}
+
+// Turn a probeCompletion() diagnostic into a user-facing message. The body
+// snippet often contains the provider's actual error JSON (LiteLLM/OpenAI
+// shape: { error: { message: ... } }); pull that out when it's there so the
+// admin sees "Authentication Error: ..." instead of the wrapped JSON.
+function extractProviderMessage(snippet) {
+  if (!snippet) return "";
+  try {
+    const parsed = JSON.parse(snippet);
+    const msg = parsed?.error?.message ?? parsed?.error ?? parsed?.message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim().slice(0, 300);
+  } catch { /* not JSON — fall through */ }
+  return snippet.slice(0, 300);
+}
+
+export function formatProbeFailure(probe) {
+  switch (probe.reason) {
+    case "no_api_key":
+      return "API key is required.";
+    case "http_error": {
+      const provider = extractProviderMessage(probe.bodySnippet);
+      const suffix = provider ? ` Provider said: ${provider}` : "";
+      if (probe.status === 401 || probe.status === 403) {
+        return `Provider rejected the API key (HTTP ${probe.status}). The key is invalid, revoked, or lacks access to this model.${suffix}`;
+      }
+      if (probe.status === 404) {
+        return `Endpoint not found (HTTP 404). Check the Base URL — for LiteLLM / OpenAI-compatible proxies, use the proxy root (no /v1).${suffix}`;
+      }
+      if (probe.status === 400 || probe.status === 422) {
+        return `Provider rejected the request (HTTP ${probe.status}). Common cause: model name is not configured for this endpoint.${suffix}`;
+      }
+      if (probe.status === 429) {
+        return `Provider rate-limited the validation call (HTTP 429). Try again in a moment.${suffix}`;
+      }
+      if (probe.status >= 500) {
+        return `Provider returned HTTP ${probe.status} — likely a provider-side outage.${suffix}`;
+      }
+      return `Provider returned HTTP ${probe.status}.${suffix}`;
+    }
+    case "bad_json":
+      return `Provider responded with non-JSON content. The Base URL probably points at a login / HTML page rather than the API. First 200 chars: ${(probe.bodySnippet || "").slice(0, 200)}`;
+    case "no_text_block":
+      return "Provider responded but with no text content. Check the Model name — the configured model may not be a chat / text-output model.";
+    case "too_large":
+      return `Provider response exceeded the ${64} KB cap (${probe.bytes} bytes). This endpoint is probably not OpenAI-/Anthropic-compatible.`;
+    case "timeout":
+      return "Validation call timed out after 30s. The endpoint is unreachable or overloaded.";
+    case "network":
+      return `Couldn't reach the Base URL: ${probe.message}. Check spelling and that the host is reachable from the public internet (private / loopback addresses are blocked).`;
+    default:
+      return "Validation call failed — check provider, base URL, model name, and API key.";
+  }
 }
 
 // Block hostnames that resolve into the worker's local network or
@@ -188,20 +241,17 @@ export async function onRequestPut(context) {
 
   // Validate by issuing a real (cheap) completion. If the provider rejects
   // the key, the wrong base URL is configured, or the model name is invalid,
-  // `complete()` returns null and we refuse to save — saves users from
-  // discovering broken config later when an event tries to narrate.
+  // the probe returns a diagnostic and we refuse to save — surfaces the real
+  // reason (401, 404, model-not-found, etc.) instead of a generic message.
   const probeConfig = { provider, baseUrl, apiKey, model };
-  const probe = await complete(probeConfig, {
+  const probe = await probeCompletion(probeConfig, {
     system: "Reply with the single word: ok",
     user: "ping",
     maxTokens: 8,
     tag: "llm-settings-validate",
   });
-  if (probe == null) {
-    return errorResponse(
-      "Validation call failed — check provider, base URL, model name, and API key.",
-      422,
-    );
+  if (!probe.ok) {
+    return errorResponse(formatProbeFailure(probe), 422);
   }
 
   const encryptedKey = await encryptToken(apiKey, encryptionKey);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/llm.js", () => ({
-  complete: vi.fn(),
+  probeCompletion: vi.fn(),
 }));
 vi.mock("../../lib/crypto.js", () => ({
   encryptToken: vi.fn(async (plain, _key) => `enc:${plain}`),
@@ -12,9 +12,13 @@ import {
   onRequestPut,
   onRequestDelete,
   isPrivateHostname,
+  formatProbeFailure,
 } from "../llm-settings.js";
-import { complete } from "../../lib/llm.js";
+import { probeCompletion } from "../../lib/llm.js";
 import { encryptToken } from "../../lib/crypto.js";
+
+// Probes that succeed by default — individual tests override per-call.
+const okProbe = { ok: true, text: "ok" };
 
 // D1 stub that dispatches by SQL substring. Tests configure a `settingsRow`
 // (returned by the GET path's first()) and inspect captured runs/binds for
@@ -119,7 +123,7 @@ describe("PUT /api/llm-settings", () => {
     const { ctx } = makeCtx({ method: "PUT", body: goodBody, isAdmin: false });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(403);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("500s when ENCRYPTION_KEY is missing", async () => {
@@ -135,7 +139,7 @@ describe("PUT /api/llm-settings", () => {
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("422s on missing apiKey", async () => {
@@ -155,7 +159,7 @@ describe("PUT /api/llm-settings", () => {
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("422s on http:// baseUrl (plaintext would leak the API key)", async () => {
@@ -166,7 +170,7 @@ describe("PUT /api/llm-settings", () => {
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("422s when baseUrl is not a parseable URL", async () => {
@@ -177,7 +181,7 @@ describe("PUT /api/llm-settings", () => {
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -197,19 +201,27 @@ describe("PUT /api/llm-settings", () => {
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
-  it("422s when validation probe returns null", async () => {
-    complete.mockResolvedValueOnce(null);
+  it("422s when validation probe fails — and bubbles up provider's actual error", async () => {
+    probeCompletion.mockResolvedValueOnce({
+      ok: false,
+      reason: "http_error",
+      status: 401,
+      bodySnippet: '{"error":{"message":"Authentication Error: Invalid API key"}}',
+    });
     const { ctx, DB } = makeCtx({ method: "PUT", body: goodBody });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
     expect(DB._calls.runs).toHaveLength(0);
+    const body = await res.json();
+    expect(body.error).toMatch(/HTTP 401/);
+    expect(body.error).toMatch(/Authentication Error: Invalid API key/);
   });
 
   it("upserts the row and returns a masked key on success", async () => {
-    complete.mockResolvedValueOnce("ok");
+    probeCompletion.mockResolvedValueOnce(okProbe);
     const { ctx, DB } = makeCtx({ method: "PUT", body: goodBody });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(200);
@@ -256,7 +268,7 @@ describe("PUT rate limit", () => {
   };
 
   it("429s after RATE_LIMIT_MAX attempts in the window", async () => {
-    complete.mockResolvedValue("ok");
+    probeCompletion.mockResolvedValue(okProbe);
     const orgId = 9999;
 
     // First 10 attempts should succeed (200).
@@ -267,15 +279,15 @@ describe("PUT rate limit", () => {
     }
 
     // 11th attempt within the window is rejected before the probe runs.
-    complete.mockClear();
+    probeCompletion.mockClear();
     const { ctx } = makeCtx({ orgId, method: "PUT", body: goodBody });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(429);
-    expect(complete).not.toHaveBeenCalled();
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("rate-limits per org (one org hitting the cap does not block another)", async () => {
-    complete.mockResolvedValue("ok");
+    probeCompletion.mockResolvedValue(okProbe);
     const cappedOrg = 9998;
     // Fill cappedOrg's window.
     for (let i = 0; i < 10; i++) {
@@ -331,6 +343,106 @@ describe("isPrivateHostname", () => {
     expect(isPrivateHostname("")).toBe(true);
     expect(isPrivateHostname(undefined)).toBe(true);
     expect(isPrivateHostname(null)).toBe(true);
+  });
+});
+
+describe("formatProbeFailure", () => {
+  it("401/403 → key-rejected message + extracts provider's JSON error message", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "http_error",
+      status: 401,
+      bodySnippet: '{"error":{"message":"Authentication Error: Invalid API key"}}',
+    });
+    expect(msg).toMatch(/HTTP 401/);
+    expect(msg).toMatch(/rejected the API key/i);
+    expect(msg).toContain("Authentication Error: Invalid API key");
+  });
+
+  it("404 → base-URL guidance + LiteLLM/OpenAI proxy hint", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "http_error",
+      status: 404,
+      bodySnippet: "",
+    });
+    expect(msg).toMatch(/HTTP 404/);
+    expect(msg).toMatch(/Base URL/);
+    expect(msg).toMatch(/no \/v1/);
+  });
+
+  it("400 → model-name hint", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "http_error",
+      status: 400,
+      bodySnippet: '{"error":{"message":"model gpt-foo not found"}}',
+    });
+    expect(msg).toMatch(/HTTP 400/);
+    expect(msg).toMatch(/model name/i);
+    expect(msg).toContain("model gpt-foo not found");
+  });
+
+  it("429 → rate-limit guidance", () => {
+    const msg = formatProbeFailure({ ok: false, reason: "http_error", status: 429, bodySnippet: "" });
+    expect(msg).toMatch(/HTTP 429/);
+    expect(msg).toMatch(/rate-limited/i);
+  });
+
+  it("5xx → provider outage hint", () => {
+    const msg = formatProbeFailure({ ok: false, reason: "http_error", status: 503, bodySnippet: "" });
+    expect(msg).toMatch(/HTTP 503/);
+    expect(msg).toMatch(/outage/i);
+  });
+
+  it("network → host-unreachable message includes the underlying error", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "network",
+      message: "getaddrinfo ENOTFOUND litellm.example.com",
+    });
+    expect(msg).toMatch(/Couldn't reach/);
+    expect(msg).toContain("ENOTFOUND");
+  });
+
+  it("timeout → 30s timeout message", () => {
+    const msg = formatProbeFailure({ ok: false, reason: "timeout" });
+    expect(msg).toMatch(/timed out after 30s/);
+  });
+
+  it("bad_json → wrong-endpoint hint with body preview", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "bad_json",
+      bodySnippet: "<!DOCTYPE html><html><head><title>Login</title>",
+    });
+    expect(msg).toMatch(/non-JSON/);
+    expect(msg).toContain("<!DOCTYPE html>");
+  });
+
+  it("no_text_block → model-shape hint", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "no_text_block",
+      bodySnippet: "{}",
+    });
+    expect(msg).toMatch(/no text content/i);
+    expect(msg).toMatch(/Model/);
+  });
+
+  it("falls back to plain bodySnippet when JSON has no .error.message", () => {
+    const msg = formatProbeFailure({
+      ok: false,
+      reason: "http_error",
+      status: 502,
+      bodySnippet: "Bad Gateway",
+    });
+    expect(msg).toContain("Bad Gateway");
+  });
+
+  it("default branch returns the original generic message", () => {
+    const msg = formatProbeFailure({ ok: false, reason: "unknown_thing_we_havent_handled" });
+    expect(msg).toMatch(/Validation call failed/);
   });
 });
 
