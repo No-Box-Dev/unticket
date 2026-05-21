@@ -1,4 +1,5 @@
 import { encryptToken } from "../../lib/crypto";
+import { saveOAuthTokens } from "../../lib/oauth-tokens";
 
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
@@ -118,6 +119,36 @@ export async function onRequestGet(context) {
       status: 503,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Persist refresh token (if the GitHub App has token expiration enabled).
+  // Lookup the GitHub login server-side so we don't trust client-provided
+  // identity. Failure is non-fatal — without a refresh token, the user will
+  // simply re-authenticate after the access token expires.
+  if (data.refresh_token) {
+    try {
+      const userRes = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `Bearer ${data.access_token}`,
+          "User-Agent": "Unticket",
+        },
+      });
+      if (userRes.ok) {
+        const user = await userRes.json();
+        if (user?.login) {
+          await saveOAuthTokens(context.env.DB, {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+            expiresInSec: data.expires_in,
+            refreshTokenExpiresInSec: data.refresh_token_expires_in,
+            githubLogin: user.login,
+            encryptionKey,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[unticket oauth] failed to persist refresh token:", e);
+    }
   }
 
   // Redirect back with only the exchange code (token never appears in URL)
