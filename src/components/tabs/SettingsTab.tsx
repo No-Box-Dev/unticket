@@ -12,9 +12,16 @@ import {
   type SyncProgress,
 } from "@/lib/github";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Activity, AlertTriangle, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Cpu, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
+import {
+  fetchLlmSettings,
+  saveLlmSettings,
+  clearLlmSettings,
+  type LlmProvider,
+  type LlmSettings,
+} from "@/lib/llm-settings";
 
 export function SettingsTab() {
   const { user, selectedOrg, logout } = useAuth();
@@ -137,6 +144,7 @@ export function SettingsTab() {
               admin
             </span>
           </div>
+          <LlmSettingsSection />
           <FullResyncSection />
           <ActivityEventsBackfillSection />
           <PostsBackfillSection />
@@ -569,6 +577,208 @@ function FeatureMatchBackfillSection() {
         onConfirm={handleUnlinkAll}
         onCancel={() => setConfirmOpen(false)}
       />
+    </div>
+  );
+}
+
+const PROVIDER_PRESETS: Record<LlmProvider, { label: string; baseUrl: string; modelHint: string }> = {
+  "anthropic": {
+    label: "Anthropic (Messages API)",
+    baseUrl: "https://api.anthropic.com",
+    modelHint: "e.g. claude-sonnet-4-6",
+  },
+  "openai-compatible": {
+    label: "OpenAI-compatible",
+    baseUrl: "https://api.openai.com",
+    modelHint: "e.g. gpt-4o-mini",
+  },
+};
+
+function LlmSettingsSection() {
+  const qc = useQueryClient();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["llm-settings"],
+    queryFn: fetchLlmSettings,
+    staleTime: 30_000,
+  });
+
+  const [provider, setProvider] = useState<LlmProvider>("anthropic");
+  const [baseUrl, setBaseUrl] = useState(PROVIDER_PRESETS.anthropic.baseUrl);
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  function applyPreset(next: LlmProvider) {
+    setProvider(next);
+    setBaseUrl(PROVIDER_PRESETS[next].baseUrl);
+  }
+
+  async function handleSave() {
+    setError(null);
+    setSavedAt(null);
+    if (!apiKey.trim()) {
+      setError("API key is required.");
+      return;
+    }
+    if (!model.trim()) {
+      setError("Model is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveLlmSettings({ provider, baseUrl: baseUrl.trim(), apiKey: apiKey.trim(), model: model.trim() });
+      setApiKey("");
+      setSavedAt(Date.now());
+      qc.invalidateQueries({ queryKey: ["llm-settings"] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleClear() {
+    setError(null);
+    setSavedAt(null);
+    setBusy(true);
+    try {
+      await clearLlmSettings();
+      setApiKey("");
+      qc.invalidateQueries({ queryKey: ["llm-settings"] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const configured = (data as LlmSettings | undefined)?.configured === true;
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <Cpu size={14} className="text-stone-500" />
+        <h2 className="text-sm font-semibold text-stone-900">AI Provider</h2>
+        <button
+          onClick={() => refetch()}
+          className="ml-auto text-xs text-stone-500 hover:text-stone-700 inline-flex items-center gap-1 cursor-pointer"
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+      </div>
+      <p className="text-xs text-stone-400">
+        Bring your own LLM endpoint for narration and PR↔feature matching. Anthropic
+        (default Zhipu compat) or any OpenAI-compatible API. We validate your
+        config with a tiny live call before saving — if your key, base URL or
+        model name is wrong, the save is refused.
+      </p>
+
+      {isLoading ? (
+        <div className="text-xs text-stone-400 inline-flex items-center gap-2">
+          <Loader2 size={12} className="animate-spin" /> Loading…
+        </div>
+      ) : isError ? (
+        <p className="text-xs text-red-500">Failed to load AI provider settings.</p>
+      ) : (
+        <>
+          {configured && data && "provider" in data ? (
+            <div className="text-xs bg-stone-50 border border-stone-200 rounded-lg p-3 space-y-1">
+              <p className="text-stone-700">
+                <span className="font-medium">Active:</span> {data.provider} · {data.model}
+              </p>
+              <p className="text-stone-500">
+                {data.baseUrl} · key {data.keyMask}
+              </p>
+              {data.updatedAt && (
+                <p className="text-stone-400">
+                  Updated {new Date(data.updatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-stone-500">
+              No override set — using the default Zhipu key from the server env.
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <label className="text-xs text-stone-600 space-y-1">
+              <span className="block">Provider</span>
+              <select
+                value={provider}
+                onChange={(e) => applyPreset(e.target.value as LlmProvider)}
+                disabled={busy}
+                className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              >
+                {Object.entries(PROVIDER_PRESETS).map(([value, preset]) => (
+                  <option key={value} value={value}>{preset.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-stone-600 space-y-1">
+              <span className="block">Model</span>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={busy}
+                placeholder={PROVIDER_PRESETS[provider].modelHint}
+                className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              />
+            </label>
+            <label className="col-span-2 text-xs text-stone-600 space-y-1">
+              <span className="block">Base URL</span>
+              <input
+                type="text"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                disabled={busy}
+                className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              />
+            </label>
+            <label className="col-span-2 text-xs text-stone-600 space-y-1">
+              <span className="block">API key {configured && <span className="text-stone-400">(write-only — leave blank to keep current)</span>}</span>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={busy}
+                placeholder="sk-… / glm-…"
+                autoComplete="new-password"
+                className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleSave}
+              disabled={busy}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+            >
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
+              {busy ? "Validating…" : "Save & validate"}
+            </button>
+            {configured && (
+              <button
+                onClick={handleClear}
+                disabled={busy}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 disabled:opacity-50 cursor-pointer"
+              >
+                <Trash2 size={14} /> Clear override
+              </button>
+            )}
+            {savedAt && !error && (
+              <span className="text-xs text-green-600">Saved.</span>
+            )}
+          </div>
+          {error && (
+            <p className="text-xs text-red-500">{error}</p>
+          )}
+        </>
+      )}
     </div>
   );
 }
