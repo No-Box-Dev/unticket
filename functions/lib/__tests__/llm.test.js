@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { complete, completeNarrative, NARRATOR_MODEL, ZHIPU_MODEL } from "../llm.js";
+import { complete, completeNarrative, probeCompletion, NARRATOR_MODEL, ZHIPU_MODEL } from "../llm.js";
 import { PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE } from "../llm-config.js";
 
 const ANTHROPIC_CONFIG = {
@@ -164,6 +164,118 @@ describe("complete", () => {
       text: async () => "not json at all",
     });
     expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+  });
+});
+
+describe("probeCompletion", () => {
+  it("returns no_api_key when config is missing or has no key", async () => {
+    expect(await probeCompletion(null, { system: "s", user: "u" })).toEqual({ ok: false, reason: "no_api_key" });
+    expect(await probeCompletion({ ...ANTHROPIC_CONFIG, apiKey: "" }, { system: "s", user: "u" })).toEqual({
+      ok: false,
+      reason: "no_api_key",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns ok with the extracted text on success", async () => {
+    fetch.mockResolvedValue(okResponse({ content: [{ type: "text", text: "hi" }] }));
+    expect(await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toEqual({ ok: true, text: "hi" });
+  });
+
+  it("returns http_error with status + bodySnippet on non-2xx", async () => {
+    fetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: { get: () => null },
+      text: async () => '{"error":{"message":"bad key"}}',
+    });
+    const result = await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result).toEqual({
+      ok: false,
+      reason: "http_error",
+      status: 401,
+      bodySnippet: '{"error":{"message":"bad key"}}',
+    });
+  });
+
+  it("clips bodySnippet on http_error to 500 chars", async () => {
+    const huge = "x".repeat(2000);
+    fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: { get: () => null },
+      text: async () => huge,
+    });
+    const result = await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("http_error");
+    expect(result.bodySnippet.length).toBe(500);
+  });
+
+  it("returns bad_json when the body isn't JSON", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      text: async () => "<html>login page</html>",
+    });
+    expect(await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toEqual({
+      ok: false,
+      reason: "bad_json",
+      bodySnippet: "<html>login page</html>",
+    });
+  });
+
+  it("returns no_text_block when the provider returns JSON without text content", async () => {
+    fetch.mockResolvedValue(okResponse({ content: [{ type: "tool_use" }] }));
+    const result = await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no_text_block");
+    expect(typeof result.bodySnippet).toBe("string");
+  });
+
+  it("returns too_large when Content-Length exceeds the cap", async () => {
+    fetch.mockResolvedValue(
+      okResponse({ content: [{ type: "text", text: "x" }] }, { contentLength: String(64 * 1024 + 1) }),
+    );
+    expect(await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toEqual({
+      ok: false,
+      reason: "too_large",
+      bytes: 64 * 1024 + 1,
+    });
+  });
+
+  it("returns too_large when actual body exceeds the cap (no Content-Length)", async () => {
+    const huge = "x".repeat(70_000);
+    fetch.mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      text: async () => huge,
+    });
+    const result = await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("too_large");
+    expect(result.bytes).toBe(70_000);
+  });
+
+  it("returns timeout when fetch is aborted", async () => {
+    fetch.mockImplementation(() => {
+      const err = new Error("aborted");
+      err.name = "AbortError";
+      return Promise.reject(err);
+    });
+    expect(await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toEqual({
+      ok: false,
+      reason: "timeout",
+    });
+  });
+
+  it("returns network with the underlying error message on other throws", async () => {
+    fetch.mockRejectedValue(new Error("ENOTFOUND litellm.example"));
+    expect(await probeCompletion(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toEqual({
+      ok: false,
+      reason: "network",
+      message: "ENOTFOUND litellm.example",
+    });
   });
 });
 
