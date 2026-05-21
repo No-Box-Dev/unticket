@@ -26,9 +26,81 @@ import {
 
 const VALID_PROVIDERS = new Set([PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE]);
 
+// Per-isolate rate limit on PUT — the validation probe makes an outbound
+// fetch with admin-supplied (url, key), so we don't want a compromised admin
+// token to be able to bulk-probe credentials. Cloudflare reuses isolates for
+// warm invocations so this works as a soft cap; we accept that a cold-start
+// fan-out across many isolates would let a few extra probes through.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
+const putAttempts = new Map();
+
+function checkAndRecordPutAttempt(orgId) {
+  const now = Date.now();
+  const recent = (putAttempts.get(orgId) ?? []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS,
+  );
+  if (recent.length >= RATE_LIMIT_MAX) return false;
+  recent.push(now);
+  putAttempts.set(orgId, recent);
+
+  // GC idle orgs occasionally — keeps the Map from growing unbounded across
+  // warm-isolate lifetime without paying a sweep on every request.
+  if (Math.random() < 0.01) {
+    for (const [k, v] of putAttempts) {
+      if (!v.some((t) => now - t < RATE_LIMIT_WINDOW_MS)) putAttempts.delete(k);
+    }
+  }
+  return true;
+}
+
 function maskKey(key) {
   if (typeof key !== "string" || key.length < 4) return "••••";
   return `••••${key.slice(-4)}`;
+}
+
+// Block hostnames that resolve into the worker's local network or
+// link-local / metadata ranges. We can't fully defend against DNS rebinding
+// from a CF Worker (no pre-resolve API short of `connect()`), but blocking
+// literal IPs + common local names kills the easy variants.
+export function isPrivateHostname(hostname) {
+  if (!hostname) return true;
+  // URL.hostname wraps IPv6 in brackets ("[::1]"); strip them so the literal
+  // comparisons below work against the raw address.
+  let lower = hostname.toLowerCase();
+  if (lower.startsWith("[") && lower.endsWith("]")) {
+    lower = lower.slice(1, -1);
+  }
+
+  if (lower === "localhost") return true;
+  if (
+    lower.endsWith(".localhost") ||
+    lower.endsWith(".local") ||
+    lower.endsWith(".internal")
+  ) {
+    return true;
+  }
+
+  const v4 = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = v4.slice(1, 3).map(Number);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local incl. cloud IMDS
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true; // multicast + reserved
+    return false;
+  }
+
+  if (lower.includes(":")) {
+    if (lower === "::1" || lower === "::") return true;
+    if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA
+    if (lower.startsWith("fe80:")) return true; // link-local
+    if (lower.startsWith("::ffff:")) return true; // IPv4-mapped
+    return false;
+  }
+
+  return false;
 }
 
 export async function onRequestGet(context) {
@@ -61,6 +133,13 @@ export async function onRequestPut(context) {
   if (!orgId) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
 
+  if (!checkAndRecordPutAttempt(orgId)) {
+    return errorResponse(
+      `Too many save attempts — try again in a minute (max ${RATE_LIMIT_MAX}/min).`,
+      429,
+    );
+  }
+
   const encryptionKey = context.env.ENCRYPTION_KEY;
   if (!encryptionKey) {
     return errorResponse("Server missing ENCRYPTION_KEY", 500);
@@ -81,9 +160,25 @@ export async function onRequestPut(context) {
   if (!VALID_PROVIDERS.has(provider)) {
     return errorResponse(`Invalid provider. Use one of: ${[...VALID_PROVIDERS].join(", ")}`, 422);
   }
-  if (!baseUrl || !/^https?:\/\//.test(baseUrl)) {
-    return errorResponse("baseUrl must be an http(s) URL", 422);
+
+  // HTTPS only — the request body carries the API key in Authorization /
+  // x-api-key headers, so plaintext HTTP would leak it on the wire.
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(baseUrl);
+  } catch {
+    return errorResponse("baseUrl must be a valid URL", 422);
   }
+  if (parsedUrl.protocol !== "https:") {
+    return errorResponse("baseUrl must use https://", 422);
+  }
+  if (isPrivateHostname(parsedUrl.hostname)) {
+    return errorResponse(
+      "baseUrl must be a public hostname (private / link-local / loopback addresses are blocked)",
+      422,
+    );
+  }
+
   if (!apiKey) {
     return errorResponse("apiKey is required", 422);
   }

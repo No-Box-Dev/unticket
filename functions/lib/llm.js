@@ -12,6 +12,12 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MAX_TOKENS = 220;
 const TIMEOUT_MS = 30_000;
 
+// Cap the response body we'll buffer from a user-supplied LLM endpoint.
+// max_tokens caps the *content*, but a hostile endpoint could send a giant
+// JSON blob and OOM the worker (128 MB limit). 64 KB is ~10× the longest
+// legitimate response we expect (matcher uses max_tokens=800).
+const MAX_RESPONSE_BYTES = 64 * 1024;
+
 // Historical names kept so test mocks and callers that just want a label
 // don't need a config lookup.
 export const NARRATOR_MODEL = "glm-5";
@@ -79,7 +85,23 @@ export async function complete(config, { system, user, maxTokens = DEFAULT_MAX_T
       console.warn(`[${tag}] LLM (${config.provider}) returned ${res.status}`);
       return null;
     }
-    const body = await res.json();
+    const contentLength = Number(res.headers.get("content-length") ?? "0");
+    if (contentLength > MAX_RESPONSE_BYTES) {
+      console.warn(`[${tag}] LLM response too large (${contentLength} bytes)`);
+      return null;
+    }
+    const raw = await res.text();
+    if (raw.length > MAX_RESPONSE_BYTES) {
+      console.warn(`[${tag}] LLM response too large (${raw.length} bytes)`);
+      return null;
+    }
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      console.warn(`[${tag}] LLM response was not JSON`);
+      return null;
+    }
     return req.extract(body);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

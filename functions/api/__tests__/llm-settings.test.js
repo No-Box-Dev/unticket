@@ -11,6 +11,7 @@ import {
   onRequestGet,
   onRequestPut,
   onRequestDelete,
+  isPrivateHostname,
 } from "../llm-settings.js";
 import { complete } from "../../lib/llm.js";
 import { encryptToken } from "../../lib/crypto.js";
@@ -146,13 +147,57 @@ describe("PUT /api/llm-settings", () => {
     expect(res.status).toBe(422);
   });
 
-  it("422s on non-http baseUrl", async () => {
+  it("422s on non-https baseUrl scheme", async () => {
     const { ctx } = makeCtx({
+      orgId: 101,
       method: "PUT",
-      body: { ...goodBody, baseUrl: "ftp://nope" },
+      body: { ...goodBody, baseUrl: "ftp://nope.example.com" },
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("422s on http:// baseUrl (plaintext would leak the API key)", async () => {
+    const { ctx } = makeCtx({
+      orgId: 102,
+      method: "PUT",
+      body: { ...goodBody, baseUrl: "http://api.anthropic.com" },
+    });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(422);
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("422s when baseUrl is not a parseable URL", async () => {
+    const { ctx } = makeCtx({
+      orgId: 103,
+      method: "PUT",
+      body: { ...goodBody, baseUrl: "not a url at all" },
+    });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(422);
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["localhost", "https://localhost/v1"],
+    ["loopback IPv4", "https://127.0.0.1/v1"],
+    ["private RFC1918 10.x", "https://10.0.0.5/v1"],
+    ["private RFC1918 192.168.x", "https://192.168.1.1/v1"],
+    ["AWS/GCP metadata 169.254.169.254", "https://169.254.169.254/latest/meta-data/"],
+    ["IPv6 loopback", "https://[::1]/v1"],
+    ["mDNS .local", "https://printer.local/v1"],
+    ["resolver-internal .internal", "https://svc.internal/v1"],
+  ])("422s when baseUrl points at a private host (%s)", async (_label, baseUrl) => {
+    const { ctx } = makeCtx({
+      orgId: 200 + Math.floor(Math.random() * 1000),
+      method: "PUT",
+      body: { ...goodBody, baseUrl },
+    });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(422);
+    expect(complete).not.toHaveBeenCalled();
   });
 
   it("422s when validation probe returns null", async () => {
@@ -199,6 +244,93 @@ describe("PUT /api/llm-settings", () => {
     };
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT rate limit", () => {
+  const goodBody = {
+    provider: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+    apiKey: "sk-ant-rate",
+    model: "claude-sonnet-4-6",
+  };
+
+  it("429s after RATE_LIMIT_MAX attempts in the window", async () => {
+    complete.mockResolvedValue("ok");
+    const orgId = 9999;
+
+    // First 10 attempts should succeed (200).
+    for (let i = 0; i < 10; i++) {
+      const { ctx } = makeCtx({ orgId, method: "PUT", body: goodBody });
+      const res = await onRequestPut(ctx);
+      expect(res.status).toBe(200);
+    }
+
+    // 11th attempt within the window is rejected before the probe runs.
+    complete.mockClear();
+    const { ctx } = makeCtx({ orgId, method: "PUT", body: goodBody });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(429);
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits per org (one org hitting the cap does not block another)", async () => {
+    complete.mockResolvedValue("ok");
+    const cappedOrg = 9998;
+    // Fill cappedOrg's window.
+    for (let i = 0; i < 10; i++) {
+      const { ctx } = makeCtx({ orgId: cappedOrg, method: "PUT", body: goodBody });
+      const res = await onRequestPut(ctx);
+      expect(res.status).toBe(200);
+    }
+    // A fresh org should still be allowed.
+    const { ctx } = makeCtx({ orgId: 9997, method: "PUT", body: goodBody });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("isPrivateHostname", () => {
+  it.each([
+    "localhost",
+    "Localhost",
+    "anything.local",
+    "service.internal",
+    "127.0.0.1",
+    "0.0.0.0",
+    "10.0.0.1",
+    "169.254.169.254", // AWS/GCP IMDS
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "224.0.0.1", // multicast
+    "::1",
+    "[::1]", // bracketed form as URL.hostname returns it
+    "::",
+    "fc00::1", // ULA
+    "fd12:3456::1", // ULA
+    "fe80::1", // link-local
+    "::ffff:127.0.0.1", // IPv4-mapped
+  ])("treats %s as private", (host) => {
+    expect(isPrivateHostname(host)).toBe(true);
+  });
+
+  it.each([
+    "api.anthropic.com",
+    "api.openai.com",
+    "api.z.ai",
+    "8.8.8.8",
+    "172.15.0.1", // just outside the 172.16/12 block
+    "172.32.0.1", // just outside the 172.16/12 block
+    "2606:4700::1111", // public Cloudflare IPv6
+  ])("treats %s as public", (host) => {
+    expect(isPrivateHostname(host)).toBe(false);
+  });
+
+  it("treats empty/missing hostnames as private (fail-secure)", () => {
+    expect(isPrivateHostname("")).toBe(true);
+    expect(isPrivateHostname(undefined)).toBe(true);
+    expect(isPrivateHostname(null)).toBe(true);
   });
 });
 
