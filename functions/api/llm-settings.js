@@ -247,14 +247,16 @@ export async function onRequestPut(context) {
   // the probe returns a diagnostic and we refuse to save — surfaces the real
   // reason (401, 404, model-not-found, etc.) instead of a generic message.
   const probeConfig = { provider, baseUrl, apiKey, model };
-  // 128 tokens of headroom — reasoning models (Gemini 2.5, Claude with
-  // extended thinking, o-series) consume tokens internally before producing
-  // visible output. A budget of 8 was enough for vanilla models but ate the
-  // whole response on Gemini 2.5 Flash.
+  // Effectively uncapped — reasoning models (Gemini 2.5, Claude extended
+  // thinking, o-series) spend tokens internally before producing visible
+  // output, and there's no way to predict how many. The 64 KB response cap
+  // in llm.js bounds the actual transport size, so we don't need a tight
+  // max_tokens here. Anthropic requires the field, so we send a high value
+  // rather than omitting it.
   const probe = await probeCompletion(probeConfig, {
     system: "Reply with the single word: ok",
     user: "ping",
-    maxTokens: 128,
+    maxTokens: 4096,
     tag: "llm-settings-validate",
   });
   if (!probe.ok) {
