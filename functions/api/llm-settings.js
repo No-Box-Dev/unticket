@@ -99,8 +99,11 @@ export function formatProbeFailure(probe) {
     }
     case "bad_json":
       return `Provider responded with non-JSON content. The Base URL probably points at a login / HTML page rather than the API. First 200 chars: ${(probe.bodySnippet || "").slice(0, 200)}`;
-    case "no_text_block":
-      return "Provider responded but with no text content. Check the Model name — the configured model may not be a chat / text-output model.";
+    case "no_text_block": {
+      const snippet = (probe.bodySnippet || "").slice(0, 300);
+      const suffix = snippet ? ` Provider returned: ${snippet}` : "";
+      return `Provider responded but with no text content. Common causes: the model isn't a chat / text-output model, or it's a reasoning model that consumed the token budget before producing visible output (try a larger model or a non-reasoning variant).${suffix}`;
+    }
     case "too_large":
       return `Provider response exceeded the ${64} KB cap (${probe.bytes} bytes). This endpoint is probably not OpenAI-/Anthropic-compatible.`;
     case "timeout":
@@ -244,10 +247,14 @@ export async function onRequestPut(context) {
   // the probe returns a diagnostic and we refuse to save — surfaces the real
   // reason (401, 404, model-not-found, etc.) instead of a generic message.
   const probeConfig = { provider, baseUrl, apiKey, model };
+  // 128 tokens of headroom — reasoning models (Gemini 2.5, Claude with
+  // extended thinking, o-series) consume tokens internally before producing
+  // visible output. A budget of 8 was enough for vanilla models but ate the
+  // whole response on Gemini 2.5 Flash.
   const probe = await probeCompletion(probeConfig, {
     system: "Reply with the single word: ok",
     user: "ping",
-    maxTokens: 8,
+    maxTokens: 128,
     tag: "llm-settings-validate",
   });
   if (!probe.ok) {
