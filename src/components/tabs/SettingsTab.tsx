@@ -12,7 +12,7 @@ import {
   type SyncProgress,
 } from "@/lib/github";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Activity, AlertTriangle, Cpu, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Check, Cpu, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
 import {
@@ -589,7 +589,16 @@ type PresetId = "anthropic" | "openai" | "litellm";
 
 const PROVIDER_PRESETS: Record<
   PresetId,
-  { label: string; wire: LlmProvider; baseUrl: string; modelHint: string; apiKeyHint: string; hint?: string }
+  {
+    label: string;
+    wire: LlmProvider;
+    baseUrl: string;
+    modelHint: string;
+    apiKeyHint: string;
+    hint?: string;
+    // Quick-pick suggestions for the Model input. First entry = recommended.
+    suggestedModels: string[];
+  }
 > = {
   "anthropic": {
     label: "Anthropic (Messages API)",
@@ -597,6 +606,12 @@ const PROVIDER_PRESETS: Record<
     baseUrl: "https://api.anthropic.com",
     modelHint: "e.g. claude-sonnet-4-6",
     apiKeyHint: "sk-ant-…",
+    suggestedModels: [
+      "claude-haiku-4-5",
+      "claude-sonnet-4-6",
+      "claude-opus-4-7",
+      "glm-5",
+    ],
   },
   "openai": {
     label: "OpenAI (chat completions)",
@@ -604,6 +619,12 @@ const PROVIDER_PRESETS: Record<
     baseUrl: "https://api.openai.com",
     modelHint: "e.g. gpt-4o-mini",
     apiKeyHint: "sk-…",
+    suggestedModels: [
+      "gpt-4o-mini",
+      "gpt-4o",
+      "gpt-4.1-mini",
+      "gpt-4.1",
+    ],
   },
   "litellm": {
     label: "LiteLLM proxy",
@@ -614,6 +635,12 @@ const PROVIDER_PRESETS: Record<
     hint:
       "Point Base URL at your LiteLLM proxy root (no /v1, no trailing slash). " +
       "Model must match an alias defined in your LiteLLM config.yaml.",
+    suggestedModels: [
+      "gpt-4o-mini",
+      "claude-haiku-4-5",
+      "claude-sonnet-4-6",
+      "gemini-2.0-flash",
+    ],
   },
 };
 
@@ -766,6 +793,29 @@ function LlmSettingsSection() {
                 placeholder={PROVIDER_PRESETS[preset].modelHint}
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {PROVIDER_PRESETS[preset].suggestedModels.map((m) => {
+                  const active = model.trim() === m;
+                  const savedActive = configured && data && "model" in data && data.model === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModel(m)}
+                      disabled={busy}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-mono transition-colors cursor-pointer disabled:opacity-50 ${
+                        active
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                      }`}
+                      title={savedActive ? `${m} (saved)` : m}
+                    >
+                      {savedActive && <Check size={10} aria-hidden />}
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
             </label>
             <label className="col-span-2 text-xs text-stone-600 space-y-1">
               <span className="block">Base URL</span>
