@@ -5,6 +5,11 @@ vi.mock("../../lib/llm.js", () => ({
 }));
 vi.mock("../../lib/crypto.js", () => ({
   encryptToken: vi.fn(async (plain, _key) => `enc:${plain}`),
+  decryptToken: vi.fn(async (cipher, _key) => {
+    if (typeof cipher === "string" && cipher.startsWith("enc:")) return cipher.slice(4);
+    if (cipher === "corrupt") throw new Error("bad MAC");
+    return cipher;
+  }),
 }));
 
 import {
@@ -15,7 +20,7 @@ import {
   formatProbeFailure,
 } from "../llm-settings.js";
 import { probeCompletion } from "../../lib/llm.js";
-import { encryptToken } from "../../lib/crypto.js";
+import { encryptToken, decryptToken } from "../../lib/crypto.js";
 
 // Probes that succeed by default — individual tests override per-call.
 const okProbe = { ok: true, text: "ok" };
@@ -142,13 +147,56 @@ describe("PUT /api/llm-settings", () => {
     expect(probeCompletion).not.toHaveBeenCalled();
   });
 
-  it("422s on missing apiKey", async () => {
+  it("422s on missing apiKey when no row exists", async () => {
     const { ctx } = makeCtx({
       method: "PUT",
       body: { ...goodBody, apiKey: "" },
+      settingsRow: null,
     });
     const res = await onRequestPut(ctx);
     expect(res.status).toBe(422);
+    expect(probeCompletion).not.toHaveBeenCalled();
+  });
+
+  it("reuses the stored key when apiKey is blank and a row exists", async () => {
+    probeCompletion.mockResolvedValueOnce(okProbe);
+    const { ctx, DB } = makeCtx({
+      method: "PUT",
+      body: { ...goodBody, apiKey: "" },
+      settingsRow: { encrypted_api_key: "enc:sk-ant-stored-secret" },
+    });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(200);
+
+    // The probe should have been called with the decrypted stored key.
+    expect(decryptToken).toHaveBeenCalledWith("enc:sk-ant-stored-secret", "0".repeat(64));
+    expect(probeCompletion.mock.calls[0][0]).toMatchObject({ apiKey: "sk-ant-stored-secret" });
+
+    // The row is re-upserted; encryption happens with the reused plaintext.
+    expect(encryptToken).toHaveBeenCalledWith("sk-ant-stored-secret", "0".repeat(64));
+    const run = DB._calls.runs.find((r) => r.sql.includes("INSERT INTO llm_settings"));
+    expect(run).toBeDefined();
+
+    const body = await res.json();
+    expect(body).toMatchObject({
+      configured: true,
+      model: "claude-sonnet-4-6",
+      keyMask: "••••cret",
+      keyReused: true,
+    });
+  });
+
+  it("422s when the stored key cannot be decrypted", async () => {
+    const { ctx } = makeCtx({
+      method: "PUT",
+      body: { ...goodBody, apiKey: "" },
+      settingsRow: { encrypted_api_key: "corrupt" },
+    });
+    const res = await onRequestPut(ctx);
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toMatch(/decrypt/i);
+    expect(probeCompletion).not.toHaveBeenCalled();
   });
 
   it("422s on non-https baseUrl scheme", async () => {

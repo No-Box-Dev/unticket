@@ -16,6 +16,8 @@ export type LlmSettings =
 export type LlmSettingsInput = {
   provider: LlmProvider;
   baseUrl: string;
+  // Leave blank when editing an existing config (server reuses the stored
+  // key). Required when no row exists yet.
   apiKey: string;
   model: string;
 };
