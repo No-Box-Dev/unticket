@@ -17,7 +17,7 @@
 // `_middleware.js` bootstrap path.
 
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
-import { encryptToken } from "../lib/crypto";
+import { encryptToken, decryptToken } from "../lib/crypto";
 import { probeCompletion } from "../lib/llm";
 import {
   PROVIDER_ANTHROPIC,
@@ -235,18 +235,39 @@ export async function onRequestPut(context) {
     );
   }
 
-  if (!apiKey) {
-    return errorResponse("apiKey is required", 422);
-  }
   if (!model) {
     return errorResponse("model is required", 422);
+  }
+
+  // When the admin leaves the API key blank on an existing config, reuse the
+  // stored key. Lets them swap models or base URLs without re-pasting the
+  // secret every time. If no row exists yet, the key is genuinely required.
+  let effectiveApiKey = apiKey;
+  let reuseStoredKey = false;
+  if (!effectiveApiKey) {
+    const existing = await context.env.DB
+      .prepare("SELECT encrypted_api_key FROM llm_settings WHERE org_id = ?")
+      .bind(orgId)
+      .first();
+    if (!existing) {
+      return errorResponse("apiKey is required", 422);
+    }
+    try {
+      effectiveApiKey = await decryptToken(existing.encrypted_api_key, encryptionKey);
+    } catch {
+      return errorResponse(
+        "Stored API key could not be decrypted (ENCRYPTION_KEY may have changed). Re-enter the key.",
+        422,
+      );
+    }
+    reuseStoredKey = true;
   }
 
   // Validate by issuing a real (cheap) completion. If the provider rejects
   // the key, the wrong base URL is configured, or the model name is invalid,
   // the probe returns a diagnostic and we refuse to save — surfaces the real
   // reason (401, 404, model-not-found, etc.) instead of a generic message.
-  const probeConfig = { provider, baseUrl, apiKey, model };
+  const probeConfig = { provider, baseUrl, apiKey: effectiveApiKey, model };
   // Effectively uncapped — reasoning models (Gemini 2.5, Claude extended
   // thinking, o-series) spend tokens internally before producing visible
   // output, and there's no way to predict how many. The 64 KB response cap
@@ -263,7 +284,7 @@ export async function onRequestPut(context) {
     return errorResponse(formatProbeFailure(probe), 422);
   }
 
-  const encryptedKey = await encryptToken(apiKey, encryptionKey);
+  const encryptedKey = await encryptToken(effectiveApiKey, encryptionKey);
   await context.env.DB
     .prepare(
       `INSERT INTO llm_settings (org_id, provider, base_url, encrypted_api_key, model, updated_at)
@@ -283,7 +304,8 @@ export async function onRequestPut(context) {
     provider,
     baseUrl,
     model,
-    keyMask: maskKey(apiKey),
+    keyMask: maskKey(effectiveApiKey),
+    keyReused: reuseStoredKey,
   });
 }
 

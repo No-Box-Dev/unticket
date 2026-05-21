@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRepos, useOrgMembers, useIsAdmin } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
@@ -617,6 +617,14 @@ const PROVIDER_PRESETS: Record<
   },
 };
 
+// Derive the UI preset from the stored wire provider + base URL. LiteLLM
+// rides on the same openai-compatible wire as OpenAI, so we use the
+// hostname as the tie-breaker for the placeholder/hint set.
+function derivePreset(provider: LlmProvider, baseUrl: string): PresetId {
+  if (provider === "anthropic") return "anthropic";
+  return /litellm/i.test(baseUrl) ? "litellm" : "openai";
+}
+
 function LlmSettingsSection() {
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery({
@@ -633,15 +641,33 @@ function LlmSettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
+  const configured = (data as LlmSettings | undefined)?.configured === true;
+
+  // When the saved config loads (or refetches), seed the form so the inputs
+  // *are* the current state — no separate "Active:" panel duplicating the
+  // model / base URL.
+  useEffect(() => {
+    if (data && data.configured) {
+      setPreset(derivePreset(data.provider, data.baseUrl));
+      setBaseUrl(data.baseUrl);
+      setModel(data.model);
+    }
+  }, [data]);
+
   function applyPreset(next: PresetId) {
     setPreset(next);
-    setBaseUrl(PROVIDER_PRESETS[next].baseUrl);
+    // Only overwrite baseUrl with the preset default when the user is
+    // starting fresh — once a config is saved, we keep their URL untouched
+    // on preset changes (they explicitly picked it).
+    if (!configured) {
+      setBaseUrl(PROVIDER_PRESETS[next].baseUrl);
+    }
   }
 
   async function handleSave() {
     setError(null);
     setSavedAt(null);
-    if (!apiKey.trim()) {
+    if (!configured && !apiKey.trim()) {
       setError("API key is required.");
       return;
     }
@@ -682,8 +708,6 @@ function LlmSettingsSection() {
     }
   }
 
-  const configured = (data as LlmSettings | undefined)?.configured === true;
-
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
       <div className="flex items-center gap-2">
@@ -712,21 +736,7 @@ function LlmSettingsSection() {
         <p className="text-xs text-red-500">Failed to load AI provider settings.</p>
       ) : (
         <>
-          {configured && data && "provider" in data ? (
-            <div className="text-xs bg-stone-50 border border-stone-200 rounded-lg p-3 space-y-1">
-              <p className="text-stone-700">
-                <span className="font-medium">Active:</span> {data.provider} · {data.model}
-              </p>
-              <p className="text-stone-500">
-                {data.baseUrl} · key {data.keyMask}
-              </p>
-              {data.updatedAt && (
-                <p className="text-stone-400">
-                  Updated {new Date(data.updatedAt).toLocaleString()}
-                </p>
-              )}
-            </div>
-          ) : (
+          {!configured && (
             <p className="text-xs text-stone-500">
               No override set — using the default Zhipu key from the server env.
             </p>
@@ -771,13 +781,20 @@ function LlmSettingsSection() {
               )}
             </label>
             <label className="col-span-2 text-xs text-stone-600 space-y-1">
-              <span className="block">API key {configured && <span className="text-stone-400">(write-only — leave blank to keep current)</span>}</span>
+              <span className="block">
+                API key
+                {configured && data && "keyMask" in data && (
+                  <span className="text-stone-400">
+                    {" "}— current {data.keyMask}, leave blank to keep it
+                  </span>
+                )}
+              </span>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={busy}
-                placeholder={PROVIDER_PRESETS[preset].apiKeyHint}
+                placeholder={configured ? "leave blank to keep current key" : PROVIDER_PRESETS[preset].apiKeyHint}
                 autoComplete="new-password"
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
@@ -791,7 +808,7 @@ function LlmSettingsSection() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
             >
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
-              {busy ? "Validating…" : "Save & validate"}
+              {busy ? "Validating…" : configured ? "Save changes" : "Save & validate"}
             </button>
             {configured && (
               <button
