@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
-import { apiGet, apiPost, ApiError, broadcastError } from "./api";
+import { apiGet, apiPost, ApiError, broadcastError, refreshAccessToken } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -97,6 +97,27 @@ export async function fetchUser() {
     const { data } = await ok.rest.users.getAuthenticated();
     return data;
   } catch (err) {
+    // 401 here means the access token expired (GitHub App default: 8h). Try
+    // one silent refresh + retry before treating it as a hard logout — this
+    // is the path that lets users stay signed in for the refresh-token TTL.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = (err as any)?.status;
+    if (status === 401) {
+      const expiredToken = localStorage.getItem("gp_token");
+      if (expiredToken) {
+        const refreshed = await refreshAccessToken(expiredToken);
+        if (refreshed) {
+          resetOctokit();
+          try {
+            const ok = getOctokit();
+            const { data } = await ok.rest.users.getAuthenticated();
+            return data;
+          } catch (retryErr) {
+            throw wrapOctokitError(retryErr);
+          }
+        }
+      }
+    }
     throw wrapOctokitError(err);
   }
 }

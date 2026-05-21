@@ -53,10 +53,41 @@ function forceLogout() {
   window.dispatchEvent(new CustomEvent("gp:force-logout"));
 }
 
-export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
-  const token = localStorage.getItem("gp_token");
+// Coalesce concurrent refresh attempts: if N requests 401 at once we only
+// want one round-trip to /api/auth/refresh, not N. Subsequent callers await
+// the in-flight promise instead.
+let refreshPromise: Promise<string | null> | null = null;
+
+export async function refreshAccessToken(expiredToken: string): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: expiredToken }),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json().catch(() => null)) as { token?: string } | null;
+      if (!body?.token) return null;
+      localStorage.setItem("gp_token", body.token);
+      return body.token;
+    } catch {
+      return null;
+    } finally {
+      // Clear *after* the next microtask so any 401 retries in this batch
+      // share the same result before the next round starts a fresh attempt.
+      queueMicrotask(() => {
+        refreshPromise = null;
+      });
+    }
+  })();
+  return refreshPromise;
+}
+
+function buildRequestInit(token: string | null, options?: RequestInit): RequestInit {
   const org = localStorage.getItem("gp_org");
-  return fetch(path, {
+  return {
     ...options,
     headers: {
       "Authorization": `Bearer ${token ?? ""}`,
@@ -64,7 +95,18 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<Res
       "Content-Type": "application/json",
       ...options?.headers,
     },
-  });
+  };
+}
+
+export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const token = localStorage.getItem("gp_token");
+  const res = await fetch(path, buildRequestInit(token, options));
+  if (res.status !== 401 || !token) return res;
+
+  // Stale access token? Try one silent refresh, then retry the original call.
+  const refreshed = await refreshAccessToken(token);
+  if (!refreshed) return res;
+  return fetch(path, buildRequestInit(refreshed, options));
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
