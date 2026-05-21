@@ -420,14 +420,15 @@ describe("formatProbeFailure", () => {
     expect(msg).toContain("<!DOCTYPE html>");
   });
 
-  it("no_text_block → model-shape hint", () => {
+  it("no_text_block → model-shape hint with reasoning-model note", () => {
     const msg = formatProbeFailure({
       ok: false,
       reason: "no_text_block",
-      bodySnippet: "{}",
+      bodySnippet: '{"choices":[{"finish_reason":"length","message":{"content":null}}]}',
     });
     expect(msg).toMatch(/no text content/i);
-    expect(msg).toMatch(/Model/);
+    expect(msg).toMatch(/reasoning model/i);
+    expect(msg).toContain("finish_reason");
   });
 
   it("falls back to plain bodySnippet when JSON has no .error.message", () => {
