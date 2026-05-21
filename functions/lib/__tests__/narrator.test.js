@@ -4,9 +4,13 @@ vi.mock("../llm.js", () => ({
   completeNarrative: vi.fn(),
   NARRATOR_MODEL: "glm-5",
 }));
+vi.mock("../op-failures.js", () => ({
+  recordFailure: vi.fn(async () => {}),
+}));
 
 import { narrateEvent, NARRATABLE_TYPES } from "../narrator.js";
 import { completeNarrative } from "../llm.js";
+import { recordFailure } from "../op-failures.js";
 
 // D1 stub: dispatch by SQL substring. Tests configure what each query returns
 // and inspect _calls.runs/binds for the INSERT side effect.
@@ -51,7 +55,10 @@ const EVENT_ROW = {
 const PROJECT_ROW = { name: "unticket", narrator_enabled: 1 };
 const ACTOR_ROW = { id: "actor-1", name: "Jane", tone: "Dry but warm" };
 
-beforeEach(() => completeNarrative.mockReset());
+beforeEach(() => {
+  completeNarrative.mockReset();
+  recordFailure.mockClear();
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("NARRATABLE_TYPES", () => {
@@ -121,8 +128,14 @@ describe("narrateEvent — happy path", () => {
     completeNarrative.mockResolvedValue("I merged the login button.");
     await narrateEvent(ENV(db), 1);
     expect(completeNarrative).toHaveBeenCalledTimes(1);
-    const [apiKey, systemPrompt, userMessage] = completeNarrative.mock.calls[0];
-    expect(apiKey).toBe("z-key");
+    const [config, systemPrompt, userMessage] = completeNarrative.mock.calls[0];
+    expect(config).toMatchObject({
+      provider: "anthropic",
+      baseUrl: "https://api.z.ai/api/anthropic",
+      apiKey: "z-key",
+      model: "glm-5",
+      source: "default",
+    });
     expect(typeof systemPrompt).toBe("string");
     expect(systemPrompt.length).toBeGreaterThan(50);
     expect(userMessage).toContain("You are Jane.");
@@ -190,6 +203,22 @@ describe("narrateEvent — fallback path", () => {
     expect(run.binds[6]).toBe("PR #42: do thing");
     const payload = JSON.parse(run.binds[7]);
     expect(payload.model).toBe("fallback");
+  });
+
+  it("records an op_failures entry when LLM returns null", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue(null);
+    await narrateEvent(ENV(db), 1);
+    expect(recordFailure).toHaveBeenCalledTimes(1);
+    const [, args] = recordFailure.mock.calls[0];
+    expect(args).toMatchObject({
+      ownerId: "owner-1",
+      op: "narrateEvent",
+      deliveryId: "event-1",
+    });
+    expect(args.error).toContain("default");
+    expect(args.error).toContain("anthropic");
+    expect(args.error).toContain("glm-5");
   });
 
   it("does NOT insert when LLM returns null AND row.summary is missing", async () => {

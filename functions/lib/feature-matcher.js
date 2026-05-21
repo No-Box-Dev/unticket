@@ -10,6 +10,8 @@
 // trigger; sync / cron backfill anything the webhook missed.
 
 import { complete } from "./llm.js";
+import { resolveLlmConfig } from "./llm-config.js";
+import { recordFailure } from "./op-failures.js";
 import { parseFeatureMetadata } from "./feature-metadata.js";
 
 const MAX_TOKENS = 800;
@@ -50,8 +52,9 @@ Empty matches array if nothing qualifies:
 Length budget: at most 5 matches, at most 3 evidence items per match, at most 80 characters per evidence string.`;
 
 export async function matchPRToFeatures(env, orgId, repo, pr) {
-  if (!env?.ZHIPU_API_KEY) return null;
   if (!pr?.number) return null;
+  const llmConfig = await resolveLlmConfig(env, orgId);
+  if (!llmConfig.apiKey) return null;
 
   const db = env.DB;
 
@@ -93,12 +96,32 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
     return null;
   }
 
-  const text = await complete(env.ZHIPU_API_KEY, {
+  const text = await complete(llmConfig, {
     system: SYSTEM_PROMPT,
     user: buildUserMessage(repo, pr, features),
     maxTokens: MAX_TOKENS,
     tag: "feature-matcher",
   });
+  if (text == null) {
+    // Surface the failure to admins. Skip the link rather than guessing —
+    // a wrong match is worse than a missed match. ownerId is resolved on the
+    // failure path only (cheap, doesn't run on the happy path).
+    const ownerRow = await db
+      .prepare("SELECT github_login FROM orgs WHERE id = ?")
+      .bind(orgId)
+      .first()
+      .catch(() => null);
+    if (ownerRow?.github_login) {
+      await recordFailure(db, {
+        ownerId: ownerRow.github_login,
+        op: "matchPRToFeatures",
+        deliveryId: `${repo}#${pr.number}`,
+        error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+      }).catch(() => {});
+    }
+    await recordAttempt(db, orgId, repo, pr.number, "llm_error", null, null);
+    return null;
+  }
 
   const matches = parseMatches(text, features);
   const rawTrunc = typeof text === "string" ? text.slice(0, RAW_RESPONSE_LIMIT) : null;
