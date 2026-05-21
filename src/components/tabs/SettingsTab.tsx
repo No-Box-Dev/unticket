@@ -581,16 +581,39 @@ function FeatureMatchBackfillSection() {
   );
 }
 
-const PROVIDER_PRESETS: Record<LlmProvider, { label: string; baseUrl: string; modelHint: string }> = {
+// UI-only preset id. Maps to the backend wire provider (`LlmProvider`) via
+// `wire`. LiteLLM speaks OpenAI's chat-completions shape, so it rides the
+// same `openai-compatible` transport — the preset just gives it a labeled
+// entry in the dropdown and LiteLLM-flavored placeholders.
+type PresetId = "anthropic" | "openai" | "litellm";
+
+const PROVIDER_PRESETS: Record<
+  PresetId,
+  { label: string; wire: LlmProvider; baseUrl: string; modelHint: string; apiKeyHint: string; hint?: string }
+> = {
   "anthropic": {
     label: "Anthropic (Messages API)",
+    wire: "anthropic",
     baseUrl: "https://api.anthropic.com",
     modelHint: "e.g. claude-sonnet-4-6",
+    apiKeyHint: "sk-ant-…",
   },
-  "openai-compatible": {
-    label: "OpenAI-compatible",
+  "openai": {
+    label: "OpenAI (chat completions)",
+    wire: "openai-compatible",
     baseUrl: "https://api.openai.com",
     modelHint: "e.g. gpt-4o-mini",
+    apiKeyHint: "sk-…",
+  },
+  "litellm": {
+    label: "LiteLLM proxy",
+    wire: "openai-compatible",
+    baseUrl: "https://litellm.example.com",
+    modelHint: "model alias from your LiteLLM config (e.g. gpt-4o-mini)",
+    apiKeyHint: "your LiteLLM virtual or master key",
+    hint:
+      "Point Base URL at your LiteLLM proxy root (no /v1, no trailing slash). " +
+      "Model must match an alias defined in your LiteLLM config.yaml.",
   },
 };
 
@@ -602,7 +625,7 @@ function LlmSettingsSection() {
     staleTime: 30_000,
   });
 
-  const [provider, setProvider] = useState<LlmProvider>("anthropic");
+  const [preset, setPreset] = useState<PresetId>("anthropic");
   const [baseUrl, setBaseUrl] = useState(PROVIDER_PRESETS.anthropic.baseUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
@@ -610,8 +633,8 @@ function LlmSettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  function applyPreset(next: LlmProvider) {
-    setProvider(next);
+  function applyPreset(next: PresetId) {
+    setPreset(next);
     setBaseUrl(PROVIDER_PRESETS[next].baseUrl);
   }
 
@@ -628,7 +651,12 @@ function LlmSettingsSection() {
     }
     setBusy(true);
     try {
-      await saveLlmSettings({ provider, baseUrl: baseUrl.trim(), apiKey: apiKey.trim(), model: model.trim() });
+      await saveLlmSettings({
+        provider: PROVIDER_PRESETS[preset].wire,
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim(),
+        model: model.trim(),
+      });
       setApiKey("");
       setSavedAt(Date.now());
       qc.invalidateQueries({ queryKey: ["llm-settings"] });
@@ -669,10 +697,11 @@ function LlmSettingsSection() {
         </button>
       </div>
       <p className="text-xs text-stone-400">
-        Bring your own LLM endpoint for narration and PR↔feature matching. Anthropic
-        (default Zhipu compat) or any OpenAI-compatible API. We validate your
-        config with a tiny live call before saving — if your key, base URL or
-        model name is wrong, the save is refused.
+        Bring your own LLM endpoint for narration and PR↔feature matching. Pick
+        Anthropic (also covers Zhipu's Anthropic-compat endpoint), OpenAI, or a
+        LiteLLM proxy — anything that speaks the OpenAI chat-completions shape.
+        We validate with a tiny live call before saving — if your key, base URL
+        or model name is wrong, the save is refused.
       </p>
 
       {isLoading ? (
@@ -707,13 +736,13 @@ function LlmSettingsSection() {
             <label className="text-xs text-stone-600 space-y-1">
               <span className="block">Provider</span>
               <select
-                value={provider}
-                onChange={(e) => applyPreset(e.target.value as LlmProvider)}
+                value={preset}
+                onChange={(e) => applyPreset(e.target.value as PresetId)}
                 disabled={busy}
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               >
-                {Object.entries(PROVIDER_PRESETS).map(([value, preset]) => (
-                  <option key={value} value={value}>{preset.label}</option>
+                {Object.entries(PROVIDER_PRESETS).map(([value, p]) => (
+                  <option key={value} value={value}>{p.label}</option>
                 ))}
               </select>
             </label>
@@ -724,7 +753,7 @@ function LlmSettingsSection() {
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={busy}
-                placeholder={PROVIDER_PRESETS[provider].modelHint}
+                placeholder={PROVIDER_PRESETS[preset].modelHint}
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </label>
@@ -737,6 +766,9 @@ function LlmSettingsSection() {
                 disabled={busy}
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
+              {PROVIDER_PRESETS[preset].hint && (
+                <span className="block text-stone-400">{PROVIDER_PRESETS[preset].hint}</span>
+              )}
             </label>
             <label className="col-span-2 text-xs text-stone-600 space-y-1">
               <span className="block">API key {configured && <span className="text-stone-400">(write-only — leave blank to keep current)</span>}</span>
@@ -745,7 +777,7 @@ function LlmSettingsSection() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={busy}
-                placeholder="sk-… / glm-…"
+                placeholder={PROVIDER_PRESETS[preset].apiKeyHint}
                 autoComplete="new-password"
                 className="w-full px-2 py-1.5 rounded border border-stone-200 bg-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
