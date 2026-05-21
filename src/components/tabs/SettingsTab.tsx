@@ -276,6 +276,7 @@ function PostsBackfillSection() {
 
   const [running, setRunning] = useState(false);
   const [days, setDays] = useState(3);
+  const [rewriteOtherModels, setRewriteOtherModels] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string | null }>({
     done: 0,
     total: 0,
@@ -298,7 +299,7 @@ function PostsBackfillSection() {
       const p = activeProjects[i];
       setProgress({ done: i, total: activeProjects.length, current: p.repo });
       try {
-        const res = await backfillProjectPrs(p.id, days);
+        const res = await backfillProjectPrs(p.id, days, rewriteOtherModels);
         queuedTotal += res.queued ?? 0;
         foundTotal += res.found ?? 0;
         renarratedTotal += res.renarrated ?? 0;
@@ -320,7 +321,7 @@ function PostsBackfillSection() {
         Generate first-person Posts for recently merged PRs across every active
         repo. Idempotent — already-backfilled PRs are skipped.
       </p>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <label className="text-xs text-stone-600 flex items-center gap-2">
           Days:
           <input
@@ -332,6 +333,16 @@ function PostsBackfillSection() {
             disabled={running}
             className="w-16 px-2 py-1 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:opacity-50"
           />
+        </label>
+        <label className="text-xs text-stone-600 flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={rewriteOtherModels}
+            onChange={(e) => setRewriteOtherModels(e.target.checked)}
+            disabled={running}
+            className="rounded border-stone-300 text-accent focus:ring-accent/30 disabled:opacity-50"
+          />
+          Rewrite posts written on a different model
         </label>
         <button
           onClick={handleBackfillAll}
@@ -348,7 +359,7 @@ function PostsBackfillSection() {
         <div className="text-xs space-y-1">
           <p className="text-green-600">
             Queued {result.queued} new post{result.queued === 1 ? "" : "s"} from {result.found} PR{result.found === 1 ? "" : "s"} found
-            {result.renarrated > 0 && `, re-narrated ${result.renarrated} fallback post${result.renarrated === 1 ? "" : "s"}`}.
+            {result.renarrated > 0 && `, re-narrated ${result.renarrated} post${result.renarrated === 1 ? "" : "s"}`}.
           </p>
           {result.errors.length > 0 && (
             <div className="text-red-500 space-y-0.5">

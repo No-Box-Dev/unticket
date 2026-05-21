@@ -62,10 +62,14 @@ export interface BackfillResult {
   message?: string;
 }
 
-export const backfillProjectPrs = (id: string, days = 3) =>
+export const backfillProjectPrs = (
+  id: string,
+  days = 3,
+  rewriteOtherModels = false,
+) =>
   apiPost<BackfillResult>(
     `/api/projects/${encodeURIComponent(id)}/backfill-prs`,
-    { days },
+    { days, rewriteOtherModels },
   );
 
 export const archiveProject = (id: string) =>
