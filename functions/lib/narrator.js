@@ -1,7 +1,9 @@
 // Per-event first-person narrator. Called from the webhook (waitUntil).
 // One raw event in, one narrative event out. No queue, no debounce.
 
-import { completeNarrative, NARRATOR_MODEL } from "./llm";
+import { completeNarrative } from "./llm";
+import { resolveLlmConfig } from "./llm-config";
+import { recordFailure } from "./op-failures";
 import { ACTOR_SYSTEM, buildActorMessage } from "./prompt";
 
 const MAX_OUTPUT_LENGTH = 800;
@@ -45,7 +47,10 @@ export async function narrateEvent(env, eventId) {
     },
   });
 
-  const text = await completeNarrative(env.ZHIPU_API_KEY, ACTOR_SYSTEM, userMessage);
+  // Per-org override (BYOK) wins; default falls back to env.ZHIPU_API_KEY.
+  const orgId = await resolveOrgId(env.DB, row.owner_id);
+  const llmConfig = await resolveLlmConfig(env, orgId);
+  const text = await completeNarrative(llmConfig, ACTOR_SYSTEM, userMessage);
 
   let summary;
   let model;
@@ -54,13 +59,22 @@ export async function narrateEvent(env, eventId) {
     summary = trimmed.length > MAX_OUTPUT_LENGTH
       ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
       : trimmed;
-    model = NARRATOR_MODEL;
+    model = llmConfig.model;
   } else {
-    // Zhipu unavailable (no key, timeout, HTTP error). Surface the raw event
-    // summary (e.g. "PR #42: title") so the feed isn't empty when the LLM is down.
+    // LLM unavailable (no key, timeout, HTTP error, model rejected the
+    // request). Keep the feed populated with the raw summary so the trigger
+    // event is visible, AND record a row in op_failures so admins see *why*
+    // the narrator skipped — important for BYOK debugging (bad key, wrong
+    // model name) rather than failing silently and forever.
     if (!row.summary) return;
     summary = row.summary;
     model = "fallback";
+    await recordFailure(env.DB, {
+      ownerId: row.owner_id,
+      op: "narrateEvent",
+      deliveryId: `event-${row.id}`,
+      error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+    });
   }
 
   await env.DB.prepare(
@@ -82,6 +96,16 @@ export async function narrateEvent(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
+}
+
+async function resolveOrgId(db, ownerId) {
+  if (!db || !ownerId) return null;
+  const row = await db
+    .prepare("SELECT id FROM orgs WHERE github_login = ?")
+    .bind(ownerId)
+    .first()
+    .catch(() => null);
+  return row?.id ?? null;
 }
 
 function safeParseObject(s) {
