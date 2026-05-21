@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../pacing.js", () => ({
+  NARRATOR_PACING_MS: 0,
+  sleep: vi.fn(async () => {}),
+}));
+
 import { complete, completeNarrative, probeCompletion, NARRATOR_MODEL, ZHIPU_MODEL } from "../llm.js";
 import { PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE } from "../llm-config.js";
+import { sleep } from "../pacing.js";
 
 const ANTHROPIC_CONFIG = {
   provider: PROVIDER_ANTHROPIC,
@@ -164,6 +171,98 @@ describe("complete", () => {
       text: async () => "not json at all",
     });
     expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+  });
+});
+
+describe("complete retry-on-transient", () => {
+  beforeEach(() => {
+    sleep.mockClear();
+  });
+
+  it("retries on 429 and succeeds on the second attempt", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch
+      .mockResolvedValueOnce(errorResponse(429))
+      .mockResolvedValueOnce(okResponse({ content: [{ type: "text", text: "ok" }] }));
+    const result = await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result).toBe("ok");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries on 500 and succeeds on the third attempt", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch
+      .mockResolvedValueOnce(errorResponse(500))
+      .mockResolvedValueOnce(errorResponse(502))
+      .mockResolvedValueOnce(okResponse({ content: [{ type: "text", text: "ok" }] }));
+    const result = await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" });
+    expect(result).toBe("ok");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries on network failure and succeeds", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch
+      .mockRejectedValueOnce(new Error("ECONNRESET"))
+      .mockResolvedValueOnce(okResponse({ content: [{ type: "text", text: "ok" }] }));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBe("ok");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries on timeout (AbortError) and succeeds", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch
+      .mockImplementationOnce(() => {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        return Promise.reject(err);
+      })
+      .mockResolvedValueOnce(okResponse({ content: [{ type: "text", text: "ok" }] }));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBe("ok");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT retry on 401 (auth error)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch.mockResolvedValue(errorResponse(401));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("does NOT retry on 400 (bad request)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch.mockResolvedValue(errorResponse(400));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT retry on bad_json", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch.mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      text: async () => "<html>not json</html>",
+    });
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT retry on no_text_block", async () => {
+    fetch.mockResolvedValue(okResponse({ content: [{ type: "tool_use" }] }));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("exhausts 3 attempts on persistent 503 and returns null with final warn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetch.mockResolvedValue(errorResponse(503));
+    expect(await complete(ANTHROPIC_CONFIG, { system: "s", user: "u", tag: "tag" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("[tag] LLM (anthropic) returned 503"));
   });
 });
 

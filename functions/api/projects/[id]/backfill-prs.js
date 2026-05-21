@@ -3,12 +3,18 @@ import { getInstallationToken } from "../../../lib/github-app";
 import { resolveActorFromGithub } from "../../../lib/actors";
 import { narrateEvent } from "../../../lib/narrator";
 import { recordFailure } from "../../../lib/op-failures";
+import { sleep, NARRATOR_PACING_MS } from "../../../lib/pacing";
 
 // POST /api/projects/:id/backfill-prs  body: { days?: number (1..30, default 3) }
 // Generates first-person posts for the last N days of PRs in the project's repo,
 // one per PR, attributed to its author. Dedupes via delivery_id like
 // `backfill:<projectId>:pr-<n>` so re-running is idempotent.
 const BACKFILL_MAX_PRS = 25;
+// Mirror the new-trigger cap on fallback re-narration. Unbounded loops blow
+// past waitUntil's wall-clock budget — earlier fallbacks ran, later ones
+// silently dropped (the "they're being skipped" report). Re-running backfill
+// picks up the remainder.
+const BACKFILL_MAX_FALLBACKS = 25;
 
 export async function onRequestPost(context) {
   try {
@@ -76,8 +82,11 @@ export async function onRequestPost(context) {
 
     // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
     // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
-    // natural moment to retry: the user is asking for a refresh anyway.
-    const fallbackIds = await findFallbackNarrativeIds(db, orgLogin, project.id);
+    // natural moment to retry: the user is asking for a refresh anyway. Capped
+    // so one call doesn't outrun the waitUntil budget; the next invocation
+    // picks up whatever's left.
+    const fallbackIds = (await findFallbackNarrativeIds(db, orgLogin, project.id))
+      .slice(0, BACKFILL_MAX_FALLBACKS);
 
     if (todo.length === 0 && fallbackIds.length === 0) {
       return jsonResponse({
@@ -139,7 +148,8 @@ async function findFallbackNarrativeIds(db, ownerId, projectId) {
        FROM events
       WHERE owner_id = ? AND project_id = ?
         AND type = 'narrative'
-        AND json_extract(payload_json, '$.model') = 'fallback'`
+        AND json_extract(payload_json, '$.model') = 'fallback'
+      ORDER BY id DESC`
   ).bind(ownerId, projectId).all();
   return (rows.results ?? [])
     .map((r) => ({ id: r.id, triggerEventId: r.trigger_event_id }))
@@ -147,7 +157,9 @@ async function findFallbackNarrativeIds(db, ownerId, projectId) {
 }
 
 async function renarrateFallbacks(env, fallbacks) {
-  for (const { id, triggerEventId } of fallbacks) {
+  for (let i = 0; i < fallbacks.length; i++) {
+    if (i > 0) await sleep(NARRATOR_PACING_MS);
+    const { id, triggerEventId } = fallbacks[i];
     try {
       await env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
       await narrateEvent(env, triggerEventId);
@@ -182,7 +194,9 @@ async function fetchRecentPrs(env, installationId, org, repo, days) {
 async function processBackfill(env, args) {
   // Oldest-first so the feed reads chronologically.
   const sorted = [...args.prs].sort((a, b) => prAnchor(a).localeCompare(prAnchor(b)));
-  for (const pr of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0) await sleep(NARRATOR_PACING_MS);
+    const pr = sorted[i];
     try {
       await backfillOnePr(env, args, pr);
     } catch (err) {

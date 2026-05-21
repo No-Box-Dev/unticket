@@ -14,6 +14,7 @@
 import { resolveActorFromGithub } from "./actors.js";
 import { upsertGhUser } from "./gh-mirror.js";
 import { narrateEvent } from "./narrator.js";
+import { sleep, NARRATOR_PACING_MS } from "./pacing.js";
 
 const GH_EVENTS_MAX_PAGES = 3;
 
@@ -89,7 +90,13 @@ export async function reconcileRepoEvents(env, db, args) {
     }
   }
 
-  for (const id of newEventIds) {
+  // Pace narrations so a 20-PR backfill doesn't fire 20 LLM calls in
+  // <1s. The LLM client retries 429/5xx internally, but spacing the
+  // calls out reduces the chance of hitting the limit in the first
+  // place — cheaper than triggering retries.
+  for (let i = 0; i < newEventIds.length; i++) {
+    if (i > 0) await sleep(NARRATOR_PACING_MS);
+    const id = newEventIds[i];
     try {
       await narrateEvent(env, id);
     } catch (err) {
