@@ -7,10 +7,36 @@
 // resolver handles default fallback so test mocks stay simple.
 
 import { PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE } from "./llm-config";
+import { sleep } from "./pacing";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MAX_TOKENS = 220;
 const TIMEOUT_MS = 30_000;
+
+// Retry only transient conditions. 4xx auth / model-name errors should
+// surface immediately so the matcher/narrator don't burn 3× the tokens
+// on a config that's broken anyway.
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+const RETRY_MAX_DELAY_MS = 8000;
+
+function isRetriable(result) {
+  if (result.ok) return false;
+  if (result.reason === "timeout") return true;
+  if (result.reason === "network") return true;
+  if (result.reason === "http_error") {
+    return result.status === 429 || result.status >= 500;
+  }
+  return false;
+}
+
+// Full-jitter exponential backoff: random in [0, base * 2^attempt],
+// capped at RETRY_MAX_DELAY_MS. Jitter avoids the thundering-herd
+// case where every queued post retries at the same beat after a 429.
+function backoffDelay(attempt) {
+  const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  return Math.floor(Math.random() * ceiling);
+}
 
 // Cap the response body we'll buffer from a user-supplied LLM endpoint.
 // max_tokens caps the *content*, but a hostile endpoint could send a giant
@@ -128,23 +154,42 @@ export async function probeCompletion(config, { system, user, maxTokens = DEFAUL
 }
 
 /**
- * One-shot text completion. Returns the raw assistant text, or null on any
- * failure (no key, HTTP error, timeout, malformed JSON). The caller decides
- * what to do with null — surface it, skip, or log to op_failures. Diagnostic
- * details land in console.warn so observability/op_failures stays unchanged.
+ * One-shot text completion with retry-on-transient. Returns the raw
+ * assistant text, or null on persistent failure. The caller decides what
+ * to do with null — surface it, skip, or log to op_failures. Diagnostic
+ * details land in console.warn so observability/op_failures stays
+ * unchanged.
+ *
+ * Retries 429 / 5xx / network / timeout with exponential backoff + jitter.
+ * Does NOT retry: 4xx (other than 429), bad_json, no_text_block,
+ * no_api_key, too_large — those are config/permanent errors, not transient.
  */
 export async function complete(config, opts) {
   const tag = opts?.tag ?? "llm";
-  const result = await probeCompletion(config, opts);
-  if (result.ok) return result.text;
-  switch (result.reason) {
+  let lastResult;
+  for (let attempt = 0; attempt < RETRY_MAX_ATTEMPTS; attempt++) {
+    const result = await probeCompletion(config, opts);
+    if (result.ok) return result.text;
+    lastResult = result;
+    const isLast = attempt === RETRY_MAX_ATTEMPTS - 1;
+    if (!isRetriable(result) || isLast) break;
+    const delay = backoffDelay(attempt);
+    const detail = result.reason === "http_error"
+      ? `${result.reason} ${result.status}`
+      : result.reason;
+    console.warn(
+      `[${tag}] LLM transient failure (${detail}); retry ${attempt + 1}/${RETRY_MAX_ATTEMPTS - 1} in ${delay}ms`,
+    );
+    await sleep(delay);
+  }
+  switch (lastResult.reason) {
     case "no_api_key":
       return null; // historic: silent null for missing key
     case "http_error":
-      console.warn(`[${tag}] LLM (${config?.provider}) returned ${result.status}`);
+      console.warn(`[${tag}] LLM (${config?.provider}) returned ${lastResult.status}`);
       return null;
     case "too_large":
-      console.warn(`[${tag}] LLM response too large (${result.bytes} bytes)`);
+      console.warn(`[${tag}] LLM response too large (${lastResult.bytes} bytes)`);
       return null;
     case "bad_json":
       console.warn(`[${tag}] LLM response was not JSON`);
@@ -153,7 +198,7 @@ export async function complete(config, opts) {
       console.warn(`[${tag}] LLM request aborted after ${TIMEOUT_MS}ms`);
       return null;
     case "network":
-      console.warn(`[${tag}] LLM request failed: ${result.message}`);
+      console.warn(`[${tag}] LLM request failed: ${lastResult.message}`);
       return null;
     case "no_text_block":
       return null; // historic: silent null when content was returned without text

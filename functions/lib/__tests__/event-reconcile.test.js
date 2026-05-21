@@ -11,6 +11,10 @@ vi.mock("../gh-mirror.js", () => ({
 vi.mock("../narrator.js", () => ({
   narrateEvent: vi.fn(async () => {}),
 }));
+vi.mock("../pacing.js", () => ({
+  NARRATOR_PACING_MS: 0,
+  sleep: vi.fn(async () => {}),
+}));
 
 import { reconcileRepoEvents, translateGithubEvent } from "../event-reconcile.js";
 import { resolveActorFromGithub } from "../actors.js";

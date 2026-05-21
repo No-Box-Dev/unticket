@@ -60,12 +60,15 @@ export async function matchPRToFeatures(env, orgId, repo, pr) {
 
   const prior = await db
     .prepare(
-      "SELECT attempted_at FROM pr_match_attempts WHERE org_id = ? AND pr_repo = ? AND pr_number = ?",
+      "SELECT attempted_at, result FROM pr_match_attempts WHERE org_id = ? AND pr_repo = ? AND pr_number = ?",
     )
     .bind(orgId, repo, pr.number)
     .first()
     .catch(() => null);
-  if (prior?.attempted_at) {
+  // Honor the TTL only for real outcomes (match / no_match / no_features /
+  // no_pr_created_at). llm_error means the previous LLM call failed — once
+  // the user fixes their config, we want to retry, not wait a week.
+  if (prior?.attempted_at && prior.result !== "llm_error") {
     const attemptedAt = Date.parse(prior.attempted_at.replace(" ", "T") + "Z");
     if (Number.isFinite(attemptedAt) && Date.now() - attemptedAt < ATTEMPT_TTL_HOURS * 3600 * 1000) {
       return null;
