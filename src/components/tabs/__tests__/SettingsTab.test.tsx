@@ -5,6 +5,11 @@ vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
   useOrgMembers: vi.fn(),
   useIsAdmin: vi.fn(() => false),
+  useTriggerFeatureSync: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/components/SyncFromGithub", () => ({
+  SyncFromGithubModal: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="sync-modal" /> : null,
 }));
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: vi.fn(),
@@ -105,6 +110,7 @@ describe("SettingsTab", () => {
     expect(screen.queryByText("Posts Backfill")).not.toBeInTheDocument();
     expect(screen.queryByText("PR → Feature Backfill")).not.toBeInTheDocument();
     expect(screen.queryByText("Background failures")).not.toBeInTheDocument();
+    expect(screen.queryByText("Manual sync")).not.toBeInTheDocument();
   });
 
   it("shows all admin tools for admins", () => {
@@ -116,5 +122,8 @@ describe("SettingsTab", () => {
     expect(screen.getByText("Posts Backfill")).toBeInTheDocument();
     expect(screen.getByText("PR → Feature Backfill")).toBeInTheDocument();
     expect(screen.getByText("Background failures")).toBeInTheDocument();
+    expect(screen.getByText("Manual sync")).toBeInTheDocument();
+    expect(screen.getByText("Sync features")).toBeInTheDocument();
+    expect(screen.getByText("Sync from GitHub")).toBeInTheDocument();
   });
 });
