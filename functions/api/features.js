@@ -1,4 +1,25 @@
-import { getCtx, jsonResponse } from "../lib/db";
+// /api/features — server-side proxy for the kanban board.
+//
+// GET: read features from D1 (the cached projection populated by webhooks +
+// these very endpoints).
+// POST: create a feature issue on GitHub, mirror the response to D1.
+//
+// PATCH and DELETE for a single feature live in features/[number].js.
+// PUT used to exist as the dumb "syncIssueToD1" sink for the old
+// browser-side Octokit path; it's gone now because every server endpoint
+// mirrors its own response.
+
+import { getCtx, jsonResponse, errorResponse } from "../lib/db";
+import {
+  buildFeatureLabels,
+  buildIssueBody,
+  createFeatureIssue,
+  ensureUnticketRepoLabels,
+  ghIssueToFeature,
+  readLinkedPRs,
+  upsertFeatureRow,
+  VALID_STATUSES,
+} from "../lib/feature-issues";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const FEATURE_COLUMNS = [
@@ -7,9 +28,6 @@ const FEATURE_COLUMNS = [
   "html_url", "created_at", "updated_at",
 ].join(", ");
 
-// GET /api/features — return cached features from D1
-// Query params: state (default: open)
-//
 // Hydrates `linkedPRs` from the `pr_feature_links` table (not the body
 // metadata) because the LLM matcher writes to the table only and never
 // touches the issue body. The table is the union of manual + deterministic
@@ -52,69 +70,42 @@ export async function onRequestGet(context) {
   return jsonResponse(data);
 }
 
-// PUT /api/features — upsert a single feature in D1
-export async function onRequestPut(context) {
-  const { orgId } = getCtx(context);
-  let issue;
-  try {
-    issue = await context.request.json();
-  } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400);
+// POST /api/features — create a feature on GitHub, mirror to D1.
+// Body: { title, status, owners?: string[], plan?: string }
+export async function onRequestPost(context) {
+  const { orgId, orgLogin, token } = getCtx(context);
+  if (!orgLogin || !token) return errorResponse("Missing org context", 400);
+
+  let payload;
+  try { payload = await context.request.json(); } catch {
+    return errorResponse("Invalid JSON body", 400);
   }
 
-  // Validate required fields
-  if (typeof issue.number !== "number" || !Number.isFinite(issue.number)) {
-    return jsonResponse({ error: "Invalid or missing 'number' field" }, 400);
-  }
-  if (typeof issue.title !== "string" || issue.title.length === 0) {
-    return jsonResponse({ error: "Invalid or missing 'title' field" }, 400);
-  }
+  const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+  if (!title) return errorResponse("title is required", 422);
 
-  await context.env.DB
-    .prepare(
-      `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(org_id, number) DO UPDATE SET
-         title = excluded.title,
-         state = excluded.state,
-         body = excluded.body,
-         assignees_json = excluded.assignees_json,
-         labels_json = excluded.labels_json,
-         milestone_title = excluded.milestone_title,
-         html_url = excluded.html_url,
-         updated_at = excluded.updated_at`
-    )
-    .bind(
-      orgId,
-      issue.number,
-      issue.title,
-      issue.state ?? "open",
-      issue.body ?? "",
-      JSON.stringify(issue.assignees ?? []),
-      JSON.stringify(issue.labels ?? []),
-      issue.milestone_title ?? null,
-      issue.html_url ?? null,
-      issue.created_at ?? new Date().toISOString(),
-      issue.updated_at ?? new Date().toISOString()
-    )
-    .run();
+  const status = payload?.status ?? "todo";
+  if (!VALID_STATUSES.has(status)) return errorResponse(`Invalid status: ${status}`, 422);
 
-  return jsonResponse({ ok: true });
-}
+  const owners = Array.isArray(payload?.owners)
+    ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o))
+    : [];
+  const plan = typeof payload?.plan === "string" ? payload.plan : "";
 
-// DELETE /api/features?number=123 — mark feature as closed in D1
-export async function onRequestDelete(context) {
-  const { orgId } = getCtx(context);
-  const url = new URL(context.request.url);
-  const number = parseInt(url.searchParams.get("number"), 10);
-  if (!Number.isFinite(number)) {
-    return jsonResponse({ error: "number must be a valid integer" }, 400);
-  }
+  await ensureUnticketRepoLabels(token, orgLogin);
 
-  await context.env.DB
-    .prepare("UPDATE features SET state = 'closed' WHERE org_id = ? AND number = ?")
-    .bind(orgId, number)
-    .run();
+  const body = buildIssueBody(plan, {
+    statusHistory: [{ status, timestamp: new Date().toISOString() }],
+  });
 
-  return jsonResponse({ ok: true });
+  const ghIssue = await createFeatureIssue(token, orgLogin, {
+    title,
+    body,
+    labels: buildFeatureLabels(status),
+    ...(owners.length > 0 ? { assignees: owners } : {}),
+  });
+
+  await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+  const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
+  return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
 }
