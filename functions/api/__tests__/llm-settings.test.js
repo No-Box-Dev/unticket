@@ -93,12 +93,13 @@ describe("GET /api/llm-settings", () => {
     expect(await res.json()).toEqual({ configured: false });
   });
 
-  it("returns provider/baseUrl/model + masked key when a row exists", async () => {
+  it("returns provider/baseUrl/model + key prefix when a row exists", async () => {
     const { ctx } = makeCtx({
       settingsRow: {
         provider: "openai-compatible",
         base_url: "https://proxy.example.com",
         model: "gpt-4o-mini",
+        key_prefix: "sk-pro",
         updated_at: "2026-05-21T10:00:00Z",
       },
     });
@@ -110,9 +111,25 @@ describe("GET /api/llm-settings", () => {
       provider: "openai-compatible",
       baseUrl: "https://proxy.example.com",
       model: "gpt-4o-mini",
-      keyMask: "••••",
+      keyMask: "sk-pro…",
       updatedAt: "2026-05-21T10:00:00Z",
     });
+  });
+
+  it("falls back to ••• when the row pre-dates the key_prefix column", async () => {
+    const { ctx } = makeCtx({
+      settingsRow: {
+        provider: "anthropic",
+        base_url: "https://api.anthropic.com",
+        model: "claude-sonnet-4-6",
+        key_prefix: null,
+        updated_at: "2026-05-20T10:00:00Z",
+      },
+    });
+    const res = await onRequestGet(ctx);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.keyMask).toBe("••••");
   });
 });
 
@@ -181,7 +198,7 @@ describe("PUT /api/llm-settings", () => {
     expect(body).toMatchObject({
       configured: true,
       model: "claude-sonnet-4-6",
-      keyMask: "••••cret",
+      keyMask: "sk-ant…",
       keyReused: true,
     });
   });
@@ -284,6 +301,7 @@ describe("PUT /api/llm-settings", () => {
       "https://api.anthropic.com",
       "enc:sk-ant-XXXXxxxx",
       "claude-sonnet-4-6",
+      "sk-ant",
     ]);
     const body = await res.json();
     expect(body).toMatchObject({
@@ -291,7 +309,7 @@ describe("PUT /api/llm-settings", () => {
       provider: "anthropic",
       baseUrl: "https://api.anthropic.com",
       model: "claude-sonnet-4-6",
-      keyMask: "••••xxxx",
+      keyMask: "sk-ant…",
     });
   });
 

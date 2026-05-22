@@ -1,9 +1,11 @@
 // Per-org LLM provider override.
 //
 // GET    /api/llm-settings  — returns the current config (key replaced by a
-//                              masked tail like "••••abcd" so we never echo
-//                              the secret back to the browser). Returns
-//                              `{ configured: false }` when no override is set.
+//                              short plaintext prefix like "sk-ant…" so admins
+//                              can tell which key is stored without us echoing
+//                              the secret). Pre-prefix rows render "••••".
+//                              Returns `{ configured: false }` when no override
+//                              is set.
 // PUT    /api/llm-settings  — validates the submitted config by issuing a
 //                              one-shot `complete()` call. If the LLM responds,
 //                              we encrypt the key and upsert the row. If it
@@ -54,9 +56,20 @@ function checkAndRecordPutAttempt(orgId) {
   return true;
 }
 
-function maskKey(key) {
-  if (typeof key !== "string" || key.length < 4) return "••••";
-  return `••••${key.slice(-4)}`;
+// How many leading chars of the API key we store in plaintext as `key_prefix`.
+// Enough to disambiguate provider/account families (sk-ant…, sk-pro…, sk-svc…)
+// without giving away meaningful entropy from the secret portion.
+const KEY_PREFIX_CHARS = 6;
+
+function extractKeyPrefix(key) {
+  if (typeof key !== "string") return null;
+  const trimmed = key.trim();
+  if (trimmed.length < KEY_PREFIX_CHARS) return null;
+  return trimmed.slice(0, KEY_PREFIX_CHARS);
+}
+
+function keyDisplayMask(prefix) {
+  return prefix ? `${prefix}…` : "••••";
 }
 
 // Turn a probeCompletion() diagnostic into a user-facing message. The body
@@ -166,7 +179,7 @@ export async function onRequestGet(context) {
 
   const row = await context.env.DB
     .prepare(
-      `SELECT provider, base_url, model, updated_at
+      `SELECT provider, base_url, model, key_prefix, updated_at
          FROM llm_settings WHERE org_id = ?`,
     )
     .bind(orgId)
@@ -179,7 +192,7 @@ export async function onRequestGet(context) {
     provider: row.provider,
     baseUrl: row.base_url,
     model: row.model,
-    keyMask: "••••",
+    keyMask: keyDisplayMask(row.key_prefix),
     updatedAt: row.updated_at,
   });
 }
@@ -285,18 +298,20 @@ export async function onRequestPut(context) {
   }
 
   const encryptedKey = await encryptToken(effectiveApiKey, encryptionKey);
+  const keyPrefix = extractKeyPrefix(effectiveApiKey);
   await context.env.DB
     .prepare(
-      `INSERT INTO llm_settings (org_id, provider, base_url, encrypted_api_key, model, updated_at)
-       VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      `INSERT INTO llm_settings (org_id, provider, base_url, encrypted_api_key, model, key_prefix, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
        ON CONFLICT(org_id) DO UPDATE SET
          provider = excluded.provider,
          base_url = excluded.base_url,
          encrypted_api_key = excluded.encrypted_api_key,
          model = excluded.model,
+         key_prefix = excluded.key_prefix,
          updated_at = excluded.updated_at`,
     )
-    .bind(orgId, provider, baseUrl, encryptedKey, model)
+    .bind(orgId, provider, baseUrl, encryptedKey, model, keyPrefix)
     .run();
 
   return jsonResponse({
@@ -304,7 +319,7 @@ export async function onRequestPut(context) {
     provider,
     baseUrl,
     model,
-    keyMask: maskKey(effectiveApiKey),
+    keyMask: keyDisplayMask(keyPrefix),
     keyReused: reuseStoredKey,
   });
 }
