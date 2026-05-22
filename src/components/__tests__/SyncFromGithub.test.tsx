@@ -9,27 +9,13 @@ vi.mock("@tanstack/react-query", () => {
   return { useQueryClient: () => qc };
 });
 
-import { SyncFromGithubMenuItem, SyncFromGithubModal } from "../SyncFromGithub";
+import { SyncFromGithubModal } from "../SyncFromGithub";
 import { triggerSyncWithProgress } from "@/lib/github";
 
 const mockSync = triggerSyncWithProgress as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockSync.mockReset();
-});
-
-describe("SyncFromGithubMenuItem", () => {
-  it("renders 'Sync from GitHub' label", () => {
-    render(<SyncFromGithubMenuItem onTrigger={vi.fn()} />);
-    expect(screen.getByText("Sync from GitHub")).toBeInTheDocument();
-  });
-
-  it("calls onTrigger when clicked", () => {
-    const onTrigger = vi.fn();
-    render(<SyncFromGithubMenuItem onTrigger={onTrigger} />);
-    fireEvent.click(screen.getByText("Sync from GitHub"));
-    expect(onTrigger).toHaveBeenCalled();
-  });
 });
 
 describe("SyncFromGithubModal", () => {
