@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRateLimit, useTriggerFeatureSync } from "@/hooks/useGitHub";
+import { useRateLimit } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
-import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut, Sparkles, Loader2 } from "lucide-react";
+import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
 import type { TabId } from "@/lib/types";
-import { SyncFromGithubMenuItem, SyncFromGithubModal } from "@/components/SyncFromGithub";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "engineers", label: "People" },
@@ -23,10 +22,8 @@ interface TopNavProps {
 export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   const { user, setSelectedOrg, logout } = useAuth();
   const { data: rateLimit } = useRateLimit();
-  const syncFeaturesMut = useTriggerFeatureSync();
   const isRateLimited = rateLimit && rateLimit.remaining < rateLimit.limit * 0.2;
   const [menuOpen, setMenuOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,29 +130,6 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
                   <ArrowLeftRight className="w-4 h-4" />
                   Switch Organisation
                 </button>
-                <button
-                  onClick={() => {
-                    if (syncFeaturesMut.isPending) return;
-                    syncFeaturesMut.mutate(undefined, {
-                      onSettled: () => setMenuOpen(false),
-                    });
-                  }}
-                  disabled={syncFeaturesMut.isPending}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                >
-                  {syncFeaturesMut.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  {syncFeaturesMut.isPending ? "Syncing features…" : "Sync features"}
-                </button>
-                <SyncFromGithubMenuItem
-                  onTrigger={() => {
-                    setMenuOpen(false);
-                    setSyncOpen(true);
-                  }}
-                />
                 <div className="border-t border-stone-100 my-1" />
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
@@ -189,7 +163,6 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
         })}
       </nav>
 
-      <SyncFromGithubModal open={syncOpen} onClose={() => setSyncOpen(false)} />
     </header>
   );
 }
