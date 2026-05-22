@@ -4,8 +4,15 @@ import { resolveActorFromGithub } from "../../../lib/actors";
 import { narrateEvent } from "../../../lib/narrator";
 import { recordFailure } from "../../../lib/op-failures";
 import { sleep, NARRATOR_PACING_MS } from "../../../lib/pacing";
+import { resolveLlmConfig } from "../../../lib/llm-config";
 
-// POST /api/projects/:id/backfill-prs  body: { days?: number (1..30, default 3) }
+// POST /api/projects/:id/backfill-prs
+// Body: {
+//   days?: number (1..30, default 3),
+//   rewriteOtherModels?: boolean (default false) — when true, also re-narrate
+//     posts whose payload.model isn't the currently-configured model. Useful
+//     after swapping providers so the feed converges on the new voice.
+// }
 // Generates first-person posts for the last N days of PRs in the project's repo,
 // one per PR, attributed to its author. Dedupes via delivery_id like
 // `backfill:<projectId>:pr-<n>` so re-running is idempotent.
@@ -31,6 +38,7 @@ export async function onRequestPost(context) {
       body = {};
     }
     const days = Math.max(1, Math.min(30, Number(body?.days) || 3));
+    const rewriteOtherModels = body?.rewriteOtherModels === true;
 
     const db = context.env.DB;
 
@@ -80,13 +88,22 @@ export async function onRequestPost(context) {
       .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
       .slice(0, BACKFILL_MAX_PRS);
 
-    // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
-    // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
-    // natural moment to retry: the user is asking for a refresh anyway. Capped
-    // so one call doesn't outrun the waitUntil budget; the next invocation
-    // picks up whatever's left.
-    const fallbackIds = (await findFallbackNarrativeIds(db, orgLogin, project.id))
-      .slice(0, BACKFILL_MAX_FALLBACKS);
+    // Sweep up narratives that need re-narration:
+    //   - Always: `model='fallback'` (LLM was down when they ran).
+    //   - When the user opts in: any narrative whose model isn't the
+    //     currently-configured one (e.g. they swapped providers and want the
+    //     feed to converge on the new voice).
+    // Capped so one call doesn't outrun the waitUntil budget; re-run picks up
+    // whatever's left. Newest-first so visible posts go first.
+    let currentModel = null;
+    if (rewriteOtherModels) {
+      const orgId = await resolveOrgId(db, orgLogin);
+      const llmConfig = await resolveLlmConfig(context.env, orgId);
+      currentModel = llmConfig?.model ?? null;
+    }
+    const fallbackIds = (
+      await findRenarrateTargets(db, orgLogin, project.id, currentModel)
+    ).slice(0, BACKFILL_MAX_FALLBACKS);
 
     if (todo.length === 0 && fallbackIds.length === 0) {
       return jsonResponse({
@@ -142,18 +159,41 @@ export async function onRequestPost(context) {
   }
 }
 
-async function findFallbackNarrativeIds(db, ownerId, projectId) {
-  const rows = await db.prepare(
-    `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
-       FROM events
-      WHERE owner_id = ? AND project_id = ?
-        AND type = 'narrative'
-        AND json_extract(payload_json, '$.model') = 'fallback'
-      ORDER BY id DESC`
-  ).bind(ownerId, projectId).all();
+// When `currentModel` is set, sweep up any narrative whose stamped model isn't
+// the one currently configured (including `fallback`). When it's null, only
+// fallback narratives are returned — the default behavior. Newest-first so the
+// visible feed converges first.
+async function findRenarrateTargets(db, ownerId, projectId, currentModel) {
+  const sql = currentModel
+    ? `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+         FROM events
+        WHERE owner_id = ? AND project_id = ?
+          AND type = 'narrative'
+          AND COALESCE(json_extract(payload_json, '$.model'), '') != ?
+        ORDER BY id DESC`
+    : `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+         FROM events
+        WHERE owner_id = ? AND project_id = ?
+          AND type = 'narrative'
+          AND json_extract(payload_json, '$.model') = 'fallback'
+        ORDER BY id DESC`;
+  const stmt = currentModel
+    ? db.prepare(sql).bind(ownerId, projectId, currentModel)
+    : db.prepare(sql).bind(ownerId, projectId);
+  const rows = await stmt.all();
   return (rows.results ?? [])
     .map((r) => ({ id: r.id, triggerEventId: r.trigger_event_id }))
     .filter((r) => r.triggerEventId != null);
+}
+
+async function resolveOrgId(db, ownerId) {
+  if (!db || !ownerId) return null;
+  const row = await db
+    .prepare("SELECT id FROM orgs WHERE github_login = ?")
+    .bind(ownerId)
+    .first()
+    .catch(() => null);
+  return row?.id ?? null;
 }
 
 async function renarrateFallbacks(env, fallbacks) {

@@ -73,12 +73,12 @@ describe("fetchProjects", () => {
 });
 
 describe("backfillProjectPrs", () => {
-  it("POSTs with default days=3", async () => {
+  it("POSTs with default days=3 and rewriteOtherModels=false", async () => {
     mockPost.mockResolvedValue({});
     await backfillProjectPrs("proj-1");
     expect(mockPost).toHaveBeenCalledWith(
       "/api/projects/proj-1/backfill-prs",
-      { days: 3 },
+      { days: 3, rewriteOtherModels: false },
     );
   });
 
@@ -87,7 +87,16 @@ describe("backfillProjectPrs", () => {
     await backfillProjectPrs("proj-1", 14);
     expect(mockPost).toHaveBeenCalledWith(
       "/api/projects/proj-1/backfill-prs",
-      { days: 14 },
+      { days: 14, rewriteOtherModels: false },
+    );
+  });
+
+  it("forwards rewriteOtherModels=true when requested", async () => {
+    mockPost.mockResolvedValue({});
+    await backfillProjectPrs("proj-1", 7, true);
+    expect(mockPost).toHaveBeenCalledWith(
+      "/api/projects/proj-1/backfill-prs",
+      { days: 7, rewriteOtherModels: true },
     );
   });
 
