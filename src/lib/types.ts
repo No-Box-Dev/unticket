@@ -139,7 +139,6 @@ export interface Person {
 }
 
 export interface OrgSettings {
-  draftRepos?: string[];
   excludedMembers?: string[];
   unticketRepo?: string;
 }
