@@ -9,6 +9,7 @@ import { parseFeatureMetadata } from "../../lib/feature-metadata";
 import {
   buildFeatureLabels,
   buildIssueBody,
+  extractStatusFromLabels,
   ghIssueToFeature,
   patchFeatureIssue,
   readFeatureRow,
@@ -47,7 +48,7 @@ export async function onRequestPatch(context) {
 
   // Compose desired state from request + current D1 row.
   const currentLabels = JSON.parse(row.labels_json || "[]");
-  const currentStatus = inferStatusFromLabelsJson(currentLabels);
+  const currentStatus = extractStatusFromLabels(currentLabels);
   const currentAssignees = JSON.parse(row.assignees_json || "[]");
   const { content: currentPlan, metadata: currentMetadata } = parseFeatureMetadata(row.body ?? "");
 
@@ -127,9 +128,4 @@ export async function onRequestDelete(context) {
 
   await upsertFeatureRow(context.env.DB, orgId, ghIssue);
   return jsonResponse({ ok: true });
-}
-
-function inferStatusFromLabelsJson(labels) {
-  const found = labels.find((l) => typeof l?.name === "string" && l.name.startsWith("status:"));
-  return found ? found.name.slice("status:".length) : "todo";
 }
