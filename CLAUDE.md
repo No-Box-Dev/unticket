@@ -60,19 +60,23 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Hooks: `src/hooks/useConfigRepo.ts` — TanStack Query hooks with optimistic updates
 - To add a new config key: add to `VALID_KEYS` + `DEFAULTS` in `[key].js`, add fetch/save in `config-repo.ts`, add hooks in `useConfigRepo.ts`
 
-**`unticket` repo (features as issues + plan files):**
-- `src/lib/unticket-repo.ts` — `ensureUnticketRepo()`, `createUnticketRepo()`
+**`unticket` repo (features as issues):**
 - Default repo name is `unticket`; users can override via Settings (`settings.unticketRepo`)
-- Feature plans: `plans/PLAN-{featureId}.md` (e.g. `PLAN-42.md`)
-- CLI access: `gh api repos/{org}/unticket/contents/plans/ --jq '.[].name'`
+- Resolved by `src/lib/unticket-repo-name.ts` (`getUnticketRepoName`)
+- CLI access: `gh issue list --repo {org}/unticket --label unticket --label feature`
 
 ### API Routes (Cloudflare Pages Functions)
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
 - `functions/api/sync.js` — Cursor-based GitHub-to-D1 sync: GET checks staleness (MIN across all resources), POST accepts `?cursor=repoName&force=true` for one-repo-at-a-time sync
+- `functions/api/sync-events.js` — Admin-only cursor-batched backfill of the `events` table. POST with no cursor returns the active repo list; subsequent POSTs with `?cursor=<repo>` run `reconcileRepoEvents` per repo (30-day lookback). 403s for non-admin callers.
+- `functions/api/op-failures.js` — Admin-only GET. Lists recent rows from the `op_failures` table (errors swallowed by `waitUntil`). Capped at 100 rows per call, default 25. 403s for non-admin callers.
+- `functions/api/llm-settings.js` — Admin-only GET/PUT/DELETE for per-org LLM provider override (`llm_settings` table, migration `0023_llm_settings.sql`). PUT validates with a live `complete()` probe and refuses to save when the call fails. The encrypted key is never echoed back; GET returns `keyMask: "••••"`. Backed by `functions/lib/llm-config.js resolveLlmConfig(env, orgId)` which is the single source for "which LLM endpoint should we use right now" — falls back to the default Zhipu config (`env.ZHIPU_API_KEY`) when no row, no `ENCRYPTION_KEY`, or decryption fails. Narrator + matcher both resolve via this helper.
 - `functions/api/webhook.js` — GitHub webhook receiver (HMAC-SHA256 verified, handles `issues`, `pull_request`, `member` events)
 - `functions/api/assign.js` — POST: update issue assignees on GitHub + D1 (`{ repo, issue_number, assignees }`)
 - `functions/api/issues.js`, `functions/api/prs.js`, `functions/api/repos.js`, `functions/api/members.js` — cached data endpoints
-- `functions/api/auth/callback.js` — OAuth callback
+- `functions/api/auth/callback.js` — OAuth callback. Also persists the GitHub App `refresh_token` into the `oauth_tokens` table (keyed by SHA-256 of the access token).
+- `functions/api/auth/exchange.js` — One-time exchange code → access token (immediately after callback redirect).
+- `functions/api/auth/refresh.js` — POST `{ token }` (the expired access token). Looks up the matching `oauth_tokens` row, calls GitHub's `grant_type=refresh_token` flow, rotates both tokens, returns the new access token. Used by `apiFetch` and `fetchUser` to silently recover from 401s so users stay signed in for the refresh-token TTL (~6 months) instead of the 8-hour access-token TTL.
 - `functions/_middleware.js`, `functions/api/_middleware.js` — auth middleware (webhook route bypasses auth)
 - `functions/lib/github-sync.js`, `functions/lib/db.js`, `functions/lib/crypto.js` — server-side helpers
 
@@ -83,6 +87,13 @@ Key server functions in `functions/lib/github-sync.js`:
 - `syncInit(db, token, orgId, orgLogin)` — migrate config, sync repos + members, return repo names
 - `syncRepo(db, token, orgId, orgLogin, repo, force)` — sync PRs + issues for ONE repo
 - `upsertIssue(db, orgId, repo, issue, closedBy?)` / `upsertPR` / `upsertMember` / `removeMember` — single-entity upserts used by webhook handler. `upsertIssue` accepts optional `closedBy` param; uses `COALESCE` to preserve existing `closed_by` when not provided
+
+**Live Activity events (the `events` table — feeds Engineers tab's Live activity)** has the same three-way redundancy as PRs/issues:
+1. **Webhooks** — `functions/lib/events.js storeEvent()` inserts rows in real time from `pull_request`, `issues`, `pull_request_review`, `push`, `release`, `repository`, and `installation*` payloads. `slimPayload` for `issues` carries `issue.number/title/state/author` forward so downstream dedup can match by number.
+2. **Cron reconcile (30 min)** — `cron/src/reconcile.js` calls `reconcileRepoEvents` per active repo with a 48h lookback. Catches webhook deliveries missed during deploys or provider outages.
+3. **Manual admin backfill** — `POST /api/sync-events` triggered from Settings → Live Activity Backfill. Same `reconcileRepoEvents` helper with a 30-day lookback.
+
+`reconcileRepoEvents` (in `functions/lib/event-reconcile.js`) is the single source of truth for "what's missing in events for this repo." Three sources, in order: (1) `pull_requests` → `github:pr:opened|closed|merged`, (2) `issues` → `github:issue:opened|closed`, (3) `GET /repos/{owner}/{repo}/events` → reviews/pushes/releases (events GitHub doesn't expose as webhooks-into-D1). Idempotent via deterministic `delivery_id` of `reconcile:<org>:<repo>:pr-<n>:<kind>` / `issue-<n>:<kind>` / `gh-event-<id>` + the `events.delivery_id UNIQUE` constraint. Inserted rows are passed to `narrateEvent`, which only narrates types in `NARRATABLE_TYPES` (currently `github:pr:merged`) so backfilling opens/reviews/pushes doesn't trigger LLM spend.
 
 ### Webhooks
 Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. On `issues.closed`, captures `sender.login` as `closed_by`. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
@@ -98,6 +109,7 @@ TanStack Query hooks for live GitHub data: `useOrgs`, `useRepos`, `useOpenPRs`, 
 - Two auth modes: OAuth (production) and PAT (`loginWithToken()`)
 - Dev mode: `VITE_DEV_TOKEN` / `VITE_DEV_ORG` env vars for local development
 - Per-user features filter by `user.login`
+- **Refresh-token rotation:** GitHub App user-to-server access tokens expire after 8 hours. The callback persists the `refresh_token` server-side in `oauth_tokens` (encrypted, keyed by SHA-256 of the access token). `src/lib/api.ts apiFetch` and `src/lib/github.ts fetchUser` intercept 401s by POSTing the expired token to `/api/auth/refresh`, which uses the stored refresh token to obtain a new pair and updates `localStorage.gp_token`. Concurrent 401s coalesce on a single in-flight refresh promise. If refresh fails (refresh-token expired or revoked) the row is deleted and the existing force-logout path runs. The refresh token rotates on every call — old tokens are invalid as soon as a new pair is issued.
 
 ## Features
 
@@ -116,3 +128,9 @@ Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable 
 
 #### Settings (`settings` tab, top-nav settings icon)
 Manages people config and tracked repos (mark repos as draft). Includes webhook setup section with payload URL and link to GitHub org webhook settings. Accessed via the gear icon in the top nav. Agent Rules section lets users define org-wide rules and push them to each repo's `CLAUDE.md` via the GitHub API. Rules are stored in D1 (`agentRules` config key). Pushed content uses `<!-- unticket:start -->` / `<!-- unticket:end -->` markers for safe updates. Includes a built-in preamble explaining features, PR linking convention, and feature lifecycle. Full Re-sync button to backfill historical data with `force=true` (bypasses incremental sync timestamps). Data Sync section shows live progress during re-sync.
+
+**Live Activity Backfill (admin-only)** — section gated by `useIsAdmin()`. Re-derives missing PR / issue / review / release / push event rows by calling `POST /api/sync-events` repo by repo (`triggerEventsBackfillWithProgress` in `src/lib/github.ts`). 30-day lookback so admins can recover events that pre-date the cron's 48h window. Used when Engineers tab's Live activity is missing recent activity for a teammate (typical cause: a deploy gap or webhook outage). Idempotent — re-running over the same period inserts zero new rows.
+
+**AI Provider (admin-only — BYOK)** — `LlmSettingsSection` in `SettingsTab.tsx`. Lets an org admin swap the default Zhipu key for their own LLM endpoint. Two provider shapes: `anthropic` (Anthropic Messages API; also covers Zhipu's Anthropic-compat endpoint) and `openai-compatible` (OpenAI chat-completions; covers OpenAI, LiteLLM proxies, Ollama, vLLM, etc. — chosen via base URL + model name rather than a vendor-specific SDK so we don't ship a `litellm` dependency). Save triggers a live one-shot `complete()` probe and refuses to save on failure (catches bad key, wrong model name, wrong base URL before they hit production). The plaintext key is encrypted with `encryptToken` before storage, never sent back to the browser, and never logged — `op_failures` rows from a failed narrator/matcher call only carry `llmConfig.source / provider / model`, not the key.
+
+**Background failures (admin-only)** — `RecentFailuresSection` in `SettingsTab.tsx`, gated by `useIsAdmin()`. Surfaces rows from the `op_failures` D1 table (migration `0021_op_failures.sql`). Background work scheduled via `context.waitUntil(...)` (narrator, PR matcher, install bootstrap, sync-on-repo-add, posts backfill) finishes after the HTTP response — when it throws, only `console.error` sees it and the response was already `200`. The `recordFailure` helper in `functions/lib/op-failures.js` writes a row into D1 from every `waitUntil` catch handler so the admin UI can show "the webhook returned 200, but the follow-up work failed: here's why." The helper swallows its own errors so logging can never escape into the response path.

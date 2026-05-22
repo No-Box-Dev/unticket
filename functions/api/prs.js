@@ -9,6 +9,12 @@ const PR_COLUMNS = [
   "requested_reviewers_json", "labels_json",
 ].join(", ");
 
+// Allow-listed sort columns — anything not in this set falls back to
+// the default. Prevents user input from being interpolated into SQL.
+const SORTABLE_PR_COLUMNS = new Set([
+  "updated_at", "created_at", "number", "title", "repo", "author",
+]);
+
 const EMPTY_PR_STATS = { open: 0, draft: 0, stale: 0, byRepo: [] };
 
 // GET /api/prs — query cached pull requests
@@ -134,7 +140,10 @@ export async function onRequestGet(context) {
 
   const countStmt = context.env.DB.prepare(countQuery).bind(...countBindings);
 
-  query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
+  const sortParam = url.searchParams.get("sort");
+  const sortColumn = sortParam && SORTABLE_PR_COLUMNS.has(sortParam) ? sortParam : "updated_at";
+  const sortDir = url.searchParams.get("sort_dir") === "asc" ? "ASC" : "DESC";
+  query += ` ORDER BY ${sortColumn} ${sortDir} LIMIT ? OFFSET ?`;
   const dataStmt = context.env.DB.prepare(query).bind(...bindings, pageSize, (page - 1) * pageSize);
 
   const [countResult, rows] = await context.env.DB.batch([countStmt, dataStmt]);

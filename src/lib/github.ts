@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
-import { apiGet, apiPost, ApiError, broadcastError } from "./api";
+import { apiGet, apiPost, ApiError, broadcastError, refreshAccessToken } from "./api";
 
 // ---------- Auth (still uses Octokit directly) ----------
 
@@ -97,6 +97,27 @@ export async function fetchUser() {
     const { data } = await ok.rest.users.getAuthenticated();
     return data;
   } catch (err) {
+    // 401 here means the access token expired (GitHub App default: 8h). Try
+    // one silent refresh + retry before treating it as a hard logout — this
+    // is the path that lets users stay signed in for the refresh-token TTL.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = (err as any)?.status;
+    if (status === 401) {
+      const expiredToken = localStorage.getItem("gp_token");
+      if (expiredToken) {
+        const refreshed = await refreshAccessToken(expiredToken);
+        if (refreshed) {
+          resetOctokit();
+          try {
+            const ok = getOctokit();
+            const { data } = await ok.rest.users.getAuthenticated();
+            return data;
+          } catch (retryErr) {
+            throw wrapOctokitError(retryErr);
+          }
+        }
+      }
+    }
     throw wrapOctokitError(err);
   }
 }
@@ -225,6 +246,55 @@ export async function triggerSyncWithProgress(
 
 export async function fetchSyncStatus() {
   return apiGet<{ isStale: boolean; lastSync: string | null }>("/api/sync");
+}
+
+// Admin-only: backfill missing rows in the events table for every active
+// repo. Same cursor-batched shape as triggerSyncWithProgress, just hits
+// /api/sync-events. Used by Settings → Live Activity Backfill.
+export async function triggerEventsBackfillWithProgress(
+  onProgress: (status: SyncProgress) => void,
+  signal?: AbortSignal,
+) {
+  let init: SyncResponse;
+  try {
+    onProgress({ phase: "init", synced: 0, total: 0 });
+    init = await apiPost<SyncResponse>("/api/sync-events");
+  } catch (err) {
+    if (signal?.aborted) return;
+    const msg = err instanceof Error ? err.message : "Backfill failed";
+    if (!(err instanceof ApiError)) broadcastError(msg);
+    onProgress({ phase: "error", synced: 0, total: 0, error: msg });
+    return;
+  }
+
+  if (init.done) {
+    onProgress({ phase: "done", synced: 0, total: 0 });
+    return;
+  }
+
+  const repos = init.repoList ?? (init.cursor ? [init.cursor] : []);
+  const total = repos.length;
+  const failed: string[] = [];
+  let synced = 0;
+
+  for (const repo of repos) {
+    if (signal?.aborted) return;
+    onProgress({ phase: "syncing", repo, synced, total, failed: [...failed] });
+    try {
+      await apiPost<SyncResponse>(
+        `/api/sync-events?cursor=${encodeURIComponent(repo)}`,
+      );
+      synced++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[unticket] event backfill failed for ${repo}:`, msg);
+      failed.push(repo);
+    }
+  }
+
+  if (!signal?.aborted) {
+    onProgress({ phase: "done", synced, total, failed });
+  }
 }
 
 export async function triggerFeatureSync() {
@@ -469,6 +539,8 @@ export interface PrQueryParams {
   draft?: boolean;
   stale?: boolean;
   since?: string;
+  sort?: "updated_at" | "created_at" | "number" | "title" | "repo" | "author";
+  sortDir?: "asc" | "desc";
 }
 
 export async function fetchPaginatedIssues(params: IssueQueryParams): Promise<PaginatedResponse<ReturnType<typeof transformIssue>>> {
@@ -513,6 +585,8 @@ export async function fetchPaginatedPrs(
   if (params.draft) qs.set("draft", "1");
   if (params.stale) qs.set("stale", "1");
   if (params.since) qs.set("since", params.since);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.sortDir) qs.set("sort_dir", params.sortDir);
 
   const raw = await apiGet<{ data: ApiPR[]; totalCount: number; page: number; pageSize: number }>(
     `/api/prs?${qs}`,

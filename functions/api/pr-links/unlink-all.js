@@ -22,10 +22,11 @@ import {
 const CONCURRENCY = 5;
 
 export async function onRequestPost(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
+  const { orgId, orgLogin, token, isAdmin } = getCtx(context);
   if (!orgId || !orgLogin || !token) {
     return errorResponse("Missing org context", 400);
   }
+  if (!isAdmin) return errorResponse("Admin required", 403);
 
   let body;
   try {

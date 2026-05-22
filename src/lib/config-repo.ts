@@ -1,14 +1,14 @@
 import { apiGet, apiPut } from "./api";
-import { fetchPeopleFromRepo, savePeopleToRepo } from "./unticket-repo";
 import type { Person, OrgSettings } from "./types";
 
-// People (GitHub-backed via unticket repo)
-export async function fetchPeople(org: string): Promise<Person[]> {
-  return fetchPeopleFromRepo(org);
+// People (D1-backed via /api/config/people)
+export async function fetchPeople(): Promise<Person[]> {
+  const people = await apiGet<Person[] | null>("/api/config/people");
+  return people ?? [];
 }
 
-export async function savePeople(org: string, people: Person[]): Promise<void> {
-  return savePeopleToRepo(org, people);
+export async function savePeople(people: Person[]): Promise<void> {
+  await apiPut("/api/config/people", people);
 }
 
 // Settings

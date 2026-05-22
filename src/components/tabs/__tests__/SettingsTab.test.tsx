@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
   useOrgMembers: vi.fn(),
+  useIsAdmin: vi.fn(() => false),
 }));
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: vi.fn(),
@@ -23,15 +24,25 @@ vi.mock("@/lib/pr-links", () => ({
 }));
 vi.mock("@/lib/github", () => ({
   triggerSyncWithProgress: vi.fn(),
+  triggerEventsBackfillWithProgress: vi.fn(),
 }));
 vi.mock("@tanstack/react-query", () => {
   const qc = { invalidateQueries: vi.fn() };
-  return { useQueryClient: () => qc };
+  return {
+    useQueryClient: () => qc,
+    useQuery: () => ({
+      data: { failures: [] },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    }),
+  };
 });
 
 import { SettingsTab } from "../SettingsTab";
 import { useAuth } from "@/lib/auth";
-import { useOrgMembers } from "@/hooks/useGitHub";
+import { useOrgMembers, useIsAdmin } from "@/hooks/useGitHub";
 import {
   useSettings,
   useSaveSettings,
@@ -47,6 +58,7 @@ const mSaveSettings = useSaveSettings as unknown as ReturnType<typeof vi.fn>;
 const mPeople = usePeople as unknown as ReturnType<typeof vi.fn>;
 const mSavePeople = useSavePeople as unknown as ReturnType<typeof vi.fn>;
 const mProjects = useFeedProjects as unknown as ReturnType<typeof vi.fn>;
+const mIsAdmin = useIsAdmin as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mAuth.mockReturnValue({
@@ -84,9 +96,25 @@ describe("SettingsTab", () => {
     expect(screen.getByText(/Install or manage Unticket/i)).toBeInTheDocument();
   });
 
-  it("renders the Data Sync section with a Full Re-sync button", () => {
+  it("hides all admin tools for non-admins", () => {
+    mIsAdmin.mockReturnValue(false);
     render(<SettingsTab />);
-    expect(screen.getByText("Data Sync")).toBeInTheDocument();
-    expect(screen.getByText("Full Re-sync")).toBeInTheDocument();
+    expect(screen.queryByText("Admin tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Full Re-sync")).not.toBeInTheDocument();
+    expect(screen.queryByText("Live Activity Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("Posts Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("PR → Feature Backfill")).not.toBeInTheDocument();
+    expect(screen.queryByText("Background failures")).not.toBeInTheDocument();
+  });
+
+  it("shows all admin tools for admins", () => {
+    mIsAdmin.mockReturnValue(true);
+    render(<SettingsTab />);
+    expect(screen.getByText("Admin tools")).toBeInTheDocument();
+    expect(screen.getAllByText("Full Re-sync").length).toBeGreaterThan(0);
+    expect(screen.getByText("Live Activity Backfill")).toBeInTheDocument();
+    expect(screen.getByText("Posts Backfill")).toBeInTheDocument();
+    expect(screen.getByText("PR → Feature Backfill")).toBeInTheDocument();
+    expect(screen.getByText("Background failures")).toBeInTheDocument();
   });
 });

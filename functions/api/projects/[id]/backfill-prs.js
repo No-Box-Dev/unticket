@@ -2,127 +2,204 @@ import { getCtx, jsonResponse, errorResponse } from "../../../lib/db";
 import { getInstallationToken } from "../../../lib/github-app";
 import { resolveActorFromGithub } from "../../../lib/actors";
 import { narrateEvent } from "../../../lib/narrator";
+import { recordFailure } from "../../../lib/op-failures";
+import { sleep, NARRATOR_PACING_MS } from "../../../lib/pacing";
+import { resolveLlmConfig } from "../../../lib/llm-config";
 
-// POST /api/projects/:id/backfill-prs  body: { days?: number (1..30, default 3) }
+// POST /api/projects/:id/backfill-prs
+// Body: {
+//   days?: number (1..30, default 3),
+//   rewriteOtherModels?: boolean (default false) — when true, also re-narrate
+//     posts whose payload.model isn't the currently-configured model. Useful
+//     after swapping providers so the feed converges on the new voice.
+// }
 // Generates first-person posts for the last N days of PRs in the project's repo,
 // one per PR, attributed to its author. Dedupes via delivery_id like
 // `backfill:<projectId>:pr-<n>` so re-running is idempotent.
 const BACKFILL_MAX_PRS = 25;
+// Mirror the new-trigger cap on fallback re-narration. Unbounded loops blow
+// past waitUntil's wall-clock budget — earlier fallbacks ran, later ones
+// silently dropped (the "they're being skipped" report). Re-running backfill
+// picks up the remainder.
+const BACKFILL_MAX_FALLBACKS = 25;
 
 export async function onRequestPost(context) {
-  const { orgLogin } = getCtx(context);
-  if (!orgLogin) return errorResponse("Missing org context", 400);
-  const { id } = context.params;
-  if (!id) return errorResponse("Missing project id", 400);
-
-  let body;
   try {
-    body = await context.request.json();
-  } catch {
-    body = {};
-  }
-  const days = Math.max(1, Math.min(30, Number(body?.days) || 3));
+    const { orgLogin, isAdmin } = getCtx(context);
+    if (!orgLogin) return errorResponse("Missing org context", 400);
+    if (!isAdmin) return errorResponse("Admin required", 403);
+    const { id } = context.params;
+    if (!id) return errorResponse("Missing project id", 400);
 
-  const db = context.env.DB;
+    let body;
+    try {
+      body = await context.request.json();
+    } catch {
+      body = {};
+    }
+    const days = Math.max(1, Math.min(30, Number(body?.days) || 3));
+    const rewriteOtherModels = body?.rewriteOtherModels === true;
 
-  const project = await db.prepare(
-    "SELECT id, name, org, repo, owner_id FROM projects WHERE id = ? AND owner_id = ?"
-  ).bind(id, orgLogin).first();
-  if (!project) return errorResponse(`Unknown project ${id}`, 404);
-  if (!project.org || !project.repo) return errorResponse("Project has no org/repo", 400);
+    const db = context.env.DB;
 
-  const inst = await db.prepare(
-    "SELECT installation_id FROM installations WHERE owner_id = ? AND account_login = ?"
-  ).bind(orgLogin, project.org).first();
-  if (!inst) return errorResponse(`No installation for org ${project.org}`, 404);
+    const project = await db.prepare(
+      "SELECT id, name, org, repo, owner_id FROM projects WHERE id = ? AND owner_id = ?"
+    ).bind(id, orgLogin).first();
+    if (!project) return errorResponse(`Unknown project ${id}`, 404);
+    if (!project.org || !project.repo) return errorResponse("Project has no org/repo", 400);
 
-  let prs;
-  try {
-    prs = await fetchRecentPrs(context.env, inst.installation_id, project.org, project.repo, days);
-  } catch (err) {
-    return errorResponse(`Failed to fetch PRs: ${err instanceof Error ? err.message : String(err)}`, 502);
-  }
+    const inst = await db.prepare(
+      "SELECT installation_id FROM installations WHERE owner_id = ? AND account_login = ?"
+    ).bind(orgLogin, project.org).first();
+    if (!inst) return errorResponse(`No installation for org ${project.org}`, 404);
 
-  if (prs.length === 0) {
-    return jsonResponse({
-      ok: true,
-      found: 0,
-      queued: 0,
-      skipped: 0,
-      days,
-      message: `No PRs in the last ${days} day(s).`,
-    });
-  }
+    let prs;
+    try {
+      prs = await fetchRecentPrs(context.env, inst.installation_id, project.org, project.repo, days);
+    } catch (err) {
+      return errorResponse(`Failed to fetch PRs: ${err instanceof Error ? err.message : String(err)}`, 502);
+    }
 
-  const existing = await db.prepare(
-    `SELECT delivery_id FROM events
-      WHERE owner_id = ? AND project_id = ? AND source = 'github-backfill'
-        AND delivery_id LIKE ?`
-  ).bind(orgLogin, project.id, `backfill:${project.id}:pr-%`).all();
-  const seen = new Set((existing.results ?? []).map((r) => r.delivery_id));
+    if (prs.length === 0) {
+      return jsonResponse({
+        ok: true,
+        found: 0,
+        queued: 0,
+        skipped: 0,
+        days,
+        message: `No PRs in the last ${days} day(s).`,
+      });
+    }
 
-  const todo = prs
-    .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
-    .slice(0, BACKFILL_MAX_PRS);
+    // Build exact delivery_id candidates and dedupe via IN(...). Avoids a LIKE
+    // pattern over project.id, whose literal `_` characters (e.g.
+    // `proj_n1healthcare_authentication-service`) blow past D1's
+    // "LIKE or GLOB pattern too complex" threshold.
+    const candidateIds = prs.map((pr) => `backfill:${project.id}:pr-${pr.number}`);
+    const placeholders = candidateIds.map(() => "?").join(",");
+    const existing = await db.prepare(
+      `SELECT delivery_id FROM events
+        WHERE owner_id = ? AND project_id = ? AND source = 'github-backfill'
+          AND delivery_id IN (${placeholders})`
+    ).bind(orgLogin, project.id, ...candidateIds).all();
+    const seen = new Set((existing.results ?? []).map((r) => r.delivery_id));
 
-  // Sweep up narratives stamped `model='fallback'` (Zhipu was unavailable when
-  // they ran — usually cron Worker missing ZHIPU_API_KEY). Backfill is the
-  // natural moment to retry: the user is asking for a refresh anyway.
-  const fallbackIds = await findFallbackNarrativeIds(db, orgLogin, project.id);
+    const todo = prs
+      .filter((pr) => !seen.has(`backfill:${project.id}:pr-${pr.number}`))
+      .slice(0, BACKFILL_MAX_PRS);
 
-  if (todo.length === 0 && fallbackIds.length === 0) {
+    // Sweep up narratives that need re-narration:
+    //   - Always: `model='fallback'` (LLM was down when they ran).
+    //   - When the user opts in: any narrative whose model isn't the
+    //     currently-configured one (e.g. they swapped providers and want the
+    //     feed to converge on the new voice).
+    // Capped so one call doesn't outrun the waitUntil budget; re-run picks up
+    // whatever's left. Newest-first so visible posts go first.
+    let currentModel = null;
+    if (rewriteOtherModels) {
+      const orgId = await resolveOrgId(db, orgLogin);
+      const llmConfig = await resolveLlmConfig(context.env, orgId);
+      currentModel = llmConfig?.model ?? null;
+    }
+    const fallbackIds = (
+      await findRenarrateTargets(db, orgLogin, project.id, currentModel)
+    ).slice(0, BACKFILL_MAX_FALLBACKS);
+
+    if (todo.length === 0 && fallbackIds.length === 0) {
+      return jsonResponse({
+        ok: true,
+        found: prs.length,
+        queued: 0,
+        skipped: prs.length,
+        renarrated: 0,
+        days,
+        message: "All PRs already backfilled.",
+      });
+    }
+
+    const work = (async () => {
+      if (todo.length > 0) {
+        await processBackfill(context.env, {
+          projectId: project.id,
+          org: project.org,
+          repo: project.repo,
+          ownerId: orgLogin,
+          prs: todo,
+        });
+      }
+      if (fallbackIds.length > 0) {
+        await renarrateFallbacks(context.env, fallbackIds);
+      }
+    })();
+    context.waitUntil(
+      work.catch(async (err) => {
+        console.error("[unticket backfill] failed:", err);
+        await recordFailure(db, {
+          ownerId: orgLogin,
+          op: "backfillPrs",
+          deliveryId: project.id,
+          error: err,
+        });
+      })
+    );
+
     return jsonResponse({
       ok: true,
       found: prs.length,
-      queued: 0,
-      skipped: prs.length,
-      renarrated: 0,
+      queued: todo.length,
+      skipped: prs.length - todo.length,
+      renarrated: fallbackIds.length,
       days,
-      message: "All PRs already backfilled.",
     });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[unticket backfill] unhandled error:", message, stack);
+    return errorResponse(`Backfill failed: ${message}`, 500);
   }
-
-  const work = (async () => {
-    if (todo.length > 0) {
-      await processBackfill(context.env, {
-        projectId: project.id,
-        org: project.org,
-        repo: project.repo,
-        ownerId: orgLogin,
-        prs: todo,
-      });
-    }
-    if (fallbackIds.length > 0) {
-      await renarrateFallbacks(context.env, fallbackIds);
-    }
-  })();
-  context.waitUntil(work.catch((err) => console.error("[unticket backfill] failed:", err)));
-
-  return jsonResponse({
-    ok: true,
-    found: prs.length,
-    queued: todo.length,
-    skipped: prs.length - todo.length,
-    renarrated: fallbackIds.length,
-    days,
-  });
 }
 
-async function findFallbackNarrativeIds(db, ownerId, projectId) {
-  const rows = await db.prepare(
-    `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
-       FROM events
-      WHERE owner_id = ? AND project_id = ?
-        AND type = 'narrative'
-        AND json_extract(payload_json, '$.model') = 'fallback'`
-  ).bind(ownerId, projectId).all();
+// When `currentModel` is set, sweep up any narrative whose stamped model isn't
+// the one currently configured (including `fallback`). When it's null, only
+// fallback narratives are returned — the default behavior. Newest-first so the
+// visible feed converges first.
+async function findRenarrateTargets(db, ownerId, projectId, currentModel) {
+  const sql = currentModel
+    ? `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+         FROM events
+        WHERE owner_id = ? AND project_id = ?
+          AND type = 'narrative'
+          AND COALESCE(json_extract(payload_json, '$.model'), '') != ?
+        ORDER BY id DESC`
+    : `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+         FROM events
+        WHERE owner_id = ? AND project_id = ?
+          AND type = 'narrative'
+          AND json_extract(payload_json, '$.model') = 'fallback'
+        ORDER BY id DESC`;
+  const stmt = currentModel
+    ? db.prepare(sql).bind(ownerId, projectId, currentModel)
+    : db.prepare(sql).bind(ownerId, projectId);
+  const rows = await stmt.all();
   return (rows.results ?? [])
     .map((r) => ({ id: r.id, triggerEventId: r.trigger_event_id }))
     .filter((r) => r.triggerEventId != null);
 }
 
+async function resolveOrgId(db, ownerId) {
+  if (!db || !ownerId) return null;
+  const row = await db
+    .prepare("SELECT id FROM orgs WHERE github_login = ?")
+    .bind(ownerId)
+    .first()
+    .catch(() => null);
+  return row?.id ?? null;
+}
+
 async function renarrateFallbacks(env, fallbacks) {
-  for (const { id, triggerEventId } of fallbacks) {
+  for (let i = 0; i < fallbacks.length; i++) {
+    if (i > 0) await sleep(NARRATOR_PACING_MS);
+    const { id, triggerEventId } = fallbacks[i];
     try {
       await env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
       await narrateEvent(env, triggerEventId);
@@ -157,7 +234,9 @@ async function fetchRecentPrs(env, installationId, org, repo, days) {
 async function processBackfill(env, args) {
   // Oldest-first so the feed reads chronologically.
   const sorted = [...args.prs].sort((a, b) => prAnchor(a).localeCompare(prAnchor(b)));
-  for (const pr of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0) await sleep(NARRATOR_PACING_MS);
+    const pr = sorted[i];
     try {
       await backfillOnePr(env, args, pr);
     } catch (err) {
