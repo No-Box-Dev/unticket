@@ -2,7 +2,6 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePaginatedIssues, useIssueLabels, useRepos, useActiveMembers, useUpdateIssueAssignees, useIssueStats } from "@/hooks/useGitHub";
-import { useSettings } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { CircleDot, CircleCheck, ExternalLink, ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
@@ -61,7 +60,6 @@ function recentClosedSince(): string {
 export function IssuesTab({ navFilter }: IssuesTabProps) {
   const navigate = useNavigate();
   const closedSince = useMemo(() => recentClosedSince(), []);
-  const { data: settings } = useSettings();
   const { data: labels } = useIssueLabels();
   const { data: repos } = useRepos();
   const { data: members } = useActiveMembers();
@@ -69,7 +67,6 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   const memberLogins = useMemo(() => members?.map((m) => m.login).sort() ?? [], [members]);
 
-  const draftRepos = useMemo(() => new Set(settings?.draftRepos ?? []), [settings]);
   const { data: feedProjects } = useFeedProjects();
   const archivedRepos = useMemo(
     () => new Set((feedProjects ?? []).filter((p) => p.archived && p.repo).map((p) => p.repo!)),
@@ -78,9 +75,9 @@ export function IssuesTab({ navFilter }: IssuesTabProps) {
 
   const repoList = useMemo(() => {
     return repos?.map((r: any) => r.name)
-      .filter((n: string) => !EXCLUDED_REPOS.has(n) && !draftRepos.has(n) && !archivedRepos.has(n))
+      .filter((n: string) => !EXCLUDED_REPOS.has(n) && !archivedRepos.has(n))
       .sort() ?? [];
-  }, [repos, draftRepos, archivedRepos]);
+  }, [repos, archivedRepos]);
 
   const [repoFilter, setRepoFilter] = useState<string>("all");
   const [assignmentFilter, setAssignmentFilter] = useState<"all" | "unassigned" | "assigned">(navFilter?.person ? "all" : "unassigned");

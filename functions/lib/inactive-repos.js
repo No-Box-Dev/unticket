@@ -1,8 +1,8 @@
 // Source of truth for which repos are inactive in this org.
 // A repo is inactive (and therefore excluded from sync, the issues/PRs
 // endpoints, and any other "all repos" surface) if any of:
-//   - listed in settings.draftRepos
-//   - has projects.archived = 1 (platform-level archive)
+//   - has projects.archived = 1 (platform-level archive, toggled from the
+//     Repos tab)
 //   - has repos.archived_at IS NOT NULL (GitHub-side archive, captured by
 //     the `repository.archived` webhook)
 //   - is the configured "unticket" repo (settings.unticketRepo, default
@@ -24,13 +24,12 @@ export async function getInactiveRepoSet(db, orgId, orgLogin) {
     try {
       parsed = JSON.parse(settingsData);
     } catch (e) {
-      // Fail loud rather than silently dropping draftRepos and reverting
-      // unticketRepo to "unticket": both would re-expose hidden repos in
-      // every issue/PR surface the moment a corrupt row landed in D1.
+      // Fail loud rather than silently reverting unticketRepo to "unticket":
+      // that would re-expose the features-tracking repo in every issue/PR
+      // surface the moment a corrupt row landed in D1.
       console.error(`[unticket] Corrupt settings JSON for org ${orgId}:`, e?.message ?? e);
       throw new Error(`Corrupt settings JSON for org ${orgId} — fix the row in the config table before proceeding`);
     }
-    for (const r of parsed.draftRepos ?? []) exclude.add(r);
     if (typeof parsed.unticketRepo === "string" && parsed.unticketRepo.trim()) {
       unticketRepo = parsed.unticketRepo.trim();
     }

@@ -10,9 +10,6 @@ vi.mock("@/hooks/useGitHub", () => ({
   useUpdateIssueAssignees: vi.fn(),
   useIssueStats: vi.fn(),
 }));
-vi.mock("@/hooks/useConfigRepo", () => ({
-  useSettings: vi.fn(),
-}));
 vi.mock("@/hooks/useNoxlink", () => ({
   useFeedProjects: vi.fn(),
 }));
@@ -26,7 +23,6 @@ import {
   useUpdateIssueAssignees,
   useIssueStats,
 } from "@/hooks/useGitHub";
-import { useSettings } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 
 const mIssues = usePaginatedIssues as unknown as ReturnType<typeof vi.fn>;
@@ -35,7 +31,6 @@ const mRepos = useRepos as unknown as ReturnType<typeof vi.fn>;
 const mMembers = useActiveMembers as unknown as ReturnType<typeof vi.fn>;
 const mUpdateA = useUpdateIssueAssignees as unknown as ReturnType<typeof vi.fn>;
 const mStats = useIssueStats as unknown as ReturnType<typeof vi.fn>;
-const mSettings = useSettings as unknown as ReturnType<typeof vi.fn>;
 const mProjects = useFeedProjects as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -45,7 +40,6 @@ beforeEach(() => {
   mMembers.mockReturnValue({ data: [] });
   mUpdateA.mockReturnValue({ mutate: vi.fn(), isPending: false });
   mStats.mockReturnValue({ data: { byRepo: [], total: 0 } });
-  mSettings.mockReturnValue({ data: { draftRepos: [] } });
   mProjects.mockReturnValue({ data: [] });
 });
 
