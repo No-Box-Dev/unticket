@@ -1,39 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Build a shared Octokit mock that every test can configure.
-const mockOctokit = {
-  rest: {
-    issues: {
-      listLabelsForRepo: vi.fn(),
-      createLabel: vi.fn(),
-      listForRepo: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      get: vi.fn(),
-    },
-  },
-  paginate: vi.fn(),
-};
-
-vi.mock("../github", () => ({
-  getOctokit: () => mockOctokit,
-}));
-
 vi.mock("../api", () => ({
   apiGet: vi.fn(),
-  apiPut: vi.fn(),
   apiFetch: vi.fn(),
 }));
 
-vi.mock("../unticket-repo-name", () => ({
-  getUnticketRepoName: () => "unticket",
-}));
-
-import { apiGet, apiPut, apiFetch } from "../api";
+import { apiGet, apiFetch } from "../api";
 import {
   fetchFeaturesFromD1,
-  fetchFeatures,
-  ensureFeatureLabels,
   createFeature,
   updateFeature,
   deleteFeature,
@@ -41,16 +15,30 @@ import {
 } from "../github-features";
 
 const mockGet = vi.mocked(apiGet);
-const mockPut = vi.mocked(apiPut);
 const mockFetch = vi.mocked(apiFetch);
 
 beforeEach(() => {
-  // resetAllMocks clears implementations too — clearAllMocks only nukes call history.
-  // Implementation leaks were causing "Error: nope" from the 422 test to bleed
-  // into later tests.
   vi.resetAllMocks();
 });
 afterEach(() => vi.restoreAllMocks());
+
+function okResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => body,
+  } as unknown as Response;
+}
+
+function errResponse(status: number, body: unknown): Response {
+  return {
+    ok: false,
+    status,
+    statusText: "Error",
+    json: async () => body,
+  } as unknown as Response;
+}
 
 describe("withStatusTransition", () => {
   const base = { id: 1, title: "x", status: "todo" as const, owners: [] };
@@ -151,164 +139,76 @@ describe("fetchFeaturesFromD1", () => {
   });
 });
 
-describe("ensureFeatureLabels", () => {
-  beforeEach(() => {
-    // Reset the per-test module state cache. Easiest: dynamic re-import.
-    vi.resetModules();
-  });
-
-  it("creates missing labels and skips existing ones", async () => {
-    mockOctokit.rest.issues.listLabelsForRepo.mockResolvedValue({
-      data: [{ name: "unticket" }, { name: "feature" }],
-    });
-    mockOctokit.rest.issues.createLabel.mockResolvedValue({});
-    // Use the imported reference (not re-imported, since state lives in same module)
-    await ensureFeatureLabels("my-new-org");
-    // 2 existing + 4 missing status:* labels = 4 createLabel calls
-    expect(mockOctokit.rest.issues.createLabel).toHaveBeenCalledTimes(4);
-  });
-
-  it("survives 422 errors (label already exists race)", async () => {
-    mockOctokit.rest.issues.listLabelsForRepo.mockResolvedValue({ data: [] });
-    mockOctokit.rest.issues.createLabel.mockRejectedValue(
-      Object.assign(new Error("Validation Failed"), { status: 422 }),
-    );
-    // Should not throw despite every createLabel failing with 422.
-    await expect(ensureFeatureLabels("org-422")).resolves.not.toThrow();
-  });
-
-  it("rethrows non-422 errors", async () => {
-    mockOctokit.rest.issues.listLabelsForRepo.mockResolvedValue({ data: [] });
-    mockOctokit.rest.issues.createLabel.mockRejectedValue(
-      Object.assign(new Error("nope"), { status: 500 }),
-    );
-    await expect(ensureFeatureLabels("org-err")).rejects.toThrow("nope");
-  });
-});
-
-describe("fetchFeatures", () => {
-  // Unique org per test: ensureFeatureLabels caches "already done" orgs in a
-  // module-level Set that we can't easily reset between tests. Using a new
-  // org name each time forces the ensure path to run cleanly.
-  it("requests issues with BOTH unticket+feature labels", async () => {
-    mockOctokit.rest.issues.listLabelsForRepo.mockResolvedValue({
-      data: [{ name: "unticket" }, { name: "feature" }, { name: "status:staging" },
-             { name: "status:ready" }, { name: "status:production" }, { name: "status:future" }],
-    });
-    mockOctokit.paginate.mockResolvedValue([]);
-    await fetchFeatures("fetch-org-1");
-    const [, opts] = mockOctokit.paginate.mock.calls[0];
-    expect(opts.labels).toBe("unticket,feature");
-    expect(opts.owner).toBe("fetch-org-1");
-    expect(opts.state).toBe("open");
-  });
-
-  it("filters out PRs (pull_request property present)", async () => {
-    mockOctokit.rest.issues.listLabelsForRepo.mockResolvedValue({
-      data: [{ name: "unticket" }, { name: "feature" }, { name: "status:staging" },
-             { name: "status:ready" }, { name: "status:production" }, { name: "status:future" }],
-    });
-    mockOctokit.paginate.mockResolvedValue([
-      { number: 1, title: "feature", body: "", labels: [], assignees: [], pull_request: undefined },
-      { number: 2, title: "actually a PR", body: "", labels: [], assignees: [], pull_request: {} },
-    ]);
-    const result = await fetchFeatures("fetch-org-2");
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(1);
-  });
-});
-
 describe("createFeature", () => {
-  it("includes a fresh statusHistory in the metadata block", async () => {
-    mockOctokit.rest.issues.create.mockResolvedValue({
-      data: { number: 5, title: "x", body: "", labels: [], assignees: [], html_url: "u" },
-    });
-    mockPut.mockResolvedValue({ ok: true });
-    await createFeature("org", "Add login", { status: "todo", plan: "Build it" });
-    const [args] = mockOctokit.rest.issues.create.mock.calls[0];
-    expect(args.title).toBe("Add login");
-    expect(args.labels).toEqual(["unticket", "feature"]);  // todo → no status: label
-    expect(args.body).toContain("Build it");
-    expect(args.body).toContain("unticket:metadata");
-  });
-
-  it("emits 'status:staging' label when status=staging", async () => {
-    mockOctokit.rest.issues.create.mockResolvedValue({
-      data: { number: 5, title: "x", body: "", labels: [], assignees: [], html_url: "u" },
-    });
-    mockPut.mockResolvedValue({ ok: true });
-    await createFeature("org", "X", { status: "staging" });
-    const [args] = mockOctokit.rest.issues.create.mock.calls[0];
-    expect(args.labels).toEqual(["unticket", "feature", "status:staging"]);
-  });
-
-  it("does NOT pass assignees when owners is empty", async () => {
-    mockOctokit.rest.issues.create.mockResolvedValue({
-      data: { number: 5, title: "x", body: "", labels: [], assignees: [], html_url: "u" },
-    });
-    mockPut.mockResolvedValue({ ok: true });
-    await createFeature("org", "X", { status: "todo" });
-    const [args] = mockOctokit.rest.issues.create.mock.calls[0];
-    expect(args.assignees).toBeUndefined();
-  });
-
-  it("syncs the created issue to D1 via PUT /api/features", async () => {
-    mockOctokit.rest.issues.create.mockResolvedValue({
-      data: { number: 5, title: "x", body: "", labels: [], assignees: [], html_url: "u", state: "open", created_at: "t", updated_at: "t" },
-    });
-    mockPut.mockResolvedValue({ ok: true });
-    await createFeature("org", "X", { status: "todo" });
-    expect(mockPut).toHaveBeenCalledWith("/api/features", expect.objectContaining({
-      number: 5,
-      title: "x",
+  it("POSTs to /api/features with the requested fields", async () => {
+    mockFetch.mockResolvedValue(okResponse({
+      id: 5, title: "Add login", status: "todo", owners: [], plan: "Build it",
     }));
+    const result = await createFeature("org", "Add login", { status: "todo", plan: "Build it" });
+    expect(mockFetch).toHaveBeenCalledWith("/api/features", {
+      method: "POST",
+      body: JSON.stringify({ title: "Add login", status: "todo", owners: [], plan: "Build it" }),
+    });
+    expect(result.id).toBe(5);
+    expect(result.title).toBe("Add login");
+  });
+
+  it("forwards owners when provided", async () => {
+    mockFetch.mockResolvedValue(okResponse({ id: 5, title: "X", status: "staging", owners: ["alice"] }));
+    await createFeature("org", "X", { status: "staging", owners: ["alice"] });
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      title: "X", status: "staging", owners: ["alice"], plan: "",
+    });
+  });
+
+  it("throws with the server error message on non-OK responses", async () => {
+    mockFetch.mockResolvedValue(errResponse(422, { error: "title is required" }));
+    await expect(createFeature("org", "", { status: "todo" })).rejects.toThrow(/title is required/);
   });
 });
 
 describe("updateFeature", () => {
-  it("rebuilds labels from new status + persists linkedPRs in body", async () => {
-    mockOctokit.rest.issues.update.mockResolvedValue({
-      data: { number: 5, title: "x", body: "", labels: [], assignees: [], html_url: "u" },
-    });
-    mockPut.mockResolvedValue({ ok: true });
-    await updateFeature("org", {
-      id: 5,
-      title: "X",
-      status: "ready",
-      owners: ["alice"],
-      plan: "do it",
+  it("PATCHes /api/features/:id with title, status, owners, plan", async () => {
+    mockFetch.mockResolvedValue(okResponse({
+      id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
       linkedPRs: [{ repo: "api", number: 100 }],
+    }));
+    const result = await updateFeature("org", {
+      id: 5, title: "X", status: "ready", owners: ["alice"],
+      plan: "do it", linkedPRs: [{ repo: "api", number: 100 }],
     });
-    const [args] = mockOctokit.rest.issues.update.mock.calls[0];
-    expect(args.labels).toEqual(["unticket", "feature", "status:ready"]);
-    expect(args.assignees).toEqual(["alice"]);
-    expect(args.body).toContain("do it");
-    expect(args.body).toContain('"linkedPRs"');
+    expect(mockFetch).toHaveBeenCalledWith("/api/features/5", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "X", status: "ready", owners: ["alice"], plan: "do it" }),
+    });
+    expect(result.linkedPRs).toEqual([{ repo: "api", number: 100 }]);
+  });
+
+  it("sends an empty string plan when feature.plan is undefined", async () => {
+    mockFetch.mockResolvedValue(okResponse({ id: 5, title: "X", status: "todo", owners: [] }));
+    await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
+    const [, init] = mockFetch.mock.calls[0];
+    expect(JSON.parse(init?.body as string).plan).toBe("");
+  });
+
+  it("throws with the server error message on non-OK responses", async () => {
+    mockFetch.mockResolvedValue(errResponse(404, { error: "Feature not found" }));
+    await expect(updateFeature("org", { id: 99, title: "X", status: "todo", owners: [] }))
+      .rejects.toThrow(/Feature not found/);
   });
 });
 
 describe("deleteFeature", () => {
-  it("closes the issue, strips unticket+feature+status labels, and deletes from D1", async () => {
-    mockOctokit.rest.issues.get.mockResolvedValue({
-      data: { labels: [{ name: "unticket" }, { name: "feature" }, { name: "status:ready" }, { name: "bug" }] },
-    });
-    mockOctokit.rest.issues.update.mockResolvedValue({});
-    mockFetch.mockResolvedValue({ ok: true } as Response);
+  it("DELETEs /api/features/:id", async () => {
+    mockFetch.mockResolvedValue(okResponse({ ok: true }));
     await deleteFeature("org", 5);
-    const [args] = mockOctokit.rest.issues.update.mock.calls[0];
-    expect(args.state).toBe("closed");
-    expect(args.labels).toEqual(["bug"]);  // unticket/feature/status:* stripped
-    expect(mockFetch).toHaveBeenCalledWith("/api/features?number=5", { method: "DELETE" });
+    expect(mockFetch).toHaveBeenCalledWith("/api/features/5", { method: "DELETE" });
   });
 
-  it("throws when the D1 delete fails", async () => {
-    mockOctokit.rest.issues.get.mockResolvedValue({ data: { labels: [] } });
-    mockOctokit.rest.issues.update.mockResolvedValue({});
-    mockFetch.mockResolvedValue({
-      ok: false,
-      statusText: "Server Error",
-      json: async () => ({ error: "boom" }),
-    } as Response);
+  it("throws with the server error message on non-OK responses", async () => {
+    mockFetch.mockResolvedValue(errResponse(500, { error: "boom" }));
     await expect(deleteFeature("org", 5)).rejects.toThrow(/boom/);
   });
 });
