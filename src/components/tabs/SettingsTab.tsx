@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useOrgMembers, useIsAdmin } from "@/hooks/useGitHub";
+import { useOrgMembers, useIsAdmin, useTriggerFeatureSync } from "@/hooks/useGitHub";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { backfillFeatureMatches, unlinkAllPRs, type UnlinkAllResult } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
+import { SyncFromGithubModal } from "@/components/SyncFromGithub";
 import {
   triggerSyncWithProgress,
   triggerEventsBackfillWithProgress,
@@ -33,34 +34,53 @@ export function SettingsTab() {
   const isAdmin = useIsAdmin();
 
   return (
-    <div className="max-w-2xl space-y-6">
-      {/* Account */}
-      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900">Account</h2>
-        <div className="flex items-center gap-3">
-          {user && (
-            <img
-              src={user.avatar_url}
-              alt={user.login}
-              className="w-10 h-10 rounded-full"
-            />
-          )}
-          <div>
-            <div className="text-sm font-medium text-stone-800">
-              {user?.name ?? user?.login}
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Account */}
+        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-stone-900">Account</h2>
+          <div className="flex items-center gap-3">
+            {user && (
+              <img
+                src={user.avatar_url}
+                alt={user.login}
+                className="w-10 h-10 rounded-full"
+              />
+            )}
+            <div>
+              <div className="text-sm font-medium text-stone-800">
+                {user?.name ?? user?.login}
+              </div>
+              <div className="text-xs text-stone-400">@{user?.login}</div>
             </div>
-            <div className="text-xs text-stone-400">@{user?.login}</div>
           </div>
+          <div className="text-xs text-stone-400">
+            Organisation: <span className="font-medium text-stone-600">{selectedOrg}</span>
+          </div>
+          <button
+            onClick={logout}
+            className="text-xs text-red-500 hover:text-red-700 cursor-pointer"
+          >
+            Disconnect GitHub
+          </button>
         </div>
-        <div className="text-xs text-stone-400">
-          Organisation: <span className="font-medium text-stone-600">{selectedOrg}</span>
+
+        {/* GitHub App installation */}
+        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-stone-900">GitHub App</h2>
+          <p className="text-xs text-stone-400">
+            Unticket runs as a GitHub App. Installing it on <span className="font-medium">{selectedOrg}</span> grants
+            per-repo permissions and registers the webhook automatically — no manual setup.
+          </p>
+          <a
+            href="https://github.com/apps/unticket/installations/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-xs text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            Install or manage Unticket on GitHub →
+          </a>
         </div>
-        <button
-          onClick={logout}
-          className="text-xs text-red-500 hover:text-red-700 cursor-pointer"
-        >
-          Disconnect GitHub
-        </button>
       </div>
 
       {/* People */}
@@ -74,23 +94,6 @@ export function SettingsTab() {
         />
       )}
 
-      {/* GitHub App installation */}
-      <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900">GitHub App</h2>
-        <p className="text-xs text-stone-400">
-          Unticket runs as a GitHub App. Installing it on <span className="font-medium">{selectedOrg}</span> grants
-          per-repo permissions and registers the webhook automatically — no manual setup.
-        </p>
-        <a
-          href="https://github.com/apps/unticket/installations/new"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block text-xs text-blue-600 hover:text-blue-800 hover:underline"
-        >
-          Install or manage Unticket on GitHub →
-        </a>
-      </div>
-
       {isAdmin && (
         <section className="space-y-3 pt-4 border-t border-stone-200">
           <div className="flex items-center gap-2 px-1">
@@ -102,6 +105,7 @@ export function SettingsTab() {
             </span>
           </div>
           <LlmSettingsSection />
+          <ManualSyncSection />
           <FullResyncSection />
           <ActivityEventsBackfillSection />
           <PostsBackfillSection />
@@ -109,6 +113,46 @@ export function SettingsTab() {
           <RecentFailuresSection />
         </section>
       )}
+    </div>
+  );
+}
+
+function ManualSyncSection() {
+  const syncFeaturesMut = useTriggerFeatureSync();
+  const [syncOpen, setSyncOpen] = useState(false);
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <h2 className="text-sm font-semibold text-stone-900">Manual sync</h2>
+      <p className="text-xs text-stone-400">
+        Trigger an on-demand pull from GitHub. Incremental sync also runs automatically
+        on webhook events and the 30-minute cron.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            if (syncFeaturesMut.isPending) return;
+            syncFeaturesMut.mutate();
+          }}
+          disabled={syncFeaturesMut.isPending}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-50 disabled:opacity-50 disabled:cursor-wait cursor-pointer"
+        >
+          {syncFeaturesMut.isPending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Sparkles size={14} />
+          )}
+          {syncFeaturesMut.isPending ? "Syncing features…" : "Sync features"}
+        </button>
+        <button
+          onClick={() => setSyncOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+        >
+          <RefreshCw size={14} />
+          Sync from GitHub
+        </button>
+      </div>
+      <SyncFromGithubModal open={syncOpen} onClose={() => setSyncOpen(false)} />
     </div>
   );
 }

@@ -6,23 +6,14 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/hooks/useGitHub", () => ({
   useRateLimit: vi.fn(),
-  useTriggerFeatureSync: vi.fn(),
-}));
-vi.mock("@/components/SyncFromGithub", () => ({
-  SyncFromGithubMenuItem: ({ onTrigger }: { onTrigger: () => void }) => (
-    <button onClick={onTrigger}>Sync from GitHub</button>
-  ),
-  SyncFromGithubModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="sync-modal" /> : null,
 }));
 
 import { TopNav } from "../TopNav";
 import { useAuth } from "@/lib/auth";
-import { useRateLimit, useTriggerFeatureSync } from "@/hooks/useGitHub";
+import { useRateLimit } from "@/hooks/useGitHub";
 
 const mockAuth = useAuth as unknown as ReturnType<typeof vi.fn>;
 const mockRate = useRateLimit as unknown as ReturnType<typeof vi.fn>;
-const mockSync = useTriggerFeatureSync as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockAuth.mockReturnValue({
@@ -31,7 +22,6 @@ beforeEach(() => {
     logout: vi.fn(),
   });
   mockRate.mockReturnValue({ data: { remaining: 1000, limit: 5000 } });
-  mockSync.mockReturnValue({ mutate: vi.fn(), isPending: false });
 });
 
 describe("TopNav", () => {
@@ -68,27 +58,17 @@ describe("TopNav", () => {
     expect(document.querySelector(".bg-severity-mid")).not.toBeNull();
   });
 
-  it("clicking the avatar toggles the user menu (Sign Out + Sync features)", () => {
+  it("clicking the avatar toggles the user menu (Sign Out + Switch Organisation)", () => {
     render(<TopNav activeTab="sprint" onTabChange={vi.fn()} />);
-    // Avatar button — open the menu via the ChevronDown sibling button.
     fireEvent.click(screen.getByAltText("alice").closest("button")!);
     expect(screen.getByText("Sign Out")).toBeInTheDocument();
-    expect(screen.getByText("Sync features")).toBeInTheDocument();
+    expect(screen.getByText("Switch Organisation")).toBeInTheDocument();
   });
 
-  it("clicking 'Sync features' calls the mutation", () => {
-    const mutate = vi.fn();
-    mockSync.mockReturnValue({ mutate, isPending: false });
+  it("does not show sync actions in the user menu", () => {
     render(<TopNav activeTab="sprint" onTabChange={vi.fn()} />);
     fireEvent.click(screen.getByAltText("alice").closest("button")!);
-    fireEvent.click(screen.getByText("Sync features"));
-    expect(mutate).toHaveBeenCalled();
-  });
-
-  it("clicking 'Sync from GitHub' opens the modal", () => {
-    render(<TopNav activeTab="sprint" onTabChange={vi.fn()} />);
-    fireEvent.click(screen.getByAltText("alice").closest("button")!);
-    fireEvent.click(screen.getByText("Sync from GitHub"));
-    expect(screen.getByTestId("sync-modal")).toBeInTheDocument();
+    expect(screen.queryByText("Sync features")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sync from GitHub")).not.toBeInTheDocument();
   });
 });

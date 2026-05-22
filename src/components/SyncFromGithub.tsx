@@ -1,25 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react";
+import { Check, X, Loader2, AlertCircle } from "lucide-react";
 import { triggerSyncWithProgress, type SyncProgress } from "@/lib/github";
 import { cn } from "@/lib/cn";
-
-interface SyncFromGithubMenuItemProps {
-  onTrigger: () => void;
-}
-
-export function SyncFromGithubMenuItem({ onTrigger }: SyncFromGithubMenuItemProps) {
-  return (
-    <button
-      onClick={onTrigger}
-      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 cursor-pointer"
-    >
-      <RefreshCw className="w-4 h-4" />
-      Sync from GitHub
-    </button>
-  );
-}
 
 interface SyncFromGithubModalProps {
   open: boolean;
