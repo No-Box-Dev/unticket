@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("@/hooks/useConfigRepo", () => ({
   useFeatures: vi.fn(),
   usePeople: vi.fn(),
+  useSettings: vi.fn(),
   useCreateFeature: vi.fn(),
   useUpdateFeature: vi.fn(),
   useDeleteFeature: vi.fn(),
@@ -31,6 +32,7 @@ import { SprintTab } from "../SprintTab";
 import {
   useFeatures,
   usePeople,
+  useSettings,
   useCreateFeature,
   useUpdateFeature,
   useDeleteFeature,
@@ -42,6 +44,7 @@ import { useAuth } from "@/lib/auth";
 
 const mFeatures = useFeatures as unknown as ReturnType<typeof vi.fn>;
 const mPeople = usePeople as unknown as ReturnType<typeof vi.fn>;
+const mSettings = useSettings as unknown as ReturnType<typeof vi.fn>;
 const mCreate = useCreateFeature as unknown as ReturnType<typeof vi.fn>;
 const mUpdate = useUpdateFeature as unknown as ReturnType<typeof vi.fn>;
 const mDelete = useDeleteFeature as unknown as ReturnType<typeof vi.fn>;
@@ -54,6 +57,7 @@ const mAuth = useAuth as unknown as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mFeatures.mockReset();
   mPeople.mockReturnValue({ data: [] });
+  mSettings.mockReturnValue({ data: null });
   mCreate.mockReturnValue({ mutate: vi.fn(), isPending: false });
   mUpdate.mockReturnValue({ mutate: vi.fn(), isPending: false });
   mDelete.mockReturnValue({ mutate: vi.fn(), isPending: false });
@@ -105,5 +109,27 @@ describe("SprintTab", () => {
     renderTab();
     expect(screen.getByText("Add login")).toBeInTheDocument();
     expect(screen.getByText("Ship payments")).toBeInTheDocument();
+  });
+
+  it("renders the admin-configured stages instead of the defaults", () => {
+    mSettings.mockReturnValue({
+      data: {
+        boardStages: [
+          { id: "todo", label: "Backlog", color: "#94a3b8" },
+          { id: "doing", label: "Doing", color: "#b89464" },
+          { id: "shipped", label: "Shipped", color: "#6e9970" },
+        ],
+      },
+    });
+    mFeatures.mockReturnValue({
+      data: [{ id: 1, title: "Add login", owners: [], status: "doing" }],
+      isLoading: false,
+    });
+    renderTab();
+    expect(screen.getByText("Backlog")).toBeInTheDocument();
+    expect(screen.getByText("Doing")).toBeInTheDocument();
+    expect(screen.getByText("Shipped")).toBeInTheDocument();
+    expect(screen.queryByText("To do")).not.toBeInTheDocument();
+    expect(screen.queryByText("On production")).not.toBeInTheDocument();
   });
 });

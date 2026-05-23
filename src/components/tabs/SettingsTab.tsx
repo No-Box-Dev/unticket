@@ -6,6 +6,7 @@ import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { backfillFeatureMatches, unlinkAllPRs, type UnlinkAllResult } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
+import { BoardStagesSection } from "@/components/settings/BoardStagesSection";
 import { SyncFromGithubModal } from "@/components/SyncFromGithub";
 import {
   triggerSyncWithProgress,
@@ -104,6 +105,7 @@ export function SettingsTab() {
               admin
             </span>
           </div>
+          <BoardStagesSection />
           <LlmSettingsSection />
           <ManualSyncSection />
           <FullResyncSection />

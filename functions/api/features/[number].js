@@ -17,9 +17,11 @@ import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
 import { recordFailure } from "../../lib/op-failures";
+import { resolveBoardStages } from "../../lib/board-stages.js";
 import {
   buildFeatureLabels,
   buildIssueBody,
+  ensureUnticketRepoLabels,
   extractStatusFromLabels,
   ghIssueToFeature,
   patchFeatureIssue,
@@ -28,7 +30,6 @@ import {
   upsertFeatureRow,
   UNTICKET_LABEL,
   FEATURE_LABEL,
-  VALID_STATUSES,
 } from "../../lib/feature-issues";
 
 function parseFeatureNumber(context) {
@@ -84,9 +85,12 @@ export async function onRequestPatch(context) {
     ? payload.title.trim()
     : row.title;
 
+  const stages = await resolveBoardStages(context.env.DB, orgId);
+  const validStatusIds = new Set(stages.map((s) => s.id));
+
   let status = currentStatus;
   if (payload?.status !== undefined) {
-    if (!VALID_STATUSES.has(payload.status)) {
+    if (!validStatusIds.has(payload.status)) {
       return errorResponse(`Invalid status: ${payload.status}`, 422);
     }
     status = payload.status;
@@ -125,6 +129,9 @@ export async function onRequestPatch(context) {
 
   const ghWrite = (async () => {
     const token = await getInstallationToken(context.env, installationId);
+    // Make sure the status:<id> label exists on GitHub before patching —
+    // GitHub rejects PATCHes referencing nonexistent labels.
+    await ensureUnticketRepoLabels(token, orgLogin, stages);
     const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
       title,
       body,

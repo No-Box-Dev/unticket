@@ -163,15 +163,15 @@ export function useCreateConfigRepo() {
   });
 }
 
-// ---------- Bulk clean: close all features in production status ----------
+// ---------- Bulk clean: close all features in the last configured stage ----------
 
 export function useCleanDoneFeatures() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (features: Feature[]) => {
+    mutationFn: async ({ features, stageId }: { features: Feature[]; stageId: string }) => {
       const org = selectedOrg!;
-      const done = features.filter((f) => f.status === "production");
+      const done = features.filter((f) => f.status === stageId);
       const failed: number[] = [];
       for (const f of done) {
         try {

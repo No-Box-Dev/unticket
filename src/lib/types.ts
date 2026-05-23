@@ -85,28 +85,17 @@ export interface AssignedIssue {
 
 // unticket config repo types
 
-export type FeatureStatus = "todo" | "staging" | "ready" | "production" | "future";
+// Status IDs are now admin-configurable per org (see BoardStage + useBoardStages).
+// The default ids match the historical scheme so existing features keep working
+// before an admin customises anything.
+export type FeatureStatus = string;
 
-/** Ordered feature statuses for the kanban board (excludes "future" which is hidden from the board). */
-export const FEATURE_STATUS_ORDER: FeatureStatus[] = ["todo", "staging", "ready", "production"];
-
-/** Tailwind background color class for each feature status dot/indicator (muted palette). */
-export const STATUS_COLORS: Record<FeatureStatus, string> = {
-  todo: "bg-status-plan",
-  staging: "bg-status-progress",
-  ready: "bg-status-tested",
-  production: "bg-status-production",
-  future: "bg-status-future",
-};
-
-/** Human-readable display label for each feature status. */
-export const STATUS_LABELS: Record<FeatureStatus, string> = {
-  todo: "To do",
-  staging: "Testing on staging",
-  ready: "Ready for production",
-  production: "On production",
-  future: "Future",
-};
+/** An admin-configurable board column. `id` is the GitHub label suffix (`status:<id>`). */
+export interface BoardStage {
+  id: string;
+  label: string;
+  color: string; // hex, e.g. "#94a3b8"
+}
 
 export interface StatusHistoryEntry {
   status: FeatureStatus;
@@ -141,6 +130,7 @@ export interface Person {
 export interface OrgSettings {
   excludedMembers?: string[];
   unticketRepo?: string;
+  boardStages?: BoardStage[];
 }
 
 // Extended issue info with repo context
