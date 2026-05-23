@@ -10,6 +10,7 @@
 // mirrors its own response.
 
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
+import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app";
 import {
   buildFeatureLabels,
   buildIssueBody,
@@ -72,9 +73,18 @@ export async function onRequestGet(context) {
 
 // POST /api/features — create a feature on GitHub, mirror to D1.
 // Body: { title, status, owners?: string[], plan?: string }
+//
+// Uses the GitHub App installation token (NOT the caller's OAuth token), so
+// any logged-in user can create features regardless of their personal repo
+// permissions on {org}/unticket. The webhook + cron syncFeatures + Settings
+// "Full Re-sync" already cover the inbound path for issues users create
+// directly on GitHub, so D1 stays correct either way.
+//
+// Stays synchronous because we need GitHub's assigned issue number before we
+// can write a D1 row — PATCH and DELETE are the optimistic ones.
 export async function onRequestPost(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
-  if (!orgLogin || !token) return errorResponse("Missing org context", 400);
+  const { orgId, orgLogin } = getCtx(context);
+  if (!orgLogin) return errorResponse("Missing org context", 400);
 
   let payload;
   try { payload = await context.request.json(); } catch {
@@ -91,6 +101,17 @@ export async function onRequestPost(context) {
     ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o))
     : [];
   const plan = typeof payload?.plan === "string" ? payload.plan : "";
+
+  const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
+  if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
+
+  let token;
+  try {
+    token = await getInstallationToken(context.env, installationId);
+  } catch (err) {
+    console.error("[features:post] install token fetch failed", { msg: err?.message });
+    return errorResponse("Failed to acquire GitHub App token", 500);
+  }
 
   try {
     await ensureUnticketRepoLabels(token, orgLogin);

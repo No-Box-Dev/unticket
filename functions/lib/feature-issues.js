@@ -120,7 +120,7 @@ export function buildIssueBody(plan, metadata) {
 export async function readFeatureRow(db, orgId, number) {
   return db
     .prepare(
-      `SELECT number, title, state, body, assignees_json, labels_json, html_url, created_at, updated_at
+      `SELECT number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at
          FROM features WHERE org_id = ? AND number = ?`,
     )
     .bind(orgId, number)
