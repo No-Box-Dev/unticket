@@ -92,20 +92,25 @@ export async function onRequestPost(context) {
     : [];
   const plan = typeof payload?.plan === "string" ? payload.plan : "";
 
-  await ensureUnticketRepoLabels(token, orgLogin);
+  try {
+    await ensureUnticketRepoLabels(token, orgLogin);
 
-  const body = buildIssueBody(plan, {
-    statusHistory: [{ status, timestamp: new Date().toISOString() }],
-  });
+    const body = buildIssueBody(plan, {
+      statusHistory: [{ status, timestamp: new Date().toISOString() }],
+    });
 
-  const ghIssue = await createFeatureIssue(token, orgLogin, {
-    title,
-    body,
-    labels: buildFeatureLabels(status),
-    ...(owners.length > 0 ? { assignees: owners } : {}),
-  });
+    const ghIssue = await createFeatureIssue(token, orgLogin, {
+      title,
+      body,
+      labels: buildFeatureLabels(status),
+      ...(owners.length > 0 ? { assignees: owners } : {}),
+    });
 
-  await upsertFeatureRow(context.env.DB, orgId, ghIssue);
-  const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
-  return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+    const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
+    return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
+  } catch (err) {
+    console.error("[features:post] GitHub create failed", { status: err?.status, msg: err?.message, ghBody: err?.ghBody });
+    return errorResponse(err?.message || "GitHub create failed", err?.status || 500);
+  }
 }
