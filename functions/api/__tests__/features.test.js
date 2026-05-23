@@ -1,11 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { onRequestGet, onRequestPost } from "../features.js";
-import {
-  onRequestPatch,
-  onRequestDelete,
-} from "../features/[number].js";
 
-function makeDb({ batchResults = [], firstResult = null, allResult = { results: [] }, runResult = { meta: { changes: 1 } } } = {}) {
+vi.mock("../../lib/github-app.js", () => ({
+  getInstallationIdForOrg: vi.fn(async () => 12345),
+  getInstallationToken: vi.fn(async () => "install-tok"),
+}));
+vi.mock("../../lib/op-failures.js", () => ({
+  recordFailure: vi.fn(async () => {}),
+}));
+
+import { onRequestGet, onRequestPost } from "../features.js";
+import { onRequestPatch, onRequestDelete } from "../features/[number].js";
+import { getInstallationIdForOrg } from "../../lib/github-app.js";
+import { recordFailure } from "../../lib/op-failures.js";
+
+// Per-query first() lookup: matches on a substring of the SQL so a single
+// test can return different rows for the orgs lookup vs the features row.
+// Pass `firstByQuery: { "FROM features": {...}, "FROM orgs": {...} }` etc.
+function makeDb({
+  batchResults = [],
+  firstResult = null,
+  firstByQuery = null,
+  allResult = { results: [] },
+  runResult = { meta: { changes: 1 } },
+} = {}) {
   const calls = { batch: [], run: [], prepared: [], first: [], all: [] };
   function prepare(sql) {
     calls.prepared.push(sql);
@@ -14,7 +31,16 @@ function makeDb({ batchResults = [], firstResult = null, allResult = { results: 
       _binds: [],
       bind(...binds) { this._binds = binds; return this; },
       async run() { calls.run.push({ sql, binds: this._binds }); return runResult; },
-      async first() { calls.first.push({ sql, binds: this._binds }); return firstResult; },
+      async first() {
+        calls.first.push({ sql, binds: this._binds });
+        if (firstByQuery) {
+          for (const [needle, value] of Object.entries(firstByQuery)) {
+            if (sql.includes(needle)) return value;
+          }
+          return null;
+        }
+        return firstResult;
+      },
       async all() { calls.all.push({ sql, binds: this._binds }); return allResult; },
     };
   }
@@ -36,7 +62,7 @@ function makeCtx({
   params,
   orgId = 1,
   orgLogin = "acme",
-  token = "tok",
+  waitUntil = vi.fn((p) => p),
 }) {
   const req = body !== undefined
     ? new Request(url, { method, headers: { "Content-Type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) })
@@ -44,12 +70,17 @@ function makeCtx({
   return {
     request: req,
     env: { DB: db },
-    data: { orgId, orgLogin, token },
+    data: { orgId, orgLogin },
     params: params ?? {},
+    waitUntil,
   };
 }
 
-beforeEach(() => { global.fetch = vi.fn(); });
+beforeEach(() => {
+  global.fetch = vi.fn();
+  vi.mocked(getInstallationIdForOrg).mockResolvedValue(12345);
+  vi.mocked(recordFailure).mockClear();
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("GET /api/features", () => {
@@ -96,9 +127,16 @@ describe("POST /api/features", () => {
     expect(res.status).toBe(422);
   });
 
-  it("creates issue on GitHub, mirrors to D1, returns Feature", async () => {
-    // First fetch: ensureUnticketRepoLabels listing — return all labels present
-    // so the create-label loop is a no-op.
+  it("412s when the GitHub App is not installed for the org", async () => {
+    vi.mocked(getInstallationIdForOrg).mockResolvedValueOnce(null);
+    const res = await onRequestPost(makeCtx({
+      db: makeDb(), method: "POST",
+      body: { title: "Login", status: "todo" },
+    }));
+    expect(res.status).toBe(412);
+  });
+
+  it("creates issue with the install token, mirrors to D1, returns Feature", async () => {
     global.fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -108,7 +146,6 @@ describe("POST /api/features", () => {
           { name: "status:production" }, { name: "status:future" },
         ],
       })
-      // Second fetch: POST /issues
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -129,6 +166,9 @@ describe("POST /api/features", () => {
     expect(data.id).toBe(7);
     expect(data.title).toBe("Login");
     expect(data.status).toBe("todo");
+    // GitHub was called with the install token, not a user token.
+    const createCall = global.fetch.mock.calls[1];
+    expect(createCall[1].headers.Authorization).toBe("Bearer install-tok");
     expect(db._calls.run).toHaveLength(1);  // upsert ran
   });
 
@@ -136,7 +176,8 @@ describe("POST /api/features", () => {
     const res = await onRequestPost({
       request: new Request("http://x", { method: "POST", body: "{}" }),
       env: { DB: makeDb() },
-      data: { orgId: 1 },  // no orgLogin / token
+      data: { orgId: 1 },  // no orgLogin
+      waitUntil: vi.fn(),
     });
     expect(res.status).toBe(400);
   });
@@ -169,7 +210,22 @@ describe("PATCH /api/features/:number", () => {
     expect(res.status).toBe(422);
   });
 
-  it("appends statusHistory only when status actually changes", async () => {
+  it("412s when the GitHub App is not installed for the org", async () => {
+    vi.mocked(getInstallationIdForOrg).mockResolvedValueOnce(null);
+    const db = makeDb({
+      firstResult: {
+        number: 5, title: "X", state: "open", body: "",
+        assignees_json: "[]", labels_json: "[]", html_url: "u",
+      },
+    });
+    const res = await onRequestPatch(makeCtx({
+      db, method: "PATCH",
+      body: { status: "staging" }, params: { number: "5" },
+    }));
+    expect(res.status).toBe(412);
+  });
+
+  it("returns immediately from D1 and fires GitHub PATCH via waitUntil", async () => {
     const initialBody = `do it\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "t1" }],
     })}\n-->`;
@@ -191,18 +247,58 @@ describe("PATCH /api/features/:number", () => {
       },
       allResult: { results: [] },
     });
+    const waitUntil = vi.fn((p) => p);
     const res = await onRequestPatch(makeCtx({
       db, method: "PATCH",
       body: { status: "staging" }, params: { number: "5" },
+      waitUntil,
     }));
     expect(res.status).toBe(200);
-    // Inspect the body sent to GitHub
+    const data = await res.json();
+    // Response carries the optimistic state (status flipped to staging) even
+    // before the GitHub PATCH finishes.
+    expect(data.status).toBe("staging");
+    // D1 was updated optimistically — at least the upsert ran.
+    expect(db._calls.run.length).toBeGreaterThanOrEqual(1);
+    // GitHub PATCH was queued for waitUntil — drive it.
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await waitUntil.mock.calls[0][0];
+    expect(global.fetch).toHaveBeenCalledTimes(1);
     const ghCall = global.fetch.mock.calls[0];
+    expect(ghCall[1].headers.Authorization).toBe("Bearer install-tok");
     const ghBody = JSON.parse(ghCall[1].body);
     expect(ghBody.labels).toEqual(["unticket", "feature", "status:staging"]);
     const meta = JSON.parse(ghBody.body.match(/<!-- unticket:metadata\n([\s\S]+)\n-->/)[1]);
     expect(meta.statusHistory).toHaveLength(2);
     expect(meta.statusHistory[1].status).toBe("staging");
+  });
+
+  it("records op_failure when the GitHub PATCH eventually fails", async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      json: async () => ({ message: "no perms" }),
+    });
+    const db = makeDb({
+      firstResult: {
+        number: 5, title: "X", state: "open", body: "",
+        assignees_json: "[]", labels_json: "[]", html_url: "u",
+      },
+      allResult: { results: [] },
+    });
+    const waitUntil = vi.fn((p) => p);
+    const res = await onRequestPatch(makeCtx({
+      db, method: "PATCH",
+      body: { status: "staging" }, params: { number: "5" },
+      waitUntil,
+    }));
+    expect(res.status).toBe(200);
+    await waitUntil.mock.calls[0][0];
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ op: "patchFeatureIssue", deliveryId: "feature-5" }),
+    );
   });
 
   it("does not append statusHistory when status is unchanged", async () => {
@@ -225,10 +321,13 @@ describe("PATCH /api/features/:number", () => {
       },
       allResult: { results: [] },
     });
+    const waitUntil = vi.fn((p) => p);
     await onRequestPatch(makeCtx({
       db, method: "PATCH",
       body: { title: "New title" }, params: { number: "5" },
+      waitUntil,
     }));
+    await waitUntil.mock.calls[0][0];
     const ghCall = global.fetch.mock.calls[0];
     const ghBody = JSON.parse(ghCall[1].body);
     const meta = JSON.parse(ghBody.body.match(/<!-- unticket:metadata\n([\s\S]+)\n-->/)[1]);
@@ -250,11 +349,14 @@ describe("PATCH /api/features/:number", () => {
         assignees: [], labels: [], html_url: "u", created_at: "t", updated_at: "t",
       }),
     });
+    const waitUntil = vi.fn((p) => p);
     await onRequestPatch(makeCtx({
       db, method: "PATCH",
       body: { owners: ["alice", "bad name", "../etc"] },
       params: { number: "5" },
+      waitUntil,
     }));
+    await waitUntil.mock.calls[0][0];
     const ghCall = global.fetch.mock.calls[0];
     const ghBody = JSON.parse(ghCall[1].body);
     expect(ghBody.assignees).toEqual(["alice"]);  // invalid usernames stripped
@@ -275,7 +377,19 @@ describe("DELETE /api/features/:number", () => {
     expect(res.status).toBe(404);
   });
 
-  it("closes issue, keeps user labels, strips unticket/feature/status:* labels", async () => {
+  it("412s when the GitHub App is not installed for the org", async () => {
+    vi.mocked(getInstallationIdForOrg).mockResolvedValueOnce(null);
+    const db = makeDb({
+      firstResult: {
+        number: 5, title: "X", state: "open", body: "",
+        assignees_json: "[]", labels_json: "[]", html_url: "u",
+      },
+    });
+    const res = await onRequestDelete(makeCtx({ db, method: "DELETE", params: { number: "5" } }));
+    expect(res.status).toBe(412);
+  });
+
+  it("closes D1 row first, fires GitHub close via waitUntil, keeps user labels", async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -295,11 +409,46 @@ describe("DELETE /api/features/:number", () => {
         html_url: "u",
       },
     });
-    const res = await onRequestDelete(makeCtx({ db, method: "DELETE", params: { number: "5" } }));
+    const waitUntil = vi.fn((p) => p);
+    const res = await onRequestDelete(makeCtx({ db, method: "DELETE", params: { number: "5" }, waitUntil }));
     expect(res.status).toBe(200);
+    // D1 close ran optimistically before the GitHub PATCH was awaited.
+    const closeRun = db._calls.run.find((r) => r.sql.includes("UPDATE features"));
+    expect(closeRun).toBeTruthy();
+    expect(closeRun.binds[0]).toContain("bug");
+    expect(closeRun.binds[0]).not.toContain("unticket");
+    expect(closeRun.binds[0]).not.toContain("status:");
+    // Drive the GitHub call.
+    await waitUntil.mock.calls[0][0];
     const ghCall = global.fetch.mock.calls[0];
+    expect(ghCall[1].headers.Authorization).toBe("Bearer install-tok");
     const ghBody = JSON.parse(ghCall[1].body);
     expect(ghBody.state).toBe("closed");
     expect(ghBody.labels).toEqual(["bug"]);
+  });
+
+  it("records op_failure when the GitHub close eventually fails", async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: async () => ({ message: "gone" }),
+    });
+    const db = makeDb({
+      firstResult: {
+        number: 5, title: "X", state: "open", body: "",
+        assignees_json: "[]",
+        labels_json: JSON.stringify([{ name: "unticket" }, { name: "feature" }]),
+        html_url: "u",
+      },
+    });
+    const waitUntil = vi.fn((p) => p);
+    const res = await onRequestDelete(makeCtx({ db, method: "DELETE", params: { number: "5" }, waitUntil }));
+    expect(res.status).toBe(200);
+    await waitUntil.mock.calls[0][0];
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ op: "deleteFeatureIssue", deliveryId: "feature-5" }),
+    );
   });
 });

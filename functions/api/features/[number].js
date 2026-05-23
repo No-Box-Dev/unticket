@@ -1,11 +1,22 @@
 // /api/features/:number — single-feature mutations against the unticket
 // repo. PATCH edits title/status/owners/plan; DELETE closes the issue and
-// strips the unticket/feature/status labels. Both paths mirror the GitHub
-// response back into the D1 features table so /api/features (GET) stays
-// authoritative without waiting for the webhook to round-trip.
+// strips the unticket/feature/status labels.
+//
+// Both paths are *optimistic*: D1 is updated first so the UI reflects the
+// change immediately, and the GitHub write is fired via waitUntil. If the
+// GitHub call fails, the failure is recorded in op_failures (admins see it
+// in Settings → Recent failures) and the next webhook delivery or 30-min
+// cron syncFeatures will reconcile D1 against GitHub (GitHub is the source
+// of truth).
+//
+// Mutations use the GitHub App installation token, not the caller's OAuth
+// token — so any logged-in user can edit the board even without personal
+// `issues:write` on {org}/unticket.
 
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
+import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
+import { recordFailure } from "../../lib/op-failures";
 import {
   buildFeatureLabels,
   buildIssueBody,
@@ -27,13 +38,30 @@ function parseFeatureNumber(context) {
   return n;
 }
 
+// Build an issue-shaped object from the desired new state so we can write D1
+// before GitHub. Mirrors the column set upsertFeatureRow expects.
+function synthesizeIssue({ row, number, title, body, status, owners }) {
+  return {
+    number,
+    title,
+    state: "open",
+    body,
+    labels: buildFeatureLabels(status).map((name) => ({ name, color: "" })),
+    assignees: owners.map((login) => ({ login, avatar_url: "" })),
+    milestone: row.milestone_title ? { title: row.milestone_title } : null,
+    html_url: row.html_url,
+    created_at: row.created_at,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // PATCH /api/features/:number
 // Body: { title?, status?, owners?: string[], plan?: string }
 // Any omitted field is left unchanged on GitHub (the current value is sent
 // back so a partial update doesn't blank out a field we didn't touch).
 export async function onRequestPatch(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
-  if (!orgLogin || !token) return errorResponse("Missing org context", 400);
+  const { orgId, orgLogin } = getCtx(context);
+  if (!orgLogin) return errorResponse("Missing org context", 400);
 
   const number = parseFeatureNumber(context);
   if (!number) return errorResponse("Invalid feature number", 400);
@@ -85,30 +113,47 @@ export async function onRequestPatch(context) {
     linkedPRs: currentMetadata.linkedPRs,
   });
 
-  let ghIssue;
-  try {
-    ghIssue = await patchFeatureIssue(token, orgLogin, number, {
+  const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
+  if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
+
+  // Optimistic write: update D1 with the desired state and respond now. The
+  // GitHub call runs in waitUntil; the webhook reconciles labels/colors
+  // afterwards and cron syncFeatures backstops any drift.
+  const optimistic = synthesizeIssue({ row, number, title, body, status, owners });
+  await upsertFeatureRow(context.env.DB, orgId, optimistic);
+  const linkedPRs = await readLinkedPRs(context.env.DB, orgId, number);
+
+  const ghWrite = (async () => {
+    const token = await getInstallationToken(context.env, installationId);
+    const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
       title,
       body,
       labels: buildFeatureLabels(status),
       assignees: owners,
     });
-  } catch (err) {
-    console.error("[features:patch] GitHub PATCH failed", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
-    return errorResponse(err?.message || "GitHub PATCH failed", err?.status || 500);
-  }
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+  })();
+  context.waitUntil(
+    ghWrite.catch(async (err) => {
+      console.error("[features:patch] GitHub PATCH failed (waitUntil)", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
+      await recordFailure(context.env.DB, {
+        ownerId: orgLogin,
+        op: "patchFeatureIssue",
+        deliveryId: `feature-${number}`,
+        error: err,
+      });
+    }),
+  );
 
-  await upsertFeatureRow(context.env.DB, orgId, ghIssue);
-  const linkedPRs = await readLinkedPRs(context.env.DB, orgId, number);
-  return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs));
+  return jsonResponse(ghIssueToFeature(optimistic, linkedPRs));
 }
 
 // DELETE /api/features/:number — close the issue on GitHub, strip
 // unticket/feature/status labels so it disappears from the board, and mark
-// D1 closed.
+// D1 closed. Optimistic: D1 closes first; GitHub close runs in waitUntil.
 export async function onRequestDelete(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
-  if (!orgLogin || !token) return errorResponse("Missing org context", 400);
+  const { orgId, orgLogin } = getCtx(context);
+  if (!orgLogin) return errorResponse("Missing org context", 400);
 
   const number = parseFeatureNumber(context);
   if (!number) return errorResponse("Invalid feature number", 400);
@@ -127,17 +172,45 @@ export async function onRequestDelete(context) {
         !name.startsWith("status:"),
     );
 
-  let ghIssue;
-  try {
-    ghIssue = await patchFeatureIssue(token, orgLogin, number, {
+  const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
+  if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
+
+  // Optimistic D1 close. Webhook + cron will re-reaffirm once GitHub catches up.
+  await context.env.DB
+    .prepare(
+      `UPDATE features
+          SET state = 'closed',
+              labels_json = ?,
+              updated_at = ?
+        WHERE org_id = ? AND number = ?`,
+    )
+    .bind(
+      JSON.stringify(keepLabels.map((name) => ({ name, color: "" }))),
+      new Date().toISOString(),
+      orgId,
+      number,
+    )
+    .run();
+
+  const ghWrite = (async () => {
+    const token = await getInstallationToken(context.env, installationId);
+    const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
       labels: keepLabels,
       state: "closed",
     });
-  } catch (err) {
-    console.error("[features:delete] GitHub PATCH failed", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
-    return errorResponse(err?.message || "GitHub PATCH failed", err?.status || 500);
-  }
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+  })();
+  context.waitUntil(
+    ghWrite.catch(async (err) => {
+      console.error("[features:delete] GitHub PATCH failed (waitUntil)", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
+      await recordFailure(context.env.DB, {
+        ownerId: orgLogin,
+        op: "deleteFeatureIssue",
+        deliveryId: `feature-${number}`,
+        error: err,
+      });
+    }),
+  );
 
-  await upsertFeatureRow(context.env.DB, orgId, ghIssue);
   return jsonResponse({ ok: true });
 }
