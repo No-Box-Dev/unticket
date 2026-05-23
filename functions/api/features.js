@@ -11,6 +11,7 @@
 
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app";
+import { resolveBoardStages } from "../lib/board-stages.js";
 import {
   buildFeatureLabels,
   buildIssueBody,
@@ -19,7 +20,6 @@ import {
   ghIssueToFeature,
   readLinkedPRs,
   upsertFeatureRow,
-  VALID_STATUSES,
 } from "../lib/feature-issues";
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
@@ -94,8 +94,10 @@ export async function onRequestPost(context) {
   const title = typeof payload?.title === "string" ? payload.title.trim() : "";
   if (!title) return errorResponse("title is required", 422);
 
-  const status = payload?.status ?? "todo";
-  if (!VALID_STATUSES.has(status)) return errorResponse(`Invalid status: ${status}`, 422);
+  const stages = await resolveBoardStages(context.env.DB, orgId);
+  const validStatusIds = new Set(stages.map((s) => s.id));
+  const status = payload?.status ?? stages[0]?.id ?? "todo";
+  if (!validStatusIds.has(status)) return errorResponse(`Invalid status: ${status}`, 422);
 
   const owners = Array.isArray(payload?.owners)
     ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o))
@@ -114,7 +116,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    await ensureUnticketRepoLabels(token, orgLogin);
+    await ensureUnticketRepoLabels(token, orgLogin, stages);
 
     const body = buildIssueBody(plan, {
       statusHistory: [{ status, timestamp: new Date().toISOString() }],

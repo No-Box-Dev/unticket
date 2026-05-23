@@ -1,4 +1,6 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
+import { validateBoardStages } from "../../lib/board-stages.js";
+import { extractStatusFromLabels } from "../../lib/feature-issues.js";
 
 const VALID_KEYS = ["features", "people", "settings"];
 
@@ -55,6 +57,40 @@ export async function onRequestPut(context) {
   let body;
   try { body = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
+  }
+
+  // Board-stages validation runs before the row write so a malformed config
+  // can't get persisted and break the kanban for everyone in the org.
+  if (key === "settings" && body && typeof body === "object" && body.boardStages !== undefined) {
+    const result = validateBoardStages(body.boardStages);
+    if (!result.ok) return errorResponse(result.error, 422);
+
+    // Block the save if any open feature is sitting in a stage that's about
+    // to disappear — otherwise it would silently vanish from the board.
+    const newIds = new Set(body.boardStages.map((s) => s.id));
+    const { results: openFeatures } = await context.env.DB
+      .prepare(
+        "SELECT number, title, labels_json FROM features WHERE org_id = ? AND state = 'open'",
+      )
+      .bind(orgId)
+      .all();
+    const orphans = [];
+    for (const row of openFeatures ?? []) {
+      const labels = JSON.parse(row.labels_json || "[]");
+      const status = extractStatusFromLabels(labels);
+      if (!newIds.has(status)) {
+        orphans.push({ number: row.number, title: row.title, status });
+      }
+    }
+    if (orphans.length > 0) {
+      return jsonResponse(
+        {
+          error: `Cannot remove stages: ${orphans.length} feature${orphans.length === 1 ? " is" : "s are"} still in a stage being removed`,
+          orphans,
+        },
+        409,
+      );
+    }
   }
 
   const serialized = JSON.stringify(body);

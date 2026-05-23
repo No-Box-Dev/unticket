@@ -12,6 +12,22 @@ import { onRequestGet, onRequestPost } from "../features.js";
 import { onRequestPatch, onRequestDelete } from "../features/[number].js";
 import { getInstallationIdForOrg } from "../../lib/github-app.js";
 import { recordFailure } from "../../lib/op-failures.js";
+import { __resetLabelCacheForTests } from "../../lib/feature-issues.js";
+
+// Existing-labels response that matches the default board stages with their
+// canonical colors — when ensureUnticketRepoLabels sees these, no POST/PATCH
+// fires and the next mocked fetch is the actual create/patch call.
+const LABELS_OK_RESPONSE = {
+  ok: true,
+  json: async () => [
+    { name: "unticket", color: "1B6971" },
+    { name: "feature", color: "1B6971" },
+    { name: "status:todo", color: "94a3b8" },
+    { name: "status:staging", color: "b89464" },
+    { name: "status:ready", color: "6a9991" },
+    { name: "status:production", color: "6e9970" },
+  ],
+};
 
 // Per-query first() lookup: matches on a substring of the SQL so a single
 // test can return different rows for the orgs lookup vs the features row.
@@ -80,6 +96,7 @@ beforeEach(() => {
   global.fetch = vi.fn();
   vi.mocked(getInstallationIdForOrg).mockResolvedValue(12345);
   vi.mocked(recordFailure).mockClear();
+  __resetLabelCacheForTests();
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -138,14 +155,7 @@ describe("POST /api/features", () => {
 
   it("creates issue with the install token, mirrors to D1, returns Feature", async () => {
     global.fetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [
-          { name: "unticket" }, { name: "feature" },
-          { name: "status:staging" }, { name: "status:ready" },
-          { name: "status:production" }, { name: "status:future" },
-        ],
-      })
+      .mockResolvedValueOnce(LABELS_OK_RESPONSE)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -229,16 +239,18 @@ describe("PATCH /api/features/:number", () => {
     const initialBody = `do it\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "t1" }],
     })}\n-->`;
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        number: 5, title: "X", state: "open",
-        body: "ignored", assignees: [],
-        labels: [{ name: "unticket", color: "1B6971" }, { name: "feature", color: "1B6971" },
-                 { name: "status:staging", color: "B89464" }],
-        html_url: "u", created_at: "t", updated_at: "t",
-      }),
-    });
+    global.fetch
+      .mockResolvedValueOnce(LABELS_OK_RESPONSE)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          number: 5, title: "X", state: "open",
+          body: "ignored", assignees: [],
+          labels: [{ name: "unticket", color: "1B6971" }, { name: "feature", color: "1B6971" },
+                   { name: "status:staging", color: "B89464" }],
+          html_url: "u", created_at: "t", updated_at: "t",
+        }),
+      });
     const db = makeDb({
       firstResult: {
         number: 5, title: "X", state: "open", body: initialBody,
@@ -263,8 +275,9 @@ describe("PATCH /api/features/:number", () => {
     // GitHub PATCH was queued for waitUntil — drive it.
     expect(waitUntil).toHaveBeenCalledTimes(1);
     await waitUntil.mock.calls[0][0];
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const ghCall = global.fetch.mock.calls[0];
+    // 2 fetches: GET labels (cache miss) + PATCH issue.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const ghCall = global.fetch.mock.calls[1];
     expect(ghCall[1].headers.Authorization).toBe("Bearer install-tok");
     const ghBody = JSON.parse(ghCall[1].body);
     expect(ghBody.labels).toEqual(["unticket", "feature", "status:staging"]);
@@ -305,14 +318,16 @@ describe("PATCH /api/features/:number", () => {
     const initialBody = `do it\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "t1" }],
     })}\n-->`;
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        number: 5, title: "New title", state: "open",
-        body: "ignored", assignees: [], labels: [],
-        html_url: "u", created_at: "t", updated_at: "t",
-      }),
-    });
+    global.fetch
+      .mockResolvedValueOnce(LABELS_OK_RESPONSE)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          number: 5, title: "New title", state: "open",
+          body: "ignored", assignees: [], labels: [],
+          html_url: "u", created_at: "t", updated_at: "t",
+        }),
+      });
     const db = makeDb({
       firstResult: {
         number: 5, title: "X", state: "open", body: initialBody,
@@ -328,7 +343,7 @@ describe("PATCH /api/features/:number", () => {
       waitUntil,
     }));
     await waitUntil.mock.calls[0][0];
-    const ghCall = global.fetch.mock.calls[0];
+    const ghCall = global.fetch.mock.calls[1];
     const ghBody = JSON.parse(ghCall[1].body);
     const meta = JSON.parse(ghBody.body.match(/<!-- unticket:metadata\n([\s\S]+)\n-->/)[1]);
     expect(meta.statusHistory).toHaveLength(1);
@@ -342,13 +357,15 @@ describe("PATCH /api/features/:number", () => {
       },
       allResult: { results: [] },
     });
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        number: 5, title: "X", state: "open", body: "",
-        assignees: [], labels: [], html_url: "u", created_at: "t", updated_at: "t",
-      }),
-    });
+    global.fetch
+      .mockResolvedValueOnce(LABELS_OK_RESPONSE)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          number: 5, title: "X", state: "open", body: "",
+          assignees: [], labels: [], html_url: "u", created_at: "t", updated_at: "t",
+        }),
+      });
     const waitUntil = vi.fn((p) => p);
     await onRequestPatch(makeCtx({
       db, method: "PATCH",
@@ -357,7 +374,7 @@ describe("PATCH /api/features/:number", () => {
       waitUntil,
     }));
     await waitUntil.mock.calls[0][0];
-    const ghCall = global.fetch.mock.calls[0];
+    const ghCall = global.fetch.mock.calls[1];
     const ghBody = JSON.parse(ghCall[1].body);
     expect(ghBody.assignees).toEqual(["alice"]);  // invalid usernames stripped
   });
