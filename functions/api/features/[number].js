@@ -85,12 +85,18 @@ export async function onRequestPatch(context) {
     linkedPRs: currentMetadata.linkedPRs,
   });
 
-  const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
-    title,
-    body,
-    labels: buildFeatureLabels(status),
-    assignees: owners,
-  });
+  let ghIssue;
+  try {
+    ghIssue = await patchFeatureIssue(token, orgLogin, number, {
+      title,
+      body,
+      labels: buildFeatureLabels(status),
+      assignees: owners,
+    });
+  } catch (err) {
+    console.error("[features:patch] GitHub PATCH failed", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
+    return errorResponse(err?.message || "GitHub PATCH failed", err?.status || 500);
+  }
 
   await upsertFeatureRow(context.env.DB, orgId, ghIssue);
   const linkedPRs = await readLinkedPRs(context.env.DB, orgId, number);
@@ -121,10 +127,16 @@ export async function onRequestDelete(context) {
         !name.startsWith("status:"),
     );
 
-  const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
-    labels: keepLabels,
-    state: "closed",
-  });
+  let ghIssue;
+  try {
+    ghIssue = await patchFeatureIssue(token, orgLogin, number, {
+      labels: keepLabels,
+      state: "closed",
+    });
+  } catch (err) {
+    console.error("[features:delete] GitHub PATCH failed", { number, status: err?.status, msg: err?.message, ghBody: err?.ghBody });
+    return errorResponse(err?.message || "GitHub PATCH failed", err?.status || 500);
+  }
 
   await upsertFeatureRow(context.env.DB, orgId, ghIssue);
   return jsonResponse({ ok: true });
