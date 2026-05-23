@@ -13,19 +13,18 @@ export const UNTICKET_LABEL = "unticket";
 export const FEATURE_LABEL = "feature";
 const STATUS_PREFIX = "status:";
 
+// Fixed labels that always exist on the unticket repo. `status:*` labels are
+// derived from the org's configured board stages — see ensureUnticketRepoLabels.
 export const FEATURE_LABELS = [
   { name: "unticket", color: "1B6971", description: "Tracked by unticket.ai" },
   { name: "feature", color: "1B6971", description: "Feature managed by unticket.ai" },
-  { name: "status:staging", color: "B89464", description: "Testing on staging" },
-  { name: "status:ready", color: "6A9991", description: "Ready for production" },
-  { name: "status:production", color: "6E9970", description: "On production" },
-  { name: "status:future", color: "A8A29E", description: "Backlog feature" },
 ];
 
-export const VALID_STATUSES = new Set(["todo", "staging", "ready", "production", "future"]);
-
 // "todo" is the implicit default — no explicit status label. Only emit a
-// `status:*` label for the non-default columns.
+// `status:*` label for the non-default columns. Admins can rename the
+// non-default stage labels/colors via Settings → Board stages, but `todo`
+// remains the implicit-default id; features without a `status:*` label keep
+// resolving to it.
 export function buildFeatureLabels(status) {
   const labels = [UNTICKET_LABEL, FEATURE_LABEL];
   if (status && status !== "todo") labels.push(`${STATUS_PREFIX}${status}`);
@@ -65,32 +64,74 @@ async function ghFetch(url, init, token) {
   return res.json();
 }
 
-// Per-org cache: only run the label backfill once per Worker isolate per org.
-// On a cold start we'll re-check, which is fine — createLabel is idempotent.
+// Per-org cache: only run the label backfill once per Worker isolate per
+// (org, stage-set) signature. createLabel is idempotent, so on a cold start
+// the re-check is harmless; the cache just avoids the redundant API calls.
 const labelsEnsuredByOrg = new Set();
 
-export async function ensureUnticketRepoLabels(token, orgLogin) {
-  if (labelsEnsuredByOrg.has(orgLogin)) return;
+// Test-only: clear the per-isolate cache so unit tests can drive the GET
+// labels flow deterministically. Not exported for production use.
+export function __resetLabelCacheForTests() {
+  labelsEnsuredByOrg.clear();
+}
+
+function stageSignature(stages) {
+  return (stages ?? []).map((s) => `${s.id}:${(s.color || "").replace(/^#/, "")}`).join(",");
+}
+
+// Ensures `unticket`, `feature`, and `status:<id>` labels exist on the unticket
+// repo for every configured stage. `stages` is the array returned by
+// resolveBoardStages — caller is responsible for resolving them.
+export async function ensureUnticketRepoLabels(token, orgLogin, stages = []) {
+  const cacheKey = `${orgLogin}::${stageSignature(stages)}`;
+  if (labelsEnsuredByOrg.has(cacheKey)) return;
+
+  const needed = [
+    ...FEATURE_LABELS,
+    ...stages.map((s) => ({
+      name: `${STATUS_PREFIX}${s.id}`,
+      color: (s.color || "#94a3b8").replace(/^#/, ""),
+      description: s.label,
+    })),
+  ];
+
   const existing = await ghFetch(
     `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${UNTICKET_REPO}/labels?per_page=100`,
     { method: "GET" },
     token,
   );
-  const existingNames = new Set(existing.map((l) => l.name));
-  for (const label of FEATURE_LABELS) {
-    if (existingNames.has(label.name)) continue;
-    try {
-      await ghFetch(
-        `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${UNTICKET_REPO}/labels`,
-        { method: "POST", body: JSON.stringify(label) },
-        token,
-      );
-    } catch (err) {
-      // 422 = "already_exists" race; safe to ignore.
-      if (err?.status !== 422) throw err;
+  const existingByName = new Map(existing.map((l) => [l.name, l]));
+
+  for (const label of needed) {
+    const current = existingByName.get(label.name);
+    if (!current) {
+      try {
+        await ghFetch(
+          `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${UNTICKET_REPO}/labels`,
+          { method: "POST", body: JSON.stringify(label) },
+          token,
+        );
+      } catch (err) {
+        // 422 = "already_exists" race; safe to ignore.
+        if (err?.status !== 422) throw err;
+      }
+      continue;
+    }
+    // PATCH the label when the color or description drifts from what the
+    // admin configured — keeps GitHub's label colors in sync with the board.
+    if (label.color && current.color !== label.color) {
+      try {
+        await ghFetch(
+          `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${UNTICKET_REPO}/labels/${encodeURIComponent(label.name)}`,
+          { method: "PATCH", body: JSON.stringify({ color: label.color, description: label.description }) },
+          token,
+        );
+      } catch (err) {
+        if (err?.status !== 422) throw err;
+      }
     }
   }
-  labelsEnsuredByOrg.add(orgLogin);
+  labelsEnsuredByOrg.add(cacheKey);
 }
 
 export async function createFeatureIssue(token, orgLogin, payload) {

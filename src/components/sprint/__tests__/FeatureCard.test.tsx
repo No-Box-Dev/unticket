@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FeatureCard } from "../FeatureCard";
+import { DEFAULT_BOARD_STAGES } from "@/lib/board-stages";
 import type { Feature } from "@/lib/types";
 
 const baseFeature: Feature = {
@@ -13,11 +14,11 @@ const baseFeature: Feature = {
 
 const defaultProps = {
   feature: baseFeature,
+  stages: DEFAULT_BOARD_STAGES,
   allPeople: ["alice", "bob"],
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
-  mode: "active" as const,
 };
 
 describe("FeatureCard", () => {
@@ -35,8 +36,7 @@ describe("FeatureCard", () => {
     expect(onOpenDetail).toHaveBeenCalledWith(baseFeature);
   });
 
-  it("Delete button calls onDelete when admin (after confirm)", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("Delete button calls onDelete when admin", async () => {
     const onDelete = vi.fn();
     render(<FeatureCard {...defaultProps} onDelete={onDelete} isAdmin />);
     await userEvent.click(screen.getByTitle("Remove"));
@@ -45,43 +45,44 @@ describe("FeatureCard", () => {
 
   it("hides Delete button for non-admins", () => {
     render(<FeatureCard {...defaultProps} />);
-    expect(screen.queryByTitle("Delete")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Remove")).not.toBeInTheDocument();
   });
 
-  it("shows Move to Backlog button in active mode", () => {
-    render(<FeatureCard {...defaultProps} />);
-    expect(screen.getByTitle("Move to Backlog")).toBeInTheDocument();
-  });
-
-  it("Move to Backlog button moves to backlog", async () => {
-    const onUpdate = vi.fn();
-    render(<FeatureCard {...defaultProps} onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByTitle("Move to Backlog"));
-    expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "future" }),
-    );
-  });
-
-  it("shows Move to To do in backlog mode", () => {
-    render(<FeatureCard {...defaultProps} mode="backlog" />);
-    expect(screen.getByTitle("Move to To do")).toBeInTheDocument();
-    expect(screen.queryByTitle("Move to Backlog")).not.toBeInTheDocument();
-  });
-
-  it("Move to To do button updates status", async () => {
-    const onUpdate = vi.fn();
-    render(<FeatureCard {...defaultProps} mode="backlog" onUpdate={onUpdate} />);
-    await userEvent.click(screen.getByTitle("Move to To do"));
-    expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "todo" }),
-    );
-  });
-
-  it("production feature has reduced opacity", () => {
-    const prodFeature = { ...baseFeature, status: "production" as const };
+  it("last-stage feature has reduced opacity", () => {
+    // "production" is the last DEFAULT_BOARD_STAGES entry → opacity-60.
+    const prodFeature = { ...baseFeature, status: "production" };
     const { container } = render(<FeatureCard {...defaultProps} feature={prodFeature} />);
     const wrapper = container.firstElementChild!;
     expect(wrapper.className).toContain("opacity-60");
+  });
+
+  it("first-stage feature is full opacity", () => {
+    const { container } = render(<FeatureCard {...defaultProps} />);
+    const wrapper = container.firstElementChild!;
+    expect(wrapper.className).not.toContain("opacity-60");
+  });
+
+  it("uses the configured stage color for the status dot", () => {
+    // Custom stage palette — the dot should pick up the configured color, not
+    // a hardcoded class.
+    const stages = [
+      { id: "todo", label: "To do", color: "#ff0000" },
+      { id: "done", label: "Done", color: "#00ff00" },
+    ];
+    const { container } = render(<FeatureCard {...defaultProps} stages={stages} />);
+    const dot = container.querySelector('[style*="background-color"]') as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("rgb(255, 0, 0)");
+  });
+
+  it("arrow keys move the feature between configured stages", async () => {
+    const onUpdate = vi.fn();
+    render(<FeatureCard {...defaultProps} onUpdate={onUpdate} draggable />);
+    const card = screen.getByRole("listitem");
+    card.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "staging" }),
+    );
   });
 
   it("shows drag handle when draggable", () => {

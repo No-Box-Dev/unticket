@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { onRequestGet, onRequestPut } from "../config/[key].js";
 
-function makeDb({ firstResult = null } = {}) {
-  const calls = { run: [], first: [] };
+function makeDb({ firstResult = null, allResult = { results: [] } } = {}) {
+  const calls = { run: [], first: [], all: [] };
   return {
     prepare(sql) {
       return {
@@ -11,6 +11,7 @@ function makeDb({ firstResult = null } = {}) {
         bind(...binds) { this._binds = binds; return this; },
         async first() { calls.first.push({ sql, binds: this._binds }); return firstResult; },
         async run() { calls.run.push({ sql, binds: this._binds }); return { meta: { changes: 1 } }; },
+        async all() { calls.all.push({ sql, binds: this._binds }); return allResult; },
       };
     },
     _calls: calls,
@@ -107,5 +108,95 @@ describe("PUT /api/config/:key", () => {
     expect(db._calls.run[0].binds[0]).toBe(1);
     expect(db._calls.run[0].binds[1]).toBe("features");
     expect(db._calls.run[0].binds[2]).toBe(JSON.stringify([{ title: "Login" }]));
+  });
+});
+
+describe("PUT /api/config/settings — boardStages validation", () => {
+  const validStages = [
+    { id: "todo", label: "To do", color: "#94a3b8" },
+    { id: "done", label: "Done", color: "#6e9970" },
+  ];
+
+  it("422s when boardStages is empty", async () => {
+    const res = await onRequestPut(makeCtx({
+      db: makeDb(),
+      params: { key: "settings" },
+      method: "PUT",
+      body: { boardStages: [] },
+    }));
+    expect(res.status).toBe(422);
+  });
+
+  it("422s on invalid stage id", async () => {
+    const res = await onRequestPut(makeCtx({
+      db: makeDb(),
+      params: { key: "settings" },
+      method: "PUT",
+      body: { boardStages: [{ id: "BAD ID", label: "x", color: "#94a3b8" }] },
+    }));
+    expect(res.status).toBe(422);
+  });
+
+  it("422s on invalid hex color", async () => {
+    const res = await onRequestPut(makeCtx({
+      db: makeDb(),
+      params: { key: "settings" },
+      method: "PUT",
+      body: { boardStages: [{ id: "todo", label: "x", color: "blue" }] },
+    }));
+    expect(res.status).toBe(422);
+  });
+
+  it("422s on duplicate stage ids", async () => {
+    const res = await onRequestPut(makeCtx({
+      db: makeDb(),
+      params: { key: "settings" },
+      method: "PUT",
+      body: {
+        boardStages: [
+          { id: "todo", label: "x", color: "#94a3b8" },
+          { id: "todo", label: "y", color: "#94a3b8" },
+        ],
+      },
+    }));
+    expect(res.status).toBe(422);
+  });
+
+  it("409s and returns orphans when removing a stage that still contains features", async () => {
+    const db = makeDb({
+      allResult: {
+        results: [
+          {
+            number: 7,
+            title: "Old feature",
+            labels_json: JSON.stringify([{ name: "status:legacy" }]),
+          },
+        ],
+      },
+    });
+    const res = await onRequestPut(makeCtx({
+      db,
+      params: { key: "settings" },
+      method: "PUT",
+      body: { boardStages: validStages },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.orphans).toHaveLength(1);
+    expect(body.orphans[0]).toMatchObject({ number: 7, title: "Old feature", status: "legacy" });
+    // Should NOT have written the row.
+    expect(db._calls.run).toHaveLength(0);
+  });
+
+  it("saves when boardStages is valid and no orphans exist", async () => {
+    const db = makeDb({ allResult: { results: [] } });
+    const res = await onRequestPut(makeCtx({
+      db,
+      params: { key: "settings" },
+      method: "PUT",
+      body: { boardStages: validStages },
+    }));
+    expect(res.status).toBe(200);
+    expect(db._calls.run).toHaveLength(1);
   });
 });

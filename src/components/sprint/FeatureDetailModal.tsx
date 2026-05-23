@@ -1,14 +1,22 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { X, ExternalLink, Pencil, Save, GitPullRequest, Plus, Link2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
-import { STATUS_COLORS as SHARED_STATUS_COLORS, STATUS_LABELS as SHARED_STATUS_LABELS } from "@/lib/types";
 import { withStatusTransition } from "@/lib/github-features";
+import { useBoardStages } from "@/lib/board-stages";
 import { useLinkPR, useUnlinkPR, useLinkedPRs } from "@/hooks/usePRLinks";
-import type { Feature, FeatureStatus } from "@/lib/types";
+import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
 
-const STATUS_OPTIONS: FeatureStatus[] = ["todo", "staging", "ready", "production", "future"];
+// Look up the label/color for a feature's current status. Legacy statuses that
+// no longer match any configured stage (e.g. `status:future` after an admin
+// removed that stage) fall through to a neutral grey + the raw id so history
+// entries from before the rename still render legibly.
+function stageLookup(stages: BoardStage[], id: FeatureStatus): { label: string; color: string } {
+  const stage = stages.find((s) => s.id === id);
+  if (stage) return { label: stage.label, color: stage.color };
+  return { label: id || "—", color: "#94a3b8" };
+}
 
 // ---------- Component ----------
 
@@ -21,6 +29,14 @@ interface FeatureDetailModalProps {
 
 export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({ ...feature });
+  const stages = useBoardStages();
+  // Status options include the current value even if it no longer matches a
+  // configured stage, so admins can always pick a valid replacement.
+  const statusOptions = useMemo<BoardStage[]>(() => {
+    if (stages.some((s) => s.id === draft.status)) return stages;
+    return [...stages, { id: draft.status, label: draft.status || "—", color: "#94a3b8" }];
+  }, [stages, draft.status]);
+  const currentStage = stageLookup(stages, draft.status);
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [showAddPR, setShowAddPR] = useState(false);
@@ -162,8 +178,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 }}
                 className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
               >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{SHARED_STATUS_LABELS[s]}</option>
+                {statusOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
             </div>
@@ -371,13 +387,15 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               <div className="relative pl-4 space-y-2">
                 <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-stone-200" />
                 {draft.statusHistory.map((entry, i) => {
-                  const dotColor = SHARED_STATUS_COLORS[entry.status as keyof typeof SHARED_STATUS_COLORS] ?? "bg-stone-400";
-                  const label = SHARED_STATUS_LABELS[entry.status as keyof typeof SHARED_STATUS_LABELS] ?? "Future";
+                  const { label, color } = stageLookup(stages, entry.status);
                   const date = new Date(entry.timestamp);
                   const ago = formatTimeAgo(date);
                   return (
                     <div key={i} className="relative flex items-center gap-2">
-                      <div className={`absolute -left-4 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white  `} />
+                      <div
+                        className="absolute -left-4 w-2.5 h-2.5 rounded-full ring-2 ring-white"
+                        style={{ backgroundColor: color }}
+                      />
                       <span className="text-xs font-medium text-stone-700">{label}</span>
                       <span className="text-xs text-stone-400">
                         {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
@@ -394,11 +412,10 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* Status footer */}
           <div className="flex items-center gap-2 text-xs text-stone-400 pt-1">
             <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${
-                SHARED_STATUS_COLORS[draft.status] ?? "bg-stone-300"
-              }`}
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: currentStage.color }}
             />
-            {SHARED_STATUS_LABELS[draft.status] ?? "Future"}
+            {currentStage.label}
           </div>
         </div>
       </div>

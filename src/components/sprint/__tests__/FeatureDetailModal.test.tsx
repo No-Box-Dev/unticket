@@ -7,6 +7,9 @@ vi.mock("@/hooks/usePRLinks", () => ({
   useUnlinkPR: vi.fn(),
   useLinkedPRs: vi.fn(),
 }));
+vi.mock("@/hooks/useConfigRepo", () => ({
+  useSettings: () => ({ data: null }),
+}));
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
 }));

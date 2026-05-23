@@ -168,21 +168,6 @@ describe("matchPRToFeatures — date anchor (PR vs feature creation)", () => {
     expect(db._calls.runs.some((r) => r.binds.includes("no_features"))).toBe(true);
   });
 
-  it("filters out features labelled status:future even with a valid creation date", async () => {
-    const backlogFeature = {
-      number: 50,
-      title: "Backlog item",
-      body: "",
-      labels_json: JSON.stringify([{ name: "status:future" }]),
-      assignees_json: "[]",
-      created_at: "2026-05-01T00:00:00Z",
-    };
-    const db = makeDb({ features: [backlogFeature, ...FEATURE_ROWS] });
-    complete.mockResolvedValue(singleMatch(42));
-    await matchPRToFeatures(ENV(db), 1, "api", PR);
-    expect(complete.mock.calls[0][1].user).not.toContain("#50");
-  });
-
   it("tolerates malformed labels_json (treats as no labels, keeps the feature)", async () => {
     const malformed = {
       number: 60,

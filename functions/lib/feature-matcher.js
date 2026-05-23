@@ -167,7 +167,6 @@ async function fetchCandidateFeatures(db, orgId, prCreatedMs) {
     .bind(orgId)
     .all();
   const filtered = (rows.results ?? [])
-    .filter((f) => !hasLabel(f.labels_json, "status:future"))
     .filter((f) => {
       const featureCreatedMs = f.created_at ? Date.parse(f.created_at) : NaN;
       if (!Number.isFinite(featureCreatedMs)) return false;
@@ -189,16 +188,6 @@ function stripMetadata(body) {
     return parseFeatureMetadata(body).content ?? "";
   } catch {
     return body;
-  }
-}
-
-function hasLabel(json, name) {
-  if (!json) return false;
-  try {
-    const v = JSON.parse(json);
-    return Array.isArray(v) && v.some((l) => l?.name === name);
-  } catch {
-    return false;
   }
 }
 
