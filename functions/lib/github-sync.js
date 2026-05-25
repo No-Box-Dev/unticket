@@ -666,19 +666,25 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
 // function, exported for unit-testability.
 //
 // Returns "pull" | "push" | "noop".
+//
+// Timestamps are parsed to ms before comparison: GitHub serializes
+// `updated_at` to second precision (`...:00Z`), while local writes via
+// `new Date().toISOString()` always include ms (`...:00.123Z`). A naive
+// string compare puts `.123Z` < `Z` lexicographically and would drop a
+// same-second local edit.
 export function decideReconcileAction(d1Row, ghIssue) {
   if (!d1Row) return "pull";
 
-  const ghUpdated = ghIssue.updated_at ?? null;
-  const ghSyncedAt = d1Row.gh_synced_at ?? null;
-  const d1Updated = d1Row.updated_at ?? null;
+  const ghUpdated = parseTs(ghIssue.updated_at);
+  const ghSyncedAt = parseTs(d1Row.gh_synced_at);
+  const d1Updated = parseTs(d1Row.updated_at);
 
   // Legacy rows from before migration 0025 won't have gh_synced_at — treat
   // as GH-wins (the safe direction since we have no proof of local edits).
-  if (!ghSyncedAt) return "pull";
+  if (ghSyncedAt === null) return "pull";
 
-  const ghAdvanced = ghUpdated && ghUpdated > ghSyncedAt;
-  const d1Advanced = d1Updated && d1Updated > ghSyncedAt;
+  const ghAdvanced = ghUpdated !== null && ghUpdated > ghSyncedAt;
+  const d1Advanced = d1Updated !== null && d1Updated > ghSyncedAt;
 
   if (ghAdvanced && d1Advanced) {
     // Both sides moved since last mirror. Pick the side with the larger
@@ -688,6 +694,12 @@ export function decideReconcileAction(d1Row, ghIssue) {
   if (ghAdvanced) return "pull";
   if (d1Advanced) return "push";
   return "noop";
+}
+
+function parseTs(ts) {
+  if (!ts) return null;
+  const ms = Date.parse(ts);
+  return Number.isFinite(ms) ? ms : null;
 }
 
 // Push the local D1 state of one feature to GitHub. Returns the updated

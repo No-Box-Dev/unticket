@@ -316,6 +316,18 @@ describe("decideReconcileAction (LWW)", () => {
     const d1 = { updated_at: "2026-05-25T10:10:00Z", gh_synced_at: "2026-05-25T10:00:00Z" };
     expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:10:00Z" })).toBe("pull");
   });
+
+  it("pushes a same-second local edit even when D1 uses ms precision and gh_synced_at doesn't", () => {
+    // Regression: GitHub serializes updated_at without ms (`...:00Z`), while
+    // `new Date().toISOString()` always includes ms (`...:00.123Z`). Naive
+    // string compare puts `.123Z` < `Z` lexicographically and would noop the
+    // push, silently dropping the local edit.
+    const d1 = {
+      updated_at: "2026-05-25T10:00:00.123Z",
+      gh_synced_at: "2026-05-25T10:00:00Z",
+    };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:00:00Z" })).toBe("push");
+  });
 });
 
 describe("repo lifecycle helpers", () => {
