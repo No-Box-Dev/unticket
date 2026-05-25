@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../../lib/github-app.js", () => ({
+  getInstallationIdForOrg: vi.fn(async () => 12345),
+  getInstallationToken: vi.fn(async () => "install-tok"),
+}));
+
 import { onRequestPost } from "../assign.js";
+import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app.js";
 
 function makeDb() {
   const calls = { run: [] };
@@ -16,16 +23,20 @@ function makeDb() {
   };
 }
 
-function makeContext({ db, body, orgId = 1, orgLogin = "acme", token = "tok" }) {
+function makeContext({ db, body, orgId = 1, orgLogin = "acme" }) {
   const req = new Request("http://x/api/assign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
-  return { request: req, env: { DB: db }, data: { orgId, orgLogin, token } };
+  return { request: req, env: { DB: db }, data: { orgId, orgLogin } };
 }
 
-beforeEach(() => { global.fetch = vi.fn(); });
+beforeEach(() => {
+  global.fetch = vi.fn();
+  getInstallationIdForOrg.mockResolvedValue(12345);
+  getInstallationToken.mockResolvedValue("install-tok");
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("POST /api/assign", () => {
@@ -66,7 +77,19 @@ describe("POST /api/assign", () => {
     expect(await res.json()).toMatchObject({ error: "Unprocessable Entity" });
   });
 
-  it("PATCHes GitHub, updates D1, and returns mapped assignees on success", async () => {
+  it("412s when the GitHub App isn't installed for this org", async () => {
+    getInstallationIdForOrg.mockResolvedValueOnce(null);
+    const res = await onRequestPost(makeContext({ db: makeDb(), body: { repo: "api", issue_number: 1, assignees: ["alice"] } }));
+    expect(res.status).toBe(412);
+  });
+
+  it("500s when the install-token fetch throws", async () => {
+    getInstallationToken.mockRejectedValueOnce(new Error("network"));
+    const res = await onRequestPost(makeContext({ db: makeDb(), body: { repo: "api", issue_number: 1, assignees: ["alice"] } }));
+    expect(res.status).toBe(500);
+  });
+
+  it("PATCHes GitHub with the install token, updates D1, returns mapped assignees", async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       status: 200,
@@ -82,6 +105,9 @@ describe("POST /api/assign", () => {
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({ assignees: ["alice"] }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer install-tok",
+        }),
       }),
     );
 

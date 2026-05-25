@@ -1,8 +1,16 @@
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
+import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app";
 
-// POST /api/assign — update issue assignees on GitHub and in D1
+// POST /api/assign — update issue assignees on GitHub and in D1.
+//
+// Uses the GitHub App installation token (NOT the caller's OAuth token), so
+// any logged-in user can change assignees regardless of their personal
+// permissions on the target repo. Matches the feature kanban auth model;
+// see the audit in functions/api/features/[number].js for the rationale.
 export async function onRequestPost(context) {
-  const { orgId, orgLogin, token } = getCtx(context);
+  const { orgId, orgLogin } = getCtx(context);
+  if (!orgLogin) return errorResponse("Missing org context", 400);
+
   let body;
   try { body = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
@@ -24,7 +32,17 @@ export async function onRequestPost(context) {
     return errorResponse("Invalid assignee username", 400);
   }
 
-  // Update on GitHub
+  const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
+  if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
+
+  let token;
+  try {
+    token = await getInstallationToken(context.env, installationId);
+  } catch (err) {
+    console.error("[assign] install token fetch failed", { msg: err?.message });
+    return errorResponse("Failed to acquire GitHub App token", 500);
+  }
+
   const ghRes = await fetch(
     `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(repo)}/issues/${issue_number}`,
     {
@@ -32,6 +50,7 @@ export async function onRequestPost(context) {
       headers: {
         Authorization: `Bearer ${token}`,
         "User-Agent": "Unticket",
+        Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ assignees }),
@@ -45,7 +64,6 @@ export async function onRequestPost(context) {
 
   const ghIssue = await ghRes.json();
 
-  // Update D1 cache
   const assigneesJson = JSON.stringify(
     (ghIssue.assignees || []).map((a) => ({
       login: a.login,
