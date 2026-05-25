@@ -13,17 +13,29 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInactiveRepoSet } from "../../lib/inactive-repos";
 import { matchPRToFeatures } from "../../lib/feature-matcher";
+import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 
 const DEFAULT_DAYS = 14;
 const MAX_DAYS = 30;
 const MAX_PRS_PER_RUN = 50;
 
 export async function onRequestPost(context) {
-  const { orgId, orgLogin, token, isAdmin } = getCtx(context);
-  if (!orgId || !orgLogin || !token) return errorResponse("Missing org context", 400);
+  const { orgId, orgLogin, isAdmin } = getCtx(context);
+  if (!orgId || !orgLogin) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
   if (!context.env.ZHIPU_API_KEY) {
     return errorResponse("LLM matcher disabled (ZHIPU_API_KEY not configured)", 503);
+  }
+
+  const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
+  if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
+
+  let token;
+  try {
+    token = await getInstallationToken(context.env, installationId);
+  } catch (err) {
+    console.error("[backfill-matches] install token fetch failed", { msg: err?.message });
+    return errorResponse("Failed to acquire GitHub App token", 500);
   }
 
   let body;

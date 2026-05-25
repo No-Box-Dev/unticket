@@ -6,10 +6,15 @@ vi.mock("../../lib/inactive-repos.js", () => ({
 vi.mock("../../lib/feature-matcher.js", () => ({
   matchPRToFeatures: vi.fn(),
 }));
+vi.mock("../../lib/github-app.js", () => ({
+  getInstallationIdForOrg: vi.fn(async () => 12345),
+  getInstallationToken: vi.fn(async () => "install-tok"),
+}));
 
 import { onRequestPost } from "../features/backfill-matches.js";
 import { getInactiveRepoSet } from "../../lib/inactive-repos.js";
 import { matchPRToFeatures } from "../../lib/feature-matcher.js";
+import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app.js";
 
 function makeDb({ allByFragment = {} } = {}) {
   const calls = { all: [], run: [], batch: [] };
@@ -47,7 +52,7 @@ function makeCtx({ db, body = {}, env = {}, waitUntil = vi.fn() }) {
   return {
     request: req,
     env: { DB: db, ZHIPU_API_KEY: "k", ...env },
-    data: { orgId: 1, orgLogin: "acme", token: "tok", isAdmin: true },
+    data: { orgId: 1, orgLogin: "acme", isAdmin: true },
     waitUntil,
   };
 }
@@ -56,6 +61,8 @@ beforeEach(() => {
   global.fetch = vi.fn();
   getInactiveRepoSet.mockReset();
   matchPRToFeatures.mockReset();
+  getInstallationIdForOrg.mockReset().mockResolvedValue(12345);
+  getInstallationToken.mockReset().mockResolvedValue("install-tok");
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -63,6 +70,25 @@ describe("POST /api/features/backfill-matches", () => {
   it("503s when ZHIPU_API_KEY is missing", async () => {
     const res = await onRequestPost(makeCtx({ db: makeDb(), env: { ZHIPU_API_KEY: undefined } }));
     expect(res.status).toBe(503);
+  });
+
+  it("412s when the GitHub App isn't installed for this org", async () => {
+    getInstallationIdForOrg.mockResolvedValueOnce(null);
+    const res = await onRequestPost(makeCtx({ db: makeDb() }));
+    expect(res.status).toBe(412);
+  });
+
+  it("uses the install token (not the user OAuth token) for PR fetches", async () => {
+    getInactiveRepoSet.mockResolvedValue(new Set());
+    const db = makeDb({ allByFragment: { "FROM repos": [{ name: "api" }] } });
+    global.fetch.mockResolvedValue({ ok: true, json: async () => [] });
+    await onRequestPost(makeCtx({ db }));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/acme/api/pulls"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer install-tok" }),
+      }),
+    );
   });
 
   it("returns zero counts when there are no active repos", async () => {

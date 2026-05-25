@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../../lib/github-app.js", () => ({
+  getInstallationIdForOrg: vi.fn(async () => 12345),
+  getInstallationToken: vi.fn(async () => "install-tok"),
+}));
+
 import { onRequestPost } from "../issue-state.js";
+import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app.js";
 
 function makeDb() {
   const calls = { run: [] };
@@ -16,16 +23,20 @@ function makeDb() {
   };
 }
 
-function makeContext({ body }) {
+function makeContext({ body, db }) {
   const req = new Request("http://x/api/issue-state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
-  return { request: req, env: { DB: makeDb() }, data: { orgId: 1, orgLogin: "acme", token: "tok" } };
+  return { request: req, env: { DB: db ?? makeDb() }, data: { orgId: 1, orgLogin: "acme" } };
 }
 
-beforeEach(() => { global.fetch = vi.fn(); });
+beforeEach(() => {
+  global.fetch = vi.fn();
+  getInstallationIdForOrg.mockResolvedValue(12345);
+  getInstallationToken.mockResolvedValue("install-tok");
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("POST /api/issue-state", () => {
@@ -64,7 +75,19 @@ describe("POST /api/issue-state", () => {
     expect(res.status).toBe(404);
   });
 
-  it("PATCHes GitHub then updates D1 with closed_at", async () => {
+  it("412s when the GitHub App isn't installed for this org", async () => {
+    getInstallationIdForOrg.mockResolvedValueOnce(null);
+    const res = await onRequestPost(makeContext({ body: { repo: "api", issue_number: 1, state: "closed" } }));
+    expect(res.status).toBe(412);
+  });
+
+  it("500s when the install-token fetch throws", async () => {
+    getInstallationToken.mockRejectedValueOnce(new Error("network"));
+    const res = await onRequestPost(makeContext({ body: { repo: "api", issue_number: 1, state: "closed" } }));
+    expect(res.status).toBe(500);
+  });
+
+  it("PATCHes GitHub with the install token, then updates D1 with closed_at", async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ closed_at: "2025-01-15T10:00:00Z" }),
@@ -73,6 +96,13 @@ describe("POST /api/issue-state", () => {
     const res = await onRequestPost(ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, state: "closed", closed_at: "2025-01-15T10:00:00Z" });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/issues/42"),
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.objectContaining({ Authorization: "Bearer install-tok" }),
+      }),
+    );
     expect(ctx.env.DB._calls.run).toHaveLength(1);
     const { sql, binds } = ctx.env.DB._calls.run[0];
     expect(sql).toMatch(/UPDATE issues SET state = \?, closed_at = \?/);
