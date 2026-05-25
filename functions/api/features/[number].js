@@ -120,11 +120,13 @@ export async function onRequestPatch(context) {
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
 
-  // Optimistic write: update D1 with the desired state and respond now. The
-  // GitHub call runs in waitUntil; the webhook reconciles labels/colors
-  // afterwards and cron syncFeatures backstops any drift.
+  // Optimistic write: mark D1 as locally-edited (gh_synced_at stays at its
+  // last GH-synced value), respond now. The GitHub call runs in waitUntil;
+  // if it succeeds the row gets re-mirrored as in-sync. If it fails, the
+  // 30-min cron's syncFeatures will detect d1.updated_at > d1.gh_synced_at
+  // and push the change to GitHub on the next tick — no more silent reverts.
   const optimistic = synthesizeIssue({ row, number, title, body, status, owners });
-  await upsertFeatureRow(context.env.DB, orgId, optimistic);
+  await upsertFeatureRow(context.env.DB, orgId, optimistic, { from: "local" });
   const linkedPRs = await readLinkedPRs(context.env.DB, orgId, number);
 
   const ghWrite = (async () => {
@@ -138,7 +140,7 @@ export async function onRequestPatch(context) {
       labels: buildFeatureLabels(status),
       assignees: owners,
     });
-    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
   })();
   context.waitUntil(
     ghWrite.catch(async (err) => {
@@ -182,7 +184,9 @@ export async function onRequestDelete(context) {
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
 
-  // Optimistic D1 close. Webhook + cron will re-reaffirm once GitHub catches up.
+  // Optimistic D1 close marked as a local edit — bumps updated_at but
+  // leaves gh_synced_at, so cron syncFeatures will push the close to
+  // GitHub on the next tick if the inline waitUntil fails.
   await context.env.DB
     .prepare(
       `UPDATE features
@@ -205,7 +209,7 @@ export async function onRequestDelete(context) {
       labels: keepLabels,
       state: "closed",
     });
-    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
   })();
   context.waitUntil(
     ghWrite.catch(async (err) => {

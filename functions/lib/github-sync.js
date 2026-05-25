@@ -4,6 +4,7 @@ import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
 import { matchPRToFeatures } from "./feature-matcher";
+import { upsertFeatureRow } from "./feature-issues";
 
 // Paginated GitHub API fetcher.
 // MAX_PAGES caps any single resource sync at 5000 items (50 pages × 100/page).
@@ -525,9 +526,27 @@ export async function removeTeamMember(db, orgId, teamGithubId, login) {
 
 // ---------- Sync Features (unticket repo issues) ----------
 //
-// Always does a full sync. The unticket repo is small (<100 issues) so the
-// `since` cursor saved next to nothing, but it broke reconciliation: an
-// incremental sync can't know which D1 rows no longer exist on GitHub.
+// Bidirectional last-write-wins reconcile against {org}/unticket.
+//
+// Each feature row carries two timestamps:
+//   - updated_at    — when the row was last written (by anyone)
+//   - gh_synced_at  — the GitHub `updated_at` we mirrored in last
+//
+// Compare the GH issue's updated_at against those:
+//   - row missing                          → PULL (insert from GH)
+//   - gh_synced_at IS NULL                 → PULL (legacy / first-touch)
+//   - gh.updated_at  >  gh_synced_at       → PULL (GH advanced upstream)
+//   - d1.updated_at  >  gh_synced_at AND
+//     gh.updated_at  == gh_synced_at       → PUSH (local change, GH still stale)
+//   - both advanced                        → LWW: pick the larger of
+//                                             gh.updated_at and d1.updated_at
+//   - else                                 → no-op (in sync)
+//
+// This is the safety net for the optimistic PATCH in
+// functions/api/features/[number].js — when its inline waitUntil GitHub call
+// fails (auth, missing label, rate limit, isolate eviction), the next cron
+// tick will push the pending D1 change instead of clobbering it with GitHub's
+// stale state.
 
 export async function syncFeatures(db, token, orgId, orgLogin) {
   const unticketRepo = await getUnticketRepoName(db, orgId);
@@ -551,42 +570,54 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     console.warn(`[unticket] syncFeatures: ${issues.length} issues but 0 features — all PRs? (org=${orgLogin})`);
   }
 
-  const stmt = db.prepare(
-    `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(org_id, number) DO UPDATE SET
-       title = excluded.title,
-       state = excluded.state,
-       body = excluded.body,
-       assignees_json = excluded.assignees_json,
-       labels_json = excluded.labels_json,
-       milestone_title = excluded.milestone_title,
-       html_url = excluded.html_url,
-       updated_at = excluded.updated_at`
-  );
+  // Load existing D1 rows once so the per-feature reconcile doesn't hit D1
+  // n+1 times. Feature counts are small (<100) — this is cheaper than
+  // selecting per-issue, and we need the full set anyway for the prune pass.
+  const existingRes = await db
+    .prepare(
+      "SELECT number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at, gh_synced_at FROM features WHERE org_id = ?",
+    )
+    .bind(orgId)
+    .all();
+  const existing = new Map((existingRes.results ?? []).map((r) => [r.number, r]));
 
-  for (let i = 0; i < features.length; i += 50) {
-    const batch = features.slice(i, i + 50);
-    await db.batch(
-      batch.map((f) =>
-        stmt.bind(
-          orgId,
-          f.number,
-          f.title,
-          f.state,
-          f.body ?? "",
-          JSON.stringify((f.assignees ?? []).map((a) => ({ login: a.login }))),
-          JSON.stringify((f.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
-          f.milestone?.title ?? null,
-          f.html_url,
-          f.created_at,
-          f.updated_at
-        )
-      )
-    );
+  let pulled = 0;
+  let pushed = 0;
+  let pushFailed = 0;
+  let inSync = 0;
+
+  for (const ghIssue of features) {
+    const d1 = existing.get(ghIssue.number);
+    const decision = decideReconcileAction(d1, ghIssue);
+
+    if (decision === "pull") {
+      await upsertFeatureRow(db, orgId, ghIssue, { from: "github" });
+      pulled += 1;
+    } else if (decision === "push") {
+      try {
+        const updatedGhIssue = await pushFeatureToGitHub(token, orgLogin, unticketRepo, d1);
+        await upsertFeatureRow(db, orgId, updatedGhIssue, { from: "github" });
+        pushed += 1;
+      } catch (err) {
+        // The push failed — leave the local change in place so the next
+        // tick can retry. Don't pull GitHub's stale state in either, that
+        // would defeat the whole point of the LWW guard.
+        console.error(
+          `[unticket] syncFeatures push failed for #${ghIssue.number}:`,
+          err?.status,
+          err?.message,
+          err?.ghBody,
+        );
+        pushFailed += 1;
+      }
+    } else {
+      inSync += 1;
+    }
   }
 
-  // Extract linkedPRs from feature metadata and populate pr_feature_links
+  // Extract linkedPRs from feature metadata and populate pr_feature_links.
+  // Done off the GH list so a successful push (which re-mirrors via
+  // upsertFeatureRow) doesn't need to repeat the work.
   const linkStmt = db.prepare(
     `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
      VALUES (?, ?, ?, ?, 'metadata')
@@ -604,17 +635,14 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
 
   await setSyncState(db, orgId, "features");
 
-  // Reconcile D1 against the unticket repo. Drops any open rows whose issue
-  // number isn't in the current feature set — including legacy rows synced
-  // from earlier repo sources.
+  // Reconcile deletes: drop any open rows whose issue number isn't in the
+  // current GitHub feature set. Includes legacy rows synced from earlier
+  // repo sources.
   const featureNumbers = new Set(features.map((f) => f.number));
-  const existing = await db
-    .prepare("SELECT number FROM features WHERE org_id = ? AND state = 'open'")
-    .bind(orgId)
-    .all();
-  const toDelete = existing.results
-    .filter((r) => !featureNumbers.has(r.number))
-    .map((r) => r.number);
+  const toDelete = [];
+  for (const [num, row] of existing.entries()) {
+    if (!featureNumbers.has(num) && row.state === "open") toDelete.push(num);
+  }
   if (toDelete.length > 0) {
     console.log(`[unticket] syncFeatures: cleaning up ${toDelete.length} stale features from D1 (org=${orgLogin})`);
     for (let i = 0; i < toDelete.length; i += 50) {
@@ -627,7 +655,94 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     }
   }
 
-  return { synced: features.length, total: issues.length };
+  console.log(
+    `[unticket] syncFeatures done: pulled=${pulled} pushed=${pushed} pushFailed=${pushFailed} inSync=${inSync} pruned=${toDelete.length}`,
+  );
+
+  return { synced: features.length, total: issues.length, pulled, pushed, pushFailed, inSync };
+}
+
+// Decide which side of the LWW reconcile to apply for one feature. Pure
+// function, exported for unit-testability.
+//
+// Returns "pull" | "push" | "noop".
+//
+// Timestamps are parsed to ms before comparison: GitHub serializes
+// `updated_at` to second precision (`...:00Z`), while local writes via
+// `new Date().toISOString()` always include ms (`...:00.123Z`). A naive
+// string compare puts `.123Z` < `Z` lexicographically and would drop a
+// same-second local edit.
+export function decideReconcileAction(d1Row, ghIssue) {
+  if (!d1Row) return "pull";
+
+  const ghUpdated = parseTs(ghIssue.updated_at);
+  const ghSyncedAt = parseTs(d1Row.gh_synced_at);
+  const d1Updated = parseTs(d1Row.updated_at);
+
+  // Legacy rows from before migration 0025 won't have gh_synced_at — treat
+  // as GH-wins (the safe direction since we have no proof of local edits).
+  if (ghSyncedAt === null) return "pull";
+
+  const ghAdvanced = ghUpdated !== null && ghUpdated > ghSyncedAt;
+  const d1Advanced = d1Updated !== null && d1Updated > ghSyncedAt;
+
+  if (ghAdvanced && d1Advanced) {
+    // Both sides moved since last mirror. Pick the side with the larger
+    // updated_at. Ties go to GitHub (source-of-truth tiebreaker).
+    return ghUpdated >= d1Updated ? "pull" : "push";
+  }
+  if (ghAdvanced) return "pull";
+  if (d1Advanced) return "push";
+  return "noop";
+}
+
+function parseTs(ts) {
+  if (!ts) return null;
+  const ms = Date.parse(ts);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// Push the local D1 state of one feature to GitHub. Returns the updated
+// GitHub issue payload so the caller can re-mirror it with gh_synced_at set.
+//
+// Uses GitHub's issue PATCH directly (no dependency on feature-issues.js so
+// we don't create an import cycle from sync → api → sync). The body shape
+// matches what the API PATCH route sends.
+async function pushFeatureToGitHub(token, orgLogin, unticketRepo, d1Row) {
+  const labels = JSON.parse(d1Row.labels_json || "[]")
+    .map((l) => (typeof l === "string" ? l : l?.name))
+    .filter(Boolean);
+  const assignees = JSON.parse(d1Row.assignees_json || "[]")
+    .map((a) => a.login)
+    .filter(Boolean);
+  const payload = {
+    title: d1Row.title,
+    body: d1Row.body ?? "",
+    labels,
+    assignees,
+    state: d1Row.state || "open",
+  };
+  const res = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(unticketRepo)}/issues/${d1Row.number}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "Unticket",
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err = new Error(body?.message || `GitHub ${res.status} ${res.statusText}`);
+    err.status = res.status;
+    err.ghBody = body;
+    throw err;
+  }
+  return res.json();
 }
 
 // ---------- Migrate unticket config ----------
@@ -818,34 +933,10 @@ export async function upsertFeature(db, orgId, issue) {
     return;
   }
 
-  await db
-    .prepare(
-      `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(org_id, number) DO UPDATE SET
-         title = excluded.title,
-         state = excluded.state,
-         body = excluded.body,
-         assignees_json = excluded.assignees_json,
-         labels_json = excluded.labels_json,
-         milestone_title = excluded.milestone_title,
-         html_url = excluded.html_url,
-         updated_at = excluded.updated_at`
-    )
-    .bind(
-      orgId,
-      issue.number,
-      issue.title,
-      issue.state,
-      issue.body ?? "",
-      JSON.stringify((issue.assignees ?? []).map((a) => ({ login: a.login }))),
-      JSON.stringify((issue.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
-      issue.milestone?.title ?? null,
-      issue.html_url,
-      issue.created_at,
-      issue.updated_at
-    )
-    .run();
+  // Webhook deliveries are GitHub's own report of issue state, so they count
+  // as "in sync with GitHub" — set gh_synced_at to the payload's updated_at
+  // so the cron's LWW compare knows there's no pending local change.
+  await upsertFeatureRow(db, orgId, issue, { from: "github" });
 }
 
 export async function upsertPR(db, orgId, repo, pr) {
