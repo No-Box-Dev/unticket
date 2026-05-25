@@ -129,7 +129,7 @@ export async function onRequestPost(context) {
       ...(owners.length > 0 ? { assignees: owners } : {}),
     });
 
-    await upsertFeatureRow(context.env.DB, orgId, ghIssue);
+    await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
     const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
     return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
   } catch (err) {

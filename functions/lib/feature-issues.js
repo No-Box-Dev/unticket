@@ -168,19 +168,69 @@ export async function readFeatureRow(db, orgId, number) {
     .first();
 }
 
-// Mirror a GitHub issue response into the features table. Same column set as
-// the webhook handler, so /api/features?state=open reads consistently
-// regardless of which path wrote the row.
-export async function upsertFeatureRow(db, orgId, ghIssue) {
+// Mirror a feature row into D1. Same column set as the webhook handler so
+// /api/features?state=open reads consistently regardless of which path wrote.
+//
+// `opts.from` is the bidirectional-sync discriminator:
+//   - "github" → row reflects GitHub's current state. Sets
+//     `gh_synced_at = ghIssue.updated_at`, so a later cron tick can tell
+//     "D1 is in sync with GitHub" from "D1 has an unpushed local change".
+//   - "local"  → row reflects a user edit from the UI. Bumps `updated_at`
+//     to now() and leaves `gh_synced_at` untouched, marking the row
+//     pending-push. The cron's syncFeatures will push it to GitHub on
+//     the next tick if the inline waitUntil PATCH didn't get there first.
+//
+// Default is "github" to keep the existing webhook callers correct without
+// every call site needing an update.
+export async function upsertFeatureRow(db, orgId, ghIssue, opts = {}) {
+  const from = opts.from ?? "github";
   const assignees = (ghIssue.assignees ?? []).map((a) => ({
     login: a.login,
     avatar_url: a.avatar_url || "",
   }));
   const labels = (ghIssue.labels ?? []).map((l) => ({ name: l.name, color: l.color }));
+  const updatedAt = from === "local"
+    ? new Date().toISOString()
+    : (ghIssue.updated_at ?? new Date().toISOString());
+
+  if (from === "local") {
+    // ON CONFLICT clause deliberately omits gh_synced_at so the previous
+    // value (set by the last GH-sourced mirror) is preserved.
+    await db
+      .prepare(
+        `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at, gh_synced_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(org_id, number) DO UPDATE SET
+           title = excluded.title,
+           state = excluded.state,
+           body = excluded.body,
+           assignees_json = excluded.assignees_json,
+           labels_json = excluded.labels_json,
+           milestone_title = excluded.milestone_title,
+           html_url = excluded.html_url,
+           updated_at = excluded.updated_at`,
+      )
+      .bind(
+        orgId,
+        ghIssue.number,
+        ghIssue.title,
+        ghIssue.state ?? "open",
+        ghIssue.body ?? "",
+        JSON.stringify(assignees),
+        JSON.stringify(labels),
+        ghIssue.milestone?.title ?? null,
+        ghIssue.html_url ?? null,
+        ghIssue.created_at ?? new Date().toISOString(),
+        updatedAt,
+      )
+      .run();
+    return;
+  }
+
   await db
     .prepare(
-      `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO features (org_id, number, title, state, body, assignees_json, labels_json, milestone_title, html_url, created_at, updated_at, gh_synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(org_id, number) DO UPDATE SET
          title = excluded.title,
          state = excluded.state,
@@ -189,7 +239,8 @@ export async function upsertFeatureRow(db, orgId, ghIssue) {
          labels_json = excluded.labels_json,
          milestone_title = excluded.milestone_title,
          html_url = excluded.html_url,
-         updated_at = excluded.updated_at`,
+         updated_at = excluded.updated_at,
+         gh_synced_at = excluded.gh_synced_at`,
     )
     .bind(
       orgId,
@@ -202,7 +253,8 @@ export async function upsertFeatureRow(db, orgId, ghIssue) {
       ghIssue.milestone?.title ?? null,
       ghIssue.html_url ?? null,
       ghIssue.created_at ?? new Date().toISOString(),
-      ghIssue.updated_at ?? new Date().toISOString(),
+      updatedAt,
+      updatedAt,
     )
     .run();
 }
