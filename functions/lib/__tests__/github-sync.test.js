@@ -42,6 +42,7 @@ import {
   syncRepos,
   syncMembers,
   syncRepo,
+  decideReconcileAction,
 } from "../github-sync.js";
 
 function makeDb(rowsForSql = {}) {
@@ -274,6 +275,46 @@ describe("team helpers", () => {
     await removeTeamMember(db, "org", null, "x");
     await removeTeamMember(db, "org", 5, null);
     expect(db._calls.runs).toHaveLength(0);
+  });
+});
+
+describe("decideReconcileAction (LWW)", () => {
+  it("pulls when D1 has no row yet", () => {
+    expect(decideReconcileAction(null, { updated_at: "2026-05-25T10:00:00Z" })).toBe("pull");
+  });
+
+  it("pulls legacy rows missing gh_synced_at (pre-migration backfill)", () => {
+    const d1 = { updated_at: "2026-05-25T10:00:00Z", gh_synced_at: null };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:00:00Z" })).toBe("pull");
+  });
+
+  it("noops when both sides match the last-synced mark", () => {
+    const d1 = { updated_at: "2026-05-25T10:00:00Z", gh_synced_at: "2026-05-25T10:00:00Z" };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:00:00Z" })).toBe("noop");
+  });
+
+  it("pulls when GitHub advanced (someone edited the issue on GH)", () => {
+    const d1 = { updated_at: "2026-05-25T10:00:00Z", gh_synced_at: "2026-05-25T10:00:00Z" };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T11:00:00Z" })).toBe("pull");
+  });
+
+  it("pushes when D1 advanced but GitHub didn't (failed inline waitUntil)", () => {
+    const d1 = { updated_at: "2026-05-25T10:30:00Z", gh_synced_at: "2026-05-25T10:00:00Z" };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:00:00Z" })).toBe("push");
+  });
+
+  it("picks the larger updated_at when both sides advanced", () => {
+    const base = "2026-05-25T10:00:00Z";
+    const ghNewer = { updated_at: "2026-05-25T10:05:00Z", gh_synced_at: base };
+    expect(decideReconcileAction(ghNewer, { updated_at: "2026-05-25T10:10:00Z" })).toBe("pull");
+
+    const d1Newer = { updated_at: "2026-05-25T10:10:00Z", gh_synced_at: base };
+    expect(decideReconcileAction(d1Newer, { updated_at: "2026-05-25T10:05:00Z" })).toBe("push");
+  });
+
+  it("breaks ties in favor of GitHub (source of truth)", () => {
+    const d1 = { updated_at: "2026-05-25T10:10:00Z", gh_synced_at: "2026-05-25T10:00:00Z" };
+    expect(decideReconcileAction(d1, { updated_at: "2026-05-25T10:10:00Z" })).toBe("pull");
   });
 });
 
