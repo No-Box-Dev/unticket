@@ -49,17 +49,20 @@ export function FeatureCard({
 
   return (
     <div
-      draggable={draggable}
+      draggable={draggable && !feature.pending}
       onDragStart={(e) => onDragStart?.(e, feature)}
       onKeyDown={handleKeyDown}
       role="listitem"
       aria-label={`${feature.title}, status: ${feature.status}`}
-      tabIndex={draggable ? 0 : undefined}
+      tabIndex={draggable && !feature.pending ? 0 : undefined}
       className={cn(
         "group bg-white  rounded-lg border border-stone-200  p-3 shadow-sm hover:shadow-md transition-shadow",
-        draggable && "cursor-grab active:cursor-grabbing",
+        draggable && !feature.pending && "cursor-grab active:cursor-grabbing",
         isLastStage && "opacity-60",
         !hasPlan && "border-l-2 border-l-amber-300",
+        // Optimistic create in flight: faded + fully non-interactive until the
+        // real issue number arrives (its temp negative id can't be PATCHed).
+        feature.pending && "opacity-50 pointer-events-none",
       )}
     >
       {/* Row 1: grip + title */}

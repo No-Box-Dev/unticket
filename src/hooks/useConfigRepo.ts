@@ -53,15 +53,49 @@ export function useSettings() {
   });
 }
 
+// Monotonically decreasing temp id for optimistic feature cards. Stays
+// negative so it can never collide with a real GitHub issue number.
+let nextTempFeatureId = -1;
+
 export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { title: string; status: FeatureStatus; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
-    onSuccess: (newFeature) => {
+    // Optimistic: drop a pending card into the target column immediately, then
+    // swap it for the real feature once GitHub assigns an issue number. Without
+    // this the user waits ~2s for the synchronous GitHub round-trip before the
+    // card appears. Mirrors the optimistic update/delete hooks below.
+    onMutate: async (args) => {
+      await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
+      const tempId = nextTempFeatureId--;
+      const optimistic: Feature = {
+        id: tempId,
+        title: args.title,
+        owners: args.owners ?? [],
+        status: args.status,
+        plan: args.plan,
+        pending: true,
+      };
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
-        old ? [...old, newFeature] : [newFeature],
+        old ? [...old, optimistic] : [optimistic],
+      );
+      return { tempId };
+    },
+    onSuccess: (newFeature, _args, context) => {
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        (old ?? []).map((f) => (f.id === context?.tempId ? newFeature : f)),
+      );
+    },
+    onError: (_err, _args, context) => {
+      // Surgically drop just the failed optimistic card by its tempId. We
+      // can't restore a pre-mutate snapshot: on the first create the cache is
+      // empty, and `setQueryData(key, undefined)` is a no-op in TanStack Query
+      // — the ghost pending card would stay stuck forever. Filtering by tempId
+      // also avoids clobbering any concurrent cache changes.
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old ? old.filter((f) => f.id !== context?.tempId) : old,
       );
     },
   });

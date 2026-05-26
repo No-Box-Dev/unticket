@@ -23,12 +23,22 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { createConfigRepo as createConfigRepoFn } from "@/lib/config-repo";
-import { updateFeature as ghUpdateFeature, deleteFeature as ghDeleteFeature } from "@/lib/github-features";
+import {
+  createFeature as ghCreateFeature,
+  updateFeature as ghUpdateFeature,
+  deleteFeature as ghDeleteFeature,
+} from "@/lib/github-features";
 import { useAuth } from "@/lib/auth";
-import { useUpdateFeature, useDeleteFeature, useCreateConfigRepo } from "../useConfigRepo";
+import {
+  useCreateFeature,
+  useUpdateFeature,
+  useDeleteFeature,
+  useCreateConfigRepo,
+} from "../useConfigRepo";
 import type { Feature } from "@/lib/types";
 
 const mockUseAuth = vi.mocked(useAuth);
+const mockCreateFeature = vi.mocked(ghCreateFeature);
 const mockUpdateFeature = vi.mocked(ghUpdateFeature);
 const mockDeleteFeature = vi.mocked(ghDeleteFeature);
 const mockCreateConfigRepo = vi.mocked(createConfigRepoFn);
@@ -48,6 +58,94 @@ const authValue = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUseAuth.mockReturnValue(authValue);
+});
+
+describe("useCreateFeature", () => {
+  it("shows a pending card immediately, then reconciles to the server feature", async () => {
+    const created: Feature = {
+      id: 42, title: "New feature", owners: [], status: "todo",
+    };
+    // Hold the create open so we can observe the optimistic pending card first.
+    let resolveCreate: (f: Feature) => void = () => {};
+    mockCreateFeature.mockReturnValue(
+      new Promise<Feature>((resolve) => { resolveCreate = resolve; }),
+    );
+
+    const { wrapper, queryClient } = createQueryWrapper();
+    queryClient.setQueryData(["features", "my-org"], []);
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    // Optimistic: a pending card with a temporary negative id appears at once.
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached).toHaveLength(1);
+      expect(cached?.[0].pending).toBe(true);
+      expect(cached?.[0].id).toBeLessThan(0);
+      expect(cached?.[0].title).toBe("New feature");
+    });
+
+    await act(async () => {
+      resolveCreate(created);
+    });
+
+    // The temp card is swapped for the real feature once GitHub assigns a number.
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached).toHaveLength(1);
+      expect(cached?.[0].id).toBe(42);
+      expect(cached?.[0].pending).toBeUndefined();
+    });
+  });
+
+  it("rolls back the pending card on error", async () => {
+    mockCreateFeature.mockRejectedValue(new Error("fail"));
+
+    const { wrapper, queryClient } = createQueryWrapper();
+    queryClient.setQueryData(["features", "my-org"], []);
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    await act(async () => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached).toEqual([]);
+    });
+  });
+
+  it("clears the ghost pending card on error when the cache was never seeded", async () => {
+    mockCreateFeature.mockRejectedValue(new Error("fail"));
+
+    // No setQueryData here — `previous` is undefined, the case where a naive
+    // `if (context?.previous)` guard would skip the rollback.
+    const { wrapper, queryClient } = createQueryWrapper();
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    await act(async () => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    // The ghost pending card must be gone — the bug was it persisting forever
+    // because `setQueryData(key, undefined)` is a no-op, so a snapshot restore
+    // could never clear it.
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached?.some((f) => f.pending)).toBeFalsy();
+      expect(cached).toEqual([]);
+    });
+  });
 });
 
 describe("useUpdateFeature", () => {
