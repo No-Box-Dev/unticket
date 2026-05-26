@@ -1,7 +1,7 @@
 /** Broadcast an error so the UI can show it in a banner. */
 export function broadcastError(message: string, status?: number) {
   window.dispatchEvent(
-    new CustomEvent("gp:error", { detail: { message, status } }),
+    new CustomEvent("ut:error", { detail: { message, status } }),
   );
 }
 
@@ -47,10 +47,10 @@ export function shouldNotRetry(error: unknown): boolean {
  * meaning the stored token is stale/revoked.
  */
 function forceLogout() {
-  localStorage.removeItem("gp_token");
-  localStorage.removeItem("gp_org");
+  localStorage.removeItem("ut_token");
+  localStorage.removeItem("ut_org");
   // Dispatch event so AuthProvider can react without circular imports
-  window.dispatchEvent(new CustomEvent("gp:force-logout"));
+  window.dispatchEvent(new CustomEvent("ut:force-logout"));
 }
 
 // Coalesce concurrent refresh attempts: if N requests 401 at once we only
@@ -70,7 +70,7 @@ export async function refreshAccessToken(expiredToken: string): Promise<string |
       if (!res.ok) return null;
       const body = (await res.json().catch(() => null)) as { token?: string } | null;
       if (!body?.token) return null;
-      localStorage.setItem("gp_token", body.token);
+      localStorage.setItem("ut_token", body.token);
       return body.token;
     } catch {
       return null;
@@ -86,7 +86,7 @@ export async function refreshAccessToken(expiredToken: string): Promise<string |
 }
 
 function buildRequestInit(token: string | null, options?: RequestInit): RequestInit {
-  const org = localStorage.getItem("gp_org");
+  const org = localStorage.getItem("ut_org");
   return {
     ...options,
     headers: {
@@ -99,7 +99,7 @@ function buildRequestInit(token: string | null, options?: RequestInit): RequestI
 }
 
 export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
-  const token = localStorage.getItem("gp_token");
+  const token = localStorage.getItem("ut_token");
   const res = await fetch(path, buildRequestInit(token, options));
   if (res.status !== 401 || !token) return res;
 
