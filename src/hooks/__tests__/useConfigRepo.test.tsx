@@ -121,6 +121,31 @@ describe("useCreateFeature", () => {
       expect(cached).toEqual([]);
     });
   });
+
+  it("clears the ghost pending card on error when the cache was never seeded", async () => {
+    mockCreateFeature.mockRejectedValue(new Error("fail"));
+
+    // No setQueryData here — `previous` is undefined, the case where a naive
+    // `if (context?.previous)` guard would skip the rollback.
+    const { wrapper, queryClient } = createQueryWrapper();
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    await act(async () => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    // The ghost pending card must be gone — the bug was it persisting forever
+    // because `setQueryData(key, undefined)` is a no-op, so a snapshot restore
+    // could never clear it.
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached?.some((f) => f.pending)).toBeFalsy();
+      expect(cached).toEqual([]);
+    });
+  });
 });
 
 describe("useUpdateFeature", () => {

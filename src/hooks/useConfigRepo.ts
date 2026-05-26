@@ -69,7 +69,6 @@ export function useCreateFeature() {
     // card appears. Mirrors the optimistic update/delete hooks below.
     onMutate: async (args) => {
       await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
-      const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
       const tempId = nextTempFeatureId--;
       const optimistic: Feature = {
         id: tempId,
@@ -82,7 +81,7 @@ export function useCreateFeature() {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
         old ? [...old, optimistic] : [optimistic],
       );
-      return { previous, tempId };
+      return { tempId };
     },
     onSuccess: (newFeature, _args, context) => {
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
@@ -90,7 +89,14 @@ export function useCreateFeature() {
       );
     },
     onError: (_err, _args, context) => {
-      if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
+      // Surgically drop just the failed optimistic card by its tempId. We
+      // can't restore a pre-mutate snapshot: on the first create the cache is
+      // empty, and `setQueryData(key, undefined)` is a no-op in TanStack Query
+      // — the ghost pending card would stay stuck forever. Filtering by tempId
+      // also avoids clobbering any concurrent cache changes.
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        old ? old.filter((f) => f.id !== context?.tempId) : old,
+      );
     },
   });
 }
