@@ -181,7 +181,7 @@ describe("reconcileRepoEvents — D1 PR backfill", () => {
     const counts = await reconcileRepoEvents({}, db, {
       orgId: 7,
       orgLogin: "noboxdev",
-      repo: "gitpulse",
+      repo: "unticket",
       token: null,
       lookbackHours: 720,
       includeGithubEvents: false,
@@ -195,7 +195,7 @@ describe("reconcileRepoEvents — D1 PR backfill", () => {
     );
     expect(eventInserts).toHaveLength(1);
     const binds = eventInserts[0].binds;
-    expect(binds[0]).toBe("reconcile:noboxdev:gitpulse:pr-42:opened");
+    expect(binds[0]).toBe("reconcile:noboxdev:unticket:pr-42:opened");
     expect(binds[1]).toBe("github:pr:opened"); // type
     expect(binds[9]).toBe("2026-05-18T10:00:00Z"); // created_at = PR created_at
     expect(narrateEvent).toHaveBeenCalled();

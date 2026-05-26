@@ -35,8 +35,8 @@ function mockFetch(status: number, body: unknown) {
 
 describe("apiFetch", () => {
   it("injects Authorization and X-Org headers from localStorage", async () => {
-    storage.gp_token = "tok123";
-    storage.gp_org = "my-org";
+    storage.ut_token = "tok123";
+    storage.ut_org = "my-org";
     const fn = mockFetch(200, {});
 
     await apiFetch("/api/test");
@@ -63,7 +63,7 @@ describe("apiFetch", () => {
   });
 
   it("merges caller-provided headers", async () => {
-    storage.gp_token = "tok";
+    storage.ut_token = "tok";
     const fn = mockFetch(200, {});
 
     await apiFetch("/api/test", {
@@ -140,14 +140,14 @@ describe("apiPost", () => {
 });
 
 describe("401 force-logout", () => {
-  it("clears token and dispatches gp:force-logout on 401", async () => {
-    storage.gp_token = "stale-tok";
+  it("clears token and dispatches ut:force-logout on 401", async () => {
+    storage.ut_token = "stale-tok";
     mockFetch(401, { error: "Invalid token" });
 
     await expect(apiGet("/api/data")).rejects.toThrow("Invalid token");
-    expect(storage.gp_token).toBeUndefined();
+    expect(storage.ut_token).toBeUndefined();
     expect(dispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "gp:force-logout" }),
+      expect.objectContaining({ type: "ut:force-logout" }),
     );
   });
 

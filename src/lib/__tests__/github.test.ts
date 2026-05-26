@@ -49,14 +49,14 @@ describe("getOctokit", () => {
   });
 
   it("creates and caches singleton Octokit", () => {
-    storage.gp_token = "tok";
+    storage.ut_token = "tok";
     const a = getOctokit();
     const b = getOctokit();
     expect(a).toBe(b);
   });
 
   it("resetOctokit causes new instance on next call", () => {
-    storage.gp_token = "tok";
+    storage.ut_token = "tok";
     const a = getOctokit();
     resetOctokit();
     const b = getOctokit();

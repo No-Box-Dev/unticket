@@ -38,11 +38,11 @@ export async function onRequestGet(context) {
   }
 
   // --- Server-side CSRF validation ---
-  // The client sets a cookie `gp_oauth_state` before redirecting to GitHub.
+  // The client sets a cookie `ut_oauth_state` before redirecting to GitHub.
   // GitHub sends the same state back as a query param. We compare both.
   const stateParam = url.searchParams.get("state") || "";
   const cookies = parseCookies(context.request.headers.get("Cookie") || "");
-  const stateCookie = cookies["gp_oauth_state"] || "";
+  const stateCookie = cookies["ut_oauth_state"] || "";
 
   if (!stateParam || !stateCookie || stateParam !== stateCookie) {
     return new Response(JSON.stringify({ error: "OAuth state mismatch — possible CSRF attack" }), {
@@ -163,7 +163,7 @@ export async function onRequestGet(context) {
       Pragma: "no-cache",
       Vary: "*",
       // Clear the CSRF cookie
-      "Set-Cookie": "gp_oauth_state=; Path=/; Max-Age=0; SameSite=Lax; Secure",
+      "Set-Cookie": "ut_oauth_state=; Path=/; Max-Age=0; SameSite=Lax; Secure",
     },
   });
 }

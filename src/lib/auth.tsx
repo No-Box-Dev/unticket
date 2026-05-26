@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<string | null>(
-    localStorage.getItem("gp_org"),
+    localStorage.getItem("ut_org"),
   );
   const authMode = getAuthMode();
 
@@ -79,18 +79,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handler = () => {
       resetOctokit();
-      localStorage.removeItem("gp_org");
+      localStorage.removeItem("ut_org");
       setUser(null);
       setSelectedOrg(null);
     };
-    window.addEventListener("gp:force-logout", handler);
-    return () => window.removeEventListener("gp:force-logout", handler);
+    window.addEventListener("ut:force-logout", handler);
+    return () => window.removeEventListener("ut:force-logout", handler);
   }, []);
 
-  // Cross-tab logout: react when another tab removes gp_token from localStorage
+  // Cross-tab logout: react when another tab removes ut_token from localStorage
   useEffect(() => {
     const handler = (e: StorageEvent) => {
-      if (e.key === "gp_token" && e.newValue === null && user) {
+      if (e.key === "ut_token" && e.newValue === null && user) {
         resetOctokit();
         setUser(null);
         setSelectedOrg(null);
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Exchange the one-time code for a token via server endpoint
       exchangeAuthCode(authCode)
         .then((token) => {
-          localStorage.setItem("gp_token", token);
+          localStorage.setItem("ut_token", token);
           resetOctokit();
           return fetchUserWithTimeout();
         })
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const msg = err instanceof Error ? err.message : "Authentication failed";
             setAuthError(msg);
             broadcastError(msg);
-            localStorage.removeItem("gp_token");
+            localStorage.removeItem("ut_token");
             resetOctokit();
           }
         })
@@ -133,17 +133,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (import.meta.env.DEV) {
       const devToken = import.meta.env.VITE_DEV_TOKEN;
       if (devToken) {
-        localStorage.setItem("gp_token", devToken);
+        localStorage.setItem("ut_token", devToken);
         resetOctokit();
       }
       const devOrg = import.meta.env.VITE_DEV_ORG;
       if (devOrg) {
-        localStorage.setItem("gp_org", devOrg);
+        localStorage.setItem("ut_org", devOrg);
         setSelectedOrg(devOrg);
       }
     }
 
-    const token = localStorage.getItem("gp_token");
+    const token = localStorage.getItem("ut_token");
     if (token) {
       resetOctokit();
       fetchUserWithTimeout()
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
           } else {
             broadcastError(err instanceof Error ? err.message : "Authentication failed");
-            localStorage.removeItem("gp_token");
+            localStorage.removeItem("ut_token");
             resetOctokit();
           }
         })
@@ -167,12 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setAuthError(null);
     try {
-      localStorage.setItem("gp_token", token);
+      localStorage.setItem("ut_token", token);
       resetOctokit();
       const userData = await fetchUserWithTimeout();
       setUser(userData);
     } catch (err) {
-      localStorage.removeItem("gp_token");
+      localStorage.removeItem("ut_token");
       resetOctokit();
       const msg = err instanceof Error ? err.message : "Authentication failed";
       setAuthError(msg);
@@ -185,14 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithOAuth = () => {
     // Clear stale token/instance before redirecting so we start fresh
-    localStorage.removeItem("gp_token");
+    localStorage.removeItem("ut_token");
     resetOctokit();
     window.location.href = getOAuthLoginUrl();
   };
 
   const logout = () => {
-    localStorage.removeItem("gp_token");
-    localStorage.removeItem("gp_org");
+    localStorage.removeItem("ut_token");
+    localStorage.removeItem("ut_org");
     resetOctokit();
     setUser(null);
     setSelectedOrg(null);
@@ -200,8 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSetOrg = (org: string | null) => {
     setSelectedOrg(org);
-    if (org) localStorage.setItem("gp_org", org);
-    else localStorage.removeItem("gp_org");
+    if (org) localStorage.setItem("ut_org", org);
+    else localStorage.removeItem("ut_org");
   };
 
   return (
