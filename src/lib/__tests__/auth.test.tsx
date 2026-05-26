@@ -96,7 +96,7 @@ describe("useAuth", () => {
   });
 
   it("isLoading starts true, becomes false", async () => {
-    storage.gp_token = "tok";
+    storage.ut_token = "tok";
     mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null } as any);
 
     render(
@@ -108,8 +108,8 @@ describe("useAuth", () => {
     });
   });
 
-  it("loads user from existing gp_token in localStorage", async () => {
-    storage.gp_token = "tok";
+  it("loads user from existing ut_token in localStorage", async () => {
+    storage.ut_token = "tok";
     mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: "Alice" } as any);
 
     render(
@@ -158,7 +158,7 @@ describe("useAuth", () => {
     await waitFor(() => {
       expect(screen.getByTestId("user").textContent).toBe("oauth-user");
     });
-    expect(storage.gp_token).toBe("exchanged-tok-123");
+    expect(storage.ut_token).toBe("exchanged-tok-123");
     expect(window.history.replaceState).toHaveBeenCalled();
   });
 
@@ -180,13 +180,13 @@ describe("useAuth", () => {
     await waitFor(() => {
       expect(screen.getByTestId("user").textContent).toBe("bob");
     });
-    expect(storage.gp_token).toBe("new-tok");
+    expect(storage.ut_token).toBe("new-tok");
     expect(mockResetOctokit).toHaveBeenCalled();
   });
 
   it("logout: clears localStorage, resets user + org", async () => {
-    storage.gp_token = "tok";
-    storage.gp_org = "org1";
+    storage.ut_token = "tok";
+    storage.ut_org = "org1";
     mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: null } as any);
 
     render(
@@ -203,8 +203,8 @@ describe("useAuth", () => {
 
     expect(screen.getByTestId("user").textContent).toBe("none");
     expect(screen.getByTestId("org").textContent).toBe("none");
-    expect(storage.gp_token).toBeUndefined();
-    expect(storage.gp_org).toBeUndefined();
+    expect(storage.ut_token).toBeUndefined();
+    expect(storage.ut_org).toBeUndefined();
   });
 
   it("setSelectedOrg persists to localStorage", async () => {
@@ -221,7 +221,7 @@ describe("useAuth", () => {
     });
 
     expect(screen.getByTestId("org").textContent).toBe("test-org");
-    expect(storage.gp_org).toBe("test-org");
+    expect(storage.ut_org).toBe("test-org");
   });
 
   it("authMode reflects getAuthMode()", async () => {

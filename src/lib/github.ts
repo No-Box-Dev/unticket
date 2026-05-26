@@ -14,7 +14,7 @@ let octokitInstance: CustomOctokitInstance | null = null;
 
 export function getOctokit(): CustomOctokitInstance {
   if (!octokitInstance) {
-    const token = localStorage.getItem("gp_token");
+    const token = localStorage.getItem("ut_token");
     if (!token) throw new Error("Not authenticated");
     octokitInstance = new CustomOctokit({
       auth: token,
@@ -52,8 +52,8 @@ function wrapOctokitError(err: unknown): never {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const status = (err as any).status as number | undefined;
     if (status === 401) {
-      localStorage.removeItem("gp_token");
-      window.dispatchEvent(new CustomEvent("gp:force-logout"));
+      localStorage.removeItem("ut_token");
+      window.dispatchEvent(new CustomEvent("ut:force-logout"));
       broadcastError("Token expired or revoked", 401);
       throw new ApiError("Token expired or revoked", 401);
     }
@@ -103,7 +103,7 @@ export async function fetchUser() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const status = (err as any)?.status;
     if (status === 401) {
-      const expiredToken = localStorage.getItem("gp_token");
+      const expiredToken = localStorage.getItem("ut_token");
       if (expiredToken) {
         const refreshed = await refreshAccessToken(expiredToken);
         if (refreshed) {

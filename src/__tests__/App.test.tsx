@@ -138,7 +138,7 @@ describe("App", () => {
     expect(screen.getByTestId("dashboard")).toBeInTheDocument();
   });
 
-  it("ErrorBar surfaces 'gp:error' window events and dismisses on click", () => {
+  it("ErrorBar surfaces 'ut:error' window events and dismisses on click", () => {
     mAuth.mockReturnValue({
       user: null,
       isLoading: false,
@@ -150,7 +150,7 @@ describe("App", () => {
     renderApp();
     act(() => {
       window.dispatchEvent(
-        new CustomEvent("gp:error", {
+        new CustomEvent("ut:error", {
           detail: { message: "Boom", status: 500 },
         }),
       );

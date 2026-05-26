@@ -81,8 +81,8 @@ function ErrorBar() {
       clearTimeout(timer);
       timer = setTimeout(() => setError(null), 10000);
     };
-    window.addEventListener("gp:error", handler);
-    return () => { window.removeEventListener("gp:error", handler); clearTimeout(timer); };
+    window.addEventListener("ut:error", handler);
+    return () => { window.removeEventListener("ut:error", handler); clearTimeout(timer); };
   }, []);
 
   if (!error) return null;
