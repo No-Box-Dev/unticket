@@ -53,16 +53,44 @@ export function useSettings() {
   });
 }
 
+// Monotonically decreasing temp id for optimistic feature cards. Stays
+// negative so it can never collide with a real GitHub issue number.
+let nextTempFeatureId = -1;
+
 export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { title: string; status: FeatureStatus; owners?: string[]; plan?: string }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
-    onSuccess: (newFeature) => {
+    // Optimistic: drop a pending card into the target column immediately, then
+    // swap it for the real feature once GitHub assigns an issue number. Without
+    // this the user waits ~2s for the synchronous GitHub round-trip before the
+    // card appears. Mirrors the optimistic update/delete hooks below.
+    onMutate: async (args) => {
+      await qc.cancelQueries({ queryKey: ["features", selectedOrg] });
+      const previous = qc.getQueryData<Feature[]>(["features", selectedOrg]);
+      const tempId = nextTempFeatureId--;
+      const optimistic: Feature = {
+        id: tempId,
+        title: args.title,
+        owners: args.owners ?? [],
+        status: args.status,
+        plan: args.plan,
+        pending: true,
+      };
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
-        old ? [...old, newFeature] : [newFeature],
+        old ? [...old, optimistic] : [optimistic],
       );
+      return { previous, tempId };
+    },
+    onSuccess: (newFeature, _args, context) => {
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
+        (old ?? []).map((f) => (f.id === context?.tempId ? newFeature : f)),
+      );
+    },
+    onError: (_err, _args, context) => {
+      if (context?.previous) qc.setQueryData(["features", selectedOrg], context.previous);
     },
   });
 }
