@@ -4,7 +4,7 @@
 // place on the server — see functions/lib/feature-issues.js. The browser
 // never talks to Octokit for features anymore: the read path hits D1
 // directly (fetchFeaturesFromD1) and writes hit /api/features.
-import { apiGet, apiFetch } from "./api";
+import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
 import type { Feature, FeatureStatus, StatusHistoryEntry, LinkedPR } from "./types";
 
 // D1-backed row shape returned by /api/features
@@ -114,15 +114,10 @@ export async function fetchFeaturesFromD1(): Promise<Feature[]> {
 
 // ---------- CRUD (server-proxied) ----------
 //
-// The server response shape from /api/features* is already the Feature shape
-// (ghIssueToFeature on the server). We trust it and return as-is.
-
-async function handleFeatureResponse(res: Response): Promise<Feature> {
-  if (res.ok) return (await res.json()) as Feature;
-  const body = await res.json().catch(() => ({ error: res.statusText }));
-  const message = (body as { error?: string }).error ?? `API error: ${res.status}`;
-  throw new Error(message);
-}
+// All writes go through the shared api helpers so failures broadcast `ut:error`
+// (surfaced as a toast) instead of throwing silently. The server response shape
+// from /api/features* is already the Feature shape (ghIssueToFeature on the
+// server). We trust it and return as-is.
 
 export async function createFeature(
   _org: string,
@@ -133,35 +128,23 @@ export async function createFeature(
     plan?: string;
   },
 ): Promise<Feature> {
-  const res = await apiFetch("/api/features", {
-    method: "POST",
-    body: JSON.stringify({
-      title,
-      status: opts.status,
-      owners: opts.owners ?? [],
-      plan: opts.plan ?? "",
-    }),
+  return apiPost<Feature>("/api/features", {
+    title,
+    status: opts.status,
+    owners: opts.owners ?? [],
+    plan: opts.plan ?? "",
   });
-  return handleFeatureResponse(res);
 }
 
 export async function updateFeature(_org: string, updated: Feature): Promise<Feature> {
-  const res = await apiFetch(`/api/features/${updated.id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      title: updated.title,
-      status: updated.status,
-      owners: updated.owners,
-      plan: updated.plan ?? "",
-    }),
+  return apiPatch<Feature>(`/api/features/${updated.id}`, {
+    title: updated.title,
+    status: updated.status,
+    owners: updated.owners,
+    plan: updated.plan ?? "",
   });
-  return handleFeatureResponse(res);
 }
 
 export async function deleteFeature(_org: string, issueNumber: number): Promise<void> {
-  const res = await apiFetch(`/api/features/${issueNumber}`, { method: "DELETE" });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((body as { error?: string }).error ?? `API error: ${res.status}`);
-  }
+  await apiDelete<unknown>(`/api/features/${issueNumber}`);
 }

@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../api", () => ({
   apiGet: vi.fn(),
-  apiFetch: vi.fn(),
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
 }));
 
-import { apiGet, apiFetch } from "../api";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../api";
 import {
   fetchFeaturesFromD1,
   createFeature,
@@ -15,30 +17,14 @@ import {
 } from "../github-features";
 
 const mockGet = vi.mocked(apiGet);
-const mockFetch = vi.mocked(apiFetch);
+const mockPost = vi.mocked(apiPost);
+const mockPatch = vi.mocked(apiPatch);
+const mockDelete = vi.mocked(apiDelete);
 
 beforeEach(() => {
   vi.resetAllMocks();
 });
 afterEach(() => vi.restoreAllMocks());
-
-function okResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => body,
-  } as unknown as Response;
-}
-
-function errResponse(status: number, body: unknown): Response {
-  return {
-    ok: false,
-    status,
-    statusText: "Error",
-    json: async () => body,
-  } as unknown as Response;
-}
 
 describe("withStatusTransition", () => {
   const base = { id: 1, title: "x", status: "todo" as const, owners: [] };
@@ -141,60 +127,57 @@ describe("fetchFeaturesFromD1", () => {
 
 describe("createFeature", () => {
   it("POSTs to /api/features with the requested fields", async () => {
-    mockFetch.mockResolvedValue(okResponse({
+    mockPost.mockResolvedValue({
       id: 5, title: "Add login", status: "todo", owners: [], plan: "Build it",
-    }));
+    });
     const result = await createFeature("org", "Add login", { status: "todo", plan: "Build it" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/features", {
-      method: "POST",
-      body: JSON.stringify({ title: "Add login", status: "todo", owners: [], plan: "Build it" }),
+    expect(mockPost).toHaveBeenCalledWith("/api/features", {
+      title: "Add login", status: "todo", owners: [], plan: "Build it",
     });
     expect(result.id).toBe(5);
     expect(result.title).toBe("Add login");
   });
 
-  it("forwards owners when provided", async () => {
-    mockFetch.mockResolvedValue(okResponse({ id: 5, title: "X", status: "staging", owners: ["alice"] }));
+  it("forwards owners when provided, defaults plan to empty string", async () => {
+    mockPost.mockResolvedValue({ id: 5, title: "X", status: "staging", owners: ["alice"] });
     await createFeature("org", "X", { status: "staging", owners: ["alice"] });
-    const [, init] = mockFetch.mock.calls[0];
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(init?.body as string)).toEqual({
+    expect(mockPost).toHaveBeenCalledWith("/api/features", {
       title: "X", status: "staging", owners: ["alice"], plan: "",
     });
   });
 
-  it("throws with the server error message on non-OK responses", async () => {
-    mockFetch.mockResolvedValue(errResponse(422, { error: "title is required" }));
+  it("propagates the error when the API helper rejects", async () => {
+    mockPost.mockRejectedValue(new Error("title is required"));
     await expect(createFeature("org", "", { status: "todo" })).rejects.toThrow(/title is required/);
   });
 });
 
 describe("updateFeature", () => {
   it("PATCHes /api/features/:id with title, status, owners, plan", async () => {
-    mockFetch.mockResolvedValue(okResponse({
+    mockPatch.mockResolvedValue({
       id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
       linkedPRs: [{ repo: "api", number: 100 }],
-    }));
+    });
     const result = await updateFeature("org", {
       id: 5, title: "X", status: "ready", owners: ["alice"],
       plan: "do it", linkedPRs: [{ repo: "api", number: 100 }],
     });
-    expect(mockFetch).toHaveBeenCalledWith("/api/features/5", {
-      method: "PATCH",
-      body: JSON.stringify({ title: "X", status: "ready", owners: ["alice"], plan: "do it" }),
+    expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
+      title: "X", status: "ready", owners: ["alice"], plan: "do it",
     });
     expect(result.linkedPRs).toEqual([{ repo: "api", number: 100 }]);
   });
 
   it("sends an empty string plan when feature.plan is undefined", async () => {
-    mockFetch.mockResolvedValue(okResponse({ id: 5, title: "X", status: "todo", owners: [] }));
+    mockPatch.mockResolvedValue({ id: 5, title: "X", status: "todo", owners: [] });
     await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
-    const [, init] = mockFetch.mock.calls[0];
-    expect(JSON.parse(init?.body as string).plan).toBe("");
+    expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
+      title: "X", status: "todo", owners: [], plan: "",
+    });
   });
 
-  it("throws with the server error message on non-OK responses", async () => {
-    mockFetch.mockResolvedValue(errResponse(404, { error: "Feature not found" }));
+  it("propagates the error when the API helper rejects", async () => {
+    mockPatch.mockRejectedValue(new Error("Feature not found"));
     await expect(updateFeature("org", { id: 99, title: "X", status: "todo", owners: [] }))
       .rejects.toThrow(/Feature not found/);
   });
@@ -202,13 +185,13 @@ describe("updateFeature", () => {
 
 describe("deleteFeature", () => {
   it("DELETEs /api/features/:id", async () => {
-    mockFetch.mockResolvedValue(okResponse({ ok: true }));
+    mockDelete.mockResolvedValue({ ok: true });
     await deleteFeature("org", 5);
-    expect(mockFetch).toHaveBeenCalledWith("/api/features/5", { method: "DELETE" });
+    expect(mockDelete).toHaveBeenCalledWith("/api/features/5");
   });
 
-  it("throws with the server error message on non-OK responses", async () => {
-    mockFetch.mockResolvedValue(errResponse(500, { error: "boom" }));
+  it("propagates the error when the API helper rejects", async () => {
+    mockDelete.mockRejectedValue(new Error("boom"));
     await expect(deleteFeature("org", 5)).rejects.toThrow(/boom/);
   });
 });
