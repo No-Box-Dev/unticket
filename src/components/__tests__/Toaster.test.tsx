@@ -71,4 +71,21 @@ describe("Toaster", () => {
     });
     expect(screen.queryByText("Temporary")).not.toBeInTheDocument();
   });
+
+  it("does not reset an existing toast's timer when a new one arrives", () => {
+    vi.useFakeTimers();
+    render(<Toaster />);
+    emit("first");
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    // A second toast 5s later must not extend the first toast's lifetime.
+    emit("second");
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    // 8s elapsed for "first" → gone; "second" (3s old) still on screen.
+    expect(screen.queryByText("first")).not.toBeInTheDocument();
+    expect(screen.getByText("second")).toBeInTheDocument();
+  });
 });

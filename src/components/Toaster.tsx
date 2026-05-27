@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 interface Toast {
@@ -42,8 +42,14 @@ export function Toaster() {
     return () => window.removeEventListener("ut:error", handler);
   }, []);
 
-  const dismiss = (id: number) =>
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  // Stable reference: ToastItem's auto-dismiss effect depends on `onDismiss`,
+  // so recreating this each render would clear and restart every existing
+  // toast's timer whenever a new toast arrives — letting old toasts linger
+  // past their TTL during an error burst.
+  const dismiss = useCallback(
+    (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id)),
+    [],
+  );
 
   if (toasts.length === 0) return null;
 
