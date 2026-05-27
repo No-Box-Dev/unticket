@@ -84,9 +84,18 @@ export function useCreateFeature() {
       return { tempId };
     },
     onSuccess: (newFeature, _args, context) => {
-      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>
-        (old ?? []).map((f) => (f.id === context?.tempId ? newFeature : f)),
-      );
+      qc.setQueryData<Feature[]>(["features", selectedOrg], (old) => {
+        const list = old ?? [];
+        // Normal path: swap the temp card for the real feature.
+        if (list.some((f) => f.id === context?.tempId)) {
+          return list.map((f) => (f.id === context?.tempId ? newFeature : f));
+        }
+        // The temp card vanished (e.g. a background refetch replaced the cache
+        // during the ~2s round-trip). Append the real feature so the create
+        // never silently disappears — but guard against a refetch that already
+        // included it, to avoid a duplicate.
+        return list.some((f) => f.id === newFeature.id) ? list : [...list, newFeature];
+      });
     },
     onError: (_err, _args, context) => {
       // Surgically drop just the failed optimistic card by its tempId. We
