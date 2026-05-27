@@ -138,7 +138,7 @@ describe("App", () => {
     expect(screen.getByTestId("dashboard")).toBeInTheDocument();
   });
 
-  it("ErrorBar surfaces 'ut:error' window events and dismisses on click", () => {
+  it("Toaster surfaces 'ut:error' window events and dismisses on click", () => {
     mAuth.mockReturnValue({
       user: null,
       isLoading: false,
@@ -157,7 +157,7 @@ describe("App", () => {
     });
     expect(screen.getByText("Boom")).toBeInTheDocument();
     expect(screen.getByText("500")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("dismiss"));
+    fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByText("Boom")).not.toBeInTheDocument();
   });
 });

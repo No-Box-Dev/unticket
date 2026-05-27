@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../api", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
-  apiFetch: vi.fn(),
+  apiDelete: vi.fn(),
 }));
 
-import { apiGet, apiPost, apiFetch } from "../api";
+import { apiGet, apiPost, apiDelete } from "../api";
 import {
   fetchLinkedPRs,
   fetchLinkedFeatures,
@@ -18,12 +18,12 @@ import {
 
 const mockGet = vi.mocked(apiGet);
 const mockPost = vi.mocked(apiPost);
-const mockFetch = vi.mocked(apiFetch);
+const mockDelete = vi.mocked(apiDelete);
 
 beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockReset();
-  mockFetch.mockReset();
+  mockDelete.mockReset();
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -57,48 +57,23 @@ describe("linkPR", () => {
 
 describe("unlinkPR", () => {
   it("DELETEs the matching URL", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({ ok: true }),
-    } as Response);
+    mockDelete.mockResolvedValue({ ok: true });
     await unlinkPR(5, "api", 100);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockDelete).toHaveBeenCalledWith(
       "/api/pr-links?feature=5&pr_repo=api&pr_number=100",
-      { method: "DELETE" },
     );
   });
 
   it("encodes special characters in the repo name", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true }),
-    } as Response);
+    mockDelete.mockResolvedValue({ ok: true });
     await unlinkPR(5, "a/b c", 1);
-    const [url] = mockFetch.mock.calls[0];
+    const [url] = mockDelete.mock.calls[0];
     expect(url).toContain("pr_repo=a%2Fb%20c");
   });
 
-  it("throws with the server error message on non-ok", async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 404,
-      statusText: "Not Found",
-      json: async () => ({ error: "PR not linked" }),
-    } as Response);
+  it("propagates the error when the API helper rejects", async () => {
+    mockDelete.mockRejectedValue(new Error("PR not linked"));
     await expect(unlinkPR(5, "api", 1)).rejects.toThrow("PR not linked");
-  });
-
-  it("falls back to statusText when the server returns no JSON body", async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: "Server Error",
-      json: async () => { throw new Error("not json"); },
-    } as unknown as Response);
-    await expect(unlinkPR(5, "api", 1)).rejects.toThrow("Server Error");
   });
 });
 

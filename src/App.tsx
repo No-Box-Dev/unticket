@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useOrgs } from "@/hooks/useGitHub";
@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { OrgPickerPage } from "@/pages/OrgPickerPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { Spinner } from "@/components/Spinner";
+import { Toaster } from "@/components/Toaster";
 
 const IssueDetailPage = lazy(() =>
   import("@/pages/details/IssueDetailPage").then((m) => ({ default: m.IssueDetailPage })),
@@ -70,37 +71,6 @@ function AuthenticatedRoutes() {
   );
 }
 
-function ErrorBar() {
-  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const handler = (e: Event) => {
-      const { message, status } = (e as CustomEvent).detail;
-      setError({ message, status });
-      clearTimeout(timer);
-      timer = setTimeout(() => setError(null), 10000);
-    };
-    window.addEventListener("ut:error", handler);
-    return () => { window.removeEventListener("ut:error", handler); clearTimeout(timer); };
-  }, []);
-
-  if (!error) return null;
-
-  return (
-    <div
-      className="fixed top-0 left-0 right-0 z-[100] bg-red-50 border-b border-red-200 px-4 sm:px-8 py-1.5 flex items-center justify-between cursor-pointer"
-      onClick={() => setError(null)}
-    >
-      <span className="text-xs text-red-600 font-mono truncate">
-        {error.status ? <span className="font-semibold mr-1.5">{error.status}</span> : null}
-        {error.message}
-      </span>
-      <span className="text-xs text-red-400 ml-2 shrink-0">dismiss</span>
-    </div>
-  );
-}
-
 export function App() {
   const { user, isLoading, authError, selectedOrg, setSelectedOrg } = useAuth();
   const { data: orgs, isLoading: orgsLoading } = useOrgs();
@@ -127,7 +97,7 @@ export function App() {
   if (authError) {
     return (
       <>
-        <ErrorBar />
+        <Toaster />
         <div className="min-h-screen bg-stone-50 flex items-center justify-center">
           <div className="text-center space-y-3 max-w-sm mx-auto px-4">
             <div className="text-amber-600 text-sm font-medium">{authError}</div>
@@ -146,7 +116,7 @@ export function App() {
   if (isLoading || (user && orgsLoading)) {
     return (
       <>
-        <ErrorBar />
+        <Toaster />
         <div className="min-h-screen bg-stone-50 flex items-center justify-center">
           <Spinner size="lg" />
         </div>
@@ -154,7 +124,7 @@ export function App() {
     );
   }
 
-  if (!user) return <><ErrorBar /><LoginPage /></>;
-  if (!selectedOrg) return <><ErrorBar /><OrgPickerPage /></>;
-  return <><ErrorBar /><AuthenticatedRoutes /></>;
+  if (!user) return <><Toaster /><LoginPage /></>;
+  if (!selectedOrg) return <><Toaster /><OrgPickerPage /></>;
+  return <><Toaster /><AuthenticatedRoutes /></>;
 }
