@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiFetch } from "./api";
+import { apiGet, apiPost, apiDelete } from "./api";
 
 export interface PRLinkRow {
   pr_repo: string;
@@ -47,15 +47,9 @@ export async function unlinkPR(
   prRepo: string,
   prNumber: number,
 ): Promise<{ ok: boolean }> {
-  const res = await apiFetch(
+  return apiDelete<{ ok: boolean }>(
     `/api/pr-links?feature=${featureNumber}&pr_repo=${encodeURIComponent(prRepo)}&pr_number=${prNumber}`,
-    { method: "DELETE" },
   );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((body as { error?: string }).error ?? `API error: ${res.status}`);
-  }
-  return res.json();
 }
 
 export interface BackfillMatchesResult {

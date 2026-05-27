@@ -82,9 +82,15 @@
   --color-chart-5: #9d7ea8;
 
   --animate-slide-in-right: slide-in-right 0.2s ease-out;
+  --animate-toast-in: toast-in 0.18s ease-out;
 }
 
 @keyframes slide-in-right {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
+}
+
+@keyframes toast-in {
+  from { transform: translateY(0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

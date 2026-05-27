@@ -102,6 +102,78 @@ describe("useCreateFeature", () => {
     });
   });
 
+  it("appends the feature if a refetch dropped the temp card mid-flight", async () => {
+    const created: Feature = {
+      id: 42, title: "New feature", owners: [], status: "todo",
+    };
+    const refetched: Feature = { id: 7, title: "From server", owners: [], status: "todo" };
+    let resolveCreate: (f: Feature) => void = () => {};
+    mockCreateFeature.mockReturnValue(
+      new Promise<Feature>((resolve) => { resolveCreate = resolve; }),
+    );
+
+    const { wrapper, queryClient } = createQueryWrapper();
+    queryClient.setQueryData(["features", "my-org"], []);
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData<Feature[]>(["features", "my-org"])?.[0].pending).toBe(true);
+    });
+
+    // Simulate a background refetch replacing the cache — the temp card is gone.
+    queryClient.setQueryData(["features", "my-org"], [refetched]);
+
+    await act(async () => {
+      resolveCreate(created);
+    });
+
+    // The created feature must still land in the cache (appended, not dropped).
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached?.map((f) => f.id).sort((a, b) => a - b)).toEqual([7, 42]);
+    });
+  });
+
+  it("does not duplicate when a refetch already included the created feature", async () => {
+    const created: Feature = {
+      id: 42, title: "New feature", owners: [], status: "todo",
+    };
+    let resolveCreate: (f: Feature) => void = () => {};
+    mockCreateFeature.mockReturnValue(
+      new Promise<Feature>((resolve) => { resolveCreate = resolve; }),
+    );
+
+    const { wrapper, queryClient } = createQueryWrapper();
+    queryClient.setQueryData(["features", "my-org"], []);
+
+    const { result } = renderHook(() => useCreateFeature(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ title: "New feature", status: "todo" });
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData<Feature[]>(["features", "my-org"])?.[0].pending).toBe(true);
+    });
+
+    // Refetch replaced the cache AND already includes the now-created feature.
+    queryClient.setQueryData(["features", "my-org"], [created]);
+
+    await act(async () => {
+      resolveCreate(created);
+    });
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<Feature[]>(["features", "my-org"]);
+      expect(cached).toEqual([created]);
+    });
+  });
+
   it("rolls back the pending card on error", async () => {
     mockCreateFeature.mockRejectedValue(new Error("fail"));
 
