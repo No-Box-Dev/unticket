@@ -22,12 +22,13 @@ import {
   fetchMe,
   fetchRateLimit,
   updateIssueState,
+  fetchEngineerStats,
   fetchIssueDetail,
   fetchPrDetail,
   fetchIssueBody,
   fetchPrBody,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats, EngineerStats } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -250,6 +251,17 @@ export function usePRStats() {
   });
 }
 
+/** Per-member counts (open PRs, reviewing, assigned issues, lifetime/recent PRs, issues closed). */
+export function useEngineerStats() {
+  const { selectedOrg } = useAuth();
+  return useQuery<EngineerStats>({
+    queryKey: ["engineerStats", selectedOrg],
+    queryFn: fetchEngineerStats,
+    enabled: !!selectedOrg,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
 // ---------- Issue assignee mutation ----------
 
 export function useUpdateIssueAssignees() {
@@ -330,6 +342,7 @@ export function useTriggerSync() {
       qc.invalidateQueries({ queryKey: ["mergedPRs", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["allPRs", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["allIssues", selectedOrg] });
+      qc.invalidateQueries({ queryKey: ["engineerStats", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["orgMembers", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["features", selectedOrg] });
       qc.invalidateQueries({ queryKey: ["syncStatus", selectedOrg] });

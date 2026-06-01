@@ -697,6 +697,21 @@ export async function fetchPRStats(): Promise<PRStats> {
   return apiGet<PRStats>("/api/prs?meta=stats");
 }
 
+// Per-member counts for the Engineers tab, aggregated server-side. Each map is
+// keyed by GitHub login. See functions/api/engineer-stats.ts.
+export interface EngineerStats {
+  openPRs: Record<string, number>;
+  reviewing: Record<string, number>;
+  assignedIssues: Record<string, number>;
+  lifetimePRs: Record<string, number>;
+  prsLast4Weeks: Record<string, number>;
+  issuesClosed: Record<string, number>;
+}
+
+export async function fetchEngineerStats(): Promise<EngineerStats> {
+  return apiGet<EngineerStats>("/api/engineer-stats");
+}
+
 export async function updateIssueAssignees(
   repo: string,
   issueNumber: number,
