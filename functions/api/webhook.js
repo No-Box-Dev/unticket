@@ -9,20 +9,15 @@ import {
   removeTeam,
   addTeamMember,
   removeTeamMember,
-  bootstrapInstallation,
   markRepoArchived,
   removeRepo,
   renameRepo,
   touchRepoPushed,
-  syncRepo,
 } from "../lib/github-sync";
 import { parseFeatureMetadata } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
-import { getInstallationToken } from "../lib/github-app";
-import { narrateEvent } from "../lib/narrator";
-import { matchPRToFeatures } from "../lib/feature-matcher";
-import { recordFailure } from "../lib/op-failures";
+import { TASK, enqueueTask } from "../lib/tasks";
 
 // Webhook actions that should trigger the LLM matcher. Reviews / labels are
 // excluded — they don't change the PR body, branch, or title, so re-running
@@ -136,18 +131,12 @@ export async function onRequestPost(context) {
     try {
       const stored = await storeEvent(db, event, deliveryId, payload, orgLogin);
       if (stored?.id) {
-        // Narrate out-of-band so the webhook returns immediately.
-        context.waitUntil(
-          narrateEvent(context.env, stored.id).catch(async (err) => {
-            console.error("[unticket narrator] narrateEvent failed:", err);
-            await recordFailure(db, {
-              ownerId: orgLogin,
-              op: "narrateEvent",
-              deliveryId,
-              error: err,
-            });
-          })
-        );
+        // Narrate via the durable queue so the webhook returns immediately and
+        // the work survives a failed attempt (retried, then dead-lettered).
+        await enqueueTask(context.env, orgLogin, deliveryId, {
+          type: TASK.NARRATE,
+          eventId: stored.id,
+        });
       }
     } catch (err) {
       console.error("[unticket webhook] storeEvent failed:", err);
@@ -229,17 +218,12 @@ export async function onRequestPost(context) {
       // branch / title itself and skips PRs that already have a link, so
       // we don't need a deterministic pre-pass.
       if (LLM_MATCH_ACTIONS.has(action)) {
-        context.waitUntil(
-          matchPRToFeatures(context.env, orgId, repo, pr).catch(async (err) => {
-            console.error(`[unticket feature-matcher] webhook ${repo}#${pr.number} failed:`, err?.message ?? err);
-            await recordFailure(db, {
-              ownerId: orgLogin,
-              op: "matchPRToFeatures",
-              deliveryId: `${repo}#${pr.number}`,
-              error: err,
-            });
-          })
-        );
+        await enqueueTask(context.env, orgLogin, `${repo}#${pr.number}`, {
+          type: TASK.MATCH_PR,
+          orgId,
+          repo,
+          pr,
+        });
       }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
     }
@@ -386,17 +370,12 @@ async function handleInstallationEvent(context, payload, deliveryId) {
       .bind(accountLogin)
       .first();
     if (orgRow?.id) {
-      context.waitUntil(
-        bootstrapInstallation(context.env, orgRow.id, accountLogin, installationId).catch(async (err) => {
-          console.error(`[unticket bootstrap] failed for ${accountLogin}:`, err?.stack ?? err);
-          await recordFailure(db, {
-            ownerId: accountLogin,
-            op: "bootstrapInstallation",
-            deliveryId,
-            error: err,
-          });
-        })
-      );
+      await enqueueTask(context.env, accountLogin, deliveryId, {
+        type: TASK.BOOTSTRAP,
+        orgId: orgRow.id,
+        accountLogin,
+        installationId,
+      });
     }
     return jsonResponse({ ok: true, event: "installation", action, org: accountLogin, bootstrapping: true });
   }
@@ -472,38 +451,22 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
     }
   }
 
-  // Backfill added repos out-of-band — keeps the webhook fast and avoids
-  // GitHub's 10s timeout for orgs that grant access to many repos at once.
+  // Backfill added repos via the queue — one durable, independently-retried
+  // job per repo. Keeps the webhook fast and avoids GitHub's 10s timeout for
+  // orgs that grant access to many repos at once.
   if (orgRow?.id && installationId && Array.isArray(payload.repositories_added) && payload.repositories_added.length > 0) {
     const repoNames = payload.repositories_added
       .map((r) => r?.name ?? (r?.full_name?.split("/")[1] ?? null))
       .filter(Boolean);
-    context.waitUntil((async () => {
-      try {
-        const token = await getInstallationToken(context.env, installationId);
-        for (const repo of repoNames) {
-          try {
-            await syncRepo(db, token, orgRow.id, accountLogin, repo, true);
-          } catch (err) {
-            console.error(`[unticket webhook] backfill repo ${repo} failed:`, err?.message ?? err);
-            await recordFailure(db, {
-              ownerId: accountLogin,
-              op: "syncRepo",
-              deliveryId: repo,
-              error: err,
-            });
-          }
-        }
-      } catch (err) {
-        console.error(`[unticket webhook] backfill failed for ${accountLogin}:`, err?.stack ?? err);
-        await recordFailure(db, {
-          ownerId: accountLogin,
-          op: "installationReposBackfill",
-          deliveryId,
-          error: err,
-        });
-      }
-    })());
+    for (const repo of repoNames) {
+      await enqueueTask(context.env, accountLogin, repo, {
+        type: TASK.SYNC_REPO,
+        orgId: orgRow.id,
+        accountLogin,
+        installationId,
+        repo,
+      });
+    }
   }
 
   return jsonResponse({ ok: true, event: "installation_repositories", action });

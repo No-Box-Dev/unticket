@@ -95,7 +95,11 @@ async function makeRequest({ event, payload }) {
 }
 
 function makeCtx({ db, request, env = {}, waitUntil = vi.fn() }) {
-  return { request, env: { DB: db, GITHUB_WEBHOOK_SECRET: SECRET, ...env }, waitUntil };
+  return {
+    request,
+    env: { DB: db, GITHUB_WEBHOOK_SECRET: SECRET, TASK_QUEUE: { send: vi.fn() }, ...env },
+    waitUntil,
+  };
 }
 
 beforeEach(() => {
@@ -266,9 +270,9 @@ describe("POST /api/webhook — installation event", () => {
     expect(body.skipped).toBe("missing installation/account");
   });
 
-  it("installation.created upserts org + kicks off bootstrap via waitUntil", async () => {
+  it("installation.created upserts org + enqueues bootstrap task", async () => {
     const db = makeDb({ firstByFragment: { "SELECT id FROM orgs": { id: 9 } } });
-    const waitUntil = vi.fn();
+    const send = vi.fn();
     const req = await makeRequest({
       event: "installation",
       payload: {
@@ -277,9 +281,12 @@ describe("POST /api/webhook — installation event", () => {
         repositories: [{ full_name: "acme/api" }],
       },
     });
-    const res = await onRequestPost(makeCtx({ db, request: req, waitUntil }));
+    const res = await onRequestPost(makeCtx({ db, request: req, env: { TASK_QUEUE: { send } } }));
     expect(res.status).toBe(200);
-    expect(waitUntil).toHaveBeenCalled();
+    // Bootstrap now runs via the durable queue instead of context.waitUntil.
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "bootstrap", orgId: 9, accountLogin: "acme", installationId: 100 }),
+    );
     // First batch is the orgs upsert
     expect(db._calls.batch[0][0].sql).toMatch(/INSERT INTO orgs/);
   });

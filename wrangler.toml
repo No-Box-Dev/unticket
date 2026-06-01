@@ -6,3 +6,12 @@ pages_build_output_dir = "dist"
 binding = "DB"
 database_name = "unticket"
 database_id = "c94084e6-d0be-423c-8de6-249e7cf8bf25"
+
+# Durable background-work queue. functions/api/webhook.js produces here instead
+# of using context.waitUntil; the cron Worker consumes (see cron/wrangler.toml).
+# PROVISION BEFORE DEPLOY: `wrangler queues create unticket-tasks` (+ the DLQ).
+# If the binding is absent, enqueueTask records to op_failures instead of 500ing
+# the webhook — but the queue must exist for background work to actually run.
+[[queues.producers]]
+binding = "TASK_QUEUE"
+queue = "unticket-tasks"
