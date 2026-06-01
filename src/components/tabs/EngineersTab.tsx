@@ -83,9 +83,13 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
     return engineers.find((e) => e.login === login) ?? engineers[0];
   }, [selectedLogin, engineers]);
 
-  // Detail-panel data is fetched on demand for the SELECTED engineer only —
-  // server-filtered, so we never download every PR/issue in the org.
-  const detailLogin = selected?.login;
+  // Detail-panel data is fetched on demand, and ONLY when an engineer is
+  // actually selected (detail view) — the grid view fetches none of it.
+  // `selected` defaults to engineers[0] for rendering, so gate on selectedLogin
+  // (not selected) or these queries would fire on the grid. Open PRs + assigned
+  // issues are server-filtered; the reviewing list reuses useReviewPRs (open
+  // PRs, client-filtered by reviewer — bounded to open, only in detail view).
+  const detailLogin = selectedLogin ? selected?.login : undefined;
   const openPrsQuery = usePaginatedPrs(
     { author: detailLogin, state: "open", pageSize: 100, sort: "updated_at", sortDir: "desc" },
     !!detailLogin,
