@@ -40,6 +40,9 @@ const EMPTY = {
 };
 
 export async function onRequestGet(context: Ctx): Promise<Response> {
+  // getCtx returns context.data, populated by functions/_middleware.js after it
+  // authenticates the request and resolves the org — orgId/orgLogin are always
+  // present on any authed /api route. db.js is untyped JS, hence the cast.
   const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
 
   const activeRepos: string[] = await getActiveRepoNames(context.env.DB, orgId, orgLogin);

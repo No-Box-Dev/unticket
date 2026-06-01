@@ -42,6 +42,9 @@ function formatRelative(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+// `repoNames` is part of the shared tab-prop contract (passed by DashboardPage
+// like the other tabs) but unused here — counts now come from the server-side
+// engineer-stats aggregation, not from client-filtering repo data.
 export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
