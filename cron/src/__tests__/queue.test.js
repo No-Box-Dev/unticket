@@ -64,7 +64,8 @@ describe("cron queue consumer", () => {
 
   it("records to op_failures and acks once the delivery limit is reached", async () => {
     narrateEvent.mockRejectedValueOnce(new Error("boom"));
-    const m = msg({ type: "narrate", eventId: 1, ownerId: "acme", deliveryId: "d-1" }, 4);
+    // MAX_DELIVERIES = 5 (1 initial + max_retries 4); the 5th delivery is terminal.
+    const m = msg({ type: "narrate", eventId: 1, ownerId: "acme", deliveryId: "d-1" }, 5);
     await worker.queue({ messages: [m] }, env);
     expect(recordFailure).toHaveBeenCalledWith(
       env.DB,

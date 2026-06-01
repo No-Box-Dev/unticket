@@ -23,6 +23,7 @@ export async function archiveOldEvents(env, nowMs) {
   let batches = 0;
 
   for (; batches < MAX_BATCHES_PER_RUN; batches++) {
+    // SELECT * is intentional here — the whole row is archived verbatim to NDJSON.
     const res = await env.DB
       .prepare("SELECT * FROM events WHERE created_at < ? ORDER BY id LIMIT ?")
       .bind(cutoff, BATCH_SIZE)

@@ -21,9 +21,10 @@ import { recordFailure } from "../../functions/lib/op-failures.js";
 // Tune up once we measure real numbers.
 const MAX_ORGS_PER_TICK = 10;
 
-// Deliveries (1-based) before a failing task is given up on and recorded to
-// op_failures. Keep in sync with max_retries in cron/wrangler.toml.
-const MAX_DELIVERIES = 4;
+// Cloudflare delivers a message up to (1 + max_retries) times (msg.attempts is
+// 1-based). We record the terminal failure on the FINAL delivery, so this must
+// equal max_retries + 1 (max_retries is set in cron/wrangler.toml).
+const MAX_DELIVERIES = 5;
 
 export default {
   async scheduled(event, env, ctx) {

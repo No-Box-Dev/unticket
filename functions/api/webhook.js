@@ -218,11 +218,22 @@ export async function onRequestPost(context) {
       // branch / title itself and skips PRs that already have a link, so
       // we don't need a deterministic pre-pass.
       if (LLM_MATCH_ACTIONS.has(action)) {
+        // Send only the fields matchPRToFeatures reads — the full GitHub PR
+        // payload can approach Cloudflare's 128KB queue-message limit.
         await enqueueTask(context.env, orgLogin, `${repo}#${pr.number}`, {
           type: TASK.MATCH_PR,
           orgId,
           repo,
-          pr,
+          pr: {
+            number: pr.number,
+            title: pr.title,
+            body: pr.body,
+            created_at: pr.created_at,
+            user: pr.user ? { login: pr.user.login } : null,
+            labels: (pr.labels ?? []).map((l) => ({ name: l.name })),
+            head: { ref: pr.head?.ref },
+            base: { ref: pr.base?.ref },
+          },
         });
       }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
