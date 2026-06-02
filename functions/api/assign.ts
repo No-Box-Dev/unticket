@@ -1,5 +1,25 @@
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app";
+import { validate } from "../lib/validate";
+
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string };
+  request: Request;
+}
+
+// Body schema — replaces the previous hand-rolled regex/type checks. The repo +
+// assignee patterns guard against path traversal / injection into the GitHub URL.
+const AssignBody = z.object({
+  repo: z.string().regex(/^[\w.-]+$/, "Invalid repo name"),
+  issue_number: z.number().int().positive(),
+  assignees: z.array(z.string().regex(/^[a-zA-Z0-9-]+$/, "Invalid assignee username")),
+});
 
 // POST /api/assign — update issue assignees on GitHub and in D1.
 //
@@ -7,39 +27,29 @@ import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app
 // any logged-in user can change assignees regardless of their personal
 // permissions on the target repo. Matches the feature kanban auth model;
 // see the audit in functions/api/features/[number].js for the rationale.
-export async function onRequestPost(context) {
-  const { orgId, orgLogin } = getCtx(context);
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
   if (!orgLogin) return errorResponse("Missing org context", 400);
 
-  let body;
-  try { body = await context.request.json(); } catch {
+  let rawBody: unknown;
+  try {
+    rawBody = await context.request.json();
+  } catch {
     return errorResponse("Invalid JSON body", 400);
   }
-  const { repo, issue_number, assignees } = body;
 
-  if (!repo || !issue_number || !Array.isArray(assignees)) {
-    return errorResponse("Missing repo, issue_number, or assignees");
-  }
-
-  // Validate inputs to prevent path traversal and injection
-  if (typeof repo !== "string" || !/^[\w.-]+$/.test(repo)) {
-    return errorResponse("Invalid repo name", 400);
-  }
-  if (!Number.isInteger(issue_number) || issue_number <= 0) {
-    return errorResponse("Invalid issue_number", 400);
-  }
-  if (!assignees.every((a) => typeof a === "string" && /^[a-zA-Z0-9-]+$/.test(a))) {
-    return errorResponse("Invalid assignee username", 400);
-  }
+  const parsed = validate(AssignBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const { repo, issue_number, assignees } = parsed.data;
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
 
-  let token;
+  let token: string;
   try {
     token = await getInstallationToken(context.env, installationId);
   } catch (err) {
-    console.error("[assign] install token fetch failed", { msg: err?.message });
+    console.error("[assign] install token fetch failed", { msg: (err as Error)?.message });
     return errorResponse("Failed to acquire GitHub App token", 500);
   }
 
@@ -58,11 +68,11 @@ export async function onRequestPost(context) {
   );
 
   if (!ghRes.ok) {
-    const body = await ghRes.json().catch(() => ({}));
-    return errorResponse(body.message || `GitHub API error: ${ghRes.status}`, ghRes.status);
+    const errBody = await ghRes.json().catch(() => ({})) as { message?: string };
+    return errorResponse(errBody.message || `GitHub API error: ${ghRes.status}`, ghRes.status);
   }
 
-  const ghIssue = await ghRes.json();
+  const ghIssue = await ghRes.json() as { assignees?: { login: string; avatar_url?: string }[] };
 
   const assigneesJson = JSON.stringify(
     (ghIssue.assignees || []).map((a) => ({

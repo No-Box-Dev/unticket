@@ -7,6 +7,8 @@
 //   const parsed = validate(BodySchema, await request.json());
 //   if (!parsed.ok) return parsed.response;
 //   parsed.data // typed
+//
+// Reference usage: functions/api/assign.ts.
 
 import type { z } from "zod";
 import { jsonResponse } from "./db";
