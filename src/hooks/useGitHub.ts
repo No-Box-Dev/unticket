@@ -23,12 +23,13 @@ import {
   fetchRateLimit,
   updateIssueState,
   fetchEngineerStats,
+  fetchEngineerActivity,
   fetchIssueDetail,
   fetchPrDetail,
   fetchIssueBody,
   fetchPrBody,
 } from "@/lib/github";
-import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats, EngineerStats } from "@/lib/github";
+import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse, IssueStats, PRStats, EngineerStats, EngineerActivity } from "@/lib/github";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -259,6 +260,17 @@ export function useEngineerStats() {
     queryFn: fetchEngineerStats,
     enabled: !!selectedOrg,
     staleTime: 2 * 60 * 1000,
+  });
+}
+
+/** Per-month PRs-opened + PRs-reviewed for one engineer (activity table). */
+export function useEngineerActivity(login: string) {
+  const { selectedOrg } = useAuth();
+  return useQuery<EngineerActivity>({
+    queryKey: ["engineerActivity", selectedOrg, login],
+    queryFn: () => fetchEngineerActivity(login),
+    enabled: !!selectedOrg && !!login,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
