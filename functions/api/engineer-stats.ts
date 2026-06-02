@@ -10,14 +10,12 @@
 //   - prsLast4Weeks:  PRs authored, created in the last 28 days (detail stat)
 //   - issuesClosed:   issues closed by the member               (detail stat)
 //
-// The reviewer/assignee lists live in JSON-array columns (`*_json`), so those
-// queries use json_each + json_extract via Drizzle's raw `sql` template. The
-// per-engineer detail *lists* (not counts) are fetched on demand by the tab.
+// Uses the native D1 batch + parameterized SQL (same proven pattern as prs.js /
+// issues.js). The reviewer/assignee lists live in JSON-array columns, queried
+// with json_each + json_extract.
 
-import { sql } from "drizzle-orm";
 import { getCtx, jsonResponse } from "../lib/db";
 import { getActiveRepoNames } from "../lib/inactive-repos";
-import { getDb } from "../lib/db-client";
 
 interface Env {
   DB: D1Database;
@@ -41,77 +39,78 @@ const EMPTY = {
 
 export async function onRequestGet(context: Ctx): Promise<Response> {
   // getCtx returns context.data, populated by functions/_middleware.js after it
-  // authenticates the request and resolves the org — orgId/orgLogin are always
-  // present on any authed /api route. db.js is untyped JS, hence the cast.
+  // authenticates the request and resolves the org. db.js is untyped JS, hence the cast.
   const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
 
   const activeRepos: string[] = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
   if (activeRepos.length === 0) return jsonResponse(EMPTY);
 
-  const db = getDb(context.env);
-  const repoFilter = sql`AND repo IN (${sql.join(
-    activeRepos.map((r) => sql`${r}`),
-    sql`, `,
-  )})`;
+  const db = context.env.DB;
+  const repoIn = `repo IN (${activeRepos.map(() => "?").join(",")})`;
   const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [openPRsRows, reviewingRows, assignedRows, lifetimeRows, recentRows, closedRows] =
-    await db.batch([
-      db.all<CountRow>(sql`
-        SELECT author AS login, COUNT(*) AS c
-        FROM pull_requests
-        WHERE org_id = ${orgId} AND state = 'open' AND author IS NOT NULL ${repoFilter}
-        GROUP BY author
-      `),
-      db.all<CountRow>(sql`
-        SELECT json_extract(value, '$.login') AS login, COUNT(*) AS c
-        FROM pull_requests, json_each(requested_reviewers_json)
-        WHERE org_id = ${orgId} AND state = 'open' AND draft = 0
-          AND requested_reviewers_json != '[]' ${repoFilter}
-        GROUP BY login
-      `),
-      db.all<CountRow>(sql`
-        SELECT json_extract(value, '$.login') AS login, COUNT(*) AS c
-        FROM issues, json_each(assignees_json)
-        WHERE org_id = ${orgId} AND state = 'open'
-          AND assignees_json != '[]' ${repoFilter}
-        GROUP BY login
-      `),
-      db.all<CountRow>(sql`
-        SELECT author AS login, COUNT(*) AS c
-        FROM pull_requests
-        WHERE org_id = ${orgId} AND author IS NOT NULL ${repoFilter}
-        GROUP BY author
-      `),
-      db.all<CountRow>(sql`
-        SELECT author AS login, COUNT(*) AS c
-        FROM pull_requests
-        WHERE org_id = ${orgId} AND author IS NOT NULL
-          AND created_at >= ${fourWeeksAgo} ${repoFilter}
-        GROUP BY author
-      `),
-      db.all<CountRow>(sql`
-        SELECT closed_by AS login, COUNT(*) AS c
-        FROM issues
-        WHERE org_id = ${orgId} AND state = 'closed' AND closed_by IS NOT NULL ${repoFilter}
-        GROUP BY closed_by
-      `),
-    ]);
+  const [openPRs, reviewing, assigned, lifetime, recent, closed] = await db.batch([
+    db
+      .prepare(
+        `SELECT author AS login, COUNT(*) AS c FROM pull_requests
+         WHERE org_id = ? AND state = 'open' AND author IS NOT NULL AND ${repoIn}
+         GROUP BY author`,
+      )
+      .bind(orgId, ...activeRepos),
+    db
+      .prepare(
+        `SELECT json_extract(value, '$.login') AS login, COUNT(*) AS c
+         FROM pull_requests, json_each(requested_reviewers_json)
+         WHERE org_id = ? AND state = 'open' AND draft = 0
+           AND requested_reviewers_json != '[]' AND ${repoIn}
+         GROUP BY login`,
+      )
+      .bind(orgId, ...activeRepos),
+    db
+      .prepare(
+        `SELECT json_extract(value, '$.login') AS login, COUNT(*) AS c
+         FROM issues, json_each(assignees_json)
+         WHERE org_id = ? AND state = 'open' AND assignees_json != '[]' AND ${repoIn}
+         GROUP BY login`,
+      )
+      .bind(orgId, ...activeRepos),
+    db
+      .prepare(
+        `SELECT author AS login, COUNT(*) AS c FROM pull_requests
+         WHERE org_id = ? AND author IS NOT NULL AND ${repoIn}
+         GROUP BY author`,
+      )
+      .bind(orgId, ...activeRepos),
+    db
+      .prepare(
+        `SELECT author AS login, COUNT(*) AS c FROM pull_requests
+         WHERE org_id = ? AND author IS NOT NULL AND created_at >= ? AND ${repoIn}
+         GROUP BY author`,
+      )
+      .bind(orgId, fourWeeksAgo, ...activeRepos),
+    db
+      .prepare(
+        `SELECT closed_by AS login, COUNT(*) AS c FROM issues
+         WHERE org_id = ? AND state = 'closed' AND closed_by IS NOT NULL AND ${repoIn}
+         GROUP BY closed_by`,
+      )
+      .bind(orgId, ...activeRepos),
+  ]);
 
   return jsonResponse({
-    openPRs: toCountMap(openPRsRows),
-    reviewing: toCountMap(reviewingRows),
-    assignedIssues: toCountMap(assignedRows),
-    lifetimePRs: toCountMap(lifetimeRows),
-    prsLast4Weeks: toCountMap(recentRows),
-    issuesClosed: toCountMap(closedRows),
+    openPRs: toCountMap(openPRs.results),
+    reviewing: toCountMap(reviewing.results),
+    assignedIssues: toCountMap(assigned.results),
+    lifetimePRs: toCountMap(lifetime.results),
+    prsLast4Weeks: toCountMap(recent.results),
+    issuesClosed: toCountMap(closed.results),
   });
 }
 
-function toCountMap(rows: CountRow[]): Record<string, number> {
+function toCountMap(rows: unknown[]): Record<string, number> {
   const map: Record<string, number> = {};
-  for (const row of rows) {
-    if (row.login) map[row.login] = Number(row.c);
+  for (const raw of rows as CountRow[]) {
+    if (raw.login) map[raw.login] = Number(raw.c);
   }
   return map;
 }
