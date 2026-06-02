@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { onRequestGet as listActors } from "../actors.js";
-import { onRequestGet as getActor, onRequestPatch as patchActor } from "../actors/[id].js";
+import { onRequestGet as getActor, onRequestPatch as patchActor } from "../actors/[id]";
 
 function makeDb({ allResult = [], firstResults = [] } = {}) {
   const calls = { all: [], first: [], run: [] };

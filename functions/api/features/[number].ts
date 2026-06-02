@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */ // dynamic D1 rows + GitHub issue payloads
 // /api/features/:number — single-feature mutations against the unticket
 // repo. PATCH edits title/status/owners/plan; DELETE closes the issue and
 // strips the unticket/feature/status labels.
@@ -13,6 +14,7 @@
 // token — so any logged-in user can edit the board even without personal
 // `issues:write` on {org}/unticket.
 
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
@@ -31,8 +33,32 @@ import {
   UNTICKET_LABEL,
   FEATURE_LABEL,
 } from "../../lib/feature-issues";
+import { validate } from "../../lib/validate";
 
-function parseFeatureNumber(context) {
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string };
+  request: Request;
+  params?: { number?: string };
+  waitUntil: (promise: Promise<unknown>) => void;
+}
+
+// Permissive body schema — every field is optional (PATCH is a partial
+// update). The status 422 check and owner-username filtering stay in the
+// handler: status validation needs the org's board stages, and the response
+// codes (422 for bad status) differ from the schema's 400.
+const PatchFeatureBody = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  owners: z.array(z.unknown()).optional(),
+  plan: z.string().optional(),
+}).passthrough();
+
+function parseFeatureNumber(context: Ctx): number | null {
   const raw = context.params?.number;
   const n = Number(raw);
   if (!Number.isInteger(n) || n <= 0) return null;
@@ -41,13 +67,16 @@ function parseFeatureNumber(context) {
 
 // Build an issue-shaped object from the desired new state so we can write D1
 // before GitHub. Mirrors the column set upsertFeatureRow expects.
-function synthesizeIssue({ row, number, title, body, status, owners }) {
+function synthesizeIssue(
+  { row, number, title, body, status, owners }:
+  { row: Record<string, any>; number: number; title: string; body: string; status: string; owners: string[] },
+) {
   return {
     number,
     title,
     state: "open",
     body,
-    labels: buildFeatureLabels(status).map((name) => ({ name, color: "" })),
+    labels: buildFeatureLabels(status).map((name: string) => ({ name, color: "" })),
     assignees: owners.map((login) => ({ login, avatar_url: "" })),
     milestone: row.milestone_title ? { title: row.milestone_title } : null,
     html_url: row.html_url,
@@ -60,17 +89,21 @@ function synthesizeIssue({ row, number, title, body, status, owners }) {
 // Body: { title?, status?, owners?: string[], plan?: string }
 // Any omitted field is left unchanged on GitHub (the current value is sent
 // back so a partial update doesn't blank out a field we didn't touch).
-export async function onRequestPatch(context) {
-  const { orgId, orgLogin } = getCtx(context);
+export async function onRequestPatch(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
   if (!orgLogin) return errorResponse("Missing org context", 400);
 
   const number = parseFeatureNumber(context);
   if (!number) return errorResponse("Invalid feature number", 400);
 
-  let payload;
-  try { payload = await context.request.json(); } catch {
+  let rawBody: unknown;
+  try { rawBody = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
   }
+
+  const parsed = validate(PatchFeatureBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.data;
 
   const row = await readFeatureRow(context.env.DB, orgId, number);
   if (!row) return errorResponse("Feature not found", 404);
@@ -96,11 +129,11 @@ export async function onRequestPatch(context) {
     status = payload.status;
   }
 
-  let owners = currentAssignees.map((a) => a.login);
+  let owners = currentAssignees.map((a: { login: string }) => a.login);
   if (Array.isArray(payload?.owners)) {
     owners = payload.owners.filter(
       (o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o),
-    );
+    ) as string[];
   }
 
   const plan = typeof payload?.plan === "string" ? payload.plan : currentPlan;
@@ -160,8 +193,8 @@ export async function onRequestPatch(context) {
 // DELETE /api/features/:number — close the issue on GitHub, strip
 // unticket/feature/status labels so it disappears from the board, and mark
 // D1 closed. Optimistic: D1 closes first; GitHub close runs in waitUntil.
-export async function onRequestDelete(context) {
-  const { orgId, orgLogin } = getCtx(context);
+export async function onRequestDelete(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
   if (!orgLogin) return errorResponse("Missing org context", 400);
 
   const number = parseFeatureNumber(context);
@@ -173,9 +206,9 @@ export async function onRequestDelete(context) {
   // Drop unticket-owned labels but keep any user-applied ones.
   const currentLabels = JSON.parse(row.labels_json || "[]");
   const keepLabels = currentLabels
-    .map((l) => l.name)
+    .map((l: { name: string }) => l.name)
     .filter(
-      (name) =>
+      (name: string) =>
         name !== UNTICKET_LABEL &&
         name !== FEATURE_LABEL &&
         !name.startsWith("status:"),
@@ -196,7 +229,7 @@ export async function onRequestDelete(context) {
         WHERE org_id = ? AND number = ?`,
     )
     .bind(
-      JSON.stringify(keepLabels.map((name) => ({ name, color: "" }))),
+      JSON.stringify(keepLabels.map((name: string) => ({ name, color: "" }))),
       new Date().toISOString(),
       orgId,
       number,

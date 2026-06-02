@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */ // dynamic GitHub PR payloads
 // POST /api/features/backfill-matches  body: { days?: 1..30 (default 14), force?: boolean }
 //
 // Walks every active repo, pulls PRs updated in the last N days from GitHub,
@@ -10,17 +11,40 @@
 // candidate window so the matcher will re-ask after features have been
 // added since the last sweep.
 
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInactiveRepoSet } from "../../lib/inactive-repos";
 import { matchPRToFeatures } from "../../lib/feature-matcher";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
+import { validate } from "../../lib/validate";
+
+interface Env {
+  DB: D1Database;
+  ZHIPU_API_KEY?: string;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string; isAdmin: boolean };
+  request: Request;
+  waitUntil: (promise: Promise<unknown>) => void;
+}
 
 const DEFAULT_DAYS = 14;
 const MAX_DAYS = 30;
 const MAX_PRS_PER_RUN = 50;
 
-export async function onRequestPost(context) {
-  const { orgId, orgLogin, isAdmin } = getCtx(context);
+// Permissive body schema — both fields are optional and the current code
+// coerces them (Number(body.days), Boolean(body.force)) before clamping, so
+// the schema must not reject non-numeric/non-boolean inputs that the coercion
+// would otherwise tolerate.
+const BackfillBody = z.object({
+  days: z.unknown().optional(),
+  force: z.unknown().optional(),
+}).passthrough();
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin, isAdmin } = getCtx(context) as { orgId: number; orgLogin: string; isAdmin: boolean };
   if (!orgId || !orgLogin) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
   if (!context.env.ZHIPU_API_KEY) {
@@ -30,20 +54,24 @@ export async function onRequestPost(context) {
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
 
-  let token;
+  let token: string;
   try {
     token = await getInstallationToken(context.env, installationId);
   } catch (err) {
-    console.error("[backfill-matches] install token fetch failed", { msg: err?.message });
+    console.error("[backfill-matches] install token fetch failed", { msg: (err as Error)?.message });
     return errorResponse("Failed to acquire GitHub App token", 500);
   }
 
-  let body;
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
-    body = {};
+    rawBody = {};
   }
+  const parsed = validate(BackfillBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+
   const days = Math.max(1, Math.min(MAX_DAYS, Number(body?.days) || DEFAULT_DAYS));
   const force = Boolean(body?.force);
 
@@ -54,20 +82,20 @@ export async function onRequestPost(context) {
     .prepare("SELECT name FROM repos WHERE org_id = ?")
     .bind(orgId)
     .all();
-  const allRepoNames = (repoRows.results ?? []).map((r) => r.name);
+  const allRepoNames = ((repoRows.results ?? []) as { name: string }[]).map((r) => r.name);
   const inactive = await getInactiveRepoSet(db, orgId, orgLogin);
   const activeRepos = allRepoNames.filter((name) => !inactive.has(name));
 
-  const candidates = [];
+  const candidates: { repo: string; pr: any }[] = [];
   let prsSeen = 0;
   let prsLinked = 0;
-  const errors = [];
+  const errors: string[] = [];
   for (const repo of activeRepos) {
-    let prs;
+    let prs: any[];
     try {
       prs = await fetchPRsUpdatedSince(token, orgLogin, repo, cutoff);
     } catch (err) {
-      const msg = err?.message ?? String(err);
+      const msg = (err as Error)?.message ?? String(err);
       console.error(`[unticket backfill-matches] fetch ${repo} failed:`, msg);
       errors.push(`${repo}: ${msg}`);
       continue;
@@ -120,7 +148,7 @@ export async function onRequestPost(context) {
         } catch (err) {
           console.error(
             `[unticket backfill-matches] ${repo}#${pr.number} failed:`,
-            err?.message ?? err,
+            (err as Error)?.message ?? err,
           );
         }
       }
@@ -146,7 +174,7 @@ export async function onRequestPost(context) {
 // GitHub gives us — `sort=created` is supported but not for `state=all`), but
 // keep ONLY PRs created or merged inside the window. A 73-day-old PR with a
 // recent comment has a fresh updated_at; we don't want to re-match those.
-async function fetchPRsUpdatedSince(token, orgLogin, repo, cutoffIso) {
+async function fetchPRsUpdatedSince(token: string, orgLogin: string, repo: string, cutoffIso: string): Promise<any[]> {
   const url = `https://api.github.com/repos/${encodeURIComponent(orgLogin)}/${encodeURIComponent(repo)}/pulls?state=all&sort=updated&direction=desc&per_page=100`;
   const res = await fetch(url, {
     headers: {
@@ -158,7 +186,7 @@ async function fetchPRsUpdatedSince(token, orgLogin, repo, cutoffIso) {
   if (!res.ok) {
     throw new Error(`GitHub ${res.status} ${res.statusText} for ${repo}`);
   }
-  const all = await res.json();
+  const all = await res.json() as any[];
   const cutoffMs = new Date(cutoffIso).getTime();
   return all.filter((pr) => {
     const createdMs = new Date(pr.created_at).getTime();
@@ -171,7 +199,7 @@ async function fetchPRsUpdatedSince(token, orgLogin, repo, cutoffIso) {
   });
 }
 
-async function fetchLinkedNumbers(db, orgId, repo, numbers) {
+async function fetchLinkedNumbers(db: D1Database, orgId: number, repo: string, numbers: number[]): Promise<Set<number>> {
   if (numbers.length === 0) return new Set();
   const placeholders = numbers.map(() => "?").join(",");
   const rows = await db
@@ -181,5 +209,5 @@ async function fetchLinkedNumbers(db, orgId, repo, numbers) {
     )
     .bind(orgId, repo, ...numbers)
     .all();
-  return new Set((rows.results ?? []).map((r) => r.pr_number));
+  return new Set(((rows.results ?? []) as { pr_number: number }[]).map((r) => r.pr_number));
 }

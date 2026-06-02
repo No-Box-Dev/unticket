@@ -5,7 +5,7 @@ vi.mock("../../lib/github-app.js", () => ({
   getInstallationToken: vi.fn(async () => "install-tok"),
 }));
 
-import { onRequestPost } from "../issue-state.js";
+import { onRequestPost } from "../issue-state";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app.js";
 
 function makeDb() {

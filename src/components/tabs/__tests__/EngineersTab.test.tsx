@@ -7,10 +7,11 @@ vi.mock("@/hooks/useConfigRepo", () => ({
 }));
 vi.mock("@/hooks/useGitHub", () => ({
   useActiveMembers: vi.fn(),
-  useAllPRs: vi.fn(),
-  useClosedIssues: vi.fn(),
-  useOpenIssues: vi.fn(),
+  useEngineerStats: vi.fn(),
   useGhTeamMemberships: vi.fn(),
+  usePaginatedPrs: vi.fn(),
+  useReviewPRs: vi.fn(),
+  useAssignedIssues: vi.fn(),
 }));
 vi.mock("@/hooks/useNoxlink", () => ({
   useFeedActors: vi.fn(),
@@ -21,29 +22,41 @@ import { EngineersTab } from "../EngineersTab";
 import { usePeople } from "@/hooks/useConfigRepo";
 import {
   useActiveMembers,
-  useAllPRs,
-  useClosedIssues,
-  useOpenIssues,
+  useEngineerStats,
   useGhTeamMemberships,
+  usePaginatedPrs,
+  useReviewPRs,
+  useAssignedIssues,
 } from "@/hooks/useGitHub";
 import { useFeedActors, useFeedEvents } from "@/hooks/useNoxlink";
 
 const mPeople = usePeople as unknown as ReturnType<typeof vi.fn>;
 const mMembers = useActiveMembers as unknown as ReturnType<typeof vi.fn>;
-const mPRs = useAllPRs as unknown as ReturnType<typeof vi.fn>;
-const mClosed = useClosedIssues as unknown as ReturnType<typeof vi.fn>;
-const mOpen = useOpenIssues as unknown as ReturnType<typeof vi.fn>;
+const mStats = useEngineerStats as unknown as ReturnType<typeof vi.fn>;
 const mTeams = useGhTeamMemberships as unknown as ReturnType<typeof vi.fn>;
+const mPaginatedPrs = usePaginatedPrs as unknown as ReturnType<typeof vi.fn>;
+const mReview = useReviewPRs as unknown as ReturnType<typeof vi.fn>;
+const mAssigned = useAssignedIssues as unknown as ReturnType<typeof vi.fn>;
 const mActors = useFeedActors as unknown as ReturnType<typeof vi.fn>;
 const mEvents = useFeedEvents as unknown as ReturnType<typeof vi.fn>;
+
+const EMPTY_STATS = {
+  openPRs: {},
+  reviewing: {},
+  assignedIssues: {},
+  lifetimePRs: {},
+  prsLast4Weeks: {},
+  issuesClosed: {},
+};
 
 beforeEach(() => {
   mPeople.mockReturnValue({ data: [] });
   mMembers.mockReset();
-  mPRs.mockReturnValue({ data: [] });
-  mClosed.mockReturnValue({ data: [] });
-  mOpen.mockReturnValue({ data: [] });
+  mStats.mockReturnValue({ data: EMPTY_STATS, isLoading: false });
   mTeams.mockReturnValue({ data: { memberships: {} } });
+  mPaginatedPrs.mockReturnValue({ data: { data: [], totalCount: 0 } });
+  mReview.mockReturnValue({ data: [] });
+  mAssigned.mockReturnValue({ data: [] });
   mActors.mockReturnValue({ data: [] });
   mEvents.mockReturnValue({ data: [] });
 });
@@ -80,5 +93,25 @@ describe("EngineersTab", () => {
     renderTab();
     expect(screen.getByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bot-1")).toBeInTheDocument();
+  });
+
+  it("shows per-member counts from useEngineerStats on the cards", () => {
+    mMembers.mockReturnValue({
+      data: [{ login: "alice", avatar_url: "https://x/a.png", kind: "human" }],
+      isLoading: false,
+    });
+    mStats.mockReturnValue({
+      data: {
+        ...EMPTY_STATS,
+        openPRs: { alice: 3 },
+        reviewing: { alice: 2 },
+        assignedIssues: { alice: 5 },
+      },
+      isLoading: false,
+    });
+    renderTab();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
   });
 });

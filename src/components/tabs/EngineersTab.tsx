@@ -2,7 +2,14 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { usePeople } from "@/hooks/useConfigRepo";
-import { useActiveMembers, useAllPRs, useClosedIssues, useGhTeamMemberships, useOpenIssues } from "@/hooks/useGitHub";
+import {
+  useActiveMembers,
+  useAssignedIssues,
+  useEngineerStats,
+  useGhTeamMemberships,
+  usePaginatedPrs,
+  useReviewPRs,
+} from "@/hooks/useGitHub";
 import { useFeedActors, useFeedEvents } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { ActorVoiceCard } from "@/components/ActorVoiceCard";
@@ -35,18 +42,19 @@ function formatRelative(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
+// `repoNames` is part of the shared tab-prop contract (passed by DashboardPage
+// like the other tabs) but unused here — counts now come from the server-side
+// engineer-stats aggregation, not from client-filtering repo data.
+export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: import("@/lib/types").NavFilter | null }) {
   const { data: people } = usePeople();
   const { data: orgMembers, isLoading: membersLoading } = useActiveMembers();
-  const { data: allPRs, isLoading: allPRsLoading } = useAllPRs(repoNames);
-  const { data: closedIssues } = useClosedIssues(repoNames);
-  const { data: openIssues, isLoading: openIssuesLoading } = useOpenIssues(repoNames);
-  const statsLoading = allPRsLoading || openIssuesLoading;
+  const { data: stats, isLoading: statsLoading } = useEngineerStats();
   const { data: ghTeams } = useGhTeamMemberships();
 
   const [selectedLogin, setSelectedLogin] = useState<string | null>(navFilter?.person ?? null);
 
-  // Build engineer list
+  // Build engineer list — per-member counts come from the server-side
+  // aggregation (useEngineerStats), keyed by login.
   const engineers = useMemo(() => {
     if (!orgMembers) return [];
     const peopleMap = new Map<string, Person>();
@@ -54,16 +62,6 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
 
     return orgMembers.map((member) => {
       const person = peopleMap.get(member.login);
-      const openPRs = allPRs?.filter((pr: any) => pr.user?.login === member.login && pr.state === "open")?.length ?? 0;
-      const reviewing = allPRs?.filter((pr: any) =>
-        pr.state === "open"
-        && !pr.draft
-        && (pr.requested_reviewers ?? []).some((r: any) => r.login === member.login),
-      )?.length ?? 0;
-      const assignedIssues = openIssues?.filter((i: any) =>
-        (i.assignees ?? []).some((a: any) => a.login === member.login),
-      )?.length ?? 0;
-
       return {
         login: member.login,
         avatar_url: member.avatar_url,
@@ -71,25 +69,38 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         role: person?.role ?? "",
         team: person?.team ?? "",
         description: person?.description ?? "",
-        openPRs,
-        reviewing,
-        assignedIssues,
+        openPRs: stats?.openPRs?.[member.login] ?? 0,
+        reviewing: stats?.reviewing?.[member.login] ?? 0,
+        assignedIssues: stats?.assignedIssues?.[member.login] ?? 0,
         ghTeams: ghTeams?.memberships?.[member.login] ?? [],
         kind: member.kind ?? (member.type === "Bot" ? "bot" : "human"),
       };
     });
-  }, [orgMembers, people, allPRs, openIssues, ghTeams]);
+  }, [orgMembers, people, stats, ghTeams]);
 
   const selected = useMemo(() => {
     const login = selectedLogin ?? engineers[0]?.login;
     return engineers.find((e) => e.login === login) ?? engineers[0];
   }, [selectedLogin, engineers]);
 
+  // Detail-panel data is fetched on demand, and ONLY when an engineer is
+  // actually selected (detail view) — the grid view fetches none of it.
+  // `selected` defaults to engineers[0] for rendering, so gate on selectedLogin
+  // (not selected) or these queries would fire on the grid. Open PRs + assigned
+  // issues are server-filtered; the reviewing list reuses useReviewPRs (open
+  // PRs, client-filtered by reviewer — bounded to open, only in detail view).
+  const detailLogin = selectedLogin ? selected?.login : undefined;
+  const openPrsQuery = usePaginatedPrs(
+    { author: detailLogin, state: "open", pageSize: 100, sort: "updated_at", sortDir: "desc" },
+    !!detailLogin,
+  );
+  const reviewingQuery = useReviewPRs(detailLogin ?? "");
+  const assignedQuery = useAssignedIssues(detailLogin ?? "");
+
   // Open issues currently assigned to the selected engineer.
   const assignedIssueList = useMemo<ListPanelItem[]>(() => {
-    if (!selected) return [];
-    return (openIssues ?? [])
-      .filter((i: any) => (i.assignees ?? []).some((a: any) => a.login === selected.login))
+    return (assignedQuery.data ?? [])
+      .filter((i: any) => i.state === "open")
       .map((i: any) => ({
         kind: "issue" as const,
         repo: i.repo,
@@ -99,13 +110,11 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         timestamp: i.updated_at,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, openIssues]);
+  }, [assignedQuery.data]);
 
   // Open PRs authored by the selected engineer.
   const openPrList = useMemo<ListPanelItem[]>(() => {
-    if (!selected) return [];
-    return (allPRs ?? [])
-      .filter((pr: any) => pr.user?.login === selected.login && pr.state === "open")
+    return (openPrsQuery.data?.data ?? [])
       .map((pr: any) => ({
         kind: "pr" as const,
         repo: pr.head?.repo?.name ?? pr.repo,
@@ -116,20 +125,14 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         draft: pr.draft,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, allPRs]);
+  }, [openPrsQuery.data]);
 
   // Open PRs where the selected engineer is a requested reviewer.
   const reviewingList = useMemo<ListPanelItem[]>(() => {
-    if (!selected) return [];
-    return (allPRs ?? [])
-      .filter((pr: any) =>
-        pr.state === "open"
-        && !pr.draft
-        && (pr.requested_reviewers ?? []).some((r: any) => r.login === selected.login),
-      )
-      .map((pr: any) => ({
+    return (reviewingQuery.data ?? [])
+      .map((pr) => ({
         kind: "pr" as const,
-        repo: pr.head?.repo?.name ?? pr.repo,
+        repo: pr.repo,
         number: pr.number,
         title: pr.title,
         html_url: pr.html_url,
@@ -137,30 +140,12 @@ export function EngineersTab({ repoNames, navFilter }: { repoNames: string[]; na
         draft: pr.draft,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, allPRs]);
+  }, [reviewingQuery.data]);
 
-  // Lifetime + recency stats (all-time / 4-week window).
-  const lifetimePRs = useMemo(() => {
-    if (!selected) return 0;
-    return (allPRs ?? []).filter((pr: any) => pr.user?.login === selected.login).length;
-  }, [selected, allPRs]);
-
-  const prsLast4Weeks = useMemo(() => {
-    if (!selected) return 0;
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 28);
-    const cutoff = cutoffDate.getTime();
-    return (allPRs ?? []).filter((pr: any) =>
-      pr.user?.login === selected.login
-      && pr.created_at
-      && new Date(pr.created_at).getTime() >= cutoff,
-    ).length;
-  }, [selected, allPRs]);
-
-  const issuesClosed = useMemo(() => {
-    if (!selected) return 0;
-    return (closedIssues ?? []).filter((i: any) => i.closed_by === selected.login).length;
-  }, [selected, closedIssues]);
+  // Lifetime + recency stats come from the same server-side aggregation.
+  const lifetimePRs = detailLogin ? (stats?.lifetimePRs?.[detailLogin] ?? 0) : 0;
+  const prsLast4Weeks = detailLogin ? (stats?.prsLast4Weeks?.[detailLogin] ?? 0) : 0;
+  const issuesClosed = detailLogin ? (stats?.issuesClosed?.[detailLogin] ?? 0) : 0;
 
   if (membersLoading) {
     return (

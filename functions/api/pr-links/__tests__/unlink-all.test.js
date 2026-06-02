@@ -10,7 +10,7 @@ vi.mock("../../../lib/feature-metadata.js", async (importOriginal) => {
   };
 });
 
-import { onRequestPost } from "../unlink-all.js";
+import { onRequestPost } from "../unlink-all";
 import { readFeatureIssue, updateFeatureBody, serializeFeatureMetadata } from "../../../lib/feature-metadata.js";
 
 // ---- D1 stub mirroring the inactive-repos test shape: keyed off SQL fragments.

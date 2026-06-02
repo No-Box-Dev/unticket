@@ -18,6 +18,7 @@
 // Admin-gated. Everything below relies on `context.data.isAdmin` from the
 // `_middleware.js` bootstrap path.
 
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { encryptToken, decryptToken } from "../lib/crypto";
 import { probeCompletion } from "../lib/llm";
@@ -25,8 +26,36 @@ import {
   PROVIDER_ANTHROPIC,
   PROVIDER_OPENAI_COMPATIBLE,
 } from "../lib/llm-config";
+import { validate } from "../lib/validate";
+
+interface Env {
+  DB: D1Database;
+  ENCRYPTION_KEY?: string;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string; isAdmin: boolean };
+  request: Request;
+}
 
 const VALID_PROVIDERS = new Set([PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE]);
+
+// PUT-body shape. The previous hand-rolled `String(body?.x ?? "").trim()`
+// extraction is replaced by this schema, which coerces each field to a trimmed
+// string with the same defaulting behavior (missing/null → ""). The downstream
+// 422 checks (provider enum, URL/https/private-host, required model/apiKey)
+// stay imperative so their specific status codes and messages are preserved.
+const coercedTrimmedString = z
+  .unknown()
+  .transform((value) => (value == null ? "" : String(value).trim()));
+
+const LlmSettingsBody = z.object({
+  provider: coercedTrimmedString,
+  baseUrl: coercedTrimmedString,
+  apiKey: coercedTrimmedString,
+  model: coercedTrimmedString,
+});
 
 // Per-isolate rate limit on PUT — the validation probe makes an outbound
 // fetch with admin-supplied (url, key), so we don't want a compromised admin
@@ -35,9 +64,9 @@ const VALID_PROVIDERS = new Set([PROVIDER_ANTHROPIC, PROVIDER_OPENAI_COMPATIBLE]
 // fan-out across many isolates would let a few extra probes through.
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
-const putAttempts = new Map();
+const putAttempts = new Map<number, number[]>();
 
-function checkAndRecordPutAttempt(orgId) {
+function checkAndRecordPutAttempt(orgId: number): boolean {
   const now = Date.now();
   const recent = (putAttempts.get(orgId) ?? []).filter(
     (t) => now - t < RATE_LIMIT_WINDOW_MS,
@@ -61,14 +90,14 @@ function checkAndRecordPutAttempt(orgId) {
 // without giving away meaningful entropy from the secret portion.
 const KEY_PREFIX_CHARS = 6;
 
-function extractKeyPrefix(key) {
+function extractKeyPrefix(key: unknown): string | null {
   if (typeof key !== "string") return null;
   const trimmed = key.trim();
   if (trimmed.length < KEY_PREFIX_CHARS) return null;
   return trimmed.slice(0, KEY_PREFIX_CHARS);
 }
 
-function keyDisplayMask(prefix) {
+function keyDisplayMask(prefix: string | null | undefined): string {
   return prefix ? `${prefix}…` : "••••";
 }
 
@@ -76,7 +105,7 @@ function keyDisplayMask(prefix) {
 // snippet often contains the provider's actual error JSON (LiteLLM/OpenAI
 // shape: { error: { message: ... } }); pull that out when it's there so the
 // admin sees "Authentication Error: ..." instead of the wrapped JSON.
-function extractProviderMessage(snippet) {
+function extractProviderMessage(snippet: string | undefined): string {
   if (!snippet) return "";
   try {
     const parsed = JSON.parse(snippet);
@@ -86,7 +115,16 @@ function extractProviderMessage(snippet) {
   return snippet.slice(0, 300);
 }
 
-export function formatProbeFailure(probe) {
+interface ProbeFailure {
+  ok: false;
+  reason: string;
+  status?: number;
+  bodySnippet?: string;
+  bytes?: number;
+  message?: string;
+}
+
+export function formatProbeFailure(probe: ProbeFailure): string {
   switch (probe.reason) {
     case "no_api_key":
       return "API key is required.";
@@ -105,7 +143,7 @@ export function formatProbeFailure(probe) {
       if (probe.status === 429) {
         return `Provider rate-limited the validation call (HTTP 429). Try again in a moment.${suffix}`;
       }
-      if (probe.status >= 500) {
+      if (probe.status !== undefined && probe.status >= 500) {
         return `Provider returned HTTP ${probe.status} — likely a provider-side outage.${suffix}`;
       }
       return `Provider returned HTTP ${probe.status}.${suffix}`;
@@ -132,7 +170,7 @@ export function formatProbeFailure(probe) {
 // link-local / metadata ranges. We can't fully defend against DNS rebinding
 // from a CF Worker (no pre-resolve API short of `connect()`), but blocking
 // literal IPs + common local names kills the easy variants.
-export function isPrivateHostname(hostname) {
+export function isPrivateHostname(hostname: string | null | undefined): boolean {
   if (!hostname) return true;
   // URL.hostname wraps IPv6 in brackets ("[::1]"); strip them so the literal
   // comparisons below work against the raw address.
@@ -172,8 +210,8 @@ export function isPrivateHostname(hostname) {
   return false;
 }
 
-export async function onRequestGet(context) {
-  const { orgId, isAdmin } = getCtx(context);
+export async function onRequestGet(context: Ctx): Promise<Response> {
+  const { orgId, isAdmin } = getCtx(context) as { orgId: number; isAdmin: boolean };
   if (!orgId) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
 
@@ -183,7 +221,13 @@ export async function onRequestGet(context) {
          FROM llm_settings WHERE org_id = ?`,
     )
     .bind(orgId)
-    .first();
+    .first<{
+      provider: string;
+      base_url: string;
+      model: string;
+      key_prefix: string | null;
+      updated_at: string;
+    }>();
 
   if (!row) return jsonResponse({ configured: false });
 
@@ -197,8 +241,8 @@ export async function onRequestGet(context) {
   });
 }
 
-export async function onRequestPut(context) {
-  const { orgId, isAdmin } = getCtx(context);
+export async function onRequestPut(context: Ctx): Promise<Response> {
+  const { orgId, isAdmin } = getCtx(context) as { orgId: number; isAdmin: boolean };
   if (!orgId) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
 
@@ -214,17 +258,16 @@ export async function onRequestPut(context) {
     return errorResponse("Server missing ENCRYPTION_KEY", 500);
   }
 
-  let body;
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
     return errorResponse("Body must be JSON", 400);
   }
 
-  const provider = String(body?.provider ?? "").trim();
-  const baseUrl = String(body?.baseUrl ?? "").trim();
-  const apiKey = String(body?.apiKey ?? "").trim();
-  const model = String(body?.model ?? "").trim();
+  const parsed = validate(LlmSettingsBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const { provider, baseUrl, apiKey, model } = parsed.data;
 
   if (!VALID_PROVIDERS.has(provider)) {
     return errorResponse(`Invalid provider. Use one of: ${[...VALID_PROVIDERS].join(", ")}`, 422);
@@ -232,7 +275,7 @@ export async function onRequestPut(context) {
 
   // HTTPS only — the request body carries the API key in Authorization /
   // x-api-key headers, so plaintext HTTP would leak it on the wire.
-  let parsedUrl;
+  let parsedUrl: URL;
   try {
     parsedUrl = new URL(baseUrl);
   } catch {
@@ -261,7 +304,7 @@ export async function onRequestPut(context) {
     const existing = await context.env.DB
       .prepare("SELECT encrypted_api_key FROM llm_settings WHERE org_id = ?")
       .bind(orgId)
-      .first();
+      .first<{ encrypted_api_key: string }>();
     if (!existing) {
       return errorResponse("apiKey is required", 422);
     }
@@ -294,7 +337,7 @@ export async function onRequestPut(context) {
     tag: "llm-settings-validate",
   });
   if (!probe.ok) {
-    return errorResponse(formatProbeFailure(probe), 422);
+    return errorResponse(formatProbeFailure(probe as ProbeFailure), 422);
   }
 
   const encryptedKey = await encryptToken(effectiveApiKey, encryptionKey);
@@ -324,8 +367,8 @@ export async function onRequestPut(context) {
   });
 }
 
-export async function onRequestDelete(context) {
-  const { orgId, isAdmin } = getCtx(context);
+export async function onRequestDelete(context: Ctx): Promise<Response> {
+  const { orgId, isAdmin } = getCtx(context) as { orgId: number; isAdmin: boolean };
   if (!orgId) return errorResponse("Missing org context", 400);
   if (!isAdmin) return errorResponse("Admin required", 403);
 

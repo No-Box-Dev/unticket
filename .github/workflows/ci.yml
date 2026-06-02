@@ -31,6 +31,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc -b
+      - run: npm run typecheck:functions
 
   test:
     runs-on: ubuntu-latest

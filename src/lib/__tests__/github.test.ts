@@ -19,6 +19,7 @@ import {
   fetchPaginatedPrs,
   fetchIssueDetail,
   fetchPrDetail,
+  fetchEngineerStats,
 } from "../github";
 
 const mockApiGet = vi.mocked(apiGet);
@@ -313,3 +314,23 @@ describe("fetchOrgMembers", () => {
   });
 });
 
+
+// ---------- fetchEngineerStats ----------
+
+describe("fetchEngineerStats", () => {
+  it("requests the aggregation endpoint and returns the count maps", async () => {
+    const payload = {
+      openPRs: { alice: 3 },
+      reviewing: { alice: 2 },
+      assignedIssues: { bob: 1 },
+      lifetimePRs: { alice: 40 },
+      prsLast4Weeks: { alice: 5 },
+      issuesClosed: { bob: 7 },
+    };
+    mockApiGet.mockResolvedValue(payload);
+
+    const stats = await fetchEngineerStats();
+    expect(mockApiGet).toHaveBeenCalledWith("/api/engineer-stats");
+    expect(stats).toEqual(payload);
+  });
+});

@@ -9,7 +9,7 @@ vi.mock("../../lib/feature-metadata.js", async (importOriginal) => {
   };
 });
 
-import { onRequestGet, onRequestPost, onRequestDelete } from "../pr-links.js";
+import { onRequestGet, onRequestPost, onRequestDelete } from "../pr-links";
 import { readFeatureIssue, updateFeatureBody } from "../../lib/feature-metadata.js";
 
 // D1 stub that records `prepare(sql).bind(...).all()` and `.batch(stmts)` calls

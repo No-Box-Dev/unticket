@@ -9,6 +9,7 @@
 // Returns { token } on success or 401 on any failure — the client should
 // treat a failure as a hard logout.
 
+import { z } from "zod";
 import {
   findOAuthRow,
   deleteOAuthRow,
@@ -16,8 +17,28 @@ import {
   refreshWithGitHub,
   decryptToken,
 } from "../../lib/oauth-tokens";
+import { validate } from "../../lib/validate";
 
-export async function onRequestPost(context) {
+interface Env {
+  DB: D1Database;
+  GITHUB_APP_CLIENT_ID?: string;
+  GITHUB_APP_CLIENT_SECRET?: string;
+  ENCRYPTION_KEY?: string;
+  [k: string]: unknown;
+}
+
+interface Ctx {
+  env: Env;
+  request: Request;
+}
+
+// Body schema — replaces the hand-rolled `typeof token === "string"` check.
+// `.min(1)` mirrors the original truthiness guard (empty string was rejected).
+const RefreshBody = z.object({
+  token: z.string().min(1, "Missing access token"),
+});
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
   const clientId = context.env.GITHUB_APP_CLIENT_ID;
   const clientSecret = context.env.GITHUB_APP_CLIENT_SECRET;
   const encryptionKey = context.env.ENCRYPTION_KEY;
@@ -26,16 +47,15 @@ export async function onRequestPost(context) {
     return jsonError("Refresh not configured", 500);
   }
 
-  let body;
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
     return jsonError("Invalid request body", 400);
   }
-  const expiredToken = body?.token;
-  if (!expiredToken || typeof expiredToken !== "string") {
-    return jsonError("Missing access token", 400);
-  }
+  const parsed = validate(RefreshBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const expiredToken = parsed.data.token;
 
   const row = await findOAuthRow(context.env.DB, expiredToken);
   if (!row || !row.encrypted_refresh_token) {
@@ -53,11 +73,11 @@ export async function onRequestPost(context) {
     }
   }
 
-  let refreshToken;
+  let refreshToken: string;
   try {
     refreshToken = await decryptToken(row.encrypted_refresh_token, encryptionKey);
   } catch (err) {
-    console.error("[auth/refresh] decryptToken failed:", err?.message ?? err);
+    console.error("[auth/refresh] decryptToken failed:", (err as Error)?.message ?? err);
     await deleteOAuthRow(context.env.DB, row.hash);
     return jsonError("Session decrypt failed", 401);
   }
@@ -103,7 +123,7 @@ export async function onRequestPost(context) {
   );
 }
 
-function jsonError(message, status) {
+function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { "Content-Type": "application/json" },

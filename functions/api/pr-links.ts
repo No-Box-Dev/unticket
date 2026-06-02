@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import {
   parseFeatureMetadata,
@@ -5,11 +6,30 @@ import {
   readFeatureIssue,
   updateFeatureBody,
 } from "../lib/feature-metadata";
+import { validate } from "../lib/validate";
+
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string; token: string };
+  request: Request;
+}
+
+// POST body schema — mirrors the previous hand-rolled checks: feature_number
+// and pr_number must be positive integers, pr_repo a valid repo name.
+const LinkBody = z.object({
+  feature_number: z.number().int().positive(),
+  pr_number: z.number().int().positive(),
+  pr_repo: z.string().regex(/^[\w.-]+$/, "pr_repo must be a valid repo name"),
+});
 
 // GET /api/pr-links?feature=42 — query D1 cache for linked PRs
 // GET /api/pr-links?pr_repo=X&pr_number=Y — reverse: features linked to a PR
-export async function onRequestGet(context) {
-  const { orgId } = getCtx(context);
+export async function onRequestGet(context: Ctx): Promise<Response> {
+  const { orgId } = getCtx(context) as { orgId: number };
   const url = new URL(context.request.url);
   const feature = url.searchParams.get("feature");
   const prRepo = url.searchParams.get("pr_repo");
@@ -72,23 +92,19 @@ export async function onRequestGet(context) {
 }
 
 // POST /api/pr-links — link a PR to a feature (D1 first, then GitHub metadata)
-export async function onRequestPost(context) {
-  const { orgId, token, orgLogin } = getCtx(context);
-  let body;
-  try { body = await context.request.json(); } catch {
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const { orgId, token, orgLogin } = getCtx(context) as { orgId: number; token: string; orgLogin: string };
+
+  let rawBody: unknown;
+  try {
+    rawBody = await context.request.json();
+  } catch {
     return errorResponse("Invalid JSON body", 400);
   }
-  const { feature_number, pr_repo, pr_number } = body ?? {};
 
-  if (!Number.isInteger(feature_number) || feature_number <= 0) {
-    return errorResponse("feature_number must be a positive integer", 400);
-  }
-  if (!Number.isInteger(pr_number) || pr_number <= 0) {
-    return errorResponse("pr_number must be a positive integer", 400);
-  }
-  if (typeof pr_repo !== "string" || !/^[\w.-]+$/.test(pr_repo)) {
-    return errorResponse("pr_repo must be a valid repo name", 400);
-  }
+  const parsed = validate(LinkBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const { feature_number, pr_repo, pr_number } = parsed.data;
 
   // GitHub-first, D1-second (mirrors the DELETE flow below). The old
   // ordering wrote D1 then ran the GitHub write inside waitUntil — a silent
@@ -99,7 +115,7 @@ export async function onRequestPost(context) {
 
   const linkedPRs = metadata.linkedPRs ?? [];
   const exists = linkedPRs.some(
-    (l) => l.repo === pr_repo && l.number === pr_number
+    (l: { repo: string; number: number }) => l.repo === pr_repo && l.number === pr_number
   );
   let newBody = null;
   if (!exists) {
@@ -129,8 +145,8 @@ export async function onRequestPost(context) {
 }
 
 // DELETE /api/pr-links?feature=42&pr_repo=api-backend&pr_number=601 — unlink
-export async function onRequestDelete(context) {
-  const { orgId, token, orgLogin } = getCtx(context);
+export async function onRequestDelete(context: Ctx): Promise<Response> {
+  const { orgId, token, orgLogin } = getCtx(context) as { orgId: number; token: string; orgLogin: string };
   const url = new URL(context.request.url);
   const feature = url.searchParams.get("feature");
   const prRepo = url.searchParams.get("pr_repo");
@@ -158,7 +174,7 @@ export async function onRequestDelete(context) {
 
   // 2. Remove from linkedPRs
   const linkedPRs = (metadata.linkedPRs ?? []).filter(
-    (l) => !(l.repo === prRepo && l.number === prNum)
+    (l: { repo: string; number: number }) => !(l.repo === prRepo && l.number === prNum)
   );
   metadata.linkedPRs = linkedPRs;
 
