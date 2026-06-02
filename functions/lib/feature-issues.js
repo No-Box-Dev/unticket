@@ -157,7 +157,7 @@ export function buildIssueBody(plan, metadata) {
 }
 
 // Read the current feature row from D1 (or null) — used by PATCH to preserve
-// metadata (linkedPRs from manual matches) and compare the old status.
+// metadata and compare the old status.
 export async function readFeatureRow(db, orgId, number) {
   return db
     .prepare(
@@ -260,9 +260,7 @@ export async function upsertFeatureRow(db, orgId, ghIssue, opts = {}) {
 }
 
 // Convert a GitHub issue response to the Feature shape the frontend uses.
-// Caller passes linkedPRs hydrated from pr_feature_links; metadata.linkedPRs
-// is a fallback for issues that only have the body-embedded list.
-export function ghIssueToFeature(ghIssue, linkedPRs) {
+export function ghIssueToFeature(ghIssue) {
   const { content, metadata } = parseFeatureMetadata(ghIssue.body ?? "");
   return {
     id: ghIssue.number,
@@ -273,16 +271,5 @@ export function ghIssueToFeature(ghIssue, linkedPRs) {
     url: ghIssue.html_url ?? undefined,
     updatedAt: ghIssue.updated_at,
     statusHistory: metadata.statusHistory,
-    linkedPRs: linkedPRs && linkedPRs.length > 0 ? linkedPRs : metadata.linkedPRs,
   };
-}
-
-export async function readLinkedPRs(db, orgId, number) {
-  const rows = await db
-    .prepare(
-      "SELECT pr_repo AS repo, pr_number AS number FROM pr_feature_links WHERE org_id = ? AND feature_number = ?",
-    )
-    .bind(orgId, number)
-    .all();
-  return (rows.results ?? []).map((r) => ({ repo: r.repo, number: r.number }));
 }

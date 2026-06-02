@@ -1,12 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-vi.mock("@/hooks/usePRLinks", () => ({
-  useLinkPR: vi.fn(),
-  useUnlinkPR: vi.fn(),
-  useLinkedPRs: vi.fn(),
-}));
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: () => ({ data: null }),
 }));
@@ -15,12 +10,7 @@ vi.mock("react-markdown", () => ({
 }));
 
 import { FeatureDetailModal } from "../FeatureDetailModal";
-import { useLinkPR, useUnlinkPR, useLinkedPRs } from "@/hooks/usePRLinks";
 import type { Feature } from "@/lib/types";
-
-const mockUseLinkPR = useLinkPR as unknown as ReturnType<typeof vi.fn>;
-const mockUseUnlinkPR = useUnlinkPR as unknown as ReturnType<typeof vi.fn>;
-const mockUseLinkedPRs = useLinkedPRs as unknown as ReturnType<typeof vi.fn>;
 
 function renderModal(
   feature: Feature,
@@ -46,12 +36,6 @@ const baseFeature: Feature = {
   plan: "Some markdown plan",
   url: "https://github.com/x/y/issues/42",
 };
-
-beforeEach(() => {
-  mockUseLinkPR.mockReturnValue({ mutate: vi.fn(), isPending: false });
-  mockUseUnlinkPR.mockReturnValue({ mutate: vi.fn(), isPending: false });
-  mockUseLinkedPRs.mockReturnValue({ data: [] });
-});
 
 describe("FeatureDetailModal", () => {
   it("renders title and plan markdown", () => {
@@ -100,42 +84,5 @@ describe("FeatureDetailModal", () => {
     fireEvent.change(textarea, { target: { value: "Updated plan" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ plan: "Updated plan" }));
-  });
-
-  it("clicking Link PR shows the form, and clicking Link calls the link mutation", () => {
-    const mutate = vi.fn();
-    mockUseLinkPR.mockReturnValue({ mutate, isPending: false });
-    renderModal(baseFeature);
-    fireEvent.click(screen.getByRole("button", { name: /link pr/i }));
-    fireEvent.change(screen.getByPlaceholderText("repo name"), { target: { value: "api" } });
-    fireEvent.change(screen.getByPlaceholderText("123"), { target: { value: "55" } });
-    fireEvent.click(screen.getByRole("button", { name: /^link$/i }));
-    expect(mutate).toHaveBeenCalledWith(
-      { featureNumber: 42, prRepo: "api", prNumber: 55 },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
-  });
-
-  it("Link button is disabled when inputs are empty", () => {
-    renderModal(baseFeature);
-    fireEvent.click(screen.getByRole("button", { name: /link pr/i }));
-    const linkBtn = screen.getByRole("button", { name: /^link$/i });
-    expect(linkBtn).toBeDisabled();
-  });
-
-  it("renders linked PRs and unlink button fires the unlink mutation", () => {
-    const mutate = vi.fn();
-    mockUseUnlinkPR.mockReturnValue({ mutate, isPending: false });
-    renderModal({
-      ...baseFeature,
-      linkedPRs: [{ repo: "api", number: 100 }],
-    });
-    // "api#100" appears twice (title fallback + the repo#number tag) — use getAllByText.
-    expect(screen.getAllByText("api#100").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByTitle("Unlink PR"));
-    expect(mutate).toHaveBeenCalledWith(
-      { featureNumber: 42, prRepo: "api", prNumber: 100 },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
   });
 });

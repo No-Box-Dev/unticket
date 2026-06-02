@@ -12,7 +12,6 @@ import { reconcileOrg } from "./reconcile.js";
 import { archiveOldEvents } from "./archive-events.js";
 import { TASK } from "../../functions/lib/tasks.js";
 import { narrateEvent } from "../../functions/lib/narrator.js";
-import { matchPRToFeatures } from "../../functions/lib/feature-matcher.js";
 import { bootstrapInstallation, syncRepo } from "../../functions/lib/github-sync.js";
 import { getInstallationToken } from "../../functions/lib/github-app.js";
 import { recordFailure } from "../../functions/lib/op-failures.js";
@@ -87,8 +86,6 @@ async function handleTask(env, body) {
   switch (body?.type) {
     case TASK.NARRATE:
       return narrateEvent(env, body.eventId);
-    case TASK.MATCH_PR:
-      return matchPRToFeatures(env, body.orgId, body.repo, body.pr);
     case TASK.BOOTSTRAP:
       return bootstrapInstallation(env, body.orgId, body.accountLogin, body.installationId);
     case TASK.SYNC_REPO: {

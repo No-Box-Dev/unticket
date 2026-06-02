@@ -20,7 +20,6 @@ import {
   createFeatureIssue,
   ensureUnticketRepoLabels,
   ghIssueToFeature,
-  readLinkedPRs,
   upsertFeatureRow,
 } from "../lib/feature-issues";
 import { validate } from "../lib/validate";
@@ -53,43 +52,22 @@ const FEATURE_COLUMNS = [
   "html_url", "created_at", "updated_at",
 ].join(", ");
 
-// Hydrates `linkedPRs` from the `pr_feature_links` table (not the body
-// metadata) because the LLM matcher writes to the table only and never
-// touches the issue body. The table is the union of manual + deterministic
-// + LLM matches; the body metadata only covers manual + deterministic.
 export async function onRequestGet(context: Ctx): Promise<Response> {
   const { orgId } = getCtx(context) as { orgId: number };
   const url = new URL(context.request.url);
   const state = url.searchParams.get("state") || "open";
 
-  const [featureRows, linkRows] = await context.env.DB.batch([
-    context.env.DB
-      .prepare(
-        `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ? AND state = ? ORDER BY number ASC`,
-      )
-      .bind(orgId, state),
-    context.env.DB
-      .prepare(
-        "SELECT feature_number, pr_repo, pr_number FROM pr_feature_links WHERE org_id = ?",
-      )
-      .bind(orgId),
-  ]);
-
-  const linksByFeature = new Map<number, { repo: string; number: number }[]>();
-  for (const link of (linkRows.results ?? []) as { feature_number: number; pr_repo: string; pr_number: number }[]) {
-    let arr = linksByFeature.get(link.feature_number);
-    if (!arr) {
-      arr = [];
-      linksByFeature.set(link.feature_number, arr);
-    }
-    arr.push({ repo: link.pr_repo, number: link.pr_number });
-  }
+  const featureRows = await context.env.DB
+    .prepare(
+      `SELECT ${FEATURE_COLUMNS} FROM features WHERE org_id = ? AND state = ? ORDER BY number ASC`,
+    )
+    .bind(orgId, state)
+    .all();
 
   const data = (featureRows.results as Record<string, any>[]).map((row) => ({
     ...row,
     assignees: JSON.parse(row.assignees_json || "[]"),
     labels: JSON.parse(row.labels_json || "[]"),
-    linkedPRs: linksByFeature.get(row.number) ?? [],
   }));
 
   return jsonResponse(data);
@@ -158,8 +136,7 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
     });
 
     await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
-    const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
-    return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
+    return jsonResponse(ghIssueToFeature(ghIssue), 201);
   } catch (err) {
     const e = err as { status?: number; message?: string; ghBody?: unknown };
     console.error("[features:post] GitHub create failed", { status: e?.status, msg: e?.message, ghBody: e?.ghBody });

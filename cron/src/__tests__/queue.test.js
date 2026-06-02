@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // Mock the cross-package helpers the queue consumer dispatches to.
 vi.mock("../reconcile.js", () => ({ reconcileOrg: vi.fn() }));
 vi.mock("../../../functions/lib/narrator.js", () => ({ narrateEvent: vi.fn() }));
-vi.mock("../../../functions/lib/feature-matcher.js", () => ({ matchPRToFeatures: vi.fn() }));
 vi.mock("../../../functions/lib/github-sync.js", () => ({
   bootstrapInstallation: vi.fn(),
   syncRepo: vi.fn(),
@@ -15,7 +14,6 @@ vi.mock("../../../functions/lib/op-failures.js", () => ({ recordFailure: vi.fn()
 
 import worker from "../index.js";
 import { narrateEvent } from "../../../functions/lib/narrator.js";
-import { matchPRToFeatures } from "../../../functions/lib/feature-matcher.js";
 import { syncRepo } from "../../../functions/lib/github-sync.js";
 import { getInstallationToken } from "../../../functions/lib/github-app.js";
 import { recordFailure } from "../../../functions/lib/op-failures.js";
@@ -35,14 +33,6 @@ describe("cron queue consumer", () => {
     expect(narrateEvent).toHaveBeenCalledWith(env, 7);
     expect(m.ack).toHaveBeenCalledOnce();
     expect(m.retry).not.toHaveBeenCalled();
-  });
-
-  it("dispatches a match_pr task", async () => {
-    const pr = { number: 5 };
-    const m = msg({ type: "match_pr", orgId: 1, repo: "api", pr });
-    await worker.queue({ messages: [m] }, env);
-    expect(matchPRToFeatures).toHaveBeenCalledWith(env, 1, "api", pr);
-    expect(m.ack).toHaveBeenCalledOnce();
   });
 
   it("resolves an install token before running sync_repo", async () => {

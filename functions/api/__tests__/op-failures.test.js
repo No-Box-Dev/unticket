@@ -55,7 +55,7 @@ describe("GET /api/op-failures", () => {
       },
       {
         id: 1,
-        op: "matchPRToFeatures",
+        op: "task:sync_repo",
         delivery_id: "repo#1",
         error: "boom",
         occurred_at: "2026-05-20T09:00:00",

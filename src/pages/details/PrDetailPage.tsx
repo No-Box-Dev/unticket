@@ -3,7 +3,6 @@ import { useParams, Link, Navigate } from "react-router-dom";
 import Markdown from "react-markdown";
 import { GitPullRequest, GitMerge, ExternalLink } from "lucide-react";
 import { usePrDetail, usePrBody } from "@/hooks/useGitHub";
-import { useLinkedFeatures } from "@/hooks/usePRLinks";
 import { useAuth } from "@/lib/auth";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
@@ -87,7 +86,7 @@ export function PrDetailPage() {
             </div>
           </header>
 
-          <MetadataRow pr={pr} body={body} repo={repo} number={number} />
+          <MetadataRow pr={pr} body={body} />
 
           <section className="rounded-lg border border-stone-200 bg-white px-5 py-4 prose prose-sm prose-stone max-w-none">
             {bodyLoading ? (
@@ -143,32 +142,15 @@ function PrStatePill({ pr }: { pr: any }) {
   );
 }
 
-function MetadataRow({ pr, body, repo, number }: { pr: any; body: any; repo?: string; number?: number }) {
+function MetadataRow({ pr, body }: { pr: any; body: any }) {
   const reviewers: { login: string }[] = pr.requested_reviewers ?? [];
   const labels: { name: string; color: string }[] = pr.labels ?? [];
   const hasStats = body && (body.additions || body.deletions || body.changed_files);
-  const { data: linkedFeatures } = useLinkedFeatures(repo, number);
 
-  if (reviewers.length === 0 && labels.length === 0 && !hasStats && (!linkedFeatures || linkedFeatures.length === 0)) return null;
+  if (reviewers.length === 0 && labels.length === 0 && !hasStats) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
-      {linkedFeatures && linkedFeatures.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-stone-400 uppercase tracking-wider">Features</span>
-          <div className="flex flex-wrap gap-1">
-            {linkedFeatures.map((f) => (
-              <Link
-                key={f.feature_number}
-                to={`/?tab=sprint&feature=${f.feature_number}`}
-                className="rounded-full bg-accent/10 text-accent px-2 py-0.5 font-medium hover:bg-accent/20 transition-colors"
-              >
-                #{f.feature_number} {f.feature_title ?? ""}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
       {labels.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-stone-400 uppercase tracking-wider">Labels</span>

@@ -5,7 +5,7 @@
 // never talks to Octokit for features anymore: the read path hits D1
 // directly (fetchFeaturesFromD1) and writes hit /api/features.
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
-import type { Feature, FeatureStatus, StatusHistoryEntry, LinkedPR } from "./types";
+import type { Feature, FeatureStatus, StatusHistoryEntry } from "./types";
 
 // D1-backed row shape returned by /api/features
 interface D1FeatureRow {
@@ -17,9 +17,6 @@ interface D1FeatureRow {
   labels: { name: string; color: string }[];
   html_url: string | null;
   updated_at?: string;
-  // Hydrated server-side from pr_feature_links — authoritative because the
-  // LLM matcher writes to the table but not to the issue body metadata.
-  linkedPRs?: LinkedPR[];
 }
 
 const UNTICKET_LABEL = "unticket";
@@ -32,7 +29,6 @@ const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
-  linkedPRs?: LinkedPR[];
 }
 
 function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
@@ -80,7 +76,6 @@ function issueToFeature(issue: any): Feature {
     url: issue.html_url,
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
-    linkedPRs: metadata.linkedPRs,
   };
 }
 
@@ -96,9 +91,6 @@ function d1RowToFeature(row: D1FeatureRow): Feature {
     html_url: row.html_url,
     updated_at: row.updated_at,
   });
-  // Server-hydrated linkedPRs from pr_feature_links wins over body metadata
-  // so LLM matches (which only land in the table) show up on cards.
-  if (row.linkedPRs) feature.linkedPRs = row.linkedPRs;
   return feature;
 }
 

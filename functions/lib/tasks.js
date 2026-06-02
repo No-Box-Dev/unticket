@@ -10,7 +10,6 @@
 
 export const TASK = {
   NARRATE: "narrate",        // { eventId }            -> narrateEvent(env, eventId)
-  MATCH_PR: "match_pr",      // { orgId, repo, pr }    -> matchPRToFeatures(env, orgId, repo, pr)
   BOOTSTRAP: "bootstrap",    // { orgId, accountLogin, installationId }
   SYNC_REPO: "sync_repo",    // { orgId, accountLogin, installationId, repo }
 };
