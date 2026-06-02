@@ -25,12 +25,18 @@ export async function enqueueTask(env, ownerId, deliveryId, message) {
     await env.TASK_QUEUE.send({ ...message, ownerId, deliveryId });
   } catch (err) {
     console.error(`[unticket queue] enqueue ${message.type} failed:`, err?.message ?? err);
-    const { recordFailure } = await import("./op-failures.js");
-    await recordFailure(env.DB, {
-      ownerId,
-      op: `enqueue:${message.type}`,
-      deliveryId,
-      error: err,
-    });
+    // Best-effort failure logging — wrapped so the "never throws into the
+    // caller" contract holds even if the import or recordFailure itself fails.
+    try {
+      const { recordFailure } = await import("./op-failures.js");
+      await recordFailure(env.DB, {
+        ownerId,
+        op: `enqueue:${message.type}`,
+        deliveryId,
+        error: err,
+      });
+    } catch (logErr) {
+      console.error("[unticket queue] recordFailure failed:", logErr?.message ?? logErr);
+    }
   }
 }
