@@ -102,11 +102,6 @@ export interface StatusHistoryEntry {
   timestamp: string; // ISO 8601
 }
 
-export interface LinkedPR {
-  repo: string;
-  number: number;
-}
-
 export interface Feature {
   id: number;
   title: string;
@@ -116,7 +111,6 @@ export interface Feature {
   url?: string;
   updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];
-  linkedPRs?: LinkedPR[];
   // True while an optimistic create is in flight — the card carries a
   // temporary negative id and renders non-interactive until GitHub assigns
   // the real issue number. Never set on features returned by the server.

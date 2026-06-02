@@ -79,18 +79,6 @@ describe("fetchFeaturesFromD1", () => {
     expect(result[0].status).toBe("staging");
   });
 
-  it("hydrates linkedPRs from the row (server is authoritative)", async () => {
-    mockGet.mockResolvedValue([
-      {
-        number: 1, title: "x", body: "", assignees: [], html_url: "u",
-        labels: [{ name: "unticket" }, { name: "feature" }],
-        linkedPRs: [{ repo: "api", number: 100 }],
-      },
-    ]);
-    const result = await fetchFeaturesFromD1();
-    expect(result[0].linkedPRs).toEqual([{ repo: "api", number: 100 }]);
-  });
-
   it("parses metadata block in body for statusHistory", async () => {
     const body = `Plan content here\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "2026-01-01T00:00:00Z" }],
@@ -156,16 +144,14 @@ describe("updateFeature", () => {
   it("PATCHes /api/features/:id with title, status, owners, plan", async () => {
     mockPatch.mockResolvedValue({
       id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
-      linkedPRs: [{ repo: "api", number: 100 }],
     });
     const result = await updateFeature("org", {
-      id: 5, title: "X", status: "ready", owners: ["alice"],
-      plan: "do it", linkedPRs: [{ repo: "api", number: 100 }],
+      id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
     });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
       title: "X", status: "ready", owners: ["alice"], plan: "do it",
     });
-    expect(result.linkedPRs).toEqual([{ repo: "api", number: 100 }]);
+    expect(result.id).toBe(5);
   });
 
   it("sends an empty string plan when feature.plan is undefined", async () => {

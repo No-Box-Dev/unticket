@@ -1,9 +1,7 @@
 import { getSyncState, setSyncState } from "./db";
-import { parseFeatureMetadata } from "./feature-metadata";
 import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
-import { matchPRToFeatures } from "./feature-matcher";
 import { upsertFeatureRow } from "./feature-issues";
 
 // Paginated GitHub API fetcher.
@@ -183,21 +181,6 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
       await upsertMember(db, orgId, pr.user, pr.user.type === "Bot" ? "bot" : "human");
     } catch (err) {
       console.error("[unticket sync] upsertMember from PR author failed:", err?.message ?? err);
-    }
-  }
-
-  // LLM matcher: ask the matcher about each PR. The matcher reads the PR
-  // body / branch / title and decides which features (if any) the PR
-  // implements. Its own attempt cache (pr_match_attempts) makes this
-  // idempotent — a re-sync won't re-ask about a PR we've already matched
-  // (or rejected) within the TTL.
-  if (env?.ZHIPU_API_KEY) {
-    for (const pr of prs) {
-      try {
-        await matchPRToFeatures(env, orgId, repo, { ...pr, base: { repo: { name: repo } } });
-      } catch (err) {
-        console.warn(`[unticket] feature-matcher ${repo}#${pr.number} failed: ${err?.message ?? err}`);
-      }
     }
   }
 
@@ -615,24 +598,6 @@ export async function syncFeatures(db, token, orgId, orgLogin) {
     }
   }
 
-  // Extract linkedPRs from feature metadata and populate pr_feature_links.
-  // Done off the GH list so a successful push (which re-mirrors via
-  // upsertFeatureRow) doesn't need to repeat the work.
-  const linkStmt = db.prepare(
-    `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-     VALUES (?, ?, ?, ?, 'metadata')
-     ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-  );
-  for (const f of features) {
-    const { metadata } = parseFeatureMetadata(f.body ?? "");
-    const linkedPRs = metadata.linkedPRs ?? [];
-    if (linkedPRs.length > 0) {
-      await db.batch(
-        linkedPRs.map((l) => linkStmt.bind(orgId, f.number, l.repo, l.number))
-      );
-    }
-  }
-
   await setSyncState(db, orgId, "features");
 
   // Reconcile deletes: drop any open rows whose issue number isn't in the
@@ -1016,7 +981,6 @@ export async function removeRepo(db, orgId, repo) {
   await db.batch([
     db.prepare("DELETE FROM issues WHERE org_id = ? AND repo = ?").bind(orgId, repo),
     db.prepare("DELETE FROM pull_requests WHERE org_id = ? AND repo = ?").bind(orgId, repo),
-    db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND pr_repo = ?").bind(orgId, repo),
     db.prepare("DELETE FROM repos WHERE org_id = ? AND name = ?").bind(orgId, repo),
   ]);
 }
@@ -1024,15 +988,14 @@ export async function removeRepo(db, orgId, repo) {
 // Rename a repo across every table that stores `repo` as plain text.
 // GitHub's `repository.renamed` event carries `changes.repository.name.from`
 // and the new name on `repository.name`. Doing the rename in place keeps
-// history (issues, PRs, feature links) intact rather than dropping it
-// and waiting for the next reconcile to refetch.
+// history (issues, PRs) intact rather than dropping it and waiting for the
+// next reconcile to refetch.
 export async function renameRepo(db, orgId, fromName, toName) {
   if (!fromName || !toName || fromName === toName) return;
   await db.batch([
     db.prepare("UPDATE repos SET name = ? WHERE org_id = ? AND name = ?").bind(toName, orgId, fromName),
     db.prepare("UPDATE issues SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
     db.prepare("UPDATE pull_requests SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
-    db.prepare("UPDATE pr_feature_links SET pr_repo = ? WHERE org_id = ? AND pr_repo = ?").bind(toName, orgId, fromName),
   ]);
 }
 

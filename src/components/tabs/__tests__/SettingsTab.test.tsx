@@ -23,10 +23,6 @@ vi.mock("@/hooks/useNoxlink", () => ({
 vi.mock("@/lib/noxlink-api", () => ({
   backfillProjectPrs: vi.fn(),
 }));
-vi.mock("@/lib/pr-links", () => ({
-  backfillFeatureMatches: vi.fn(),
-  unlinkAllPRs: vi.fn(),
-}));
 vi.mock("@/lib/github", () => ({
   triggerSyncWithProgress: vi.fn(),
   triggerEventsBackfillWithProgress: vi.fn(),
@@ -108,7 +104,6 @@ describe("SettingsTab", () => {
     expect(screen.queryByText("Full Re-sync")).not.toBeInTheDocument();
     expect(screen.queryByText("Live Activity Backfill")).not.toBeInTheDocument();
     expect(screen.queryByText("Posts Backfill")).not.toBeInTheDocument();
-    expect(screen.queryByText("PR → Feature Backfill")).not.toBeInTheDocument();
     expect(screen.queryByText("Background failures")).not.toBeInTheDocument();
     expect(screen.queryByText("Manual sync")).not.toBeInTheDocument();
   });
@@ -120,7 +115,6 @@ describe("SettingsTab", () => {
     expect(screen.getAllByText("Full Re-sync").length).toBeGreaterThan(0);
     expect(screen.getByText("Live Activity Backfill")).toBeInTheDocument();
     expect(screen.getByText("Posts Backfill")).toBeInTheDocument();
-    expect(screen.getByText("PR → Feature Backfill")).toBeInTheDocument();
     expect(screen.getByText("Background failures")).toBeInTheDocument();
     expect(screen.getByText("Manual sync")).toBeInTheDocument();
     expect(screen.getByText("Sync features")).toBeInTheDocument();

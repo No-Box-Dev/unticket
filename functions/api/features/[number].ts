@@ -28,7 +28,6 @@ import {
   ghIssueToFeature,
   patchFeatureIssue,
   readFeatureRow,
-  readLinkedPRs,
   upsertFeatureRow,
   UNTICKET_LABEL,
   FEATURE_LABEL,
@@ -147,7 +146,6 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
 
   const body = buildIssueBody(plan, {
     statusHistory,
-    linkedPRs: currentMetadata.linkedPRs,
   });
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
@@ -160,7 +158,6 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
   // and push the change to GitHub on the next tick — no more silent reverts.
   const optimistic = synthesizeIssue({ row, number, title, body, status, owners });
   await upsertFeatureRow(context.env.DB, orgId, optimistic, { from: "local" });
-  const linkedPRs = await readLinkedPRs(context.env.DB, orgId, number);
 
   const ghWrite = (async () => {
     const token = await getInstallationToken(context.env, installationId);
@@ -187,7 +184,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     }),
   );
 
-  return jsonResponse(ghIssueToFeature(optimistic, linkedPRs));
+  return jsonResponse(ghIssueToFeature(optimistic));
 }
 
 // DELETE /api/features/:number — close the issue on GitHub, strip

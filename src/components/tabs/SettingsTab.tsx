@@ -4,7 +4,6 @@ import { useOrgMembers, useIsAdmin, useTriggerFeatureSync } from "@/hooks/useGit
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
-import { backfillFeatureMatches, unlinkAllPRs, type UnlinkAllResult } from "@/lib/pr-links";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { BoardStagesSection } from "@/components/settings/BoardStagesSection";
 import { SyncFromGithubModal } from "@/components/SyncFromGithub";
@@ -13,8 +12,7 @@ import {
   triggerEventsBackfillWithProgress,
   type SyncProgress,
 } from "@/lib/github";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Activity, AlertTriangle, Check, Cpu, GitPullRequest, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Check, Cpu, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
 import {
@@ -111,7 +109,6 @@ export function SettingsTab() {
           <FullResyncSection />
           <ActivityEventsBackfillSection />
           <PostsBackfillSection />
-          <FeatureMatchBackfillSection />
           <RecentFailuresSection />
         </section>
       )}
@@ -376,221 +373,6 @@ function PostsBackfillSection() {
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-function FeatureMatchBackfillSection() {
-  const qc = useQueryClient();
-  const [running, setRunning] = useState(false);
-  const [days, setDays] = useState(14);
-  const [force, setForce] = useState(false);
-  const [result, setResult] = useState<{
-    scanned: number;
-    queued: number;
-    repos?: number;
-    reposInTable?: number;
-    prsSeen?: number;
-    prsLinked?: number;
-    errors?: string[];
-    capped?: boolean;
-    error?: string;
-  } | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [unlinking, setUnlinking] = useState(false);
-  const [unlinkResult, setUnlinkResult] = useState<
-    (UnlinkAllResult & { error?: string }) | null
-  >(null);
-
-  async function handleUnlinkAll() {
-    setConfirmOpen(false);
-    setUnlinking(true);
-    setUnlinkResult(null);
-    try {
-      const res = await unlinkAllPRs();
-      setUnlinkResult(res);
-      qc.invalidateQueries({ queryKey: ["features"] });
-      qc.invalidateQueries({ queryKey: ["linkedPRs"] });
-      qc.invalidateQueries({ queryKey: ["linkedFeatures"] });
-    } catch (err) {
-      setUnlinkResult({
-        ok: false,
-        featuresAffected: 0,
-        featuresCleared: 0,
-        linksDeleted: 0,
-        attemptsCleared: 0,
-        errors: [],
-        error: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setUnlinking(false);
-    }
-  }
-
-  async function handleRun() {
-    setRunning(true);
-    setResult(null);
-    try {
-      const res = await backfillFeatureMatches(days, force);
-      setResult({
-        scanned: res.scanned,
-        queued: res.queued,
-        repos: res.repos,
-        reposInTable: res.reposInTable,
-        prsSeen: res.prsSeen,
-        prsLinked: res.prsLinked,
-        errors: res.errors,
-        capped: res.capped,
-      });
-      qc.invalidateQueries({ queryKey: ["features"] });
-      qc.invalidateQueries({ queryKey: ["linkedPRs"] });
-      qc.invalidateQueries({ queryKey: ["linkedFeatures"] });
-    } catch (err) {
-      setResult({
-        scanned: 0,
-        queued: 0,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-      <h2 className="text-sm font-semibold text-stone-900">PR → Feature Backfill</h2>
-      <p className="text-xs text-stone-400">
-        Sweep recent PRs across every active repo and ask the LLM to match any
-        that aren't linked to a feature yet. Each PR is checked at most once
-        per week; toggle "Force" to bypass that cache after you've added new
-        features.
-      </p>
-      <div className="flex items-center gap-3 flex-wrap">
-        <label className="text-xs text-stone-600 flex items-center gap-2">
-          Days:
-          <input
-            type="number"
-            min={1}
-            max={30}
-            value={days}
-            onChange={(e) =>
-              setDays(Math.max(1, Math.min(30, Number(e.target.value) || 14)))
-            }
-            disabled={running}
-            className="w-16 px-2 py-1 rounded border border-stone-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:opacity-50"
-          />
-        </label>
-        <label className="text-xs text-stone-600 flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={force}
-            onChange={(e) => setForce(e.target.checked)}
-            disabled={running}
-          />
-          Force re-check
-        </label>
-        <button
-          onClick={handleRun}
-          disabled={running}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
-        >
-          {running ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <GitPullRequest size={14} />
-          )}
-          {running ? "Scanning..." : "Run backfill"}
-        </button>
-      </div>
-      {result && !running && (
-        <div className="text-xs space-y-1">
-          {result.error ? (
-            <p className="text-red-500">{result.error}</p>
-          ) : (
-            <>
-              <p className={result.queued > 0 ? "text-green-600" : "text-stone-600"}>
-                Scanned {result.repos ?? 0} active repo{result.repos === 1 ? "" : "s"}
-                {typeof result.reposInTable === "number" &&
-                  result.reposInTable !== result.repos &&
-                  ` (of ${result.reposInTable} in D1)`}
-                , saw {result.prsSeen ?? 0} PR{result.prsSeen === 1 ? "" : "s"} in the last {days} days
-                {typeof result.prsLinked === "number" && result.prsLinked > 0 &&
-                  ` (${result.prsLinked} already linked)`}
-                . Queued {result.queued} for matching
-                {result.capped && " (capped at 50 — run again for more)"}.
-              </p>
-              {result.errors && result.errors.length > 0 && (
-                <div className="text-red-500 space-y-0.5">
-                  {result.errors.map((e, i) => (
-                    <p key={i}>{e}</p>
-                  ))}
-                </div>
-              )}
-              {result.queued > 0 && (
-                <p className="text-stone-400">
-                  Links appear on feature cards as the LLM finishes each PR — refresh in a few seconds.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      <div className="pt-4 border-t border-stone-200 space-y-3">
-        <div>
-          <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wide">Danger zone</h3>
-          <p className="text-xs text-stone-400 mt-1">
-            Remove every PR↔feature link across the org. Clears
-            <code className="px-1 py-0.5 bg-stone-100 rounded mx-1">linkedPRs</code>
-            from every feature issue body, wipes the link table, and resets the
-            matcher's PR cache so the next backfill re-checks every PR. There is
-            no undo — links you added manually will be gone too.
-          </p>
-        </div>
-        <button
-          onClick={() => setConfirmOpen(true)}
-          disabled={unlinking || running}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 disabled:opacity-50 cursor-pointer"
-        >
-          {unlinking ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-          {unlinking ? "Unlinking..." : "Unlink all PRs"}
-        </button>
-        {unlinkResult && !unlinking && (
-          <div className="text-xs space-y-1">
-            {unlinkResult.error ? (
-              <p className="text-red-500">{unlinkResult.error}</p>
-            ) : (
-              <>
-                <p className="text-stone-600">
-                  Cleared {unlinkResult.featuresCleared}/{unlinkResult.featuresAffected} feature
-                  {unlinkResult.featuresAffected === 1 ? "" : "s"}, deleted{" "}
-                  {unlinkResult.linksDeleted} link
-                  {unlinkResult.linksDeleted === 1 ? "" : "s"} and{" "}
-                  {unlinkResult.attemptsCleared} cached match attempt
-                  {unlinkResult.attemptsCleared === 1 ? "" : "s"}.
-                </p>
-                {unlinkResult.errors.length > 0 && (
-                  <div className="text-red-500 space-y-0.5">
-                    {unlinkResult.errors.map((e, i) => (
-                      <p key={i}>{e}</p>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      <ConfirmDialog
-        open={confirmOpen}
-        variant="danger"
-        title="Unlink every PR from every feature?"
-        message="This wipes every PR↔feature link in the org — including ones you added manually — and resets the matcher's cache. There is no undo. Re-run the backfill afterwards to rebuild matches."
-        confirmLabel="Unlink all"
-        onConfirm={handleUnlinkAll}
-        onCancel={() => setConfirmOpen(false)}
-      />
     </div>
   );
 }

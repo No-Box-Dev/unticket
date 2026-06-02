@@ -14,15 +14,9 @@ import {
   renameRepo,
   touchRepoPushed,
 } from "../lib/github-sync";
-import { parseFeatureMetadata } from "../lib/feature-metadata";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { TASK, enqueueTask } from "../lib/tasks";
-
-// Webhook actions that should trigger the LLM matcher. Reviews / labels are
-// excluded — they don't change the PR body, branch, or title, so re-running
-// the matcher wouldn't reveal new evidence.
-const LLM_MATCH_ACTIONS = new Set(["opened", "edited", "synchronize", "reopened", "ready_for_review"]);
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -178,21 +172,6 @@ export async function onRequestPost(context) {
       // Also upsert into features table if this is a unticket repo issue
       if (repo === "unticket") {
         await upsertFeature(db, orgId, payload.issue);
-        // Re-sync pr_feature_links from metadata (atomic delete + re-insert)
-        const { metadata } = parseFeatureMetadata(payload.issue.body ?? "");
-        const linkedPRs = metadata.linkedPRs ?? [];
-        const deleteStmt = db.prepare("DELETE FROM pr_feature_links WHERE org_id = ? AND feature_number = ? AND source = 'metadata'")
-          .bind(orgId, payload.issue.number);
-        if (linkedPRs.length > 0) {
-          const linkStmt = db.prepare(
-            `INSERT INTO pr_feature_links (org_id, feature_number, pr_repo, pr_number, source)
-             VALUES (?, ?, ?, ?, 'metadata')
-             ON CONFLICT(org_id, feature_number, pr_repo, pr_number) DO NOTHING`
-          );
-          await db.batch([deleteStmt, ...linkedPRs.map((l) => linkStmt.bind(orgId, payload.issue.number, l.repo, l.number))]);
-        } else {
-          await deleteStmt.run();
-        }
       }
       return jsonResponse({ ok: true, event, action, repo, number: payload.issue.number });
     }
@@ -214,28 +193,6 @@ export async function onRequestPost(context) {
         }
       }
 
-      // Ask the LLM matcher out-of-band. The matcher reads the PR body /
-      // branch / title itself and skips PRs that already have a link, so
-      // we don't need a deterministic pre-pass.
-      if (LLM_MATCH_ACTIONS.has(action)) {
-        // Send only the fields matchPRToFeatures reads — the full GitHub PR
-        // payload can approach Cloudflare's 128KB queue-message limit.
-        await enqueueTask(context.env, orgLogin, `${repo}#${pr.number}`, {
-          type: TASK.MATCH_PR,
-          orgId,
-          repo,
-          pr: {
-            number: pr.number,
-            title: pr.title,
-            body: pr.body,
-            created_at: pr.created_at,
-            user: pr.user ? { login: pr.user.login } : null,
-            labels: (pr.labels ?? []).map((l) => ({ name: l.name })),
-            head: { ref: pr.head?.ref },
-            base: { ref: pr.base?.ref },
-          },
-        });
-      }
       return jsonResponse({ ok: true, event, action, repo, number: pr.number });
     }
 
