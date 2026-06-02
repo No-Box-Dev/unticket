@@ -136,7 +136,7 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
         number: pr.number,
         title: pr.title,
         html_url: pr.html_url,
-        timestamp: pr.created_at,
+        timestamp: pr.updated_at ?? pr.created_at,
         draft: pr.draft,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

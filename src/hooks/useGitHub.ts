@@ -387,6 +387,7 @@ export function useReviewPRs(login: string) {
           html_url: pr.html_url,
           author: pr.user?.login ?? null,
           created_at: pr.created_at,
+          updated_at: pr.updated_at,
         }));
     },
     enabled: !!selectedOrg && !!login,
