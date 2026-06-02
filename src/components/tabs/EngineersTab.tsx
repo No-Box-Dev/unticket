@@ -5,6 +5,7 @@ import { usePeople } from "@/hooks/useConfigRepo";
 import {
   useActiveMembers,
   useAssignedIssues,
+  useEngineerActivity,
   useEngineerStats,
   useGhTeamMemberships,
   usePaginatedPrs,
@@ -228,6 +229,9 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
           <StatCard label="Issues closed" value={issuesClosed} icon={<CircleCheck size={14} className="text-stone-400" />} />
         </div>
 
+        {/* Monthly activity table (PRs opened / reviewed) */}
+        <ActivityTable key={selected.login} login={selected.login} />
+
         {/* Lists: Open PRs / Reviewing / Assigned Issues */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <ItemListPanel
@@ -345,6 +349,115 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
         <span>{label}</span>
       </div>
       <div className="text-2xl font-bold font-display text-stone-800 mt-2 leading-none">{value}</div>
+    </div>
+  );
+}
+
+// ---------- Monthly activity table (PRs opened / reviewed) ----------
+
+function thisMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function enumerateMonths(start: string, end: string): string[] {
+  const out: string[] = [];
+  const s = start.split("-").map(Number);
+  const e = end.split("-").map(Number);
+  let y = s[0];
+  let m = s[1];
+  if (!y || !m) return [end];
+  let guard = 0;
+  while ((y < e[0] || (y === e[0] && m <= e[1])) && guard++ < 240) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out.length ? out : [end];
+}
+
+function formatMonthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  return `${d.toLocaleString("en-US", { month: "short" })} ${String(y).slice(2)}`;
+}
+
+function ActivityTable({ login }: { login: string }) {
+  const { data, isLoading } = useEngineerActivity(login);
+  const currentMonth = thisMonthKey();
+  const firstMonth = data?.firstMonth ?? currentMonth;
+
+  const allMonths = useMemo(() => enumerateMonths(firstMonth, currentMonth), [firstMonth, currentMonth]);
+  // Default to the most recent ~6 months; selectable back to the first month.
+  const defaultStart = allMonths.length > 6 ? allMonths[allMonths.length - 6] : allMonths[0];
+  const [startMonth, setStartMonth] = useState<string | null>(null);
+  const effectiveStart = startMonth && allMonths.includes(startMonth) ? startMonth : defaultStart;
+  const cols = useMemo(() => enumerateMonths(effectiveStart, currentMonth), [effectiveStart, currentMonth]);
+
+  const rows = [
+    { label: "PRs opened", map: data?.prsOpened ?? {} },
+    { label: "PRs reviewed", map: data?.prsReviewed ?? {} },
+  ];
+  const grandTotal = rows.reduce(
+    (sum, r) => sum + cols.reduce((s, c) => s + (r.map[c] ?? 0), 0),
+    0,
+  );
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 gap-4 flex-wrap">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-semibold text-stone-700">Activity</h3>
+          <span className="text-xs text-stone-400">{grandTotal} total · {cols.length} mo</span>
+        </div>
+        <label className="text-xs text-stone-500 flex items-center gap-1.5">
+          From
+          <select
+            value={effectiveStart}
+            onChange={(e) => setStartMonth(e.target.value)}
+            className="border border-stone-200 rounded-md px-2 py-1 text-xs bg-white cursor-pointer"
+          >
+            {allMonths.map((m) => (
+              <option key={m} value={m}>{formatMonthLabel(m)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {isLoading ? (
+        <div className="p-6 text-center"><Spinner className="w-5 h-5 text-accent inline-block" /></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-stone-500">
+                <th className="text-left font-medium px-4 py-2"> </th>
+                {cols.map((c) => (
+                  <th key={c} className="text-right font-medium px-3 py-2 whitespace-nowrap">{formatMonthLabel(c)}</th>
+                ))}
+                <th className="text-right font-semibold px-4 py-2 bg-stone-50">Tot</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const rowTotal = cols.reduce((s, c) => s + (r.map[c] ?? 0), 0);
+                return (
+                  <tr key={r.label} className="border-t border-stone-100">
+                    <td className="text-left font-medium text-stone-700 px-4 py-2 whitespace-nowrap">{r.label}</td>
+                    {cols.map((c) => {
+                      const v = r.map[c] ?? 0;
+                      return (
+                        <td key={c} className={cn("text-right px-3 py-2 tabular-nums", v === 0 ? "text-stone-300" : "text-stone-800")}>{v}</td>
+                      );
+                    })}
+                    <td className="text-right font-semibold text-stone-900 px-4 py-2 bg-stone-50 tabular-nums">{rowTotal}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -712,6 +712,19 @@ export async function fetchEngineerStats(): Promise<EngineerStats> {
   return apiGet<EngineerStats>("/api/engineer-stats");
 }
 
+// Per-month contribution counts for one engineer (People-tab activity table).
+// Maps keyed by "YYYY-MM". See functions/api/engineer-activity.ts.
+export interface EngineerActivity {
+  login: string;
+  firstMonth: string | null;
+  prsOpened: Record<string, number>;
+  prsReviewed: Record<string, number>;
+}
+
+export async function fetchEngineerActivity(login: string): Promise<EngineerActivity> {
+  return apiGet<EngineerActivity>(`/api/engineer-activity?login=${encodeURIComponent(login)}`);
+}
+
 export async function updateIssueAssignees(
   repo: string,
   issueNumber: number,
