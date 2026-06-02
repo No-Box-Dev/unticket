@@ -56,7 +56,7 @@ beforeEach(() => {
   mPeople.mockReturnValue({ data: [] });
   mMembers.mockReset();
   mStats.mockReturnValue({ data: EMPTY_STATS, isLoading: false });
-  mActivity.mockReturnValue({ data: { login: "", firstMonth: null, prsOpened: {}, prsReviewed: {} }, isLoading: false });
+  mActivity.mockReturnValue({ data: { login: "", month: "2026-06", firstMonth: null, prsOpened: {}, prsReviewed: {} }, isLoading: false });
   mTeams.mockReturnValue({ data: { memberships: {} } });
   mPaginatedPrs.mockReturnValue({ data: { data: [], totalCount: 0 } });
   mReview.mockReturnValue({ data: [] });

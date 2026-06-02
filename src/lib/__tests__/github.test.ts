@@ -339,16 +339,23 @@ describe("fetchEngineerStats", () => {
 // ---------- fetchEngineerActivity ----------
 
 describe("fetchEngineerActivity", () => {
-  it("requests the activity endpoint with the login and returns the maps", async () => {
+  it("requests the activity endpoint with the login and returns daily maps", async () => {
     const payload = {
       login: "alice",
+      month: "2026-06",
       firstMonth: "2026-01",
-      prsOpened: { "2026-01": 5, "2026-02": 8 },
-      prsReviewed: { "2026-02": 3 },
+      prsOpened: { "2026-06-01": 5, "2026-06-03": 8 },
+      prsReviewed: { "2026-06-02": 3 },
     };
     mockApiGet.mockResolvedValue(payload);
     const res = await fetchEngineerActivity("alice");
     expect(mockApiGet).toHaveBeenCalledWith("/api/engineer-activity?login=alice");
     expect(res).toEqual(payload);
+  });
+
+  it("passes the month param when given", async () => {
+    mockApiGet.mockResolvedValue({ login: "alice", month: "2026-05", firstMonth: "2026-01", prsOpened: {}, prsReviewed: {} });
+    await fetchEngineerActivity("alice", "2026-05");
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining("month=2026-05"));
   });
 });
