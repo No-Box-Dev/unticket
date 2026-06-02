@@ -8,6 +8,7 @@ vi.mock("@/hooks/useConfigRepo", () => ({
 vi.mock("@/hooks/useGitHub", () => ({
   useActiveMembers: vi.fn(),
   useEngineerStats: vi.fn(),
+  useEngineerActivity: vi.fn(),
   useGhTeamMemberships: vi.fn(),
   usePaginatedPrs: vi.fn(),
   useReviewPRs: vi.fn(),
@@ -23,6 +24,7 @@ import { usePeople } from "@/hooks/useConfigRepo";
 import {
   useActiveMembers,
   useEngineerStats,
+  useEngineerActivity,
   useGhTeamMemberships,
   usePaginatedPrs,
   useReviewPRs,
@@ -33,6 +35,7 @@ import { useFeedActors, useFeedEvents } from "@/hooks/useNoxlink";
 const mPeople = usePeople as unknown as ReturnType<typeof vi.fn>;
 const mMembers = useActiveMembers as unknown as ReturnType<typeof vi.fn>;
 const mStats = useEngineerStats as unknown as ReturnType<typeof vi.fn>;
+const mActivity = useEngineerActivity as unknown as ReturnType<typeof vi.fn>;
 const mTeams = useGhTeamMemberships as unknown as ReturnType<typeof vi.fn>;
 const mPaginatedPrs = usePaginatedPrs as unknown as ReturnType<typeof vi.fn>;
 const mReview = useReviewPRs as unknown as ReturnType<typeof vi.fn>;
@@ -53,6 +56,7 @@ beforeEach(() => {
   mPeople.mockReturnValue({ data: [] });
   mMembers.mockReset();
   mStats.mockReturnValue({ data: EMPTY_STATS, isLoading: false });
+  mActivity.mockReturnValue({ data: { login: "", firstMonth: null, prsOpened: {}, prsReviewed: {} }, isLoading: false });
   mTeams.mockReturnValue({ data: { memberships: {} } });
   mPaginatedPrs.mockReturnValue({ data: { data: [], totalCount: 0 } });
   mReview.mockReturnValue({ data: [] });

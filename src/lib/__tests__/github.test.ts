@@ -20,6 +20,7 @@ import {
   fetchIssueDetail,
   fetchPrDetail,
   fetchEngineerStats,
+  fetchEngineerActivity,
 } from "../github";
 
 const mockApiGet = vi.mocked(apiGet);
@@ -332,5 +333,22 @@ describe("fetchEngineerStats", () => {
     const stats = await fetchEngineerStats();
     expect(mockApiGet).toHaveBeenCalledWith("/api/engineer-stats");
     expect(stats).toEqual(payload);
+  });
+});
+
+// ---------- fetchEngineerActivity ----------
+
+describe("fetchEngineerActivity", () => {
+  it("requests the activity endpoint with the login and returns the maps", async () => {
+    const payload = {
+      login: "alice",
+      firstMonth: "2026-01",
+      prsOpened: { "2026-01": 5, "2026-02": 8 },
+      prsReviewed: { "2026-02": 3 },
+    };
+    mockApiGet.mockResolvedValue(payload);
+    const res = await fetchEngineerActivity("alice");
+    expect(mockApiGet).toHaveBeenCalledWith("/api/engineer-activity?login=alice");
+    expect(res).toEqual(payload);
   });
 });
