@@ -263,12 +263,12 @@ export function useEngineerStats() {
   });
 }
 
-/** Per-month PRs-opened + PRs-reviewed for one engineer (activity table). */
-export function useEngineerActivity(login: string) {
+/** Daily PRs-opened + PRs-reviewed for one engineer, for a given month (activity table). */
+export function useEngineerActivity(login: string, month?: string) {
   const { selectedOrg } = useAuth();
   return useQuery<EngineerActivity>({
-    queryKey: ["engineerActivity", selectedOrg, login],
-    queryFn: () => fetchEngineerActivity(login),
+    queryKey: ["engineerActivity", selectedOrg, login, month ?? "current"],
+    queryFn: () => fetchEngineerActivity(login, month),
     enabled: !!selectedOrg && !!login,
     staleTime: 5 * 60 * 1000,
   });
