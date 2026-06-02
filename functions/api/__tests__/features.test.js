@@ -8,8 +8,8 @@ vi.mock("../../lib/op-failures.js", () => ({
   recordFailure: vi.fn(async () => {}),
 }));
 
-import { onRequestGet, onRequestPost } from "../features.js";
-import { onRequestPatch, onRequestDelete } from "../features/[number].js";
+import { onRequestGet, onRequestPost } from "../features";
+import { onRequestPatch, onRequestDelete } from "../features/[number]";
 import { getInstallationIdForOrg } from "../../lib/github-app.js";
 import { recordFailure } from "../../lib/op-failures.js";
 import { __resetLabelCacheForTests } from "../../lib/feature-issues.js";

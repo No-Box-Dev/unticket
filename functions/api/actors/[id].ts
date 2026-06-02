@@ -1,11 +1,32 @@
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { DEFAULT_ACTOR_TONE } from "../../lib/actors";
+import { validate } from "../../lib/validate";
+
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string };
+  request: Request;
+  params: { id: string };
+}
 
 const PATCH_COLS = new Set(["name", "avatar_url", "tone", "kind", "github_user_id"]);
 
+// Body schema — the handler only consumes keys in PATCH_COLS, so the schema just
+// guards "the body is a JSON object". Declaring no known keys keeps every key
+// passing through in insertion order (the original iterated Object.entries on the
+// raw body, so SET-clause order follows the request); per-field allow-listing is
+// still done by the PATCH_COLS filter below. This mirrors the original
+// hand-rolled behavior exactly.
+const PatchBody = z.object({}).passthrough();
+
 // GET /api/actors/:id — single actor (joined or standalone).
-export async function onRequestGet(context) {
-  const { orgLogin } = getCtx(context);
+export async function onRequestGet(context: Ctx): Promise<Response> {
+  const { orgLogin } = getCtx(context) as { orgLogin: string };
   const { id } = context.params;
   if (!orgLogin) return errorResponse("Missing org context", 400);
   if (!id) return errorResponse("Missing id", 400);
@@ -17,24 +38,28 @@ export async function onRequestGet(context) {
 
 // PATCH /api/actors/:id — update tone / name / avatar_url / kind.
 // Materializes a synthesized 'actor_<login>' id into a real row first.
-export async function onRequestPatch(context) {
-  const { orgLogin } = getCtx(context);
+export async function onRequestPatch(context: Ctx): Promise<Response> {
+  const { orgLogin } = getCtx(context) as { orgLogin: string };
   const { id } = context.params;
   if (!orgLogin) return errorResponse("Missing org context", 400);
   if (!id) return errorResponse("Missing id", 400);
 
-  let body;
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
     return errorResponse("Invalid JSON body", 400);
   }
 
+  const parsed = validate(PatchBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+
   const materialized = await ensureActorRow(context.env.DB, orgLogin, id);
   if (!materialized) return errorResponse("Unknown actor", 404);
 
-  const setClauses = [];
-  const values = [];
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
   for (const [k, v] of Object.entries(body)) {
     if (!PATCH_COLS.has(k)) continue;
     setClauses.push(`${k} = ?`);
@@ -50,7 +75,7 @@ export async function onRequestPatch(context) {
   return jsonResponse({ actor: fresh });
 }
 
-async function selectActorById(db, orgLogin, id) {
+async function selectActorById(db: D1Database, orgLogin: string, id: string) {
   const joined = await db.prepare(
     `SELECT
         COALESCE(a.id, 'actor_' || u.login)             AS id,
@@ -88,10 +113,10 @@ async function selectActorById(db, orgLogin, id) {
 
 // Materialize an actors row when the caller passes a synthesized id.
 // 'actor_<login>' → look up gh_users by login, insert overlay row.
-async function ensureActorRow(db, orgLogin, id) {
+async function ensureActorRow(db: D1Database, orgLogin: string, id: string) {
   const existing = await db.prepare(
     "SELECT id FROM actors WHERE id = ? AND owner_id = ?"
-  ).bind(id, orgLogin).first();
+  ).bind(id, orgLogin).first<{ id: string }>();
   if (existing) return existing;
 
   if (!id.startsWith("actor_")) return null;
@@ -108,7 +133,7 @@ async function ensureActorRow(db, orgLogin, id) {
           WHERE i.owner_id = ?
         )
       LIMIT 1`
-  ).bind(login, orgLogin).first();
+  ).bind(login, orgLogin).first<{ id: number | string; login: string; avatar_url: string | null; type: string; name: string | null }>();
   if (!ghUser) return null;
 
   await db.prepare(
@@ -127,6 +152,6 @@ async function ensureActorRow(db, orgLogin, id) {
 
   const row = await db.prepare(
     "SELECT id FROM actors WHERE id = ? AND owner_id = ?"
-  ).bind(id, orgLogin).first();
+  ).bind(id, orgLogin).first<{ id: string }>();
   return row ?? null;
 }

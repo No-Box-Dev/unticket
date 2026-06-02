@@ -11,7 +11,7 @@ vi.mock("../../lib/github-app.js", () => ({
   getInstallationToken: vi.fn(async () => "install-tok"),
 }));
 
-import { onRequestPost } from "../features/backfill-matches.js";
+import { onRequestPost } from "../features/backfill-matches";
 import { getInactiveRepoSet } from "../../lib/inactive-repos.js";
 import { matchPRToFeatures } from "../../lib/feature-matcher.js";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app.js";

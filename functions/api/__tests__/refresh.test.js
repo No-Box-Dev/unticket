@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { onRequestPost } from "../auth/refresh.js";
+import { onRequestPost } from "../auth/refresh";
 import { encryptToken } from "../../lib/crypto.js";
 import { hashAccessToken } from "../../lib/oauth-tokens.js";
 
