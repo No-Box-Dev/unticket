@@ -382,24 +382,34 @@ function formatMonthLabel(ym: string): string {
   return `${d.toLocaleString("en-US", { month: "short" })} ${String(y).slice(2)}`;
 }
 
-function ActivityTable({ login }: { login: string }) {
-  const { data, isLoading } = useEngineerActivity(login);
-  const currentMonth = thisMonthKey();
-  const firstMonth = data?.firstMonth ?? currentMonth;
+// Days of a "YYYY-MM" month as "YYYY-MM-DD" keys.
+function daysOfMonth(ym: string): string[] {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return [];
+  const n = new Date(y, m, 0).getDate();
+  return Array.from({ length: n }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
+}
 
-  const allMonths = useMemo(() => enumerateMonths(firstMonth, currentMonth), [firstMonth, currentMonth]);
-  // Default to the most recent ~6 months; selectable back to the first month.
-  const defaultStart = allMonths.length > 6 ? allMonths[allMonths.length - 6] : allMonths[0];
-  const [startMonth, setStartMonth] = useState<string | null>(null);
-  const effectiveStart = startMonth && allMonths.includes(startMonth) ? startMonth : defaultStart;
-  const cols = useMemo(() => enumerateMonths(effectiveStart, currentMonth), [effectiveStart, currentMonth]);
+function ActivityTable({ login }: { login: string }) {
+  const currentMonth = thisMonthKey();
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const { data, isLoading } = useEngineerActivity(login, selectedMonth ?? undefined);
+
+  const shownMonth = data?.month ?? selectedMonth ?? currentMonth;
+  const firstMonth = data?.firstMonth ?? shownMonth;
+  // Selector: every month from first activity to now, most recent first.
+  const monthOptions = useMemo(
+    () => enumerateMonths(firstMonth, currentMonth).reverse(),
+    [firstMonth, currentMonth],
+  );
+  const days = useMemo(() => daysOfMonth(shownMonth), [shownMonth]);
 
   const rows = [
     { label: "PRs opened", map: data?.prsOpened ?? {} },
     { label: "PRs reviewed", map: data?.prsReviewed ?? {} },
   ];
   const grandTotal = rows.reduce(
-    (sum, r) => sum + cols.reduce((s, c) => s + (r.map[c] ?? 0), 0),
+    (sum, r) => sum + days.reduce((s, d) => s + (r.map[d] ?? 0), 0),
     0,
   );
 
@@ -408,16 +418,16 @@ function ActivityTable({ login }: { login: string }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 gap-4 flex-wrap">
         <div className="flex items-baseline gap-2">
           <h3 className="text-sm font-semibold text-stone-700">Activity</h3>
-          <span className="text-xs text-stone-400">{grandTotal} total · {cols.length} mo</span>
+          <span className="text-xs text-stone-400">{grandTotal} in {formatMonthLabel(shownMonth)}</span>
         </div>
         <label className="text-xs text-stone-500 flex items-center gap-1.5">
-          From
+          Month
           <select
-            value={effectiveStart}
-            onChange={(e) => setStartMonth(e.target.value)}
+            value={shownMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
             className="border border-stone-200 rounded-md px-2 py-1 text-xs bg-white cursor-pointer"
           >
-            {allMonths.map((m) => (
+            {monthOptions.map((m) => (
               <option key={m} value={m}>{formatMonthLabel(m)}</option>
             ))}
           </select>
@@ -428,29 +438,29 @@ function ActivityTable({ login }: { login: string }) {
         <div className="p-6 text-center"><Spinner className="w-5 h-5 text-accent inline-block" /></div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="text-sm min-w-full">
             <thead>
-              <tr className="text-stone-500">
-                <th className="text-left font-medium px-4 py-2"> </th>
-                {cols.map((c) => (
-                  <th key={c} className="text-right font-medium px-3 py-2 whitespace-nowrap">{formatMonthLabel(c)}</th>
+              <tr className="text-stone-400">
+                <th className="text-left font-medium px-3 py-2 sticky left-0 bg-white"> </th>
+                {days.map((d) => (
+                  <th key={d} className="text-right font-medium px-2 py-2 tabular-nums w-8">{Number(d.slice(-2))}</th>
                 ))}
-                <th className="text-right font-semibold px-4 py-2 bg-stone-50">Tot</th>
+                <th className="text-right font-semibold px-3 py-2 bg-stone-50">Tot</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const rowTotal = cols.reduce((s, c) => s + (r.map[c] ?? 0), 0);
+                const rowTotal = days.reduce((s, d) => s + (r.map[d] ?? 0), 0);
                 return (
                   <tr key={r.label} className="border-t border-stone-100">
-                    <td className="text-left font-medium text-stone-700 px-4 py-2 whitespace-nowrap">{r.label}</td>
-                    {cols.map((c) => {
-                      const v = r.map[c] ?? 0;
+                    <td className="text-left font-medium text-stone-700 px-3 py-2 whitespace-nowrap sticky left-0 bg-white">{r.label}</td>
+                    {days.map((d) => {
+                      const v = r.map[d] ?? 0;
                       return (
-                        <td key={c} className={cn("text-right px-3 py-2 tabular-nums", v === 0 ? "text-stone-300" : "text-stone-800")}>{v}</td>
+                        <td key={d} className={cn("text-right px-2 py-2 tabular-nums", v === 0 ? "text-stone-200" : "text-stone-800")}>{v}</td>
                       );
                     })}
-                    <td className="text-right font-semibold text-stone-900 px-4 py-2 bg-stone-50 tabular-nums">{rowTotal}</td>
+                    <td className="text-right font-semibold text-stone-900 px-3 py-2 bg-stone-50 tabular-nums">{rowTotal}</td>
                   </tr>
                 );
               })}
