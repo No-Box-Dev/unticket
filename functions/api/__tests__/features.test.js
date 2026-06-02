@@ -101,30 +101,24 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("GET /api/features", () => {
-  it("hydrates linkedPRs from pr_feature_links (not body metadata)", async () => {
+  it("returns features parsed from D1 rows", async () => {
     const db = makeDb({
-      batchResults: [
-        { results: [
-          { number: 42, title: "Login", state: "open", body: "Plan", assignees_json: '[]', labels_json: '[]' },
-          { number: 43, title: "Signup", state: "open", body: "Plan", assignees_json: '[]', labels_json: '[]' },
-        ] },
-        { results: [
-          { feature_number: 42, pr_repo: "api", pr_number: 100 },
-          { feature_number: 42, pr_repo: "web", pr_number: 200 },
-        ] },
-      ],
+      allResult: { results: [
+        { number: 42, title: "Login", state: "open", body: "Plan", assignees_json: '[]', labels_json: '[]' },
+        { number: 43, title: "Signup", state: "open", body: "Plan", assignees_json: '[]', labels_json: '[]' },
+      ] },
     });
     const res = await onRequestGet(makeCtx({ db }));
     const data = await res.json();
     expect(data).toHaveLength(2);
-    expect(data[0].linkedPRs).toEqual([{ repo: "api", number: 100 }, { repo: "web", number: 200 }]);
-    expect(data[1].linkedPRs).toEqual([]);
+    expect(data[0].linkedPRs).toBeUndefined();
+    expect(data[1].linkedPRs).toBeUndefined();
   });
 
   it("filters by state from query param (default 'open')", async () => {
-    const db = makeDb({ batchResults: [{ results: [] }, { results: [] }] });
+    const db = makeDb({ allResult: { results: [] } });
     await onRequestGet(makeCtx({ db, url: "http://x/api/features?state=closed" }));
-    expect(db._calls.batch[0][0].binds).toEqual([1, "closed"]);
+    expect(db._calls.all[0].binds).toEqual([1, "closed"]);
   });
 });
 

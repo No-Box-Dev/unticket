@@ -13,9 +13,6 @@ vi.mock("../github-app.js", () => ({
 vi.mock("../gh-mirror.js", () => ({
   upsertGhUser: vi.fn(async () => {}),
 }));
-vi.mock("../feature-matcher.js", () => ({
-  matchPRToFeatures: vi.fn(async () => null),
-}));
 vi.mock("../db.js", async () => {
   const actual = await vi.importActual("../db.js");
   return {
@@ -337,14 +334,13 @@ describe("repo lifecycle helpers", () => {
     expect(db._calls.runs[0].sql).toContain("UPDATE repos SET archived_at");
   });
 
-  it("removeRepo batches 4 DELETE statements", async () => {
+  it("removeRepo batches 3 DELETE statements", async () => {
     const db = makeDb();
     await removeRepo(db, "org", "api");
     expect(db._calls.batches).toHaveLength(1);
     const sqls = db._calls.batches[0].map((s) => s.sql).join(" || ");
     expect(sqls).toContain("DELETE FROM issues");
     expect(sqls).toContain("DELETE FROM pull_requests");
-    expect(sqls).toContain("DELETE FROM pr_feature_links");
     expect(sqls).toContain("DELETE FROM repos");
   });
 
@@ -356,11 +352,11 @@ describe("repo lifecycle helpers", () => {
     expect(db._calls.batches).toHaveLength(0);
   });
 
-  it("renameRepo updates 4 tables in a single batch", async () => {
+  it("renameRepo updates 3 tables in a single batch", async () => {
     const db = makeDb();
     await renameRepo(db, "org", "old", "new");
     expect(db._calls.batches).toHaveLength(1);
-    expect(db._calls.batches[0]).toHaveLength(4);
+    expect(db._calls.batches[0]).toHaveLength(3);
   });
 
   it("touchRepoPushed updates pushed_at", async () => {
@@ -463,65 +459,5 @@ describe("syncRepo orchestration", () => {
       ok: false, status: 500, headers: { get: () => null }, statusText: "x",
     });
     await expect(syncRepo(makeDb(), "tok", "org-1", "x", "api", true)).rejects.toThrow();
-  });
-});
-
-describe("syncPRs LLM matcher invocation", () => {
-  it("invokes matchPRToFeatures for each PR when ZHIPU_API_KEY is set", async () => {
-    fetch.mockResolvedValueOnce({
-      ok: true, headers: { get: () => null },
-      json: async () => [
-        {
-          number: 1, title: "x", state: "open",
-          user: { login: "octo", id: 1, avatar_url: "a", type: "User" },
-          draft: false,
-          head: { ref: "feat/42-x" },
-          base: { ref: "main" },
-          merged_at: null, created_at: "a", updated_at: "b",
-          html_url: "u", requested_reviewers: [], labels: [],
-          body: "Implements feature 42",
-        },
-        {
-          number: 2, title: "y", state: "open",
-          user: { login: "octo", id: 1, avatar_url: "a", type: "User" },
-          draft: false,
-          head: { ref: "feat/43-y" },
-          base: { ref: "main" },
-          merged_at: null, created_at: "a", updated_at: "b",
-          html_url: "u", requested_reviewers: [], labels: [],
-          body: null,
-        },
-      ],
-    });
-    const { matchPRToFeatures } = await import("../feature-matcher.js");
-    matchPRToFeatures.mockResolvedValue(null);
-    const db = makeDb();
-    const { syncPRs } = await import("../github-sync.js");
-    await syncPRs(db, "tok", "org-1", "no-box-dev", "api", null, { ZHIPU_API_KEY: "k" });
-    expect(matchPRToFeatures).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not invoke the matcher when ZHIPU_API_KEY is missing", async () => {
-    fetch.mockResolvedValueOnce({
-      ok: true, headers: { get: () => null },
-      json: async () => [
-        {
-          number: 1, title: "x", state: "open",
-          user: { login: "octo", id: 1, avatar_url: "a", type: "User" },
-          draft: false,
-          head: { ref: "feat/42-x" },
-          base: { ref: "main" },
-          merged_at: null, created_at: "a", updated_at: "b",
-          html_url: "u", requested_reviewers: [], labels: [],
-          body: null,
-        },
-      ],
-    });
-    const { matchPRToFeatures } = await import("../feature-matcher.js");
-    matchPRToFeatures.mockReset();
-    const db = makeDb();
-    const { syncPRs } = await import("../github-sync.js");
-    await syncPRs(db, "tok", "org-1", "no-box-dev", "api", null, null);
-    expect(matchPRToFeatures).not.toHaveBeenCalled();
   });
 });

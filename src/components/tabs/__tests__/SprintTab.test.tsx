@@ -19,11 +19,6 @@ vi.mock("@/hooks/useGitHub", () => ({
 vi.mock("@/lib/auth", () => ({
   useAuth: vi.fn(),
 }));
-vi.mock("@/hooks/usePRLinks", () => ({
-  useLinkPR: () => ({ mutate: vi.fn(), isPending: false }),
-  useUnlinkPR: () => ({ mutate: vi.fn(), isPending: false }),
-  useLinkedPRs: () => ({ data: [] }),
-}));
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children: string }) => <div>{children}</div>,
 }));

@@ -2,7 +2,7 @@ import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
 import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
-import { GripVertical, Trash2, GitPullRequest } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -84,12 +84,6 @@ export function FeatureCard({
           className="w-2 h-2 rounded-full shrink-0"
           style={{ backgroundColor: dotColor }}
         />
-        {feature.linkedPRs && feature.linkedPRs.length > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-[10px] text-stone-400 bg-stone-100 rounded-full px-1.5 py-0">
-            <GitPullRequest className="w-2.5 h-2.5" />
-            {feature.linkedPRs.length}
-          </span>
-        )}
         <AssignDropdown
           owners={feature.owners}
           allPeople={allPeople}

@@ -21,9 +21,6 @@ vi.mock("../../lib/github-sync.js", () => ({
   touchRepoPushed: vi.fn(() => Promise.resolve()),
   syncRepo: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("../../lib/feature-metadata.js", () => ({
-  parseFeatureMetadata: vi.fn(() => ({ content: "", metadata: { linkedPRs: [] } })),
-}));
 vi.mock("../../lib/events.js", () => ({
   storeEvent: vi.fn(async () => ({ id: 1 })),
 }));
@@ -37,9 +34,6 @@ vi.mock("../../lib/github-app.js", () => ({
 }));
 vi.mock("../../lib/narrator.js", () => ({
   narrateEvent: vi.fn(() => Promise.resolve()),
-}));
-vi.mock("../../lib/feature-matcher.js", () => ({
-  matchPRToFeatures: vi.fn(() => Promise.resolve()),
 }));
 
 import { onRequestPost } from "../webhook.js";

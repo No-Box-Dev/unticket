@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { X, ExternalLink, Pencil, Save, GitPullRequest, Plus, Link2 } from "lucide-react";
+import { X, ExternalLink, Pencil, Save } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
-import { useLinkPR, useUnlinkPR, useLinkedPRs } from "@/hooks/usePRLinks";
 import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
 
 // Look up the label/color for a feature's current status. Legacy statuses that
@@ -39,13 +37,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   const currentStage = stageLookup(stages, draft.status);
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const [showAddPR, setShowAddPR] = useState(false);
-  const [addPRRepo, setAddPRRepo] = useState("");
-  const [addPRNumber, setAddPRNumber] = useState("");
-
-  const linkMutation = useLinkPR();
-  const unlinkMutation = useUnlinkPR();
-  const { data: richLinks } = useLinkedPRs(feature.id);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasUnsavedChanges = useRef(false);
@@ -87,44 +78,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
       }
     }
     onClose();
-  }
-
-  function handleLinkPR() {
-    const num = parseInt(addPRNumber, 10);
-    if (!addPRRepo.trim() || !Number.isFinite(num) || num <= 0) return;
-    linkMutation.mutate(
-      { featureNumber: draft.id, prRepo: addPRRepo.trim(), prNumber: num },
-      {
-        onSuccess: () => {
-          const existing = draft.linkedPRs ?? [];
-          if (!existing.some((l) => l.repo === addPRRepo.trim() && l.number === num)) {
-            setDraft((d) => ({
-              ...d,
-              linkedPRs: [...(d.linkedPRs ?? []), { repo: addPRRepo.trim(), number: num }],
-            }));
-          }
-          setShowAddPR(false);
-          setAddPRRepo("");
-          setAddPRNumber("");
-        },
-      },
-    );
-  }
-
-  function handleUnlinkPR(prRepo: string, prNumber: number) {
-    unlinkMutation.mutate(
-      { featureNumber: draft.id, prRepo, prNumber },
-      {
-        onSuccess: () => {
-          setDraft((d) => ({
-            ...d,
-            linkedPRs: (d.linkedPRs ?? []).filter(
-              (l) => !(l.repo === prRepo && l.number === prNumber),
-            ),
-          }));
-        },
-      },
-    );
   }
 
   const plan = draft.plan ?? "";
@@ -256,127 +209,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                   </button>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Linked PRs */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-stone-500">Linked PRs</span>
-              {!showAddPR && (
-                <button
-                  onClick={() => setShowAddPR(true)}
-                  className="text-xs text-stone-400 hover:text-accent flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus size={12} />
-                  Link PR
-                </button>
-              )}
-            </div>
-
-            {showAddPR && (
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  value={addPRRepo}
-                  onChange={(e) => setAddPRRepo(e.target.value)}
-                  placeholder="repo name"
-                  className="w-32 rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:border-accent"
-                />
-                <span className="text-stone-300 text-xs">#</span>
-                <input
-                  value={addPRNumber}
-                  onChange={(e) => setAddPRNumber(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123"
-                  className="w-20 rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:border-accent"
-                />
-                <button
-                  onClick={handleLinkPR}
-                  disabled={linkMutation.isPending || !addPRRepo.trim() || !addPRNumber}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent/90 cursor-pointer disabled:opacity-40"
-                >
-                  <Link2 size={11} />
-                  Link
-                </button>
-                <button
-                  onClick={() => { setShowAddPR(false); setAddPRRepo(""); setAddPRNumber(""); }}
-                  className="text-xs text-stone-400 hover:text-stone-600 cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            {draft.linkedPRs && draft.linkedPRs.length > 0 ? (
-              <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200 overflow-hidden">
-                {draft.linkedPRs.map((pr) => {
-                  const rich = richLinks?.find(
-                    (r) => r.pr_repo === pr.repo && r.pr_number === pr.number,
-                  );
-                  const title = rich?.pr_title ?? `${pr.repo}#${pr.number}`;
-                  const author = rich?.pr_author ?? null;
-                  const avatar = rich?.pr_author_avatar ?? null;
-                  const merged = !!rich?.pr_merged_at;
-                  const state = rich?.pr_state ?? null;
-                  const stateLabel = merged ? "Merged" : state === "closed" ? "Closed" : state === "open" ? "Open" : null;
-                  const stateClass = merged
-                    ? "text-purple-600 bg-purple-50"
-                    : state === "closed"
-                      ? "text-red-600 bg-red-50"
-                      : state === "open"
-                        ? "text-green-600 bg-green-50"
-                        : "text-stone-500 bg-stone-100";
-                  return (
-                    <li
-                      key={`${pr.repo}-${pr.number}`}
-                      className="group/pr flex items-center gap-3 px-3 py-2 hover:bg-stone-50"
-                    >
-                      <GitPullRequest className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                      <Link
-                        to={`/prs/${pr.repo}/${pr.number}`}
-                        className="flex-1 min-w-0 text-xs"
-                      >
-                        <div className="flex items-baseline gap-1.5 min-w-0">
-                          <span className="text-stone-800 font-medium truncate hover:text-accent">
-                            {title}
-                          </span>
-                          <span className="text-stone-400 shrink-0">
-                            {pr.repo}#{pr.number}
-                          </span>
-                        </div>
-                        {author && (
-                          <div className="flex items-center gap-1.5 mt-0.5 text-stone-500">
-                            {avatar && (
-                              <img
-                                src={avatar}
-                                alt=""
-                                className="w-3.5 h-3.5 rounded-full"
-                              />
-                            )}
-                            <span>{author}</span>
-                          </div>
-                        )}
-                      </Link>
-                      {stateLabel && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${stateClass}`}>
-                          {stateLabel}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleUnlinkPR(pr.repo, pr.number)}
-                        disabled={unlinkMutation.isPending}
-                        className="text-stone-300 hover:text-red-500 cursor-pointer opacity-0 group-hover/pr:opacity-100 transition-opacity shrink-0 disabled:opacity-30"
-                        title="Unlink PR"
-                      >
-                        <X size={13} />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              !showAddPR && (
-                <span className="text-xs text-stone-400">No linked PRs.</span>
-              )
             )}
           </div>
 

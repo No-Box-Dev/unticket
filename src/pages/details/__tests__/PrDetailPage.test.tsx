@@ -6,9 +6,6 @@ vi.mock("@/hooks/useGitHub", () => ({
   usePrDetail: vi.fn(),
   usePrBody: vi.fn(),
 }));
-vi.mock("@/hooks/usePRLinks", () => ({
-  useLinkedFeatures: vi.fn(),
-}));
 vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children: string }) => <div data-testid="md">{children}</div>,
@@ -16,12 +13,10 @@ vi.mock("react-markdown", () => ({
 
 import { PrDetailPage } from "../PrDetailPage";
 import { usePrDetail, usePrBody } from "@/hooks/useGitHub";
-import { useLinkedFeatures } from "@/hooks/usePRLinks";
 import { useAuth } from "@/lib/auth";
 
 const mDetail = usePrDetail as unknown as ReturnType<typeof vi.fn>;
 const mBody = usePrBody as unknown as ReturnType<typeof vi.fn>;
-const mLinked = useLinkedFeatures as unknown as ReturnType<typeof vi.fn>;
 const mAuth = useAuth as unknown as ReturnType<typeof vi.fn>;
 
 function LocationProbe() {
@@ -32,7 +27,6 @@ function LocationProbe() {
 beforeEach(() => {
   mDetail.mockReset();
   mBody.mockReset();
-  mLinked.mockReturnValue({ data: [] });
   mAuth.mockReturnValue({ selectedOrg: "acme" });
 });
 
@@ -100,15 +94,11 @@ describe("PrDetailPage", () => {
       isLoading: false,
       isError: false,
     });
-    mLinked.mockReturnValue({
-      data: [{ feature_number: 42, feature_title: "Add login" }],
-    });
     renderAt("/prs/api/7");
     expect(screen.getByText("Fix crash")).toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
     expect(screen.getByText("bug")).toBeInTheDocument();
-    expect(screen.getByText(/#42 Add login/)).toBeInTheDocument();
     expect(screen.getByTestId("md")).toHaveTextContent("Fixes it");
   });
 });
