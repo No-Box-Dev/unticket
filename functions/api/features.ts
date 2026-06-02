@@ -1,14 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */ // dynamic D1 rows + GitHub issue payloads
 // /api/features — server-side proxy for the kanban board.
 //
 // GET: read features from D1 (the cached projection populated by webhooks +
 // these very endpoints).
 // POST: create a feature issue on GitHub, mirror the response to D1.
 //
-// PATCH and DELETE for a single feature live in features/[number].js.
+// PATCH and DELETE for a single feature live in features/[number].ts.
 // PUT used to exist as the dumb "syncIssueToD1" sink for the old
 // browser-side Octokit path; it's gone now because every server endpoint
 // mirrors its own response.
 
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../lib/github-app";
 import { resolveBoardStages } from "../lib/board-stages.js";
@@ -21,6 +23,28 @@ import {
   readLinkedPRs,
   upsertFeatureRow,
 } from "../lib/feature-issues";
+import { validate } from "../lib/validate";
+
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string };
+  request: Request;
+}
+
+// Permissive body schema — the title/status 422 checks below stay in the
+// handler because they return 422 (not 400) and status validation depends on
+// the org's board stages, which aren't known at schema-build time. The schema
+// only enforces the field *shapes* the current code reads.
+const CreateFeatureBody = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  owners: z.array(z.unknown()).optional(),
+  plan: z.string().optional(),
+}).passthrough();
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
 const FEATURE_COLUMNS = [
@@ -33,8 +57,8 @@ const FEATURE_COLUMNS = [
 // metadata) because the LLM matcher writes to the table only and never
 // touches the issue body. The table is the union of manual + deterministic
 // + LLM matches; the body metadata only covers manual + deterministic.
-export async function onRequestGet(context) {
-  const { orgId } = getCtx(context);
+export async function onRequestGet(context: Ctx): Promise<Response> {
+  const { orgId } = getCtx(context) as { orgId: number };
   const url = new URL(context.request.url);
   const state = url.searchParams.get("state") || "open";
 
@@ -51,8 +75,8 @@ export async function onRequestGet(context) {
       .bind(orgId),
   ]);
 
-  const linksByFeature = new Map();
-  for (const link of linkRows.results ?? []) {
+  const linksByFeature = new Map<number, { repo: string; number: number }[]>();
+  for (const link of (linkRows.results ?? []) as { feature_number: number; pr_repo: string; pr_number: number }[]) {
     let arr = linksByFeature.get(link.feature_number);
     if (!arr) {
       arr = [];
@@ -61,7 +85,7 @@ export async function onRequestGet(context) {
     arr.push({ repo: link.pr_repo, number: link.pr_number });
   }
 
-  const data = featureRows.results.map((row) => ({
+  const data = (featureRows.results as Record<string, any>[]).map((row) => ({
     ...row,
     assignees: JSON.parse(row.assignees_json || "[]"),
     labels: JSON.parse(row.labels_json || "[]"),
@@ -82,14 +106,18 @@ export async function onRequestGet(context) {
 //
 // Stays synchronous because we need GitHub's assigned issue number before we
 // can write a D1 row — PATCH and DELETE are the optimistic ones.
-export async function onRequestPost(context) {
-  const { orgId, orgLogin } = getCtx(context);
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
   if (!orgLogin) return errorResponse("Missing org context", 400);
 
-  let payload;
-  try { payload = await context.request.json(); } catch {
+  let rawBody: unknown;
+  try { rawBody = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
   }
+
+  const parsed = validate(CreateFeatureBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.data;
 
   const title = typeof payload?.title === "string" ? payload.title.trim() : "";
   if (!title) return errorResponse("title is required", 422);
@@ -100,18 +128,18 @@ export async function onRequestPost(context) {
   if (!validStatusIds.has(status)) return errorResponse(`Invalid status: ${status}`, 422);
 
   const owners = Array.isArray(payload?.owners)
-    ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o))
+    ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o)) as string[]
     : [];
   const plan = typeof payload?.plan === "string" ? payload.plan : "";
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
 
-  let token;
+  let token: string;
   try {
     token = await getInstallationToken(context.env, installationId);
   } catch (err) {
-    console.error("[features:post] install token fetch failed", { msg: err?.message });
+    console.error("[features:post] install token fetch failed", { msg: (err as Error)?.message });
     return errorResponse("Failed to acquire GitHub App token", 500);
   }
 
@@ -133,7 +161,8 @@ export async function onRequestPost(context) {
     const linkedPRs = await readLinkedPRs(context.env.DB, orgId, ghIssue.number);
     return jsonResponse(ghIssueToFeature(ghIssue, linkedPRs), 201);
   } catch (err) {
-    console.error("[features:post] GitHub create failed", { status: err?.status, msg: err?.message, ghBody: err?.ghBody });
-    return errorResponse(err?.message || "GitHub create failed", err?.status || 500);
+    const e = err as { status?: number; message?: string; ghBody?: unknown };
+    console.error("[features:post] GitHub create failed", { status: e?.status, msg: e?.message, ghBody: e?.ghBody });
+    return errorResponse(e?.message || "GitHub create failed", e?.status || 500);
   }
 }

@@ -10,6 +10,14 @@ vi.mock("../../../functions/lib/inactive-repos.js", () => ({
   getInactiveRepoSet: vi.fn().mockResolvedValue(new Set()),
 }));
 
+// reconcileOrg calls reconcileRepoEvents per active repo, which makes a real
+// GitHub `fetch` for repo events. Left unmocked it hits the network on every
+// run — slow and flaky (it intermittently blew past the 5s test timeout).
+// No test asserts on it, so stub it to a no-op.
+vi.mock("../../../functions/lib/event-reconcile.js", () => ({
+  reconcileRepoEvents: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../../functions/lib/github-sync.js", () => ({
   syncRepos: vi.fn(),
   syncMembers: vi.fn(),

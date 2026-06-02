@@ -11,6 +11,7 @@
 // concurrency limit to keep the total wall time bounded without spraying
 // the API.
 
+import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import {
   parseFeatureMetadata,
@@ -18,25 +19,47 @@ import {
   readFeatureIssue,
   updateFeatureBody,
 } from "../../lib/feature-metadata";
+import { validate } from "../../lib/validate";
+
+interface Env {
+  DB: D1Database;
+}
+
+interface Ctx {
+  env: Env;
+  data: { orgId: number; orgLogin: string; token: string; isAdmin: boolean };
+  request: Request;
+}
 
 const CONCURRENCY = 5;
 
-export async function onRequestPost(context) {
-  const { orgId, orgLogin, token, isAdmin } = getCtx(context);
+// Body schema — requires the exact confirmation token. The literal both
+// guards against accidental wipes and reproduces the prior 400 message.
+const UnlinkAllBody = z.object({
+  confirm: z.literal("UNLINK_ALL", { message: "Missing or invalid confirmation token" }),
+});
+
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  const { orgId, orgLogin, token, isAdmin } = getCtx(context) as {
+    orgId: number;
+    orgLogin: string;
+    token: string;
+    isAdmin: boolean;
+  };
   if (!orgId || !orgLogin || !token) {
     return errorResponse("Missing org context", 400);
   }
   if (!isAdmin) return errorResponse("Admin required", 403);
 
-  let body;
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
-    body = {};
+    rawBody = {};
   }
-  if (body?.confirm !== "UNLINK_ALL") {
-    return errorResponse("Missing or invalid confirmation token", 400);
-  }
+
+  const parsed = validate(UnlinkAllBody, rawBody);
+  if (!parsed.ok) return parsed.response;
 
   const db = context.env.DB;
 
@@ -44,7 +67,7 @@ export async function onRequestPost(context) {
     .prepare("SELECT DISTINCT feature_number FROM pr_feature_links WHERE org_id = ?")
     .bind(orgId)
     .all();
-  const featureNumbers = (linkRows.results ?? []).map((r) => r.feature_number);
+  const featureNumbers = (linkRows.results ?? []).map((r) => Number(r.feature_number));
 
   const errors = [];
   let featuresCleared = 0;
@@ -83,7 +106,7 @@ export async function onRequestPost(context) {
   });
 }
 
-async function clearFeatureLinks(db, token, orgLogin, orgId, featureNumber) {
+async function clearFeatureLinks(db: D1Database, token: string, orgLogin: string, orgId: number, featureNumber: number) {
   const issue = await readFeatureIssue(token, orgLogin, featureNumber);
   const { content, metadata } = parseFeatureMetadata(issue.body ?? "");
   if (!metadata.linkedPRs || metadata.linkedPRs.length === 0) return;

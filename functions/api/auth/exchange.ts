@@ -1,22 +1,39 @@
+import { z } from "zod";
 import { decryptToken } from "../../lib/crypto";
+import { validate } from "../../lib/validate";
+
+interface Env {
+  DB: D1Database;
+  ENCRYPTION_KEY?: string;
+  [k: string]: unknown;
+}
+
+interface Ctx {
+  env: Env;
+  request: Request;
+}
+
+// Body schema — replaces the hand-rolled `typeof code === "string"` check.
+const ExchangeBody = z.object({
+  code: z.string().min(1, "Missing exchange code"),
+});
 
 /**
  * POST /api/auth/exchange
  * Exchanges a one-time auth code for the GitHub access token.
  * The code is deleted after use (one-time only).
  */
-export async function onRequestPost(context) {
-  let body;
+export async function onRequestPost(context: Ctx): Promise<Response> {
+  let rawBody: unknown;
   try {
-    body = await context.request.json();
+    rawBody = await context.request.json();
   } catch {
     return jsonError("Invalid request body", 400);
   }
 
-  const { code } = body;
-  if (!code || typeof code !== "string") {
-    return jsonError("Missing exchange code", 400);
-  }
+  const parsed = validate(ExchangeBody, rawBody);
+  if (!parsed.ok) return parsed.response;
+  const { code } = parsed.data;
 
   // Clean up expired pending tokens first
   await context.env.DB.prepare(
@@ -26,7 +43,7 @@ export async function onRequestPost(context) {
   // Look up and delete the pending token in one step
   const row = await context.env.DB.prepare(
     "DELETE FROM pending_tokens WHERE code = ? RETURNING encrypted_token"
-  ).bind(code).first();
+  ).bind(code).first<{ encrypted_token: string }>();
 
   if (!row) {
     return jsonError("Invalid or expired exchange code", 401);
@@ -42,11 +59,11 @@ export async function onRequestPost(context) {
     console.error("[auth/exchange] ENCRYPTION_KEY is not configured");
     return jsonError("Server misconfigured: ENCRYPTION_KEY missing", 500);
   }
-  let token;
+  let token: string;
   try {
     token = await decryptToken(row.encrypted_token, encryptionKey);
   } catch (err) {
-    console.error("[auth/exchange] decryptToken failed:", err?.message ?? err);
+    console.error("[auth/exchange] decryptToken failed:", (err as Error)?.message ?? err);
     return jsonError("Invalid or expired exchange code", 401);
   }
 
@@ -59,7 +76,7 @@ export async function onRequestPost(context) {
   });
 }
 
-function jsonError(message, status) {
+function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { "Content-Type": "application/json" },

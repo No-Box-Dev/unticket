@@ -65,7 +65,11 @@ Each tab is a `TabId` (defined in `src/lib/types.ts`). To add a new tab:
 - Resolved by `src/lib/unticket-repo-name.ts` (`getUnticketRepoName`)
 - CLI access: `gh issue list --repo {org}/unticket --label unticket --label feature`
 
+### Backend setup (TypeScript + Drizzle + zod)
+New backend code (Pages Functions + cron) is written in **TypeScript**, not JS. Standard D1 access goes through `getDb(env)` in `functions/lib/db-client.ts` (Drizzle, typed against `functions/lib/schema.ts`); table-valued JSON aggregations (`json_each` over `*_json` columns) use Drizzle's raw `sql` template. `functions/lib/schema.ts` mirrors the existing D1 schema for typed queries only — it is **NOT** the migration source; schema changes still go through numbered `/migrations/*.sql` files. External request input is validated at the boundary with `validate(schema, input)` from `functions/lib/validate.ts` (zod) — it returns a 400 `Response` on failure that the handler returns directly. Type-check the backend with `npm run typecheck:functions` (`tsconfig.functions.json`, also wired into CI). Existing hand-rolled `.js` endpoints migrate to this pattern opportunistically; **`functions/api/engineer-stats.ts`** is the reference for a typed read (Drizzle) and **`functions/api/assign.ts`** for a validated write (zod).
+
 ### API Routes (Cloudflare Pages Functions)
+- `functions/api/engineer-stats.ts` — Per-member open-PR / reviewing / assigned-issue counts for the Engineers tab, aggregated server-side in one `DB.batch` (replaces client-side downloading of all PRs/issues). Returns `{ openPRs, reviewing, assignedIssues }` keyed by login.
 - `functions/api/config/[key].js` — D1 config CRUD (see Config System above)
 - `functions/api/sync.js` — Cursor-based GitHub-to-D1 sync: GET checks staleness (MIN across all resources), POST accepts `?cursor=repoName&force=true` for one-repo-at-a-time sync
 - `functions/api/sync-events.js` — Admin-only cursor-batched backfill of the `events` table. POST with no cursor returns the active repo list; subsequent POSTs with `?cursor=<repo>` run `reconcileRepoEvents` per repo (30-day lookback). 403s for non-admin callers.

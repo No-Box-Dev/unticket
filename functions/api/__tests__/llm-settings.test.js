@@ -18,7 +18,7 @@ import {
   onRequestDelete,
   isPrivateHostname,
   formatProbeFailure,
-} from "../llm-settings.js";
+} from "../llm-settings";
 import { probeCompletion } from "../../lib/llm.js";
 import { encryptToken, decryptToken } from "../../lib/crypto.js";
 
