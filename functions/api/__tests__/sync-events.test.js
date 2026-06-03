@@ -11,10 +11,23 @@ import { onRequestPost } from "../sync-events.js";
 import { getActiveRepoNames } from "../../lib/inactive-repos.js";
 import { reconcileRepoEvents } from "../../lib/event-reconcile.js";
 
-function makeCtx({ url = "http://x/api/sync-events", isAdmin = true, orgLogin = "acme" } = {}) {
+// Minimal D1 stub. The no-cursor path reads the backfill-cooldown row
+// (.first()) and writes it (.run()); `lastBackfill` controls the read.
+function makeDb({ lastBackfill = null } = {}) {
+  return {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => lastBackfill,
+        run: async () => ({}),
+      }),
+    }),
+  };
+}
+
+function makeCtx({ url = "http://x/api/sync-events", isAdmin = true, orgLogin = "acme", lastBackfill = null } = {}) {
   return {
     request: new Request(url, { method: "POST" }),
-    env: { DB: {} },
+    env: { DB: makeDb({ lastBackfill }) },
     data: { orgId: 1, orgLogin, token: "tok", isAdmin },
   };
 }
@@ -58,6 +71,23 @@ describe("POST /api/sync-events — phase 1 (no cursor)", () => {
     getActiveRepoNames.mockResolvedValueOnce([]);
     const res = await onRequestPost(makeCtx());
     expect(await res.json()).toEqual({ done: true, repos: 0 });
+  });
+
+  it("429s when a backfill ran within the last 24h", async () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    const res = await onRequestPost(makeCtx({ lastBackfill: { last_synced: recent } }));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
+    expect(getActiveRepoNames).not.toHaveBeenCalled();
+  });
+
+  it("allows a new backfill once the cooldown has elapsed", async () => {
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    getActiveRepoNames.mockResolvedValueOnce(["api"]);
+    const res = await onRequestPost(makeCtx({ lastBackfill: { last_synced: old } }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.cursor).toBe("api");
   });
 });
 

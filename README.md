@@ -1,55 +1,48 @@
 # Unticket
 
-AI-powered project management dashboard for GitHub organisations.
+AI-powered project-management dashboard for GitHub organisations. Unticket syncs your org's pull requests, issues, members, and activity into a fast dashboard with a features kanban, engineer stats, and an event feed — backed by GitHub data, no manual ticket-keeping.
 
-## Quick Start
+**Hosted (free):** [app.unticket.ai](https://app.unticket.ai) · **Self-host:** see [DEPLOY.md](./DEPLOY.md) · **Architecture:** see [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+> **License:** Unticket is **source-available** under the [PolyForm Noncommercial License 1.0.0](./LICENSE) — free for any non-commercial use, modify and self-host freely, but **commercial use is not permitted**. It is not an OSI "open source" license. See [LICENSE](./LICENSE).
+
+## Quick start (local dev)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and sign in with a GitHub personal access token.
+Open http://localhost:5173. By default the dev server proxies `/api/*` to the hosted instance; sign in with a GitHub personal access token (`repo`, `read:org` scopes) to try the UI. To run the full stack (backend Functions, D1, OAuth) against your own infrastructure, follow [DEPLOY.md](./DEPLOY.md).
 
-## Auth Modes
+Set `VITE_API_TARGET` in `.env.local` to point the dev proxy at your own deployment. See [.env.example](./.env.example) for all configuration.
 
-Unticket supports two authentication methods:
+## Auth modes
 
-### Personal Access Token (default)
-Works everywhere, no setup needed. Create a [GitHub PAT](https://github.com/settings/tokens/new?scopes=repo,read:org&description=Unticket) with `repo` and `read:org` scopes.
-
-### GitHub OAuth (optional)
-Enables the "Sign in with GitHub" button. Requires:
-1. A [GitHub OAuth App](https://github.com/settings/applications/new)
-2. A token exchange proxy (since GitHub's OAuth endpoints don't support CORS)
-
-## Deploy
-
-### GitHub Pages (free)
-
-1. Enable Pages in repo settings (Source: GitHub Actions)
-2. Optionally set up OAuth:
-   - Create a GitHub OAuth App (callback URL: `https://yourname.github.io/unticket/api/auth/callback`)
-   - Deploy the Cloudflare Worker in `/worker/` ([free tier](https://workers.cloudflare.com))
-   - Add repo variables: `VITE_GITHUB_CLIENT_ID`, `VITE_OAUTH_PROXY_URL`
-3. Push to main — auto-deploys via GitHub Actions
-
-Without OAuth configured, users authenticate via personal access tokens.
-
-### Vercel
-
-1. Import the repo on [Vercel](https://vercel.com)
-2. Add environment variables: `VITE_GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
-3. Deploy — OAuth works out of the box via `/api/auth/callback`
+- **GitHub App + OAuth** (recommended for self-host/production) — "Sign in with GitHub", real-time webhooks, refresh-token rotation. Requires registering your own GitHub App.
+- **Personal Access Token** — works with zero backend setup, but is read-only: webhooks can't be created in PAT mode, so data is only as fresh as the last manual sync.
 
 ## Stack
 
-- React 19, TypeScript, Vite
-- Tailwind CSS, Lucide icons
-- TanStack Query, Octokit
-- Vercel serverless functions (optional)
-- Cloudflare Workers OAuth proxy (optional)
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, Octokit, Radix UI, Lucide icons
+- **Backend:** Cloudflare Pages Functions + D1 (SQLite), a sibling cron Worker, Cloudflare Queues + R2
+- **Testing:** Vitest + Testing Library
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Production build |
+| `npm test` | Run the Vitest suite |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | Frontend type-check |
+| `npm run typecheck:functions` | Backend (Functions + cron) type-check |
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md). To report a security issue, see [SECURITY.md](./SECURITY.md).
 
 ## Privacy
 
-All data stays in the browser. Tokens are stored in localStorage. No telemetry, no analytics, no third-party servers.
+Self-hosted instances keep all data in your own Cloudflare account. For the hosted instance, see [PRIVACY.md](./PRIVACY.md) and [TERMS.md](./TERMS.md).

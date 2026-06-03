@@ -13,11 +13,15 @@ dist-ssr
 *.local
 .env
 .env.local
+.env.production
 .env.*.local
 
 # Wrangler
 .wrangler
 .dev.vars
+
+# Local Claude Code settings + runtime artifacts (per-machine)
+.claude/
 
 # Editor directories and files
 .vscode/*

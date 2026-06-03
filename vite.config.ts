@@ -83,7 +83,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://app.unticket.ai",
+        // Where the dev server forwards /api/* calls. Override with VITE_API_TARGET
+        // to point at your own deployed instance (defaults to the hosted app).
+        target: process.env.VITE_API_TARGET ?? "https://app.unticket.ai",
         changeOrigin: true,
         // Don't proxy the OAuth callback — handled by oauthDevProxy above
         bypass(req) {
