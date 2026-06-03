@@ -168,19 +168,19 @@ export async function onRequest(context) {
 
   // Ensure org exists in D1 (auto-create only after membership is verified)
   let orgRow = await context.env.DB.prepare(
-    "SELECT id FROM orgs WHERE github_login = ?"
+    "SELECT id, suspended_at FROM orgs WHERE github_login = ?"
   ).bind(orgLogin).first();
 
   if (!orgRow) {
     try {
       const result = await context.env.DB.prepare(
-        "INSERT INTO orgs (github_login) VALUES (?) RETURNING id"
+        "INSERT INTO orgs (github_login) VALUES (?) RETURNING id, suspended_at"
       ).bind(orgLogin).first();
       orgRow = result;
     } catch (e) {
       // Race condition: another request may have inserted the org concurrently
       orgRow = await context.env.DB.prepare(
-        "SELECT id FROM orgs WHERE github_login = ?"
+        "SELECT id, suspended_at FROM orgs WHERE github_login = ?"
       ).bind(orgLogin).first();
       if (!orgRow) {
         return new Response(JSON.stringify({ error: "Failed to resolve organization" }), {
@@ -189,6 +189,14 @@ export async function onRequest(context) {
         });
       }
     }
+  }
+
+  // Operator kill-switch: a suspended org is blocked before any work runs.
+  if (orgRow.suspended_at) {
+    return new Response(
+      JSON.stringify({ error: "This organization has been suspended. Contact support." }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   // Upsert session (encrypt token before storing in D1)
