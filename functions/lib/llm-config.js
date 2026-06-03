@@ -6,6 +6,7 @@
 // default that every caller used before this feature shipped).
 
 import { decryptToken } from "./crypto";
+import { isPrivateHostname } from "./private-host";
 
 export const PROVIDER_ANTHROPIC = "anthropic";
 export const PROVIDER_OPENAI_COMPATIBLE = "openai-compatible";
@@ -44,6 +45,22 @@ export async function resolveLlmConfig(env, orgId) {
     .first()
     .catch(() => null);
   if (!row) return defaultLlmConfig(env);
+
+  // Re-validate the stored base_url at request time, not just when it was saved.
+  // A save-time-only check (api/llm-settings.ts) is defeated by DNS rebinding or
+  // an admin re-pointing the host after saving; without this, the narrator's
+  // fetch would hit internal/metadata addresses with the org's key attached
+  // (SSRF). Fail safe to the default endpoint if it's private or unparseable.
+  let host = null;
+  try {
+    host = new URL(row.base_url).hostname;
+  } catch {
+    host = null;
+  }
+  if (isPrivateHostname(host)) {
+    console.error("[llm-config] org base_url is private or unparseable; using default endpoint");
+    return defaultLlmConfig(env);
+  }
 
   const encryptionKey = env?.ENCRYPTION_KEY;
   if (!encryptionKey) {

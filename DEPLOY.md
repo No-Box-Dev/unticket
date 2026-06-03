@@ -85,6 +85,16 @@ npx wrangler secret put ZHIPU_API_KEY        --name unticket-cron
 npx wrangler secret put ENCRYPTION_KEY       --name unticket-cron
 ```
 
+The cron Worker has `workers_dev = false` (no public URL) and its manual
+`/__scheduled` and `/__archive-events` endpoints are gated behind a token. Only
+set `CRON_TOKEN` if you intend to trigger them manually (e.g. via a custom
+route) — otherwise leave it unset and they stay disabled:
+
+```bash
+# optional — only if you want to hit the manual triggers
+npx wrangler secret put CRON_TOKEN --name unticket-cron   # then send X-Cron-Token: <value>
+```
+
 > **LLM provider:** `ZHIPU_API_KEY` is the default narrator backend (Zhipu's Anthropic-compatible GLM endpoint). Each org can override it with their own key (BYOK) in Settings → AI Provider. Narration is optional — without a key, narration is skipped gracefully.
 
 ## 5. Deploy

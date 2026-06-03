@@ -476,17 +476,18 @@ describe("formatProbeFailure", () => {
     expect(msg).toMatch(/timed out after 30s/);
   });
 
-  it("bad_json → wrong-endpoint hint with body preview", () => {
+  it("bad_json → wrong-endpoint hint WITHOUT echoing the raw body", () => {
     const msg = formatProbeFailure({
       ok: false,
       reason: "bad_json",
       bodySnippet: "<!DOCTYPE html><html><head><title>Login</title>",
     });
     expect(msg).toMatch(/non-JSON/);
-    expect(msg).toContain("<!DOCTYPE html>");
+    // Must not reflect arbitrary response bytes back to the caller (SSRF/info oracle).
+    expect(msg).not.toContain("<!DOCTYPE html>");
   });
 
-  it("no_text_block → model-shape hint with reasoning-model note", () => {
+  it("no_text_block → model-shape hint WITHOUT echoing the raw body", () => {
     const msg = formatProbeFailure({
       ok: false,
       reason: "no_text_block",
@@ -494,17 +495,27 @@ describe("formatProbeFailure", () => {
     });
     expect(msg).toMatch(/no text content/i);
     expect(msg).toMatch(/reasoning model/i);
-    expect(msg).toContain("finish_reason");
+    expect(msg).not.toContain("finish_reason");
   });
 
-  it("falls back to plain bodySnippet when JSON has no .error.message", () => {
-    const msg = formatProbeFailure({
+  it("surfaces a structured provider error message but never the raw body", () => {
+    // Structured { error: { message } } is surfaced…
+    const structured = formatProbeFailure({
+      ok: false,
+      reason: "http_error",
+      status: 401,
+      bodySnippet: '{"error":{"message":"Invalid API key"}}',
+    });
+    expect(structured).toContain("Invalid API key");
+    // …but a non-JSON body is NOT reflected back.
+    const raw = formatProbeFailure({
       ok: false,
       reason: "http_error",
       status: 502,
-      bodySnippet: "Bad Gateway",
+      bodySnippet: "Bad Gateway secret-internal-banner",
     });
-    expect(msg).toContain("Bad Gateway");
+    expect(raw).not.toContain("secret-internal-banner");
+    expect(raw).toMatch(/HTTP 502/);
   });
 
   it("default branch returns the original generic message", () => {

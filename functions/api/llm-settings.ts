@@ -27,6 +27,7 @@ import {
   PROVIDER_OPENAI_COMPATIBLE,
 } from "../lib/llm-config";
 import { validate } from "../lib/validate";
+import { isPrivateHostname } from "../lib/private-host";
 
 interface Env {
   DB: D1Database;
@@ -110,9 +111,12 @@ function extractProviderMessage(snippet: string | undefined): string {
   try {
     const parsed = JSON.parse(snippet);
     const msg = parsed?.error?.message ?? parsed?.error ?? parsed?.message;
-    if (typeof msg === "string" && msg.trim()) return msg.trim().slice(0, 300);
+    if (typeof msg === "string" && msg.trim()) return msg.trim().slice(0, 200);
   } catch { /* not JSON — fall through */ }
-  return snippet.slice(0, 300);
+  // Deliberately do NOT echo the raw body. The probe fetches an admin-supplied
+  // URL; reflecting arbitrary response bytes back would turn this into an
+  // info-disclosure oracle. Only structured provider error messages surface.
+  return "";
 }
 
 interface ProbeFailure {
@@ -149,10 +153,10 @@ export function formatProbeFailure(probe: ProbeFailure): string {
       return `Provider returned HTTP ${probe.status}.${suffix}`;
     }
     case "bad_json":
-      return `Provider responded with non-JSON content. The Base URL probably points at a login / HTML page rather than the API. First 200 chars: ${(probe.bodySnippet || "").slice(0, 200)}`;
+      return `Provider responded with non-JSON content. The Base URL probably points at a login / HTML page rather than the API.`;
     case "no_text_block": {
-      const snippet = (probe.bodySnippet || "").slice(0, 300);
-      const suffix = snippet ? ` Provider returned: ${snippet}` : "";
+      const provider = extractProviderMessage(probe.bodySnippet);
+      const suffix = provider ? ` Provider said: ${provider}` : "";
       return `Provider responded but with no text content. Common causes: the model isn't a chat / text-output model, or it's a reasoning model that consumed the token budget before producing visible output (try a larger model or a non-reasoning variant).${suffix}`;
     }
     case "too_large":
@@ -166,49 +170,10 @@ export function formatProbeFailure(probe: ProbeFailure): string {
   }
 }
 
-// Block hostnames that resolve into the worker's local network or
-// link-local / metadata ranges. We can't fully defend against DNS rebinding
-// from a CF Worker (no pre-resolve API short of `connect()`), but blocking
-// literal IPs + common local names kills the easy variants.
-export function isPrivateHostname(hostname: string | null | undefined): boolean {
-  if (!hostname) return true;
-  // URL.hostname wraps IPv6 in brackets ("[::1]"); strip them so the literal
-  // comparisons below work against the raw address.
-  let lower = hostname.toLowerCase();
-  if (lower.startsWith("[") && lower.endsWith("]")) {
-    lower = lower.slice(1, -1);
-  }
-
-  if (lower === "localhost") return true;
-  if (
-    lower.endsWith(".localhost") ||
-    lower.endsWith(".local") ||
-    lower.endsWith(".internal")
-  ) {
-    return true;
-  }
-
-  const v4 = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const [a, b] = v4.slice(1, 3).map(Number);
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true; // link-local incl. cloud IMDS
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a >= 224) return true; // multicast + reserved
-    return false;
-  }
-
-  if (lower.includes(":")) {
-    if (lower === "::1" || lower === "::") return true;
-    if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA
-    if (lower.startsWith("fe80:")) return true; // link-local
-    if (lower.startsWith("::ffff:")) return true; // IPv4-mapped
-    return false;
-  }
-
-  return false;
-}
+// Shared with the runtime narrator path — see lib/private-host.ts for why the
+// runtime guard (not just this save-time check) is the real defence. Re-exported
+// here so existing importers (and tests) keep resolving it from this module.
+export { isPrivateHostname };
 
 export async function onRequestGet(context: Ctx): Promise<Response> {
   const { orgId, isAdmin } = getCtx(context) as { orgId: number; isAdmin: boolean };

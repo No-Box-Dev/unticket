@@ -2,6 +2,12 @@ name = "unticket-cron"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
+# This Worker only runs on the cron trigger + queue consumer; it needs no public
+# HTTP route. Disabling workers.dev removes the public URL entirely so the
+# manual /__scheduled and /__archive-events endpoints can't be reached from the
+# internet (they're also CRON_TOKEN-gated in code as defence in depth).
+workers_dev = false
+
 # Same D1 database as the Pages app — the cron writes the same tables
 # (repos, issues, pull_requests, features, members, reconcile_runs).
 [[d1_databases]]

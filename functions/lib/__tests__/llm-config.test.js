@@ -74,7 +74,7 @@ describe("resolveLlmConfig", () => {
   it("returns default config when ENCRYPTION_KEY is missing despite a row", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const env = {
-      DB: makeDb({ provider: "anthropic", base_url: "x", encrypted_api_key: "c", model: "m" }),
+      DB: makeDb({ provider: "anthropic", base_url: "https://proxy.example.com", encrypted_api_key: "c", model: "m" }),
       ZHIPU_API_KEY: "z-key",
     };
     const cfg = await resolveLlmConfig(env, 7);
@@ -84,12 +84,36 @@ describe("resolveLlmConfig", () => {
   it("returns default config when decryption fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const env = {
-      DB: makeDb({ provider: "anthropic", base_url: "x", encrypted_api_key: "BAD", model: "m" }),
+      DB: makeDb({ provider: "anthropic", base_url: "https://proxy.example.com", encrypted_api_key: "BAD", model: "m" }),
       ZHIPU_API_KEY: "z-key",
       ENCRYPTION_KEY: "0".repeat(64),
     };
     const cfg = await resolveLlmConfig(env, 7);
     expect(cfg.source).toBe("default");
+  });
+
+  it("falls back to default (and logs) when the stored base_url is private — runtime SSRF guard", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const base of [
+      "http://169.254.169.254/latest/meta-data/", // cloud metadata
+      "https://10.0.0.5",
+      "https://localhost:8080",
+      "https://db.internal",
+      "not-a-url",
+    ]) {
+      const env = {
+        DB: makeDb({
+          provider: "openai-compatible",
+          base_url: base,
+          encrypted_api_key: "ENC",
+          model: "m",
+        }),
+        ZHIPU_API_KEY: "z-key",
+        ENCRYPTION_KEY: "0".repeat(64),
+      };
+      const cfg = await resolveLlmConfig(env, 7);
+      expect(cfg.source, `base_url ${base} must not be used`).toBe("default");
+    }
   });
 
   it("returns org override with decrypted key when configured", async () => {

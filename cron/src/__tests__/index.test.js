@@ -70,7 +70,11 @@ describe("scheduled tick", () => {
     });
 
     const { ctx, drain } = makeCtx();
-    await worker.fetch(new Request("https://x/__scheduled"), { DB: db }, ctx);
+    await worker.fetch(
+      new Request("https://x/__scheduled", { headers: { "X-Cron-Token": "test-token" } }),
+      { DB: db, CRON_TOKEN: "test-token" },
+      ctx,
+    );
     await drain();
 
     expect(db._state.orgs[0].installation_id).toBe(111);
@@ -91,7 +95,11 @@ describe("scheduled tick", () => {
     });
 
     const { ctx, drain } = makeCtx();
-    await worker.fetch(new Request("https://x/__scheduled"), { DB: db }, ctx);
+    await worker.fetch(
+      new Request("https://x/__scheduled", { headers: { "X-Cron-Token": "test-token" } }),
+      { DB: db, CRON_TOKEN: "test-token" },
+      ctx,
+    );
     await drain();
 
     expect(db._state.orgs[0].installation_id).toBeNull();
@@ -110,10 +118,38 @@ describe("scheduled tick", () => {
     });
 
     const { ctx, drain } = makeCtx();
-    await worker.fetch(new Request("https://x/__scheduled"), { DB: db }, ctx);
+    await worker.fetch(
+      new Request("https://x/__scheduled", { headers: { "X-Cron-Token": "test-token" } }),
+      { DB: db, CRON_TOKEN: "test-token" },
+      ctx,
+    );
     await drain();
 
     expect(db._state.orgs[0].installation_id).toBe(111);
     expect(db._state.orgs[0].bootstrapped_at).toBe(existingStamp);
+  });
+
+  it("404s the manual /__scheduled trigger without a valid CRON_TOKEN (no tick runs)", async () => {
+    vi.mocked(reconcileOrg).mockReset();
+    const db = makeDb({
+      orgs: [{ id: 1, github_login: "acme", installation_id: 111, bootstrapped_at: "x" }],
+      installations: [{ installation_id: 111, account_login: "acme" }],
+    });
+    const { ctx, drain } = makeCtx();
+
+    // No token configured → blocked.
+    let res = await worker.fetch(new Request("https://x/__scheduled"), { DB: db }, ctx);
+    expect(res.status).toBe(404);
+
+    // Wrong token → blocked.
+    res = await worker.fetch(
+      new Request("https://x/__scheduled", { headers: { "X-Cron-Token": "nope" } }),
+      { DB: db, CRON_TOKEN: "test-token" },
+      ctx,
+    );
+    expect(res.status).toBe(404);
+
+    await drain();
+    expect(reconcileOrg).not.toHaveBeenCalled();
   });
 });

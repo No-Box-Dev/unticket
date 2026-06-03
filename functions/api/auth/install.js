@@ -53,7 +53,7 @@ export async function onRequestGet(context) {
     ]);
 
     return Response.redirect(
-      `${url.origin}/?install_ok=1&org=${encodeURIComponent(accountLogin)}&setup=${setupAction}`,
+      `${url.origin}/?install_ok=1&org=${encodeURIComponent(accountLogin)}&setup=${encodeURIComponent(setupAction)}`,
       302
     );
   } catch (e) {

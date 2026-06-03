@@ -67,7 +67,16 @@ export default {
   },
 
   // Manual trigger for `wrangler dev --test-scheduled` and curl /__scheduled.
+  // These run the same expensive reconcile/archival as the cron itself, so they
+  // are gated behind CRON_TOKEN — otherwise anyone could trigger a full
+  // cross-org GitHub fan-out or force event archival/deletes if the Worker is
+  // reachable on a public *.workers.dev URL. Fail closed: no token set => no
+  // manual triggering. (scheduled() and queue() are unaffected.)
   async fetch(request, env, ctx) {
+    const token = env.CRON_TOKEN;
+    if (!token || request.headers.get("X-Cron-Token") !== token) {
+      return new Response("not found", { status: 404 });
+    }
     const url = new URL(request.url);
     if (url.pathname === "/__scheduled") {
       ctx.waitUntil(runTick(env));
