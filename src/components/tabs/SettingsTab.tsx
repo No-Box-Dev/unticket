@@ -24,7 +24,7 @@ import {
 } from "@/lib/llm-settings";
 
 export function SettingsTab() {
-  const { user, selectedOrg, logout } = useAuth();
+  const { user, selectedOrg, logout, authMode } = useAuth();
   const { data: settings } = useSettings();
   const saveSettings = useSaveSettings();
   const { data: people } = usePeople();
@@ -71,6 +71,13 @@ export function SettingsTab() {
             Unticket runs as a GitHub App. Installing it on <span className="font-medium">{selectedOrg}</span> grants
             per-repo permissions and registers the webhook automatically — no manual setup.
           </p>
+          {authMode === "pat" && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              You're signed in with a personal access token. Data refreshes only when you
+              sync manually — real-time updates need the GitHub App installed and "Sign in
+              with GitHub". Install the App below, then sign in with it to enable webhooks.
+            </p>
+          )}
           <a
             href="https://github.com/apps/unticket/installations/new"
             target="_blank"
