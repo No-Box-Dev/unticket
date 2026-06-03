@@ -11,17 +11,23 @@ import { onRequestPost } from "../sync-events.js";
 import { getActiveRepoNames } from "../../lib/inactive-repos.js";
 import { reconcileRepoEvents } from "../../lib/event-reconcile.js";
 
-// Minimal D1 stub. The no-cursor path reads the backfill-cooldown row
-// (.first()) and writes it (.run()); `lastBackfill` controls the read.
+// Minimal D1 stub. The cooldown row is read via .first() (`lastBackfill`
+// controls the value) and stamped via .run(); `runs` counts the .run() calls
+// so tests can assert WHEN the cooldown gets stamped.
 function makeDb({ lastBackfill = null } = {}) {
-  return {
+  const db = {
+    runs: 0,
     prepare: () => ({
       bind: () => ({
         first: async () => lastBackfill,
-        run: async () => ({}),
+        run: async () => {
+          db.runs += 1;
+          return {};
+        },
       }),
     }),
   };
+  return db;
 }
 
 function makeCtx({ url = "http://x/api/sync-events", isAdmin = true, orgLogin = "acme", lastBackfill = null } = {}) {
@@ -54,9 +60,10 @@ describe("POST /api/sync-events — admin gate", () => {
 });
 
 describe("POST /api/sync-events — phase 1 (no cursor)", () => {
-  it("returns the first repo + full repoList", async () => {
+  it("returns the first repo + full repoList without stamping the cooldown", async () => {
     getActiveRepoNames.mockResolvedValueOnce(["api", "web"]);
-    const res = await onRequestPost(makeCtx());
+    const ctx = makeCtx();
+    const res = await onRequestPost(ctx);
     const body = await res.json();
     expect(body).toEqual({
       done: false,
@@ -65,6 +72,8 @@ describe("POST /api/sync-events — phase 1 (no cursor)", () => {
       repoList: ["api", "web"],
     });
     expect(reconcileRepoEvents).not.toHaveBeenCalled();
+    // Cooldown is stamped on completion, not at the start of a run.
+    expect(ctx.env.DB.runs).toBe(0);
   });
 
   it("returns done=true when no active repos", async () => {
@@ -118,19 +127,34 @@ describe("POST /api/sync-events — phase 2 (cursor)", () => {
     expect(body.synced).toBe("api");
   });
 
-  it("returns done=true on the last repo", async () => {
+  it("returns done=true on the last repo and stamps the cooldown", async () => {
     getActiveRepoNames.mockResolvedValueOnce(["api", "web"]);
     reconcileRepoEvents.mockResolvedValueOnce({
       prOpened: 0, prClosed: 0, prMerged: 0,
       issueOpened: 0, issueClosed: 0,
       review: 0, push: 0, release: 0,
     });
-    const res = await onRequestPost(
-      makeCtx({ url: "http://x/api/sync-events?cursor=web" }),
-    );
+    const ctx = makeCtx({ url: "http://x/api/sync-events?cursor=web" });
+    const res = await onRequestPost(ctx);
     const body = await res.json();
     expect(body.done).toBe(true);
     expect(body.lastRepo).toBe("web");
+    // The completed run stamps the once-per-day cooldown.
+    expect(ctx.env.DB.runs).toBe(1);
+  });
+
+  it("does not stamp the cooldown on a non-final cursor step", async () => {
+    getActiveRepoNames.mockResolvedValueOnce(["api", "web"]);
+    reconcileRepoEvents.mockResolvedValueOnce({
+      prOpened: 0, prClosed: 0, prMerged: 0,
+      issueOpened: 0, issueClosed: 0,
+      review: 0, push: 0, release: 0,
+    });
+    const ctx = makeCtx({ url: "http://x/api/sync-events?cursor=api" });
+    const res = await onRequestPost(ctx);
+    const body = await res.json();
+    expect(body.done).toBe(false);
+    expect(ctx.env.DB.runs).toBe(0);
   });
 
   it("uses a 30-day lookback (wider than the cron's 48h)", async () => {

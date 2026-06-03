@@ -72,7 +72,11 @@ function oauthDevProxy(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // loadEnv reads .env / .env.local (Vite does NOT put these on process.env),
+  // so VITE_API_TARGET set in .env.local is honoured here.
+  const env = loadEnv(mode, process.cwd(), "");
+  return {
   plugins: [react(), tailwindcss(), oauthDevProxy()],
   base: process.env.GITHUB_PAGES === "true" ? "/unticket/" : "/",
   resolve: {
@@ -85,7 +89,7 @@ export default defineConfig({
       "/api": {
         // Where the dev server forwards /api/* calls. Override with VITE_API_TARGET
         // to point at your own deployed instance (defaults to the hosted app).
-        target: process.env.VITE_API_TARGET ?? "https://app.unticket.ai",
+        target: env.VITE_API_TARGET || "https://app.unticket.ai",
         changeOrigin: true,
         // Don't proxy the OAuth callback — handled by oauthDevProxy above
         bypass(req) {
@@ -94,4 +98,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

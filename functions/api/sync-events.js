@@ -51,8 +51,10 @@ export async function onRequestPost(context) {
 
   try {
     if (!cursor) {
-      // Rate-limit the start of a backfill run (cursor calls in the same chain
-      // pass through, mirroring the force-sync gate in sync.js).
+      // Rate-limit on the START of a run, but the cooldown is only stamped once
+      // a run COMPLETES (see the done branch below). That way a run that fails
+      // partway (network error, closed tab) doesn't lock the admin out for 24h —
+      // they can retry. Cursor calls in an in-flight chain bypass this gate.
       const last = await getLastBackfill(context.env.DB, orgId);
       if (last && Date.now() - last < BACKFILL_COOLDOWN_MS) {
         const retryAfterSec = Math.ceil(
@@ -76,7 +78,6 @@ export async function onRequestPost(context) {
       if (repoNames.length === 0) {
         return jsonResponse({ done: true, repos: 0 });
       }
-      await markBackfill(context.env.DB, orgId);
       return jsonResponse({
         done: false,
         cursor: repoNames[0],
@@ -103,6 +104,9 @@ export async function onRequestPost(context) {
         : null;
 
     if (!nextRepo) {
+      // Run finished — stamp the cooldown now (not at start), so only a
+      // completed backfill counts against the once-per-day limit.
+      await markBackfill(context.env.DB, orgId);
       return jsonResponse({ done: true, lastRepo: cursor, counts });
     }
     return jsonResponse({
