@@ -29,6 +29,8 @@
 - Cloudflare Pages (hosting + functions + D1)
 - Testing: Vitest, Testing Library
 
+**Deploy credentials**: CI (`deploy-pages.yml`) authenticates with the shared `nbx-workers-pages-ci` Cloudflare API token (account `41484e75…`; Workers/Pages/D1/R2), stored **only** as the GitHub Actions secret `CLOUDFLARE_API_TOKEN` (+ `CLOUDFLARE_ACCOUNT_ID`) — not in noxkey. The same token deploys noxspot/112schade/playnist. To rotate: mint a temporary `User → API Tokens → Edit` token, recreate the deploy token, update the secret.
+
 ## Architecture
 
 ### Layout System
