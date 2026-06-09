@@ -122,7 +122,10 @@ export function buildReleaseNotesBlocks({ projectName, summary, prUrl, prNumber 
         type: "mrkdwn",
         // Wrap in a code fence so Slack preserves whitespace + section labels.
         // Cap at ~2800 chars to stay comfortably under Slack's 3000-char text limit.
-        text: "```\n" + truncate(summary ?? "(no release note)", 2800) + "\n```",
+        // Sanitize any embedded ``` runs so a model (or custom prompt) emitting
+        // backtick fences can't close ours early and spill the rest of the note
+        // outside the code block.
+        text: "```\n" + truncate(sanitizeForCodeFence(summary ?? "(no release note)"), 2800) + "\n```",
       },
     },
   ];
@@ -154,4 +157,11 @@ function stripForFallback(s) {
 
 function truncate(s, max) {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+
+// Break up any run of 3+ backticks so it can't close a wrapping code fence.
+// Inserts a zero-width space between each backtick — visually identical in
+// Slack, but the fence-matcher no longer sees consecutive backticks.
+function sanitizeForCodeFence(s) {
+  return String(s ?? "").replace(/`{3,}/g, (m) => m.split("").join("​"));
 }

@@ -164,4 +164,20 @@ describe("buildReleaseNotesBlocks", () => {
     expect(payload.blocks[1].text.text.length).toBeLessThan(2820);
     expect(payload.blocks[1].text.text).toContain("…");
   });
+
+  it("sanitizes embedded ``` so a model can't close the wrapping code fence", () => {
+    const payload = buildReleaseNotesBlocks({
+      projectName: "u",
+      summary: "Type: Bugfix\n```python\nprint('hi')\n```\nDone.",
+    });
+    const text = payload.blocks[1].text.text;
+    // Outer fence still wraps the whole thing
+    expect(text.startsWith("```\n")).toBe(true);
+    expect(text.endsWith("\n```")).toBe(true);
+    // The inner ``` runs are broken up so they no longer form fences. We
+    // assert: between the outer opener and closer, no three consecutive
+    // backticks survive (only the outer pair would).
+    const inner = text.slice(4, -4);
+    expect(/`{3,}/.test(inner)).toBe(false);
+  });
 });
