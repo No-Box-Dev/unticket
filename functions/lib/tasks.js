@@ -9,9 +9,10 @@
 // JS cron Worker — avoids mixing a .ts module into the cron esbuild bundle.
 
 export const TASK = {
-  NARRATE: "narrate",        // { eventId }            -> narrateEvent(env, eventId)
-  BOOTSTRAP: "bootstrap",    // { orgId, accountLogin, installationId }
-  SYNC_REPO: "sync_repo",    // { orgId, accountLogin, installationId, repo }
+  NARRATE: "narrate",                 // { eventId }            -> narrateEvent(env, eventId)
+  RELEASE_NOTES: "release_notes",     // { eventId }            -> narrateReleaseNotes(env, eventId)
+  BOOTSTRAP: "bootstrap",             // { orgId, accountLogin, installationId }
+  SYNC_REPO: "sync_repo",             // { orgId, accountLogin, installationId, repo }
 };
 
 // Enqueue a task. Never throws into the caller: a missing binding or transient

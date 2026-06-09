@@ -99,7 +99,16 @@ Key server functions in `functions/lib/github-sync.js`:
 2. **Cron reconcile (30 min)** — `cron/src/reconcile.js` calls `reconcileRepoEvents` per active repo with a 48h lookback. Catches webhook deliveries missed during deploys or provider outages.
 3. **Manual admin backfill** — `POST /api/sync-events` triggered from Settings → Live Activity Backfill. Same `reconcileRepoEvents` helper with a 30-day lookback.
 
-`reconcileRepoEvents` (in `functions/lib/event-reconcile.js`) is the single source of truth for "what's missing in events for this repo." Three sources, in order: (1) `pull_requests` → `github:pr:opened|closed|merged`, (2) `issues` → `github:issue:opened|closed`, (3) `GET /repos/{owner}/{repo}/events` → reviews/pushes/releases (events GitHub doesn't expose as webhooks-into-D1). Idempotent via deterministic `delivery_id` of `reconcile:<org>:<repo>:pr-<n>:<kind>` / `issue-<n>:<kind>` / `gh-event-<id>` + the `events.delivery_id UNIQUE` constraint. Inserted rows are passed to `narrateEvent`, which only narrates types in `NARRATABLE_TYPES` (currently `github:pr:merged`) so backfilling opens/reviews/pushes doesn't trigger LLM spend.
+`reconcileRepoEvents` (in `functions/lib/event-reconcile.js`) is the single source of truth for "what's missing in events for this repo." Three sources, in order: (1) `pull_requests` → `github:pr:opened|closed|merged`, (2) `issues` → `github:issue:opened|closed`, (3) `GET /repos/{owner}/{repo}/events` → reviews/pushes/releases (events GitHub doesn't expose as webhooks-into-D1). Idempotent via deterministic `delivery_id` of `reconcile:<org>:<repo>:pr-<n>:<kind>` / `issue-<n>:<kind>` / `gh-event-<id>` + the `events.delivery_id UNIQUE` constraint. Inserted rows are passed to BOTH `narrateEvent` and `narrateReleaseNotes` in parallel (`Promise.allSettled`), both gated by `NARRATABLE_TYPES` (currently `github:pr:merged`) so backfilling opens/reviews/pushes doesn't trigger LLM spend.
+
+### Narration (two voices, one trigger)
+Every `NARRATABLE_TYPES` event produces TWO downstream rows in the `events` table — one per feed — via separate functions in `functions/lib/narrator.js`:
+- `narrateEvent` → `type='narrative'`, `source='narrator'` — the Posts feed (first-person chat post, `ACTOR_SYSTEM` prompt).
+- `narrateReleaseNotes` → `type='release_notes'`, `source='release-notes'` — the Release-notes feed (structured release note, `RELEASE_NOTES_SYSTEM` default prompt; admin-overridable via `settings.releaseNotesPrompt`).
+
+The two narrators MUST share the same LLM provider/model — they both call `resolveLlmConfig(env, orgId)`. The only thing that diverges between feeds is the system prompt. Both run at every trigger point: webhook (`TASK.NARRATE` + `TASK.RELEASE_NOTES` enqueued back-to-back), cron queue handler, reconcile loop, `/api/projects/:id/backfill-prs`. The release-note insert is idempotent via a `trigger_event_id` existence check so backfill loops can't double-insert.
+
+When admins use Posts Backfill with "rewrite posts written on a different model," the same flow refreshes the matching release-notes row in lockstep — `findRenarrateTargets` returns BOTH `narrative` and `release_notes` types and dedupes by `trigger_event_id`, then `renarrateFallbacks` deletes both rows and re-runs both narrators.
 
 ### Webhooks
 Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. On `issues.closed`, captures `sender.login` as `closed_by`. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
@@ -128,6 +137,11 @@ All API failures must reach the user. `broadcastError(message, status?)` in `src
 - **Refresh-token rotation:** GitHub App user-to-server access tokens expire after 8 hours. The callback persists the `refresh_token` server-side in `oauth_tokens` (encrypted, keyed by SHA-256 of the access token). `src/lib/api.ts apiFetch` and `src/lib/github.ts fetchUser` intercept 401s by POSTing the expired token to `/api/auth/refresh`, which uses the stored refresh token to obtain a new pair and updates `localStorage.ut_token`. Concurrent 401s coalesce on a single in-flight refresh promise. If refresh fails (refresh-token expired or revoked) the row is deleted and the existing force-logout path runs. The refresh token rotates on every call — old tokens are invalid as soon as a new pair is issued.
 
 ## Features
+
+### Posts feed (`posts` tab — Posts / Release notes toggle)
+The feed tab renders one of two views via a top toggle (`FeedModeToggle` in `PostsTab.tsx`): **Posts** (first-person chat posts) or **Release notes** (structured release notes). Both views share the same People + Repo filters, the same `PostCard` renderer, and the same trigger-type filter (`POST_TRIGGER_TYPES = ['github:pr:merged']`). The toggle just swaps the events table read from `narrative` to `release_notes` via the `mode` arg on `useInfinitePosts`. Same trigger event, two different LLM-generated rows — see "Narration (two voices, one trigger)" above.
+
+The Release-notes prompt is admin-editable in Settings → Release notes prompt (`ReleaseNotesPromptSection`). Empty/missing falls back to `RELEASE_NOTES_SYSTEM` from `functions/lib/prompt.js`. Stored under `settings.releaseNotesPrompt` (D1 config). The LLM provider/model is NOT separately configurable per feed — Posts and Release notes always share the org's `LlmSettingsSection` config.
 
 ### Active Tabs (visible in tab bar)
 

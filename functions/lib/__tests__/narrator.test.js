@@ -8,13 +8,14 @@ vi.mock("../op-failures.js", () => ({
   recordFailure: vi.fn(async () => {}),
 }));
 
-import { narrateEvent, NARRATABLE_TYPES } from "../narrator.js";
+import { narrateEvent, narrateReleaseNotes, NARRATABLE_TYPES } from "../narrator.js";
 import { completeNarrative } from "../llm.js";
 import { recordFailure } from "../op-failures.js";
+import { RELEASE_NOTES_SYSTEM } from "../prompt.js";
 
 // D1 stub: dispatch by SQL substring. Tests configure what each query returns
 // and inspect _calls.runs/binds for the INSERT side effect.
-function makeDb({ event = null, project = null, actor = null } = {}) {
+function makeDb({ event = null, project = null, actor = null, settings = null, existingReleaseNote = null, org = { id: "org-1" } } = {}) {
   const calls = { firsts: [], runs: [] };
   function prepare(sql) {
     return {
@@ -23,9 +24,12 @@ function makeDb({ event = null, project = null, actor = null } = {}) {
       bind(...binds) { this._binds = binds; return this; },
       async first() {
         calls.firsts.push({ sql, binds: this._binds });
+        if (sql.includes("type = 'release_notes'")) return existingReleaseNote;
         if (sql.includes("FROM events")) return event;
         if (sql.includes("FROM projects")) return project;
         if (sql.includes("FROM actors")) return actor;
+        if (sql.includes("FROM config")) return settings;
+        if (sql.includes("FROM orgs")) return org;
         return null;
       },
       async run() {
@@ -230,6 +234,75 @@ describe("narrateEvent — fallback path", () => {
     completeNarrative.mockResolvedValue(null);
     await narrateEvent(ENV(db), 1);
     expect(db._calls.runs).toHaveLength(0);
+  });
+});
+
+describe("narrateReleaseNotes", () => {
+  it("inserts a release_notes row when the LLM produces text", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("🐛 unticket #42 Merged - Bugfix\nDetails: fixed the thing.");
+    await narrateReleaseNotes(ENV(db), 1);
+    const inserts = db._calls.runs.filter((r) => r.sql.includes("INSERT INTO events"));
+    expect(inserts).toHaveLength(1);
+    const [source, type] = inserts[0].binds;
+    expect(source).toBe("release-notes");
+    expect(type).toBe("release_notes");
+  });
+
+  it("uses the default system prompt when no override is configured", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateReleaseNotes(ENV(db), 1);
+    const [, systemPrompt] = completeNarrative.mock.calls[0];
+    expect(systemPrompt).toBe(RELEASE_NOTES_SYSTEM);
+  });
+
+  it("uses the admin override prompt from settings.releaseNotesPrompt", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      settings: { data: JSON.stringify({ releaseNotesPrompt: "CUSTOM RELEASE-NOTE VOICE" }) },
+    });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateReleaseNotes(ENV(db), 1);
+    const [, systemPrompt] = completeNarrative.mock.calls[0];
+    expect(systemPrompt).toBe("CUSTOM RELEASE-NOTE VOICE");
+  });
+
+  it("skips when a release_notes row already exists for the trigger", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      existingReleaseNote: { id: 99 },
+    });
+    await narrateReleaseNotes(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(db._calls.runs).toHaveLength(0);
+  });
+
+  it("falls back to row.summary when the LLM fails and records op_failure", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue(null);
+    await narrateReleaseNotes(ENV(db), 1);
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert.binds[6]).toBe("PR #42: do thing");
+    expect(JSON.parse(insert.binds[7]).model).toBe("fallback");
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ op: "narrateReleaseNotes" }),
+    );
+  });
+
+  it("respects narrator_enabled=0 (same gate as narrateEvent)", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: { ...PROJECT_ROW, narrator_enabled: 0 },
+      actor: ACTOR_ROW,
+    });
+    await narrateReleaseNotes(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
   });
 });
 
