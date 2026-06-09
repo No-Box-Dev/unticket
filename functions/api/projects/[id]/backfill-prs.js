@@ -210,18 +210,21 @@ async function resolveOrgId(db, ownerId) {
 async function renarrateFallbacks(env, fallbacks) {
   for (let i = 0; i < fallbacks.length; i++) {
     if (i > 0) await sleep(NARRATOR_PACING_MS);
-    const { id, triggerEventId } = fallbacks[i];
+    const { triggerEventId } = fallbacks[i];
     try {
-      // Delete both the narrative AND the matching release-notes row for
-      // this trigger so the two feeds stay in lockstep on re-narration.
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id),
-        env.DB.prepare(
-          `DELETE FROM events
-             WHERE type = 'release_notes'
-               AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?`,
-        ).bind(triggerEventId),
-      ]);
+      // Clear ANY existing narrative/release_notes rows for this trigger
+      // before re-running both narrators. The id we have from
+      // findRenarrateTargets can be either type (depending on which one
+      // had the stale model), so we sweep both by trigger_event_id rather
+      // than the specific row id — otherwise a stale narrative could
+      // survive when only the release_notes row was selected as the
+      // target (narrateEvent has no idempotency guard and would insert a
+      // duplicate narrative on top of the surviving one).
+      await env.DB.prepare(
+        `DELETE FROM events
+           WHERE type IN ('narrative', 'release_notes')
+             AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?`,
+      ).bind(triggerEventId).run();
       await Promise.allSettled([
         narrateEvent(env, triggerEventId),
         narrateReleaseNotes(env, triggerEventId),
