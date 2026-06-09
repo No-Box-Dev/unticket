@@ -7,11 +7,18 @@ vi.mock("../llm.js", () => ({
 vi.mock("../op-failures.js", () => ({
   recordFailure: vi.fn(async () => {}),
 }));
+vi.mock("../slack.js", () => ({
+  resolveSlackSettings: vi.fn(async () => ({ postsWebhookUrl: "", releaseNotesWebhookUrl: "" })),
+  postToSlack: vi.fn(async () => {}),
+  buildPostsBlocks: vi.fn((args) => ({ blocks: ["post", args] })),
+  buildReleaseNotesBlocks: vi.fn((args) => ({ blocks: ["release", args] })),
+}));
 
 import { narrateEvent, narrateReleaseNotes, NARRATABLE_TYPES } from "../narrator.js";
 import { completeNarrative } from "../llm.js";
 import { recordFailure } from "../op-failures.js";
 import { RELEASE_NOTES_SYSTEM } from "../prompt.js";
+import { resolveSlackSettings, postToSlack } from "../slack.js";
 
 // D1 stub: dispatch by SQL substring. Tests configure what each query returns
 // and inspect _calls.runs/binds for the INSERT side effect.
@@ -62,6 +69,10 @@ const ACTOR_ROW = { id: "actor-1", name: "Jane", tone: "Dry but warm" };
 beforeEach(() => {
   completeNarrative.mockReset();
   recordFailure.mockClear();
+  resolveSlackSettings.mockReset();
+  resolveSlackSettings.mockResolvedValue({ postsWebhookUrl: "", releaseNotesWebhookUrl: "" });
+  postToSlack.mockReset();
+  postToSlack.mockResolvedValue(undefined);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -338,5 +349,80 @@ describe("narrateEvent — payload parsing", () => {
     completeNarrative.mockResolvedValue("ok");
     await narrateEvent(ENV(db), 1);
     expect(completeNarrative).toHaveBeenCalled();
+  });
+});
+
+describe("narrateEvent — Slack mirror", () => {
+  it("does NOT post to Slack when no webhook is configured", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateEvent(ENV(db), 1);
+    expect(postToSlack).not.toHaveBeenCalled();
+  });
+
+  it("posts to the Posts webhook after inserting a narrative", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("I merged it.");
+    resolveSlackSettings.mockResolvedValue({
+      postsWebhookUrl: "https://hooks.slack.com/services/T/B/abc",
+      releaseNotesWebhookUrl: "",
+    });
+    await narrateEvent(ENV(db), 1);
+    expect(postToSlack).toHaveBeenCalledTimes(1);
+    expect(postToSlack.mock.calls[0][0]).toBe("https://hooks.slack.com/services/T/B/abc");
+  });
+
+  it("does NOT post the narrative to the Release-notes webhook (cross-feed isolation)", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("I merged it.");
+    resolveSlackSettings.mockResolvedValue({
+      postsWebhookUrl: "",
+      releaseNotesWebhookUrl: "https://hooks.slack.com/services/T/B/notes",
+    });
+    await narrateEvent(ENV(db), 1);
+    expect(postToSlack).not.toHaveBeenCalled();
+  });
+
+  it("records op_failure but doesn't throw when Slack post fails", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("I merged it.");
+    resolveSlackSettings.mockResolvedValue({
+      postsWebhookUrl: "https://hooks.slack.com/services/T/B/abc",
+      releaseNotesWebhookUrl: "",
+    });
+    postToSlack.mockRejectedValueOnce(new Error("Slack 500"));
+    await expect(narrateEvent(ENV(db), 1)).resolves.toBeUndefined();
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ op: "slackPostNarrative" }),
+    );
+  });
+});
+
+describe("narrateReleaseNotes — Slack mirror", () => {
+  it("posts to the Release-notes webhook after inserting a release_notes row", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("🐛 unticket #42 ...");
+    resolveSlackSettings.mockResolvedValue({
+      postsWebhookUrl: "",
+      releaseNotesWebhookUrl: "https://hooks.slack.com/services/T/B/notes",
+    });
+    await narrateReleaseNotes(ENV(db), 1);
+    expect(postToSlack).toHaveBeenCalledTimes(1);
+    expect(postToSlack.mock.calls[0][0]).toBe("https://hooks.slack.com/services/T/B/notes");
+  });
+
+  it("does NOT post to Slack when the gate (narrator_enabled=0) blocks", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: { ...PROJECT_ROW, narrator_enabled: 0 },
+      actor: ACTOR_ROW,
+    });
+    resolveSlackSettings.mockResolvedValue({
+      postsWebhookUrl: "https://hooks.slack.com/services/T/B/x",
+      releaseNotesWebhookUrl: "https://hooks.slack.com/services/T/B/y",
+    });
+    await narrateReleaseNotes(ENV(db), 1);
+    expect(postToSlack).not.toHaveBeenCalled();
   });
 });
