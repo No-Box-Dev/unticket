@@ -12,9 +12,10 @@ import {
   triggerEventsBackfillWithProgress,
   type SyncProgress,
 } from "@/lib/github";
-import { Activity, AlertTriangle, Check, Cpu, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Check, Cpu, Loader2, MessageSquare, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiFetch } from "@/lib/api";
+import type { OrgSettings } from "@/lib/types";
 import {
   fetchLlmSettings,
   saveLlmSettings,
@@ -114,6 +115,7 @@ export function SettingsTab() {
           <BoardStagesSection />
           <LlmSettingsSection />
           <ReleaseNotesPromptSection />
+          <SlackSettingsSection />
           <ManualSyncSection />
           <FullResyncSection />
           <ActivityEventsBackfillSection />
@@ -872,6 +874,210 @@ function ReleaseNotesPromptSection() {
       </div>
     </div>
   );
+}
+
+type SlackKind = "narrative" | "release_notes";
+
+function SlackSettingsSection() {
+  const { data: settings } = useSettings();
+  const saveSettings = useSaveSettings();
+  const persistedPosts = settings?.slack?.postsWebhookUrl ?? "";
+  const persistedNotes = settings?.slack?.releaseNotesWebhookUrl ?? "";
+
+  const [postsDraft, setPostsDraft] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const postsValue = postsDraft ?? persistedPosts;
+  const notesValue = notesDraft ?? persistedNotes;
+
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<{ kind: SlackKind; ok: boolean; msg: string } | null>(null);
+  const [testingKind, setTestingKind] = useState<SlackKind | null>(null);
+
+  const postsValid = postsValue.trim() === "" || isHooksSlackUrl(postsValue.trim());
+  const notesValid = notesValue.trim() === "" || isHooksSlackUrl(notesValue.trim());
+  const isDirty =
+    (postsDraft !== null && postsDraft.trim() !== persistedPosts.trim()) ||
+    (notesDraft !== null && notesDraft.trim() !== persistedNotes.trim());
+
+  async function handleSave() {
+    if (!settings) return;
+    if (!postsValid || !notesValid) {
+      setError("Webhook URL must be https://hooks.slack.com/...");
+      return;
+    }
+    setError(null);
+    try {
+      const next: OrgSettings = {
+        ...settings,
+        slack: {
+          postsWebhookUrl: postsValue.trim() ? postsValue.trim() : undefined,
+          releaseNotesWebhookUrl: notesValue.trim() ? notesValue.trim() : undefined,
+        },
+      };
+      // Strip an entirely-empty slack object so the settings JSON stays clean.
+      if (!next.slack?.postsWebhookUrl && !next.slack?.releaseNotesWebhookUrl) {
+        delete next.slack;
+      }
+      await saveSettings.mutateAsync(next);
+      setPostsDraft(null);
+      setNotesDraft(null);
+      setSavedAt(Date.now());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleTest(kind: SlackKind) {
+    const url = kind === "release_notes" ? notesValue.trim() : postsValue.trim();
+    if (!url) {
+      setTestStatus({ kind, ok: false, msg: "Paste a webhook URL first." });
+      return;
+    }
+    if (!isHooksSlackUrl(url)) {
+      setTestStatus({ kind, ok: false, msg: "Must be https://hooks.slack.com/..." });
+      return;
+    }
+    setTestingKind(kind);
+    setTestStatus(null);
+    try {
+      const res = await apiFetch("/api/slack/test", {
+        method: "POST",
+        body: JSON.stringify({ url, kind }),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(detail?.error ?? `Test failed (HTTP ${res.status})`);
+      }
+      setTestStatus({ kind, ok: true, msg: "Test message posted to your channel." });
+    } catch (err) {
+      setTestStatus({ kind, ok: false, msg: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setTestingKind(null);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <MessageSquare size={14} className="text-stone-500" />
+        <h2 className="text-sm font-semibold text-stone-900">Slack</h2>
+      </div>
+      <p className="text-xs text-stone-400">
+        Mirror Posts and Release notes to Slack using a dedicated Slack app's
+        incoming webhooks — one webhook per channel.{" "}
+        <a
+          href="https://api.slack.com/apps?new_app=1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+        >
+          Create a Slack app
+        </a>{" "}
+        → enable Incoming Webhooks → "Add New Webhook to Workspace" → copy the URL.
+        Leave a field empty to disable that feed. Test before saving to make sure
+        the channel receives messages.
+      </p>
+
+      <SlackWebhookField
+        label="Posts feed"
+        helpText="First-person chat-style narratives. One message per merged PR."
+        value={postsValue}
+        onChange={setPostsDraft}
+        valid={postsValid}
+        onTest={() => handleTest("narrative")}
+        testing={testingKind === "narrative"}
+        testStatus={testStatus?.kind === "narrative" ? testStatus : null}
+      />
+
+      <SlackWebhookField
+        label="Release notes feed"
+        helpText="Structured release notes. One message per merged PR."
+        value={notesValue}
+        onChange={setNotesDraft}
+        valid={notesValid}
+        onTest={() => handleTest("release_notes")}
+        testing={testingKind === "release_notes"}
+        testStatus={testStatus?.kind === "release_notes" ? testStatus : null}
+      />
+
+      <div className="flex items-center gap-3 flex-wrap border-t border-stone-100 pt-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!isDirty || saveSettings.isPending}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+        >
+          {saveSettings.isPending && <Loader2 size={12} className="animate-spin" />}
+          Save
+        </button>
+        {savedAt && !isDirty && !error && (
+          <span className="inline-flex items-center gap-1 text-xs text-green-600">
+            <Check size={12} /> Saved
+          </span>
+        )}
+        {error && <span className="text-xs text-red-500">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SlackWebhookField(props: {
+  label: string;
+  helpText: string;
+  value: string;
+  onChange: (v: string) => void;
+  valid: boolean;
+  onTest: () => void;
+  testing: boolean;
+  testStatus: { ok: boolean; msg: string } | null;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <label className="text-xs font-semibold text-stone-700">{props.label}</label>
+        <span className="text-xs text-stone-400">{props.helpText}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={props.value}
+          onChange={(e) => props.onChange(e.target.value)}
+          placeholder="https://hooks.slack.com/services/T.../B.../..."
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          className={
+            "flex-1 min-w-[260px] px-2.5 py-1.5 text-xs font-mono rounded-lg border bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/30 " +
+            (props.valid ? "border-stone-200 focus:border-accent" : "border-red-300 focus:border-red-400")
+          }
+        />
+        <button
+          type="button"
+          onClick={props.onTest}
+          disabled={props.testing}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-700 hover:border-stone-300 hover:text-stone-900 disabled:opacity-50 cursor-pointer"
+        >
+          {props.testing && <Loader2 size={12} className="animate-spin" />}
+          Test
+        </button>
+      </div>
+      {props.testStatus && (
+        <p className={"text-xs " + (props.testStatus.ok ? "text-green-600" : "text-red-500")}>
+          {props.testStatus.msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function isHooksSlackUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" && u.hostname === "hooks.slack.com";
+  } catch {
+    return false;
+  }
 }
 
 type OpFailure = {

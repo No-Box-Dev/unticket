@@ -17,6 +17,12 @@ import {
   RELEASE_NOTES_SYSTEM,
   buildReleaseNotesMessage,
 } from "./prompt";
+import {
+  resolveSlackSettings,
+  postToSlack,
+  buildPostsBlocks,
+  buildReleaseNotesBlocks,
+} from "./slack";
 
 const MAX_OUTPUT_LENGTH = 800;
 // Release notes are inherently more verbose than chat posts (structured
@@ -112,6 +118,20 @@ export async function narrateEvent(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
+
+  // Slack mirror — fire after the D1 write so a Slack outage never blocks
+  // the in-app feed. Failures are recorded to op_failures (admin-visible)
+  // and swallowed; the narrative row is already durable.
+  await maybePostToSlack(env, {
+    kind: "narrative",
+    orgId,
+    ownerId: row.owner_id,
+    triggerEventId: row.id,
+    actor: { id: actor.id, name: actor.name },
+    project,
+    summary,
+    rawEvent: row,
+  });
 }
 
 // Sibling to narrateEvent — same gates, same LLM config, different prompt
@@ -204,6 +224,81 @@ export async function narrateReleaseNotes(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
+
+  await maybePostToSlack(env, {
+    kind: "release_notes",
+    orgId,
+    ownerId: row.owner_id,
+    triggerEventId: row.id,
+    actor: { id: actor.id, name: actor.name },
+    project,
+    summary,
+    rawEvent: row,
+  });
+}
+
+// Mirror a narration to Slack if the org has configured a webhook for this
+// feed. Pulls actor avatar + PR URL out of the trigger event payload. Any
+// failure (bad URL, Slack 5xx, timeout) is recorded to op_failures and
+// swallowed — the in-app feed already has the row.
+async function maybePostToSlack(env, args) {
+  const { kind, orgId, ownerId, triggerEventId, actor, project, summary, rawEvent } = args;
+  try {
+    const slack = await resolveSlackSettings(env.DB, orgId);
+    const url = kind === "release_notes" ? slack.releaseNotesWebhookUrl : slack.postsWebhookUrl;
+    if (!url) return;
+
+    const payload = safeParseObject(rawEvent.payload_json);
+    const pr = payload?.pr && typeof payload.pr === "object" ? payload.pr : null;
+    const prNumber = typeof pr?.number === "number" ? pr.number : null;
+    const prUrl = prNumber && rawEvent.org && rawEvent.repo
+      ? `https://github.com/${rawEvent.org}/${rawEvent.repo}/pull/${prNumber}`
+      : null;
+
+    let blocks;
+    if (kind === "release_notes") {
+      blocks = buildReleaseNotesBlocks({
+        projectName: project?.name ?? rawEvent.repo,
+        summary,
+        prUrl,
+        prNumber,
+      });
+    } else {
+      // Avatar lives on the actor row only when we re-fetch it; the
+      // happy-path uses actor.id/name from the gate above. Look up the
+      // avatar lazily so a missing column doesn't break the post.
+      const avatarUrl = await fetchActorAvatar(env.DB, actor.id, ownerId);
+      blocks = buildPostsBlocks({
+        actorName: actor.name,
+        avatarUrl,
+        projectName: project?.name ?? rawEvent.repo,
+        summary,
+        prUrl,
+        prNumber,
+      });
+    }
+    await postToSlack(url, blocks);
+  } catch (err) {
+    await recordFailure(env.DB, {
+      ownerId,
+      op: kind === "release_notes" ? "slackPostReleaseNotes" : "slackPostNarrative",
+      deliveryId: `event-${triggerEventId}`,
+      error: err,
+    }).catch(() => {});
+  }
+}
+
+async function fetchActorAvatar(db, actorId, ownerId) {
+  if (!db || !actorId || !ownerId) return null;
+  try {
+    const row = await db
+      .prepare("SELECT avatar_url FROM actors WHERE id = ? AND owner_id = ?")
+      .bind(actorId, ownerId)
+      .first();
+    return typeof row?.avatar_url === "string" ? row.avatar_url : null;
+  } catch {
+    return null;
+  }
 }
 
 // Per-org override of the release-notes system prompt, stored in
