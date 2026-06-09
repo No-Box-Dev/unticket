@@ -110,6 +110,9 @@ The two narrators MUST share the same LLM provider/model — they both call `res
 
 When admins use Posts Backfill with "rewrite posts written on a different model," the same flow refreshes the matching release-notes row in lockstep — `findRenarrateTargets` returns BOTH `narrative` and `release_notes` types and dedupes by `trigger_event_id`, then `renarrateFallbacks` deletes both rows and re-runs both narrators.
 
+### Slack mirror (incoming webhooks)
+After each narrator inserts its row, it fires a Slack mirror to the configured incoming webhook for that feed via `functions/lib/slack.js`. Two URLs stored under `settings.slack.postsWebhookUrl` / `settings.slack.releaseNotesWebhookUrl` — one per feed, either can be empty to disable. URLs are validated against `hooks.slack.com` (defense-in-depth; a misconfigured row can't point us at an internal host). Posts go out as Block Kit — chat-style with avatar accessory + "View PR" button for the Posts feed, code-fenced multi-section text + button for the Release notes feed. Slack failures (bad URL, 5xx, timeout) are caught and written to `op_failures` so the in-app feed is never blocked by Slack downtime; the timeout is 5s. Admin Settings → Slack section has a per-field **Test** button that POSTs to `/api/slack/test` (admin-only, never touches D1) so admins can verify connectivity before saving.
+
 ### Webhooks
 Real-time updates via GitHub org webhooks. Endpoint: `POST /api/webhook`. Verified with `GITHUB_WEBHOOK_SECRET` env var (HMAC-SHA256). Handles `issues`, `pull_request`, `member` events. On `issues.closed`, captures `sender.login` as `closed_by`. Setup instructions shown in Settings UI. Requires manual webhook creation in GitHub org settings (no `admin:org_hook` scope needed).
 
