@@ -1,7 +1,7 @@
 import { getCtx, jsonResponse, errorResponse } from "../../../lib/db";
 import { getInstallationToken } from "../../../lib/github-app";
 import { resolveActorFromGithub } from "../../../lib/actors";
-import { narrateEvent } from "../../../lib/narrator";
+import { narrateEvent, narrateReleaseNotes } from "../../../lib/narrator";
 import { recordFailure } from "../../../lib/op-failures";
 import { sleep, NARRATOR_PACING_MS } from "../../../lib/pacing";
 import { resolveLlmConfig } from "../../../lib/llm-config";
@@ -159,31 +159,42 @@ export async function onRequestPost(context) {
   }
 }
 
-// When `currentModel` is set, sweep up any narrative whose stamped model isn't
-// the one currently configured (including `fallback`). When it's null, only
-// fallback narratives are returned — the default behavior. Newest-first so the
-// visible feed converges first.
+// When `currentModel` is set, sweep up any narrative OR release-note whose
+// stamped model isn't the one currently configured (including `fallback`).
+// When it's null, only fallback rows are returned — the default behavior.
+// Newest-first so the visible feed converges first. Results are deduped by
+// trigger_event_id (one renarrate handles both feeds in lockstep).
 async function findRenarrateTargets(db, ownerId, projectId, currentModel) {
   const sql = currentModel
-    ? `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+    ? `SELECT id, type, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
          FROM events
         WHERE owner_id = ? AND project_id = ?
-          AND type = 'narrative'
+          AND type IN ('narrative', 'release_notes')
           AND COALESCE(json_extract(payload_json, '$.model'), '') != ?
         ORDER BY id DESC`
-    : `SELECT id, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
+    : `SELECT id, type, json_extract(payload_json, '$.trigger_event_id') AS trigger_event_id
          FROM events
         WHERE owner_id = ? AND project_id = ?
-          AND type = 'narrative'
+          AND type IN ('narrative', 'release_notes')
           AND json_extract(payload_json, '$.model') = 'fallback'
         ORDER BY id DESC`;
   const stmt = currentModel
     ? db.prepare(sql).bind(ownerId, projectId, currentModel)
     : db.prepare(sql).bind(ownerId, projectId);
   const rows = await stmt.all();
-  return (rows.results ?? [])
-    .map((r) => ({ id: r.id, triggerEventId: r.trigger_event_id }))
-    .filter((r) => r.triggerEventId != null);
+  // Dedupe by trigger_event_id — both rows for the same trigger collapse
+  // into one entry. The id we keep is the narrative one when present so
+  // the existing DELETE-by-id covers it; the release-note row is purged
+  // by the trigger_event_id sweep in renarrateFallbacks.
+  const byTrigger = new Map();
+  for (const r of rows.results ?? []) {
+    if (r.trigger_event_id == null) continue;
+    const existing = byTrigger.get(r.trigger_event_id);
+    if (!existing || (existing.type !== "narrative" && r.type === "narrative")) {
+      byTrigger.set(r.trigger_event_id, { id: r.id, type: r.type, triggerEventId: r.trigger_event_id });
+    }
+  }
+  return [...byTrigger.values()];
 }
 
 async function resolveOrgId(db, ownerId) {
@@ -199,10 +210,25 @@ async function resolveOrgId(db, ownerId) {
 async function renarrateFallbacks(env, fallbacks) {
   for (let i = 0; i < fallbacks.length; i++) {
     if (i > 0) await sleep(NARRATOR_PACING_MS);
-    const { id, triggerEventId } = fallbacks[i];
+    const { triggerEventId } = fallbacks[i];
     try {
-      await env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
-      await narrateEvent(env, triggerEventId);
+      // Clear ANY existing narrative/release_notes rows for this trigger
+      // before re-running both narrators. The id we have from
+      // findRenarrateTargets can be either type (depending on which one
+      // had the stale model), so we sweep both by trigger_event_id rather
+      // than the specific row id — otherwise a stale narrative could
+      // survive when only the release_notes row was selected as the
+      // target (narrateEvent has no idempotency guard and would insert a
+      // duplicate narrative on top of the surviving one).
+      await env.DB.prepare(
+        `DELETE FROM events
+           WHERE type IN ('narrative', 'release_notes')
+             AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?`,
+      ).bind(triggerEventId).run();
+      await Promise.allSettled([
+        narrateEvent(env, triggerEventId),
+        narrateReleaseNotes(env, triggerEventId),
+      ]);
     } catch (err) {
       console.error(`[unticket backfill] re-narrate trigger ${triggerEventId} failed:`, err);
     }
@@ -302,5 +328,11 @@ async function backfillOnePr(env, args, pr) {
 
   const eventId = result.meta?.last_row_id;
   if (!eventId) return;
-  await narrateEvent(env, eventId);
+  // Run both voices in parallel — one event, two stored rows. Same LLM
+  // config, different prompt. Promise.allSettled so one LLM failure
+  // doesn't drop the other.
+  await Promise.allSettled([
+    narrateEvent(env, eventId),
+    narrateReleaseNotes(env, eventId),
+  ]);
 }

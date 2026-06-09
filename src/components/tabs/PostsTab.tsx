@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, GitPullRequest } from "lucide-react";
-import { useInfinitePosts, useFeedActors, useFeedProjects, useFeedEvent } from "@/hooks/useNoxlink";
+import {
+  useInfinitePosts,
+  useFeedActors,
+  useFeedProjects,
+  useFeedEvent,
+  type FeedMode,
+} from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
@@ -13,10 +19,12 @@ export function PostsTab() {
   const projects = useFeedProjects();
   const [actorFilter, setActorFilter] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
+  const [mode, setMode] = useState<FeedMode>("post");
   const posts = useInfinitePosts({
     actorId: actorFilter || undefined,
     projectId: projectFilter || undefined,
     pageSize: PAGE_SIZE,
+    mode,
   });
 
   const actorById = useMemo(() => {
@@ -74,6 +82,8 @@ export function PostsTab() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
+      <FeedModeToggle mode={mode} onChange={setMode} />
+
       <div className="flex flex-wrap items-center gap-2">
         <SearchableSelect
           value={actorFilter}
@@ -103,8 +113,10 @@ export function PostsTab() {
       {events.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
           {hasFilters
-            ? "No posts match the current filters."
-            : "No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here."}
+            ? `No ${mode === "post" ? "posts" : "release notes"} match the current filters.`
+            : mode === "post"
+              ? "No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here."
+              : "No release notes yet. Structured release notes will appear here as PRs get merged."}
         </div>
       ) : (
         <>
@@ -133,6 +145,47 @@ export function PostsTab() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function FeedModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: FeedMode;
+  onChange: (m: FeedMode) => void;
+}) {
+  const options: { value: FeedMode; label: string }[] = [
+    { value: "post", label: "Posts" },
+    { value: "release_notes", label: "Release notes" },
+  ];
+  return (
+    <div
+      className="inline-flex items-center rounded-lg border border-stone-200 bg-white p-0.5"
+      role="tablist"
+      aria-label="Feed mode"
+    >
+      {options.map((opt) => {
+        const active = opt.value === mode;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.value)}
+            className={
+              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors " +
+              (active
+                ? "bg-accent text-white shadow-sm"
+                : "text-stone-600 hover:text-stone-900 hover:bg-stone-50")
+            }
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

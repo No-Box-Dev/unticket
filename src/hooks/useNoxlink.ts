@@ -82,16 +82,28 @@ export interface PostsFilter {
   pageSize?: number;
 }
 
-export function useInfinitePosts(filter: PostsFilter = {}) {
+// "post" = first-person chat post (events.type='narrative')
+// "release_notes" = structured release note (events.type='release_notes')
+// Both ride the same trigger (PR merged) so the trigger-type filter is shared.
+export type FeedMode = "post" | "release_notes";
+
+const FEED_MODE_TYPE: Record<FeedMode, string> = {
+  post: "narrative",
+  release_notes: "release_notes",
+};
+
+export function useInfinitePosts(filter: PostsFilter & { mode?: FeedMode } = {}) {
   const { selectedOrg } = useAuth();
   const pageSize = filter.pageSize ?? 25;
   const actorId = filter.actorId || undefined;
   const projectId = filter.projectId || undefined;
+  const mode: FeedMode = filter.mode ?? "post";
+  const eventType = FEED_MODE_TYPE[mode];
   return useInfiniteQuery({
-    queryKey: ["noxlink", "posts", selectedOrg, { actorId, projectId, pageSize }],
+    queryKey: ["noxlink", "posts", selectedOrg, { mode, actorId, projectId, pageSize }],
     queryFn: ({ pageParam }) =>
       fetchEventsPage({
-        type: "narrative",
+        type: eventType,
         triggerTypes: POST_TRIGGER_TYPES,
         limit: pageSize,
         actorId,
