@@ -129,6 +129,11 @@ export interface OrgSettings {
   excludedMembers?: string[];
   unticketRepo?: string;
   boardStages?: BoardStage[];
+  // Admin-editable system prompt for the Release-notes feed. Empty/missing
+  // falls back to the bundled default (RELEASE_NOTES_SYSTEM in
+  // functions/lib/prompt.js). The LLM provider/model is NOT configurable
+  // per-feed — both Posts and Release notes share the org's LLM config.
+  releaseNotesPrompt?: string;
 }
 
 // Extended issue info with repo context

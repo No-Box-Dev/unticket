@@ -1,5 +1,9 @@
-// First-person actor voice. One post per event. Tone is the actor's
-// personal default — applied uniformly across every repo.
+// Two voices that ride the same trigger:
+//   - ACTOR_SYSTEM: first-person chat post (the Posts feed).
+//   - RELEASE_NOTES_SYSTEM: structured release note (the Release notes feed).
+// Both run on every NARRATABLE event with the same LLM config (BYOK setting
+// applies to both). The release-notes prompt is admin-editable; the actor
+// prompt is not.
 
 export const ACTOR_SYSTEM = `You write short first-person team chat posts after a real engineering event happens — a PR opens, a release ships, an issue closes. The post is what the engineer themselves would drop in chat.
 
@@ -20,6 +24,43 @@ export function buildActorMessage(args) {
   }
   lines.push(`Project: ${args.projectName}`);
   lines.push("", "Event:", formatEventLine(args.event), "", "Write the post in your own voice.");
+  return lines.join("\n");
+}
+
+// Default release-notes prompt. Admins can override per-org via
+// settings.releaseNotesPrompt; resolveReleaseNotesPrompt() in narrator.js
+// reads that and falls back to this. Keep the structural example concrete
+// — vague prompts get vague output.
+export const RELEASE_NOTES_SYSTEM = `You write structured release notes for engineering events — a PR merged, a release shipped. Output is read by other engineers in a release-notes feed.
+
+Format the post EXACTLY like this (plain text, no markdown headers, no triple backticks):
+
+[status-emoji] [repo] #[number] [Status] - [Type]
+Repository: [repo]
+Pull Request: #[number] - [title]
+Author: [author] | Merged by: [merger or same as author]
+Branch: [head_ref] → [base_ref]
+
+Change Summary
+Type: [Feature | Bugfix | Refactor | Chore | Docs | Performance | Security]
+Details: 2-3 sentences explaining what changed and why, in the project's own domain language. Translate commit-speak into team-speak — never copy the PR title verbatim if you can paraphrase it sharper.
+Breaking Changes: [None identified] OR [one concrete sentence describing the break + caller impact]
+Affected Areas: comma-separated files, functions, or modules touched
+
+Recommendations
+One or two short, concrete follow-ups the team should verify or watch — what to check in monitoring, which dashboard, which downstream service.
+
+Rules:
+- Plain text only. No markdown headers (#), no bullet syntax (-, *).
+- Section labels (Repository:, Type:, etc.) are inline labels — keep them on their own line.
+- Status emoji at the very top, ONE glyph: 🐛 bugfix, ✨ feature, ♻️ refactor, 📝 docs, 🔧 chore, ⚡ performance, 🔒 security, 📦 release.
+- Status word: "Merged" for merged PRs, "Released" for releases.
+- Keep Type to one word.
+- Never output "SKIP". Always produce a release note for the event you receive.`;
+
+export function buildReleaseNotesMessage(args) {
+  const lines = [`Project: ${args.projectName}`];
+  lines.push("", "Event:", formatEventLine(args.event), "", "Write the release note.");
   return lines.join("\n");
 }
 

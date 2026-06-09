@@ -127,8 +127,16 @@ export async function onRequestPost(context) {
       if (stored?.id) {
         // Narrate via the durable queue so the webhook returns immediately and
         // the work survives a failed attempt (retried, then dead-lettered).
+        // Two siblings: chat-post narration (Posts feed) and structured
+        // release notes (Release notes feed). Same LLM config, different
+        // prompt — kept independent so a failure in one never blocks the
+        // other's retry.
         await enqueueTask(context.env, orgLogin, deliveryId, {
           type: TASK.NARRATE,
+          eventId: stored.id,
+        });
+        await enqueueTask(context.env, orgLogin, deliveryId, {
+          type: TASK.RELEASE_NOTES,
           eventId: stored.id,
         });
       }
