@@ -91,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handler = () => {
       resetOctokit();
       localStorage.removeItem("ut_org");
+      clearSessionCookie();
       setUser(null);
       setSelectedOrg(null);
     };
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handler = (e: StorageEvent) => {
       if (e.key === "ut_token" && e.newValue === null && user) {
         resetOctokit();
+        clearSessionCookie();
         setUser(null);
         setSelectedOrg(null);
       }
