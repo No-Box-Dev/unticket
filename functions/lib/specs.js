@@ -49,6 +49,12 @@ export async function resolveSpecsConfig(db, orgId) {
     return { configured: false };
   }
   const rootPath = typeof specs.rootPath === "string" ? specs.rootPath.trim().replace(/^\/+|\/+$/g, "") : "";
+  // Reject any segment that's `..` or contains a path-traversal hop. Same
+  // guard isSafeSegment uses for spec names — applied here so a stored
+  // rootPath="docs/../etc" can't escape what the admin thought they typed.
+  if (rootPath && rootPath.split("/").some((seg) => !seg || seg === "." || seg === ".." || seg.includes("\\"))) {
+    return { configured: false };
+  }
   return { configured: true, repo, rootPath };
 }
 

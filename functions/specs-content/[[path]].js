@@ -46,13 +46,29 @@ export async function onRequestGet(context) {
   );
   if (memberRes.status !== 204) return new Response("Not a member of this org", { status: 403 });
 
-  // 3. Resolve the org + apply the same operator-kill-switch as middleware
-  //    so suspended orgs don't serve content via the proxy either.
-  const orgRow = await context.env.DB
+  // 3. Resolve the org + apply the same operator-kill-switch as middleware.
+  //    Mirror middleware's auto-create so a logged-in member opening a spec
+  //    URL before they've ever hit /api/* (rare but possible) still works.
+  //    Suspended orgs are blocked here too.
+  let orgRow = await context.env.DB
     .prepare("SELECT id, suspended_at FROM orgs WHERE github_login = ?")
     .bind(orgLogin)
     .first();
-  if (!orgRow?.id) return new Response("Org not found", { status: 404 });
+  if (!orgRow) {
+    try {
+      orgRow = await context.env.DB
+        .prepare("INSERT INTO orgs (github_login) VALUES (?) RETURNING id, suspended_at")
+        .bind(orgLogin)
+        .first();
+    } catch {
+      // Race with middleware: re-select after a concurrent insert wins.
+      orgRow = await context.env.DB
+        .prepare("SELECT id, suspended_at FROM orgs WHERE github_login = ?")
+        .bind(orgLogin)
+        .first();
+    }
+  }
+  if (!orgRow?.id) return new Response("Failed to resolve organization", { status: 500 });
   if (orgRow.suspended_at) return new Response("Organization suspended", { status: 403 });
 
   const cfg = await resolveSpecsConfig(context.env.DB, orgRow.id);
