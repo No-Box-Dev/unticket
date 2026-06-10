@@ -1,6 +1,7 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { validateBoardStages } from "../../lib/board-stages.js";
 import { extractStatusFromLabels } from "../../lib/feature-issues.js";
+import { hasUnsafePathSegment } from "../../lib/specs.js";
 
 const VALID_KEYS = ["features", "people", "settings"];
 
@@ -60,13 +61,12 @@ export async function onRequestPut(context) {
   }
 
   // Specs source is admin-only: it picks which repo the /specs-content/
-  // proxy reads from. Without this gate any org member could repoint it
-  // at an unrelated repo + exfiltrate via the proxy (or DOS via huge dirs).
-  // We compare against the persisted value so non-admins can still save
-  // changes to other settings fields (boardStages, releaseNotesPrompt, …)
-  // without owning the specs field — but ALWAYS gate if the resulting
-  // specs object would differ from what's stored, including the case
-  // where a non-admin omits `specs` to silently clear a configured source.
+  // proxy reads from. Rather than rejecting non-admin saves that happen
+  // to carry a stale `specs` field (which would also reject legitimate
+  // edits of *other* settings made while the admin was reconfiguring
+  // specs in another tab), we force the persisted value to win: a
+  // non-admin's body simply can't change the specs field. Other settings
+  // (boardStages, releaseNotesPrompt, slack, etc.) still go through.
   if (key === "settings" && body && typeof body === "object" && !isAdmin) {
     const current = await context.env.DB
       .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
@@ -76,9 +76,33 @@ export async function onRequestPut(context) {
     if (current?.data) {
       try { currentSpecs = JSON.parse(current.data)?.specs; } catch { /* treat as unset */ }
     }
-    const incomingSpecs = body.specs;
-    if (JSON.stringify(currentSpecs ?? null) !== JSON.stringify(incomingSpecs ?? null)) {
-      return errorResponse("Admin required to change specs source", 403);
+    if (currentSpecs === undefined) delete body.specs;
+    else body.specs = currentSpecs;
+  }
+
+  // Admin saves: validate the specs object before persisting so we never
+  // store a value that resolveSpecsConfig would refuse on read (which
+  // would silently disable the Specs tab). Belt-and-braces against the
+  // settings UI accepting characters the helper rejects.
+  if (
+    key === "settings" &&
+    body && typeof body === "object" &&
+    body.specs && typeof body.specs === "object"
+  ) {
+    const s = body.specs;
+    if (s.repo !== undefined && s.repo !== "") {
+      if (typeof s.repo !== "string" || !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s.repo.trim())) {
+        return errorResponse("Invalid specs.repo (expected 'owner/repo')", 422);
+      }
+    }
+    if (s.rootPath !== undefined && s.rootPath !== "") {
+      if (typeof s.rootPath !== "string") {
+        return errorResponse("Invalid specs.rootPath", 422);
+      }
+      const normalized = s.rootPath.trim().replace(/^\/+|\/+$/g, "");
+      if (hasUnsafePathSegment(normalized)) {
+        return errorResponse("specs.rootPath contains an unsafe segment", 422);
+      }
     }
   }
 

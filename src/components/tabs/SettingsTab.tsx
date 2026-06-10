@@ -800,7 +800,18 @@ function SpecsSourceSection() {
   // owner/repo (matching what's in settings.unticketRepo logic) but here we
   // accept a full slug because the spec source can live in a different repo.
   const repoValid = repo.trim() === "" || /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo.trim());
-  const rootValid = root.trim() === "" || /^[A-Za-z0-9._/-]+$/.test(root.trim());
+  // rootPath: per-segment validation matches functions/lib/specs.js
+  // hasUnsafePathSegment — only reject literal `.` / `..` / empty / `\`
+  // segments. Legitimate names like `design..v2` are fine.
+  const rootValid = (() => {
+    const normalized = root.trim().replace(/^\/+|\/+$/g, "");
+    if (!normalized) return true;
+    for (const seg of normalized.split("/")) {
+      if (!seg || seg === "." || seg === ".." || seg.includes("\\")) return false;
+      if (!/^[A-Za-z0-9._-]+$/.test(seg)) return false;
+    }
+    return true;
+  })();
 
   const isDirty =
     (repoDraft !== null && repoDraft.trim() !== persistedRepo.trim()) ||
