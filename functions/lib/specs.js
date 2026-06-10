@@ -21,13 +21,27 @@ export function joinPath(...parts) {
     .join("/");
 }
 
-// Defense-in-depth: reject any segment containing `..` or `\` so a malicious
-// spec name + sub-path can't escape the configured rootPath.
+// Defense-in-depth: reject a segment that IS `..`, contains `/` (so a
+// caller can't smuggle a multi-segment path in here), or contains `\`.
+// We deliberately do NOT reject substrings like `foo..bar` — those are
+// legitimate filenames; only the literal traversal segment `..` matters.
 export function isSafeSegment(s) {
   if (typeof s !== "string" || !s) return false;
-  if (s.includes("..") || s.includes("\\")) return false;
-  if (s.startsWith("/") || s.endsWith("/")) return false;
+  if (s === "." || s === "..") return false;
+  if (s.includes("/") || s.includes("\\")) return false;
   return true;
+}
+
+// Path-traversal check for slash-separated paths (root paths, relative file
+// paths inside a spec). Splits on `/` and validates each segment, so a name
+// like `design..v2.md` passes but `docs/../etc` fails.
+export function hasUnsafePathSegment(path) {
+  if (typeof path !== "string") return true;
+  if (!path) return false;
+  for (const seg of path.split("/")) {
+    if (!seg || seg === "." || seg === ".." || seg.includes("\\")) return true;
+  }
+  return false;
 }
 
 // Resolve the spec source for an org. Reads settings.specs from D1 config.
@@ -49,12 +63,10 @@ export async function resolveSpecsConfig(db, orgId) {
     return { configured: false };
   }
   const rootPath = typeof specs.rootPath === "string" ? specs.rootPath.trim().replace(/^\/+|\/+$/g, "") : "";
-  // Reject any segment that's `..` or contains a path-traversal hop. Same
-  // guard isSafeSegment uses for spec names — applied here so a stored
-  // rootPath="docs/../etc" can't escape what the admin thought they typed.
-  if (rootPath && rootPath.split("/").some((seg) => !seg || seg === "." || seg === ".." || seg.includes("\\"))) {
-    return { configured: false };
-  }
+  // Reject path-traversal in the stored rootPath. Per-segment check so a
+  // legitimate name like `docs..v2` still passes — only literal `..` /
+  // `.` segments fail.
+  if (hasUnsafePathSegment(rootPath)) return { configured: false };
   return { configured: true, repo, rootPath };
 }
 
@@ -142,8 +154,9 @@ async function walk(env, repo, baseDir, rel, out, depth = 0) {
 // endpoint — out of scope for v1 spec docs.
 export async function fetchSpecFile(env, repo, rootPath, specName, relativePath) {
   if (!isSafeSegment(specName)) throw new Error("Invalid spec name");
-  // relative path can contain `/` segments but must NOT contain `..`.
-  if (typeof relativePath !== "string" || relativePath.includes("..") || relativePath.startsWith("/")) {
+  // relative path is slash-separated; reject literal `..` segments but
+  // allow `foo..bar.md` style names.
+  if (typeof relativePath !== "string" || relativePath.startsWith("/") || hasUnsafePathSegment(relativePath)) {
     throw new Error("Invalid file path");
   }
   const fullPath = joinPath(rootPath, specName, relativePath);

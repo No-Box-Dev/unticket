@@ -12,7 +12,7 @@
 // Admins trust whoever can write to the spec repo — this is documented
 // in the Settings UI. nosniff + Referrer-Policy applied defensively.
 
-import { resolveSpecsConfig, fetchSpecFile, isSafeSegment } from "../lib/specs";
+import { resolveSpecsConfig, fetchSpecFile, isSafeSegment, hasUnsafePathSegment } from "../lib/specs";
 
 const SESSION_COOKIE = "ut_session";
 
@@ -23,7 +23,7 @@ export async function onRequestGet(context) {
 
   const [orgLogin, specName, ...rest] = segments;
   const relativePath = rest.join("/");
-  if (!isSafeOrgLogin(orgLogin) || !isSafeSegment(specName) || relativePath.includes("..")) {
+  if (!isSafeOrgLogin(orgLogin) || !isSafeSegment(specName) || hasUnsafePathSegment(relativePath)) {
     return new Response("Bad Request", { status: 400 });
   }
 
@@ -101,7 +101,14 @@ function parseCookies(cookieHeader) {
   const cookies = {};
   for (const pair of cookieHeader.split(";")) {
     const [key, ...rest] = pair.trim().split("=");
-    if (key) cookies[key.trim()] = decodeURIComponent(rest.join("=").trim());
+    if (!key) continue;
+    const raw = rest.join("=").trim();
+    // Tolerate malformed percent-encoding rather than throwing a 500 from
+    // the worker — an invalid cookie should just fail the 401 path below.
+    let value;
+    try { value = decodeURIComponent(raw); }
+    catch { value = raw; }
+    cookies[key.trim()] = value;
   }
   return cookies;
 }

@@ -64,20 +64,21 @@ export async function onRequestPut(context) {
   // at an unrelated repo + exfiltrate via the proxy (or DOS via huge dirs).
   // We compare against the persisted value so non-admins can still save
   // changes to other settings fields (boardStages, releaseNotesPrompt, …)
-  // without owning the specs field.
-  if (key === "settings" && body && typeof body === "object" && "specs" in body) {
-    if (!isAdmin) {
-      const current = await context.env.DB
-        .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
-        .bind(orgId)
-        .first();
-      let currentSpecs = undefined;
-      if (current?.data) {
-        try { currentSpecs = JSON.parse(current.data)?.specs; } catch { /* treat as unset */ }
-      }
-      if (JSON.stringify(currentSpecs ?? null) !== JSON.stringify(body.specs ?? null)) {
-        return errorResponse("Admin required to change specs source", 403);
-      }
+  // without owning the specs field — but ALWAYS gate if the resulting
+  // specs object would differ from what's stored, including the case
+  // where a non-admin omits `specs` to silently clear a configured source.
+  if (key === "settings" && body && typeof body === "object" && !isAdmin) {
+    const current = await context.env.DB
+      .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
+      .bind(orgId)
+      .first();
+    let currentSpecs = undefined;
+    if (current?.data) {
+      try { currentSpecs = JSON.parse(current.data)?.specs; } catch { /* treat as unset */ }
+    }
+    const incomingSpecs = body.specs;
+    if (JSON.stringify(currentSpecs ?? null) !== JSON.stringify(incomingSpecs ?? null)) {
+      return errorResponse("Admin required to change specs source", 403);
     }
   }
 
