@@ -1,5 +1,15 @@
 import { apiGet } from "./api";
 
+export interface RepoFolders {
+  defaultBranch: string | null;
+  folders: string[];
+  truncated: boolean;
+}
+
+export function fetchRepoFolders(repo: string): Promise<RepoFolders> {
+  return apiGet<RepoFolders>(`/api/specs/repo-folders?repo=${encodeURIComponent(repo)}`);
+}
+
 export interface SpecsList {
   configured: boolean;
   repo?: string;

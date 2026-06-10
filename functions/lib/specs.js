@@ -85,6 +85,61 @@ async function getTokenForOrg(env, ownerLogin) {
   return getInstallationToken(env, inst.installation_id);
 }
 
+// List every folder path in a repo, capped at 500 entries and 4 levels deep.
+// Uses the Git Trees API with recursive=1 — one round-trip, no per-folder
+// fetches. Skips dotfile-dirs (.github, .git, node_modules etc) since those
+// are essentially never the spec source.
+const FOLDER_MAX = 500;
+const FOLDER_MAX_DEPTH = 4;
+const SKIP_DIRS = new Set(["node_modules", ".git", ".github", "dist", "build", ".next", ".cache"]);
+
+export async function listRepoFolders(env, repo) {
+  if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
+    throw new Error("Invalid repo");
+  }
+  const [owner, name] = repo.split("/");
+  const token = await getTokenForOrg(env, owner);
+
+  // Default branch first — many repos use main, some develop, some master.
+  const metaRes = await fetch(`${GH}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "Unticket",
+    },
+  });
+  if (metaRes.status === 404) return { defaultBranch: null, folders: [], truncated: false };
+  if (!metaRes.ok) throw new Error(`GitHub repo meta ${metaRes.status}`);
+  const meta = await metaRes.json();
+  const branch = meta.default_branch;
+  if (!branch) return { defaultBranch: null, folders: [], truncated: false };
+
+  const treeRes = await fetch(
+    `${GH}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "Unticket",
+      },
+    },
+  );
+  if (!treeRes.ok) throw new Error(`GitHub trees ${treeRes.status}`);
+  const tree = await treeRes.json();
+  const folders = [];
+  for (const entry of tree.tree ?? []) {
+    if (entry.type !== "tree") continue;
+    if (typeof entry.path !== "string") continue;
+    const segs = entry.path.split("/");
+    if (segs.length > FOLDER_MAX_DEPTH) continue;
+    if (segs.some((s) => SKIP_DIRS.has(s))) continue;
+    folders.push(entry.path);
+    if (folders.length >= FOLDER_MAX) break;
+  }
+  folders.sort();
+  return { defaultBranch: branch, folders, truncated: !!tree.truncated || folders.length >= FOLDER_MAX };
+}
+
 // GET /repos/{owner}/{repo}/contents/{path} — directory listing or single file.
 // Returns the parsed JSON (array for dirs, object for files) or throws.
 async function ghContents(env, repo, path) {
