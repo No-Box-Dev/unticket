@@ -9,16 +9,12 @@ vi.mock("@/lib/github", () => ({
 }));
 
 vi.mock("@/lib/oauth-proxy", () => ({
-  getAuthMode: vi.fn().mockReturnValue("oauth"),
   getOAuthLoginUrl: vi.fn().mockReturnValue("https://github.com/login/oauth"),
 }));
 
-import { fetchUser, resetOctokit } from "@/lib/github";
-import { getAuthMode } from "@/lib/oauth-proxy";
+import { fetchUser } from "@/lib/github";
 
 const mockFetchUser = vi.mocked(fetchUser);
-const mockResetOctokit = vi.mocked(resetOctokit);
-const mockGetAuthMode = vi.mocked(getAuthMode);
 
 let storage: Record<string, string> = {};
 
@@ -29,8 +25,6 @@ function TestConsumer() {
       <span data-testid="loading">{String(auth.isLoading)}</span>
       <span data-testid="user">{auth.user?.login ?? "none"}</span>
       <span data-testid="org">{auth.selectedOrg ?? "none"}</span>
-      <span data-testid="mode">{auth.authMode}</span>
-      <button onClick={() => auth.loginWithToken("new-tok")}>loginWithToken</button>
       <button onClick={auth.logout}>logout</button>
       <button onClick={() => auth.setSelectedOrg("test-org")}>setOrg</button>
     </div>
@@ -64,8 +58,6 @@ beforeEach(() => {
     configurable: true,
   });
   window.history.replaceState = vi.fn();
-
-  mockGetAuthMode.mockReturnValue("oauth");
 
   // By default, import.meta.env has no dev token
   vi.stubEnv("VITE_DEV_TOKEN", "");
@@ -162,28 +154,6 @@ describe("useAuth", () => {
     expect(window.history.replaceState).toHaveBeenCalled();
   });
 
-  it("loginWithToken: stores token, resets octokit, sets user", async () => {
-    mockFetchUser.mockResolvedValue({ login: "bob", avatar_url: "", name: null } as any);
-
-    render(
-      <AuthProvider><TestConsumer /></AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("loading").textContent).toBe("false");
-    });
-
-    await act(async () => {
-      screen.getByText("loginWithToken").click();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("user").textContent).toBe("bob");
-    });
-    expect(storage.ut_token).toBe("new-tok");
-    expect(mockResetOctokit).toHaveBeenCalled();
-  });
-
   it("logout: clears localStorage, resets user + org", async () => {
     storage.ut_token = "tok";
     storage.ut_org = "org1";
@@ -224,15 +194,4 @@ describe("useAuth", () => {
     expect(storage.ut_org).toBe("test-org");
   });
 
-  it("authMode reflects getAuthMode()", async () => {
-    mockGetAuthMode.mockReturnValue("pat");
-
-    render(
-      <AuthProvider><TestConsumer /></AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("mode").textContent).toBe("pat");
-    });
-  });
 });

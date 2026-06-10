@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-let getAuthMode: typeof import("../oauth-proxy").getAuthMode;
 let getOAuthLoginUrl: typeof import("../oauth-proxy").getOAuthLoginUrl;
 
 beforeEach(() => {
@@ -12,23 +11,15 @@ async function loadModule(env: Record<string, string | undefined>) {
   vi.stubEnv("VITE_OAUTH_PROXY_URL", env.VITE_OAUTH_PROXY_URL ?? "");
 
   const mod = await import("../oauth-proxy");
-  getAuthMode = mod.getAuthMode;
   getOAuthLoginUrl = mod.getOAuthLoginUrl;
 }
 
-describe("getAuthMode", () => {
-  it("returns 'oauth' when CLIENT_ID is set", async () => {
-    await loadModule({ VITE_GITHUB_APP_CLIENT_ID: "abc123" });
-    expect(getAuthMode()).toBe("oauth");
-  });
-
-  it("returns 'pat' when CLIENT_ID is not set", async () => {
-    await loadModule({ VITE_GITHUB_APP_CLIENT_ID: undefined });
-    expect(getAuthMode()).toBe("pat");
-  });
-});
-
 describe("getOAuthLoginUrl", () => {
+  it("throws when CLIENT_ID is not set", async () => {
+    await loadModule({ VITE_GITHUB_APP_CLIENT_ID: undefined });
+    expect(() => getOAuthLoginUrl()).toThrow(/VITE_GITHUB_APP_CLIENT_ID/);
+  });
+
   it("without proxy, uses /api/auth/callback redirect", async () => {
     await loadModule({
       VITE_GITHUB_APP_CLIENT_ID: "client1",
