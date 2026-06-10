@@ -1,3 +1,0 @@
-## Assets
-
-No entries yet.

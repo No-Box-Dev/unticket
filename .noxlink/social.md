@@ -1,3 +1,0 @@
-## Social
-
-No entries yet.

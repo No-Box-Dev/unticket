@@ -82,8 +82,6 @@ export function PostsTab() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <FeedModeToggle mode={mode} onChange={setMode} />
-
       <div className="flex flex-wrap items-center gap-2">
         <SearchableSelect
           value={actorFilter}
@@ -108,6 +106,9 @@ export function PostsTab() {
             Clear
           </button>
         )}
+        <div className="ml-auto">
+          <FeedModeToggle mode={mode} onChange={setMode} />
+        </div>
       </div>
 
       {events.length === 0 ? (
