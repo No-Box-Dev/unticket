@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { fetchUser, resetOctokit } from "@/lib/github";
-import { getAuthMode, getOAuthLoginUrl } from "@/lib/oauth-proxy";
+import { getOAuthLoginUrl } from "@/lib/oauth-proxy";
 import { broadcastError } from "@/lib/api";
 
 interface User {
@@ -20,8 +20,6 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   authError: string | null;
-  authMode: "oauth" | "pat";
-  loginWithToken: (token: string) => Promise<void>;
   loginWithOAuth: () => void;
   logout: () => void;
   selectedOrg: string | null;
@@ -73,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [selectedOrg, setSelectedOrg] = useState<string | null>(
     localStorage.getItem("ut_org"),
   );
-  const authMode = getAuthMode();
 
   // Listen for force-logout events (fired by api.ts on 401)
   useEffect(() => {
@@ -139,6 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const devOrg = import.meta.env.VITE_DEV_ORG;
       if (devOrg) {
         localStorage.setItem("ut_org", devOrg);
+        // Intentional: one-shot dev-only injection during initial mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedOrg(devOrg);
       }
     }
@@ -162,26 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, []);
-
-  const loginWithToken = async (token: string) => {
-    setIsLoading(true);
-    setAuthError(null);
-    try {
-      localStorage.setItem("ut_token", token);
-      resetOctokit();
-      const userData = await fetchUserWithTimeout();
-      setUser(userData);
-    } catch (err) {
-      localStorage.removeItem("ut_token");
-      resetOctokit();
-      const msg = err instanceof Error ? err.message : "Authentication failed";
-      setAuthError(msg);
-      broadcastError(msg);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const loginWithOAuth = () => {
     // Clear stale token/instance before redirecting so we start fresh
@@ -210,8 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         authError,
-        authMode,
-        loginWithToken,
         loginWithOAuth,
         logout,
         selectedOrg,

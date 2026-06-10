@@ -28,6 +28,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # Public client ID for the Unticket GitHub App. Required at build
+          # time for the OAuth sign-in flow — without it, getOAuthLoginUrl()
+          # throws and the login button stays unusable. Stored as a repo
+          # variable (public, not a secret); the name mismatch with the Vite
+          # var is historical, so we map it here rather than rename in two
+          # places.
+          VITE_GITHUB_APP_CLIENT_ID: ${{ vars.VITE_GITHUB_CLIENT_ID }}
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
