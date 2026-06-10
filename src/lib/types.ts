@@ -50,6 +50,7 @@ export type TabId =
   | "prs"
   | "issues"
   | "posts"
+  | "specs"
   | "repos"
   | "engineers"
   | "settings";
@@ -141,6 +142,16 @@ export interface OrgSettings {
     postsWebhookUrl?: string;
     releaseNotesWebhookUrl?: string;
   };
+  // Specs page source — which repo + path holds the spec folders. Each
+  // top-level directory under `rootPath` becomes one spec on the Specs tab.
+  // Empty repo disables the Specs tab.
+  specs?: {
+    repo?: string;       // "owner/repo" — defaults to {selectedOrg}/{unticketRepo} when unset
+    rootPath?: string;   // "" = repo root; otherwise a slash-relative path like "specs"
+  };
+  // Per-spec optional link to a feature issue (number from the unticket
+  // features board). Used for cross-navigation between Specs and Features.
+  specLinks?: Record<string, number>;
 }
 
 // Extended issue info with repo context

@@ -111,6 +111,15 @@ The two narrators MUST share the same LLM provider/model — they both call `res
 
 When admins use Posts Backfill with "rewrite posts written on a different model," the same flow refreshes the matching release-notes row in lockstep — `findRenarrateTargets` returns BOTH `narrative` and `release_notes` types and dedupes by `trigger_event_id`, then `renarrateFallbacks` deletes both rows and re-runs both narrators.
 
+### Specs (`specs` tab)
+Read-only viewer for top-level folders in an admin-configured GitHub source. Each folder under `settings.specs.rootPath` is one spec; files inside render inline (Markdown) or open via the proxy (HTML + relative assets).
+
+- API: `GET /api/specs` (list spec names), `GET /api/specs/:name` (file tree under the spec), `GET /api/specs/:name?path=...` (single text-file content for the Markdown viewer).
+- Helper: `functions/lib/specs.js` — `resolveSpecsConfig`, `listSpecs`, `listSpecFiles`, `fetchSpecFile`. Uses the installation token of the org that owns the spec repo (not the user's PAT, so asset-heavy specs don't burn rate-limit budget).
+- Proxy: `functions/specs-content/[[path]].js` serves files at `/specs-content/<orgLogin>/<specName>/<relative-path>` with the correct content type. Auth is the `ut_session` cookie (mirror of the localStorage GitHub token, set by `src/lib/auth.tsx`) — browser sub-resource loads inside an HTML spec carry cookies but not Authorization headers, so /api/_middleware can't gate them. The proxy revalidates token + org-membership the same way the middleware does.
+- HTML specs render **same-origin** on app.unticket.ai. The Settings UI carries an inline warning that admins must only point this at a repo whose maintainers they trust to author safe HTML. If you ever need stronger isolation, move the proxy to a sibling subdomain via a Worker route (separate origin) — keep the auth model the same.
+- Per-spec feature link: stored as `settings.specLinks: { [specName]: featureNumber }`. UI is a SearchableSelect in the spec detail modal; saving goes through the existing settings PUT.
+
 ### Slack mirror (incoming webhooks)
 After each narrator inserts its row, it fires a Slack mirror to the configured incoming webhook for that feed via `functions/lib/slack.js`. Two URLs stored under `settings.slack.postsWebhookUrl` / `settings.slack.releaseNotesWebhookUrl` — one per feed, either can be empty to disable. URLs are validated against `hooks.slack.com` (defense-in-depth; a misconfigured row can't point us at an internal host). Posts go out as Block Kit — chat-style with avatar accessory + "View PR" button for the Posts feed, code-fenced multi-section text + button for the Release notes feed. Slack failures (bad URL, 5xx, timeout) are caught and written to `op_failures` so the in-app feed is never blocked by Slack downtime; the timeout is 5s. Admin Settings → Slack section has a per-field **Test** button that POSTs to `/api/slack/test` (admin-only, never touches D1) so admins can verify connectivity before saving.
 

@@ -10,6 +10,20 @@ import { fetchUser, resetOctokit } from "@/lib/github";
 import { getOAuthLoginUrl } from "@/lib/oauth-proxy";
 import { broadcastError } from "@/lib/api";
 
+// Mirror the localStorage token into a cookie so the /specs-content/* proxy
+// can authenticate browser-initiated sub-resource loads (images, scripts,
+// stylesheets inside a rendered HTML spec). The cookie holds the same token
+// localStorage holds — same security level, no new attack surface. Path=/
+// so all assets under /specs-content/ pick it up; Lax+Secure standard.
+function setSessionCookie(token: string): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `ut_session=${encodeURIComponent(token)}; Path=/; Max-Age=86400; SameSite=Lax; Secure`;
+}
+function clearSessionCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = "ut_session=; Path=/; Max-Age=0; SameSite=Lax; Secure";
+}
+
 interface User {
   login: string;
   avatar_url: string;
@@ -107,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       exchangeAuthCode(authCode)
         .then((token) => {
           localStorage.setItem("ut_token", token);
+          setSessionCookie(token);
           resetOctokit();
           return fetchUserWithTimeout();
         })
@@ -144,6 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const token = localStorage.getItem("ut_token");
     if (token) {
+      // Keep cookie in sync for users whose session predates the proxy.
+      setSessionCookie(token);
       resetOctokit();
       fetchUserWithTimeout()
         .then(setUser)
@@ -153,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             broadcastError(err instanceof Error ? err.message : "Authentication failed");
             localStorage.removeItem("ut_token");
+            clearSessionCookie();
             resetOctokit();
           }
         })
@@ -165,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithOAuth = () => {
     // Clear stale token/instance before redirecting so we start fresh
     localStorage.removeItem("ut_token");
+    clearSessionCookie();
     resetOctokit();
     window.location.href = getOAuthLoginUrl();
   };
@@ -172,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem("ut_token");
     localStorage.removeItem("ut_org");
+    clearSessionCookie();
     resetOctokit();
     setUser(null);
     setSelectedOrg(null);
