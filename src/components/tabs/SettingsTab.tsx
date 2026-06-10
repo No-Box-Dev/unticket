@@ -105,6 +105,7 @@ export function SettingsTab() {
             </span>
           </div>
           <FeaturesRepoSection />
+          <SpecsSourceSection />
           <BoardStagesSection />
           <LlmSettingsSection />
           <ReleaseNotesPromptSection />
@@ -770,6 +771,147 @@ function FeaturesRepoSection() {
           className="text-xs text-stone-500 hover:text-stone-700 disabled:opacity-50 cursor-pointer"
         >
           Reset to default
+        </button>
+        {savedAt && !isDirty && !error && (
+          <span className="inline-flex items-center gap-1 text-xs text-green-600">
+            <Check size={12} /> Saved
+          </span>
+        )}
+        {error && <span className="text-xs text-red-500">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SpecsSourceSection() {
+  const { data: settings } = useSettings();
+  const saveSettings = useSaveSettings();
+  const persistedRepo = settings?.specs?.repo ?? "";
+  const persistedRoot = settings?.specs?.rootPath ?? "";
+
+  const [repoDraft, setRepoDraft] = useState<string | null>(null);
+  const [rootDraft, setRootDraft] = useState<string | null>(null);
+  const repo = repoDraft ?? persistedRepo;
+  const root = rootDraft ?? persistedRoot;
+
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // owner/repo (matching what's in settings.unticketRepo logic) but here we
+  // accept a full slug because the spec source can live in a different repo.
+  const repoValid = repo.trim() === "" || /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo.trim());
+  // rootPath: per-segment validation matches functions/lib/specs.js
+  // hasUnsafePathSegment — only reject literal `.` / `..` / empty / `\`
+  // segments. Legitimate names like `design..v2` are fine.
+  const rootValid = (() => {
+    const normalized = root.trim().replace(/^\/+|\/+$/g, "");
+    if (!normalized) return true;
+    for (const seg of normalized.split("/")) {
+      if (!seg || seg === "." || seg === ".." || seg.includes("\\")) return false;
+      if (!/^[A-Za-z0-9._-]+$/.test(seg)) return false;
+    }
+    return true;
+  })();
+
+  const isDirty =
+    (repoDraft !== null && repoDraft.trim() !== persistedRepo.trim()) ||
+    (rootDraft !== null && rootDraft.trim() !== persistedRoot.trim());
+
+  async function handleSave() {
+    if (!settings) return;
+    if (!repoValid || !rootValid) {
+      setError("Invalid format. Repo must be 'owner/repo'; root path is slash-separated.");
+      return;
+    }
+    setError(null);
+    try {
+      const trimmedRepo = repo.trim();
+      const trimmedRoot = root.trim().replace(/^\/+|\/+$/g, "");
+      const next: OrgSettings = { ...settings };
+      if (!trimmedRepo) {
+        delete next.specs;
+      } else {
+        next.specs = {
+          repo: trimmedRepo,
+          ...(trimmedRoot ? { rootPath: trimmedRoot } : {}),
+        };
+      }
+      await saveSettings.mutateAsync(next);
+      setRepoDraft(null);
+      setRootDraft(null);
+      setSavedAt(Date.now());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const configured = !!persistedRepo.trim();
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-stone-900">Specs source</h2>
+        {!configured && (
+          <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
+            disabled
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-stone-400">
+        Pick a GitHub repo + folder. Each top-level directory under that folder
+        becomes one spec on the Specs tab. Files inside render inline (Markdown)
+        or open via{" "}
+        <code className="font-mono text-stone-600">/specs-content/</code>{" "}
+        (HTML + their relative assets). The Unticket GitHub App must be
+        installed on the owning org.
+      </p>
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+        HTML specs render same-origin on app.unticket.ai — only point this at a
+        repo whose maintainers you trust to author safe HTML.
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span className="text-xs text-stone-500">Repo</span>
+          <input
+            type="text"
+            value={repo}
+            onChange={(e) => setRepoDraft(e.target.value)}
+            placeholder="owner/repo"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            className={
+              "w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/30 " +
+              (repoValid ? "border-stone-200 focus:border-accent" : "border-red-300 focus:border-red-400")
+            }
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-stone-500">Root folder (empty = repo root)</span>
+          <input
+            type="text"
+            value={root}
+            onChange={(e) => setRootDraft(e.target.value)}
+            placeholder="specs"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            className={
+              "w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/30 " +
+              (rootValid ? "border-stone-200 focus:border-accent" : "border-red-300 focus:border-red-400")
+            }
+          />
+        </label>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!isDirty || !repoValid || !rootValid || saveSettings.isPending}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+        >
+          {saveSettings.isPending && <Loader2 size={12} className="animate-spin" />}
+          Save
         </button>
         {savedAt && !isDirty && !error && (
           <span className="inline-flex items-center gap-1 text-xs text-green-600">

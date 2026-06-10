@@ -1,6 +1,7 @@
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { validateBoardStages } from "../../lib/board-stages.js";
 import { extractStatusFromLabels } from "../../lib/feature-issues.js";
+import { hasUnsafePathSegment } from "../../lib/specs.js";
 
 const VALID_KEYS = ["features", "people", "settings"];
 
@@ -53,10 +54,59 @@ export async function onRequestPut(context) {
     return errorResponse("Config payload too large (max 256KB)", 413);
   }
 
-  const { orgId } = getCtx(context);
+  const { orgId, isAdmin } = getCtx(context);
   let body;
   try { body = await context.request.json(); } catch {
     return errorResponse("Invalid JSON body", 400);
+  }
+
+  // Specs source is admin-only: it picks which repo the /specs-content/
+  // proxy reads from. Rather than rejecting non-admin saves that happen
+  // to carry a stale `specs` field (which would also reject legitimate
+  // edits of *other* settings made while the admin was reconfiguring
+  // specs in another tab), we force the persisted value to win: a
+  // non-admin's body simply can't change the specs field. Other settings
+  // (boardStages, releaseNotesPrompt, slack, etc.) still go through.
+  if (key === "settings" && body && typeof body === "object" && !isAdmin) {
+    const current = await context.env.DB
+      .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
+      .bind(orgId)
+      .first();
+    let currentSpecs = undefined;
+    if (current?.data) {
+      try { currentSpecs = JSON.parse(current.data)?.specs; } catch { /* treat as unset */ }
+    }
+    if (currentSpecs === undefined) delete body.specs;
+    else body.specs = currentSpecs;
+  }
+
+  // Validate the specs object before persisting, but ONLY when the admin
+  // is actually authoring it on this request — non-admins had body.specs
+  // overwritten with the persisted value above, so re-running validation
+  // there would 422 legitimate unrelated saves (e.g. specLinks updates
+  // from the Specs tab) if a legacy / hand-edited persisted value happens
+  // to fail today's checks.
+  if (
+    key === "settings" &&
+    body && typeof body === "object" &&
+    body.specs && typeof body.specs === "object" &&
+    isAdmin
+  ) {
+    const s = body.specs;
+    if (s.repo !== undefined && s.repo !== "") {
+      if (typeof s.repo !== "string" || !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s.repo.trim())) {
+        return errorResponse("Invalid specs.repo (expected 'owner/repo')", 422);
+      }
+    }
+    if (s.rootPath !== undefined && s.rootPath !== "") {
+      if (typeof s.rootPath !== "string") {
+        return errorResponse("Invalid specs.rootPath", 422);
+      }
+      const normalized = s.rootPath.trim().replace(/^\/+|\/+$/g, "");
+      if (hasUnsafePathSegment(normalized)) {
+        return errorResponse("specs.rootPath contains an unsafe segment", 422);
+      }
+    }
   }
 
   // Board-stages validation runs before the row write so a malformed config
