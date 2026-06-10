@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useOrgMembers, useIsAdmin, useRepos, useTriggerFeatureSync } from "@/hooks/useGitHub";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -862,16 +862,16 @@ function SpecsSourceSection() {
     return base;
   }, [folders.data, root]);
 
-  // Reset root when the repo changes — old folders almost certainly don't
-  // exist in the new repo. Skip when the new repo is empty (= disabling).
-  const prevRepoRef = useRef(repo);
-  useEffect(() => {
-    if (prevRepoRef.current !== repo && repo && rootDraft !== "") {
-      setRootDraft("");
-    }
-    prevRepoRef.current = repo;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo]);
+  // When the user picks a different repo, reset root to the new repo's
+  // root — stale folder paths from the previous repo almost certainly
+  // don't exist there. Inlined in the onChange below (NOT a useEffect on
+  // `repo`) because the effect would also fire on initial settings
+  // hydration (repo: "" → persistedRepo) and silently clobber a
+  // persisted rootPath. Only a user-initiated repo switch should reset.
+  function handleRepoChange(next: string) {
+    if (next !== repo) setRootDraft("");
+    setRepoDraft(next);
+  }
 
   async function handleSave() {
     if (!settings) return;
@@ -930,7 +930,7 @@ function SpecsSourceSection() {
           <span className="text-xs text-stone-500">Repo</span>
           <SearchableSelect
             value={repo}
-            onChange={setRepoDraft}
+            onChange={handleRepoChange}
             options={repoOptions}
             placeholder={reposLoading ? "Loading repos…" : "Pick a repo"}
             className="w-full"
