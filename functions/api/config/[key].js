@@ -80,14 +80,17 @@ export async function onRequestPut(context) {
     else body.specs = currentSpecs;
   }
 
-  // Admin saves: validate the specs object before persisting so we never
-  // store a value that resolveSpecsConfig would refuse on read (which
-  // would silently disable the Specs tab). Belt-and-braces against the
-  // settings UI accepting characters the helper rejects.
+  // Validate the specs object before persisting, but ONLY when the admin
+  // is actually authoring it on this request — non-admins had body.specs
+  // overwritten with the persisted value above, so re-running validation
+  // there would 422 legitimate unrelated saves (e.g. specLinks updates
+  // from the Specs tab) if a legacy / hand-edited persisted value happens
+  // to fail today's checks.
   if (
     key === "settings" &&
     body && typeof body === "object" &&
-    body.specs && typeof body.specs === "object"
+    body.specs && typeof body.specs === "object" &&
+    isAdmin
   ) {
     const s = body.specs;
     if (s.repo !== undefined && s.repo !== "") {

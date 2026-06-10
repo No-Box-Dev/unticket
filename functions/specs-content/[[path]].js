@@ -16,6 +16,49 @@ import { resolveSpecsConfig, fetchSpecFile, isSafeSegment, hasUnsafePathSegment 
 
 const SESSION_COOKIE = "ut_session";
 
+// Per-worker in-memory caches mirror /api/_middleware's pattern. Without
+// these, every browser sub-resource load (every <img>, <script>, <link>
+// inside an HTML spec) would hit GitHub's /user + /orgs/<o>/members/<u>
+// endpoints, burning the user's rate limit on what should be one auth
+// check per page. Keys are SHA-256 token hashes so raw tokens never sit
+// in Map keys (matches the middleware's `hashToken` discipline).
+const TOKEN_TTL_MS = 5 * 60_000;   // 5 min — same as middleware
+const MEMBER_TTL_MS = 5 * 60_000;
+const tokenCache = new Map();      // tokenHash -> { login, expiresAt }
+const membershipCache = new Map(); // `${tokenHash}:${orgLogin}` -> { isMember, expiresAt }
+
+async function hashToken(token) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function validateToken(token) {
+  const key = await hashToken(token);
+  const cached = tokenCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return { login: cached.login, key };
+  const res = await fetch("https://api.github.com/user", {
+    headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" },
+  });
+  if (!res.ok) return null;
+  const user = await res.json();
+  if (!user?.login) return null;
+  tokenCache.set(key, { login: user.login, expiresAt: Date.now() + TOKEN_TTL_MS });
+  return { login: user.login, key };
+}
+
+async function isOrgMember(token, tokenHash, orgLogin, userLogin) {
+  const cacheKey = `${tokenHash}:${orgLogin}`;
+  const cached = membershipCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.isMember;
+  const res = await fetch(
+    `https://api.github.com/orgs/${encodeURIComponent(orgLogin)}/members/${encodeURIComponent(userLogin)}`,
+    { headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" } },
+  );
+  const isMember = res.status === 204;
+  membershipCache.set(cacheKey, { isMember, expiresAt: Date.now() + MEMBER_TTL_MS });
+  return isMember;
+}
+
 export async function onRequestGet(context) {
   const parts = context.params.path;
   const segments = Array.isArray(parts) ? parts : (typeof parts === "string" ? [parts] : []);
@@ -31,20 +74,15 @@ export async function onRequestGet(context) {
   const token = cookies[SESSION_COOKIE];
   if (!token) return new Response("Not signed in", { status: 401 });
 
-  // 1. Validate token → who is this user?
-  const userRes = await fetch("https://api.github.com/user", {
-    headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" },
-  });
-  if (!userRes.ok) return new Response("Invalid session", { status: 401 });
-  const user = await userRes.json();
-  if (!user?.login) return new Response("Invalid session", { status: 401 });
+  // 1. Validate token → who is this user? Cached for 5 min to keep asset
+  //    loads in an HTML spec off GitHub's /user endpoint.
+  const validated = await validateToken(token);
+  if (!validated) return new Response("Invalid session", { status: 401 });
 
-  // 2. Verify membership in the requested org. Mirrors middleware behavior.
-  const memberRes = await fetch(
-    `https://api.github.com/orgs/${encodeURIComponent(orgLogin)}/members/${encodeURIComponent(user.login)}`,
-    { headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" } },
-  );
-  if (memberRes.status !== 204) return new Response("Not a member of this org", { status: 403 });
+  // 2. Verify org membership. Same per-token cache discipline.
+  if (!(await isOrgMember(token, validated.key, orgLogin, validated.login))) {
+    return new Response("Not a member of this org", { status: 403 });
+  }
 
   // 3. Resolve the org + apply the same operator-kill-switch as middleware.
   //    Mirror middleware's auto-create so a logged-in member opening a spec
