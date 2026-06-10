@@ -32,6 +32,10 @@ async function hashToken(token) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Mirrors /api/_middleware's distinction. Returns:
+//   { login, key }       — valid token
+//   { rateLimited: true } — GitHub throttled us; treat as transient, don't logout
+//   null                  — actually invalid / revoked
 async function validateToken(token) {
   const key = await hashToken(token);
   const cached = tokenCache.get(key);
@@ -39,6 +43,7 @@ async function validateToken(token) {
   const res = await fetch("https://api.github.com/user", {
     headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" },
   });
+  if (res.status === 429 || res.status === 403) return { rateLimited: true };
   if (!res.ok) return null;
   const user = await res.json();
   if (!user?.login) return null;
@@ -46,17 +51,22 @@ async function validateToken(token) {
   return { login: user.login, key };
 }
 
+// Only positive membership is cached — same discipline as middleware. A
+// transient GitHub 5xx or a one-time "not a member" must not pin a user
+// to 403 for the full TTL while the rest of the app accepts them again.
 async function isOrgMember(token, tokenHash, orgLogin, userLogin) {
   const cacheKey = `${tokenHash}:${orgLogin}`;
   const cached = membershipCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.isMember;
+  if (cached && cached.expiresAt > Date.now()) return true;
   const res = await fetch(
     `https://api.github.com/orgs/${encodeURIComponent(orgLogin)}/members/${encodeURIComponent(userLogin)}`,
     { headers: { Authorization: `Bearer ${token}`, "User-Agent": "Unticket" } },
   );
-  const isMember = res.status === 204;
-  membershipCache.set(cacheKey, { isMember, expiresAt: Date.now() + MEMBER_TTL_MS });
-  return isMember;
+  if (res.status === 204) {
+    membershipCache.set(cacheKey, { expiresAt: Date.now() + MEMBER_TTL_MS });
+    return true;
+  }
+  return false;
 }
 
 export async function onRequestGet(context) {
@@ -78,6 +88,14 @@ export async function onRequestGet(context) {
   //    loads in an HTML spec off GitHub's /user endpoint.
   const validated = await validateToken(token);
   if (!validated) return new Response("Invalid session", { status: 401 });
+  if (validated.rateLimited) {
+    // Don't 401 (which would force-logout via the client's 401 handler) —
+    // signal that this is transient so the browser will retry shortly.
+    return new Response("GitHub rate limit reached, try again shortly", {
+      status: 503,
+      headers: { "Retry-After": "30" },
+    });
+  }
 
   // 2. Verify org membership. Same per-token cache discipline.
   if (!(await isOrgMember(token, validated.key, orgLogin, validated.login))) {
