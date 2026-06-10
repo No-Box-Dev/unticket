@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useOrgMembers, useIsAdmin, useTriggerFeatureSync } from "@/hooks/useGitHub";
+import { useOrgMembers, useIsAdmin, useRepos, useTriggerFeatureSync } from "@/hooks/useGitHub";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
@@ -784,7 +785,9 @@ function FeaturesRepoSection() {
 }
 
 function SpecsSourceSection() {
+  const { selectedOrg } = useAuth();
   const { data: settings } = useSettings();
+  const { data: repos, isLoading: reposLoading } = useRepos({ includeAll: true });
   const saveSettings = useSaveSettings();
   const persistedRepo = settings?.specs?.repo ?? "";
   const persistedRoot = settings?.specs?.rootPath ?? "";
@@ -816,6 +819,30 @@ function SpecsSourceSection() {
   const isDirty =
     (repoDraft !== null && repoDraft.trim() !== persistedRepo.trim()) ||
     (rootDraft !== null && rootDraft.trim() !== persistedRoot.trim());
+
+  // Build the dropdown options from the current org's repos. `useRepos`
+  // returns just the bare name, so we prefix the org login to land at the
+  // owner/repo shape the backend expects. We don't list cross-org repos
+  // here — admins who need a spec source outside the selected org can
+  // switch orgs first.
+  const repoOptions = useMemo(() => {
+    const opts = (repos ?? [])
+      .filter((r) => !r.inactive)
+      .map((r) => ({
+        value: selectedOrg ? `${selectedOrg}/${r.name}` : r.name,
+        label: selectedOrg ? `${selectedOrg}/${r.name}` : r.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    // Empty option = clear / disable the Specs source.
+    const result = [{ value: "", label: "— Disable specs source —" }, ...opts];
+    // Preserve a persisted value pointing at a cross-org repo or one no
+    // longer in /api/repos (archived, removed) so the dropdown can still
+    // render it instead of silently looking unset.
+    if (persistedRepo && !result.some((o) => o.value === persistedRepo)) {
+      result.push({ value: persistedRepo, label: `${persistedRepo}  (other org / archived)` });
+    }
+    return result;
+  }, [repos, selectedOrg, persistedRepo]);
 
   async function handleSave() {
     if (!settings) return;
@@ -872,18 +899,12 @@ function SpecsSourceSection() {
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="space-y-1">
           <span className="text-xs text-stone-500">Repo</span>
-          <input
-            type="text"
+          <SearchableSelect
             value={repo}
-            onChange={(e) => setRepoDraft(e.target.value)}
-            placeholder="owner/repo"
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className={
-              "w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/30 " +
-              (repoValid ? "border-stone-200 focus:border-accent" : "border-red-300 focus:border-red-400")
-            }
+            onChange={setRepoDraft}
+            options={repoOptions}
+            placeholder={reposLoading ? "Loading repos…" : "Pick a repo"}
+            className="w-full"
           />
         </label>
         <label className="space-y-1">

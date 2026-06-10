@@ -5,6 +5,7 @@ vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
   useOrgMembers: vi.fn(),
   useIsAdmin: vi.fn(() => false),
+  useRepos: vi.fn(() => ({ data: [], isLoading: false })),
   useTriggerFeatureSync: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/components/SyncFromGithub", () => ({
