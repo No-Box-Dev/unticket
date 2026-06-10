@@ -4,6 +4,7 @@ import { useOrgMembers, useIsAdmin, useRepos, useTriggerFeatureSync } from "@/ho
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
+import { useRepoFolders } from "@/hooks/useSpecs";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { BoardStagesSection } from "@/components/settings/BoardStagesSection";
@@ -796,6 +797,7 @@ function SpecsSourceSection() {
   const [rootDraft, setRootDraft] = useState<string | null>(null);
   const repo = repoDraft ?? persistedRepo;
   const root = rootDraft ?? persistedRoot;
+  const folders = useRepoFolders(repo);
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -843,6 +845,33 @@ function SpecsSourceSection() {
     }
     return result;
   }, [repos, selectedOrg, persistedRepo]);
+
+  // Build the Root folder dropdown from the selected repo's actual folder
+  // tree. The repo-root option always comes first so admins can ship a
+  // tiny demo (`hello-world/` directly at the root) without typing.
+  // Always include the persisted value as an entry too, so an existing
+  // config (or a value that was removed from the repo) still renders.
+  const rootOptions = useMemo(() => {
+    const base = [{ value: "", label: "— Repo root —" }];
+    for (const path of folders.data?.folders ?? []) {
+      base.push({ value: path, label: path });
+    }
+    if (root && !base.some((o) => o.value === root)) {
+      base.push({ value: root, label: `${root}  (not in repo tree)` });
+    }
+    return base;
+  }, [folders.data, root]);
+
+  // When the user picks a different repo, reset root to the new repo's
+  // root — stale folder paths from the previous repo almost certainly
+  // don't exist there. Inlined in the onChange below (NOT a useEffect on
+  // `repo`) because the effect would also fire on initial settings
+  // hydration (repo: "" → persistedRepo) and silently clobber a
+  // persisted rootPath. Only a user-initiated repo switch should reset.
+  function handleRepoChange(next: string) {
+    if (next !== repo) setRootDraft("");
+    setRepoDraft(next);
+  }
 
   async function handleSave() {
     if (!settings) return;
@@ -901,27 +930,31 @@ function SpecsSourceSection() {
           <span className="text-xs text-stone-500">Repo</span>
           <SearchableSelect
             value={repo}
-            onChange={setRepoDraft}
+            onChange={handleRepoChange}
             options={repoOptions}
             placeholder={reposLoading ? "Loading repos…" : "Pick a repo"}
             className="w-full"
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-stone-500">Root folder (empty = repo root)</span>
-          <input
-            type="text"
+          <span className="text-xs text-stone-500">Root folder</span>
+          <SearchableSelect
             value={root}
-            onChange={(e) => setRootDraft(e.target.value)}
-            placeholder="specs"
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className={
-              "w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border bg-stone-50 focus:outline-none focus:ring-2 focus:ring-accent/30 " +
-              (rootValid ? "border-stone-200 focus:border-accent" : "border-red-300 focus:border-red-400")
+            onChange={setRootDraft}
+            options={rootOptions}
+            placeholder={
+              !repo ? "Pick a repo first" :
+              folders.isLoading ? "Loading folders…" :
+              folders.isError ? "Failed to load folders" :
+              "— Repo root —"
             }
+            className="w-full"
           />
+          {folders.data?.truncated && (
+            <span className="text-[10px] text-stone-400">
+              Folder list capped — only the first {folders.data.folders.length} entries shown.
+            </span>
+          )}
         </label>
       </div>
       <div className="flex items-center gap-3 flex-wrap">
