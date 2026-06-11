@@ -28,6 +28,18 @@ vi.mock("@/lib/github", () => ({
   triggerSyncWithProgress: vi.fn(),
   triggerEventsBackfillWithProgress: vi.fn(),
 }));
+vi.mock("@/lib/slack-api", () => ({
+  fetchSlackStatus: vi.fn(),
+  fetchSlackChannels: vi.fn(),
+  startSlackOAuth: vi.fn(),
+  disconnectSlack: vi.fn(),
+}));
+vi.mock("@/lib/specs-api", () => ({
+  fetchRepoFolders: vi.fn(),
+}));
+vi.mock("@/hooks/useSpecs", () => ({
+  useRepoFolders: vi.fn(() => ({ data: { folders: [] }, isLoading: false, isError: false })),
+}));
 vi.mock("@tanstack/react-query", () => {
   const qc = { invalidateQueries: vi.fn() };
   return {

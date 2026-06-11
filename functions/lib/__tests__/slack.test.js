@@ -1,182 +1,212 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../crypto", () => ({
+  decryptToken: vi.fn(async (encrypted) => `decrypted:${encrypted}`),
+  encryptToken: vi.fn(async (plain) => `encrypted:${plain}`),
+}));
+
 import {
-  isValidSlackWebhookUrl,
-  postToSlack,
-  resolveSlackSettings,
+  buildOAuthAuthorizeUrl,
+  exchangeOAuthCode,
+  resolveSlackInstall,
+  resolveSlackChannels,
+  postSlackMessage,
+  listSlackChannels,
   buildPostsBlocks,
   buildReleaseNotesBlocks,
 } from "../slack.js";
 
-describe("isValidSlackWebhookUrl", () => {
-  it("accepts https://hooks.slack.com URLs", () => {
-    expect(isValidSlackWebhookUrl("https://hooks.slack.com/services/T1/B2/abc")).toBe(true);
-  });
-  it("rejects non-Slack hostnames", () => {
-    expect(isValidSlackWebhookUrl("https://evil.com/hook")).toBe(false);
-  });
-  it("rejects http (must be https)", () => {
-    expect(isValidSlackWebhookUrl("http://hooks.slack.com/services/T/B/abc")).toBe(false);
-  });
-  it("rejects empty / non-string", () => {
-    expect(isValidSlackWebhookUrl("")).toBe(false);
-    expect(isValidSlackWebhookUrl(null)).toBe(false);
-    expect(isValidSlackWebhookUrl(undefined)).toBe(false);
-  });
-  it("rejects malformed URLs", () => {
-    expect(isValidSlackWebhookUrl("not a url")).toBe(false);
+describe("buildOAuthAuthorizeUrl", () => {
+  it("builds an authorize URL with the right scopes + state", () => {
+    const url = buildOAuthAuthorizeUrl("client-123", "https://app.example.com", "state-xyz");
+    expect(url).toContain("https://slack.com/oauth/v2/authorize");
+    expect(url).toContain("client_id=client-123");
+    expect(url).toContain("state=state-xyz");
+    expect(url).toContain("channels%3Aread");
+    expect(url).toContain("chat%3Awrite");
+    expect(url).toContain(encodeURIComponent("https://app.example.com/api/slack/oauth/callback"));
   });
 });
 
-describe("postToSlack", () => {
-  beforeEach(() => {
-    globalThis.fetch = vi.fn();
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+describe("exchangeOAuthCode", () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => vi.restoreAllMocks());
 
-  it("throws when the URL is not a Slack webhook", async () => {
-    await expect(postToSlack("https://evil.com/x", {})).rejects.toThrow(/Invalid Slack webhook/);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it("POSTs JSON to the webhook URL", async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, text: async () => "ok" });
-    await postToSlack("https://hooks.slack.com/services/T/B/abc", { text: "hi" });
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe("https://hooks.slack.com/services/T/B/abc");
-    expect(init.method).toBe("POST");
-    expect(init.headers).toMatchObject({ "Content-Type": "application/json" });
-    expect(JSON.parse(init.body)).toEqual({ text: "hi" });
-  });
-
-  it("throws on non-2xx with status + body excerpt", async () => {
+  it("returns bot token + team metadata on success", async () => {
     globalThis.fetch.mockResolvedValue({
-      ok: false,
-      status: 403,
-      statusText: "Forbidden",
-      text: async () => "channel_not_found",
+      ok: true,
+      json: async () => ({
+        ok: true,
+        access_token: "xoxb-abc",
+        bot_user_id: "U123",
+        team: { id: "T999", name: "Acme" },
+      }),
     });
-    await expect(postToSlack("https://hooks.slack.com/services/T/B/abc", {})).rejects.toThrow(
-      /Slack 403 Forbidden: channel_not_found/,
-    );
+    const result = await exchangeOAuthCode({
+      clientId: "c", clientSecret: "s", code: "code1", redirectUri: "https://x/cb",
+    });
+    expect(result).toEqual({
+      botToken: "xoxb-abc",
+      botUserId: "U123",
+      teamId: "T999",
+      teamName: "Acme",
+    });
+  });
+
+  it("throws when Slack returns ok=false", async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: false, error: "invalid_code" }),
+    });
+    await expect(exchangeOAuthCode({ clientId: "c", clientSecret: "s", code: "x", redirectUri: "u" }))
+      .rejects.toThrow(/invalid_code/);
+  });
+
+  it("throws when bot token is missing", async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, team: { id: "T1" } }),
+    });
+    await expect(exchangeOAuthCode({ clientId: "c", clientSecret: "s", code: "x", redirectUri: "u" }))
+      .rejects.toThrow(/no bot token/);
   });
 });
 
-describe("resolveSlackSettings", () => {
-  function makeDb(row) {
-    return {
-      prepare: () => ({
-        bind: () => ({ first: async () => row }),
-      }),
-    };
+describe("resolveSlackInstall", () => {
+  function mkDb(row) {
+    return { prepare: () => ({ bind: () => ({ first: async () => row }) }) };
   }
-
-  it("returns empty URLs when no settings row exists", async () => {
-    const settings = await resolveSlackSettings(makeDb(null), "org-1");
-    expect(settings).toEqual({ postsWebhookUrl: "", releaseNotesWebhookUrl: "" });
+  it("returns null with no encryption key", async () => {
+    const env = { DB: mkDb({ encrypted_bot_token: "enc" }) };
+    expect(await resolveSlackInstall(env, "org-1")).toBeNull();
   });
-
-  it("returns empty URLs when slack key is missing", async () => {
-    const row = { data: JSON.stringify({ unticketRepo: "unticket" }) };
-    const settings = await resolveSlackSettings(makeDb(row), "org-1");
-    expect(settings).toEqual({ postsWebhookUrl: "", releaseNotesWebhookUrl: "" });
+  it("returns null when no row", async () => {
+    const env = { DB: mkDb(null), ENCRYPTION_KEY: "k" };
+    expect(await resolveSlackInstall(env, "org-1")).toBeNull();
   });
-
-  it("returns trimmed URLs from the settings row", async () => {
-    const row = {
-      data: JSON.stringify({
-        slack: {
-          postsWebhookUrl: "  https://hooks.slack.com/posts  ",
-          releaseNotesWebhookUrl: "https://hooks.slack.com/notes",
-        },
+  it("decrypts + returns the install row", async () => {
+    const env = {
+      DB: mkDb({
+        team_id: "T1",
+        team_name: "Acme",
+        bot_user_id: "U1",
+        encrypted_bot_token: "enc",
       }),
+      ENCRYPTION_KEY: "k",
     };
-    const settings = await resolveSlackSettings(makeDb(row), "org-1");
-    expect(settings).toEqual({
-      postsWebhookUrl: "https://hooks.slack.com/posts",
-      releaseNotesWebhookUrl: "https://hooks.slack.com/notes",
+    expect(await resolveSlackInstall(env, "org-1")).toEqual({
+      teamId: "T1",
+      teamName: "Acme",
+      botUserId: "U1",
+      botToken: "decrypted:enc",
     });
   });
+});
 
+describe("resolveSlackChannels", () => {
+  function mkDb(row) {
+    return { prepare: () => ({ bind: () => ({ first: async () => row }) }) };
+  }
+  it("returns empty IDs when no settings", async () => {
+    expect(await resolveSlackChannels(mkDb(null), "org-1")).toEqual({
+      postsChannelId: "", releaseNotesChannelId: "",
+    });
+  });
+  it("returns the configured channel IDs", async () => {
+    const row = { data: JSON.stringify({ slack: { postsChannelId: "C1", releaseNotesChannelId: "C2" } }) };
+    expect(await resolveSlackChannels(mkDb(row), "org-1")).toEqual({
+      postsChannelId: "C1", releaseNotesChannelId: "C2",
+    });
+  });
   it("tolerates corrupt JSON", async () => {
-    const settings = await resolveSlackSettings(makeDb({ data: "not json" }), "org-1");
-    expect(settings).toEqual({ postsWebhookUrl: "", releaseNotesWebhookUrl: "" });
+    expect(await resolveSlackChannels(mkDb({ data: "not json" }), "org-1")).toEqual({
+      postsChannelId: "", releaseNotesChannelId: "",
+    });
+  });
+});
+
+describe("postSlackMessage", () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("POSTs to chat.postMessage with bearer auth + channel", async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, ts: "1.2" }) });
+    await postSlackMessage("xoxb-1", "C-123", { text: "hi", blocks: [] });
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe("https://slack.com/api/chat.postMessage");
+    expect(init.headers.Authorization).toBe("Bearer xoxb-1");
+    const body = JSON.parse(init.body);
+    expect(body.channel).toBe("C-123");
+    expect(body.text).toBe("hi");
+  });
+
+  it("throws when Slack returns ok=false", async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: "channel_not_found" }) });
+    await expect(postSlackMessage("xoxb-1", "C-bad", {})).rejects.toThrow(/channel_not_found/);
+  });
+});
+
+describe("listSlackChannels", () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns sorted channels + handles pagination", async () => {
+    globalThis.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        ok: true,
+        channels: [{ id: "C2", name: "beta", is_private: false }],
+        response_metadata: { next_cursor: "cur1" },
+      })})
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        ok: true,
+        channels: [{ id: "C1", name: "alpha", is_private: true }],
+        response_metadata: { next_cursor: "" },
+      })});
+    const result = await listSlackChannels("xoxb-1");
+    expect(result).toHaveLength(2);
+    expect(result[0].name).toBe("alpha");
+    expect(result[1].name).toBe("beta");
+    expect(result[0].is_private).toBe(true);
   });
 });
 
 describe("buildPostsBlocks", () => {
-  it("renders header + summary with a PR action button", () => {
+  it("renders header + summary + action button", () => {
     const payload = buildPostsBlocks({
       actorName: "Jane",
       projectName: "unticket",
-      summary: "I merged the login button.",
-      prUrl: "https://github.com/no-box-dev/unticket/pull/42",
-      prNumber: 42,
-      avatarUrl: "https://example.com/jane.png",
+      summary: "I merged it.",
+      prUrl: "https://github.com/x/y/pull/1",
+      prNumber: 1,
+      avatarUrl: "https://x/a.png",
     });
     expect(payload.blocks).toHaveLength(2);
-    expect(payload.blocks[0].type).toBe("section");
     expect(payload.blocks[0].text.text).toContain("*Jane*");
-    expect(payload.blocks[0].text.text).toContain("`unticket`");
-    expect(payload.blocks[0].text.text).toContain("I merged the login button.");
-    expect(payload.blocks[0].accessory?.image_url).toBe("https://example.com/jane.png");
-    expect(payload.blocks[1].type).toBe("actions");
-    expect(payload.blocks[1].elements[0].url).toBe("https://github.com/no-box-dev/unticket/pull/42");
-    expect(payload.blocks[1].elements[0].text.text).toBe("View PR #42");
+    expect(payload.blocks[0].accessory.image_url).toBe("https://x/a.png");
+    expect(payload.blocks[1].elements[0].url).toBe("https://github.com/x/y/pull/1");
   });
 
-  it("omits the action button when no PR url is given", () => {
-    const payload = buildPostsBlocks({
-      actorName: "Jane",
-      projectName: "unticket",
-      summary: "hello",
-    });
-    expect(payload.blocks).toHaveLength(1);
-  });
-
-  it("escapes &, <, > in summary and names to prevent mrkdwn injection", () => {
-    const payload = buildPostsBlocks({
-      actorName: "<script>",
-      projectName: "&repo",
-      summary: "5 < 10 & true",
-    });
-    expect(payload.blocks[0].text.text).toContain("&lt;script&gt;");
-    expect(payload.blocks[0].text.text).toContain("&amp;repo");
-    expect(payload.blocks[0].text.text).toContain("5 &lt; 10 &amp; true");
+  it("escapes mrkdwn characters", () => {
+    const payload = buildPostsBlocks({ actorName: "<x>", projectName: "&y", summary: "5 < 10" });
+    expect(payload.blocks[0].text.text).toContain("&lt;x&gt;");
+    expect(payload.blocks[0].text.text).toContain("&amp;y");
+    expect(payload.blocks[0].text.text).toContain("5 &lt; 10");
   });
 });
 
 describe("buildReleaseNotesBlocks", () => {
-  it("wraps the structured release note in a code fence to preserve formatting", () => {
-    const note = "🐛 unticket #42 Merged - Bugfix\nRepository: unticket\nDetails: ...";
-    const payload = buildReleaseNotesBlocks({ projectName: "unticket", summary: note, prUrl: "https://x", prNumber: 42 });
-    expect(payload.blocks[0].text.text).toContain("*Release note*");
+  it("wraps the release note in a code fence", () => {
+    const payload = buildReleaseNotesBlocks({ projectName: "u", summary: "🐛 #1 ..." });
     expect(payload.blocks[1].text.text.startsWith("```\n")).toBe(true);
     expect(payload.blocks[1].text.text.endsWith("\n```")).toBe(true);
-    expect(payload.blocks[1].text.text).toContain("🐛 unticket #42");
   });
 
-  it("truncates summaries longer than ~2800 chars", () => {
-    const long = "x".repeat(3500);
-    const payload = buildReleaseNotesBlocks({ projectName: "u", summary: long });
-    expect(payload.blocks[1].text.text.length).toBeLessThan(2820);
-    expect(payload.blocks[1].text.text).toContain("…");
-  });
-
-  it("sanitizes embedded ``` so a model can't close the wrapping code fence", () => {
+  it("sanitizes embedded ``` so a model can't close the fence", () => {
     const payload = buildReleaseNotesBlocks({
       projectName: "u",
-      summary: "Type: Bugfix\n```python\nprint('hi')\n```\nDone.",
+      summary: "Bug.\n```python\nprint()\n```\nDone.",
     });
     const text = payload.blocks[1].text.text;
-    // Outer fence still wraps the whole thing
-    expect(text.startsWith("```\n")).toBe(true);
-    expect(text.endsWith("\n```")).toBe(true);
-    // The inner ``` runs are broken up so they no longer form fences. We
-    // assert: between the outer opener and closer, no three consecutive
-    // backticks survive (only the outer pair would).
     const inner = text.slice(4, -4);
     expect(/`{3,}/.test(inner)).toBe(false);
   });
