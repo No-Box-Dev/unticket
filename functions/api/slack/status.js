@@ -21,6 +21,11 @@ export async function onRequestGet(context) {
     postsChannelId: channels.postsChannelId,
     releaseNotesChannelId: channels.releaseNotesChannelId,
     canConfigure: isAdmin,
-    appConfigured: !!context.env.SLACK_CLIENT_ID,
+    // appConfigured requires BOTH halves of the Slack app credentials
+    // because /oauth/start needs the secret too (it signs the state HMAC
+    // with it) and the callback can't exchange the code without it.
+    // Reporting just CLIENT_ID = ready would hide the warning while the
+    // Connect button leads to a 503.
+    appConfigured: !!context.env.SLACK_CLIENT_ID && !!context.env.SLACK_CLIENT_SECRET,
   });
 }
