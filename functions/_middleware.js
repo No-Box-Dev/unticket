@@ -105,6 +105,13 @@ export async function onRequest(context) {
     return context.next();
   }
 
+  // Slack OAuth callback is hit by Slack as a browser redirect — no
+  // Authorization header. The callback validates the ut_slack_state cookie
+  // for CSRF and uses orgId embedded in `state` to persist the install.
+  if (url.pathname === "/api/slack/oauth/callback") {
+    return context.next();
+  }
+
   // Skip middleware for non-API routes
   if (!url.pathname.startsWith("/api/")) {
     return context.next();

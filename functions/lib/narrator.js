@@ -18,8 +18,9 @@ import {
   buildReleaseNotesMessage,
 } from "./prompt";
 import {
-  resolveSlackSettings,
-  postToSlack,
+  resolveSlackInstall,
+  resolveSlackChannels,
+  postSlackMessage,
   buildPostsBlocks,
   buildReleaseNotesBlocks,
 } from "./slack";
@@ -237,16 +238,21 @@ export async function narrateReleaseNotes(env, eventId) {
   });
 }
 
-// Mirror a narration to Slack if the org has configured a webhook for this
-// feed. Pulls actor avatar + PR URL out of the trigger event payload. Any
-// failure (bad URL, Slack 5xx, timeout) is recorded to op_failures and
-// swallowed — the in-app feed already has the row.
+// Mirror a narration to Slack via the org's installed Unticket bot. Resolves
+// the bot token from slack_settings and the per-feed channel id from
+// settings.slack.{postsChannelId,releaseNotesChannelId}. Any failure is
+// recorded to op_failures and swallowed — the in-app feed already has the
+// row, Slack downtime never blocks the queue.
 async function maybePostToSlack(env, args) {
   const { kind, orgId, ownerId, triggerEventId, actor, project, summary, rawEvent } = args;
   try {
-    const slack = await resolveSlackSettings(env.DB, orgId);
-    const url = kind === "release_notes" ? slack.releaseNotesWebhookUrl : slack.postsWebhookUrl;
-    if (!url) return;
+    const [install, channels] = await Promise.all([
+      resolveSlackInstall(env, orgId),
+      resolveSlackChannels(env.DB, orgId),
+    ]);
+    if (!install) return;
+    const channelId = kind === "release_notes" ? channels.releaseNotesChannelId : channels.postsChannelId;
+    if (!channelId) return;
 
     const payload = safeParseObject(rawEvent.payload_json);
     const pr = payload?.pr && typeof payload.pr === "object" ? payload.pr : null;
@@ -264,9 +270,6 @@ async function maybePostToSlack(env, args) {
         prNumber,
       });
     } else {
-      // Avatar lives on the actor row only when we re-fetch it; the
-      // happy-path uses actor.id/name from the gate above. Look up the
-      // avatar lazily so a missing column doesn't break the post.
       const avatarUrl = await fetchActorAvatar(env.DB, actor.id, ownerId);
       blocks = buildPostsBlocks({
         actorName: actor.name,
@@ -277,7 +280,7 @@ async function maybePostToSlack(env, args) {
         prNumber,
       });
     }
-    await postToSlack(url, blocks);
+    await postSlackMessage(install.botToken, channelId, blocks);
   } catch (err) {
     await recordFailure(env.DB, {
       ownerId,

@@ -135,12 +135,12 @@ export interface OrgSettings {
   // functions/lib/prompt.js). The LLM provider/model is NOT configurable
   // per-feed — both Posts and Release notes share the org's LLM config.
   releaseNotesPrompt?: string;
-  // Slack incoming-webhook URLs — one per feed. Empty/missing disables
-  // Slack mirroring for that feed. Validated server-side against
-  // hooks.slack.com (see functions/lib/slack.js isValidSlackWebhookUrl).
+  // Per-feed Slack channel selections. The bot install (token + team
+  // metadata) lives in the separate slack_settings table — the only thing
+  // in settings.slack is which channels each feed should post to.
   slack?: {
-    postsWebhookUrl?: string;
-    releaseNotesWebhookUrl?: string;
+    postsChannelId?: string;
+    releaseNotesChannelId?: string;
   };
   // Specs page source — which repo + path holds the spec folders. Each
   // top-level directory under `rootPath` becomes one spec on the Specs tab.
