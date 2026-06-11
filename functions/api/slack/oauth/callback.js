@@ -1,4 +1,4 @@
-import { exchangeOAuthCode, saveSlackInstall } from "../../../lib/slack";
+import { exchangeOAuthCode, saveSlackInstall, verifyOAuthState } from "../../../lib/slack";
 
 // GET /api/slack/oauth/callback?code=...&state=...
 //
@@ -26,14 +26,17 @@ export async function onRequestGet(context) {
     return redirectHome(url, "csrf");
   }
 
-  const parts = state.split(":");
-  const orgId = Number(parts[1]);
-  const userLogin = parts[2] ? decodeURIComponent(parts[2]) : "";
-  if (!Number.isFinite(orgId) || orgId <= 0) return redirectHome(url, "bad-state");
-
   const clientId = context.env.SLACK_CLIENT_ID;
   const clientSecret = context.env.SLACK_CLIENT_SECRET;
   if (!clientId || !clientSecret) return redirectHome(url, "app-not-configured");
+
+  // Verify the HMAC on the state BEFORE trusting any embedded orgId. The
+  // cookie comparison above is the CSRF gate; this is defense-in-depth
+  // against a client managing to craft a matching state+cookie pair.
+  const verified = await verifyOAuthState(clientSecret, state);
+  if (!verified) return redirectHome(url, "bad-state");
+  const { orgId, userLogin: rawUser } = verified;
+  const userLogin = rawUser ? decodeURIComponent(rawUser) : "";
 
   let install;
   try {

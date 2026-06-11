@@ -54,6 +54,19 @@ export async function resolveSlackInstall(env, orgId) {
 export async function saveSlackInstall(env, orgId, install) {
   if (!env.ENCRYPTION_KEY) throw new Error("ENCRYPTION_KEY missing");
   const encrypted = await encryptToken(install.botToken, env.ENCRYPTION_KEY);
+
+  // Wipe channel selections if this is a NEW install or a switch to a
+  // different workspace — the old channel IDs are workspace-scoped and
+  // would route narration to the wrong place (or fail with channel_not_found).
+  const existing = await env.DB
+    .prepare("SELECT team_id FROM slack_settings WHERE org_id = ?")
+    .bind(orgId)
+    .first()
+    .catch(() => null);
+  if (!existing || existing.team_id !== install.teamId) {
+    await clearSlackChannelsForOrg(env.DB, orgId);
+  }
+
   await env.DB.prepare(
     `INSERT INTO slack_settings (org_id, team_id, team_name, bot_user_id, encrypted_bot_token, installed_by, installed_at)
      VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -70,6 +83,10 @@ export async function saveSlackInstall(env, orgId, install) {
 }
 
 export async function deleteSlackInstall(env, orgId) {
+  // Drop channel selections too — they reference a workspace that no
+  // longer has a bot token, so leaving them would either silently fail or
+  // route to the wrong workspace if the admin re-connects elsewhere.
+  await clearSlackChannelsForOrg(env.DB, orgId);
   await env.DB.prepare("DELETE FROM slack_settings WHERE org_id = ?").bind(orgId).run();
 }
 
@@ -196,13 +213,29 @@ export function buildOAuthAuthorizeUrl(clientId, origin, state) {
 
 // Exchange the OAuth code for a bot token + team metadata. Throws on any
 // Slack-side failure so the callback can surface a clean error page.
+// Credentials go in the form-encoded body, not the URL, so intermediaries
+// don't log the client_secret in access logs. Wraps the fetch in the same
+// 5s AbortController pattern the rest of this file uses.
 export async function exchangeOAuthCode({ clientId, clientSecret, code, redirectUri }) {
-  const u = new URL(`${SLACK_API}/api/oauth.v2.access`);
-  u.searchParams.set("client_id", clientId);
-  u.searchParams.set("client_secret", clientSecret);
-  u.searchParams.set("code", code);
-  u.searchParams.set("redirect_uri", redirectUri);
-  const res = await fetch(u.toString(), { method: "POST" });
+  const params = new URLSearchParams();
+  params.set("client_id", clientId);
+  params.set("client_secret", clientSecret);
+  params.set("code", code);
+  params.set("redirect_uri", redirectUri);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(`${SLACK_API}/api/oauth.v2.access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`Slack HTTP ${res.status}`);
   const data = await res.json();
   if (!data.ok) throw new Error(`Slack oauth.v2.access: ${data.error ?? "unknown"}`);
@@ -215,6 +248,74 @@ export async function exchangeOAuthCode({ clientId, clientSecret, code, redirect
     teamId: data.team.id,
     teamName: data.team.name ?? null,
   };
+}
+
+// HMAC-SHA256 the state payload with the Slack client secret so a callback
+// can't be tricked into trusting a forged orgId. The cookie comparison
+// alone is fine for CSRF (HttpOnly + Lax), but signing the payload is a
+// belt-and-braces gate against any future regression in cookie handling.
+export async function signOAuthState(secret, payload) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Constant-time HMAC verify so a callback can recover orgId + user from a
+// signed state without trusting the URL alone. Returns the parsed payload
+// or null on mismatch / malformed input.
+export async function verifyOAuthState(secret, state) {
+  if (typeof state !== "string") return null;
+  const idx = state.lastIndexOf(".");
+  if (idx <= 0) return null;
+  const payload = state.slice(0, idx);
+  const sig = state.slice(idx + 1);
+  const expected = await signOAuthState(secret, payload);
+  if (sig.length !== expected.length) return null;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+  if (diff !== 0) return null;
+  // payload format: `<nonce>:<orgId>:<userLogin>`
+  const parts = payload.split(":");
+  if (parts.length < 3) return null;
+  const orgId = Number(parts[1]);
+  if (!Number.isFinite(orgId) || orgId <= 0) return null;
+  return { orgId, userLogin: parts.slice(2).join(":") };
+}
+
+// Wipe channel selections from settings.slack when the install changes
+// workspace OR is disconnected. Channel IDs are workspace-scoped — leaving
+// them around after a switch would route narration to the wrong place.
+export async function clearSlackChannelsForOrg(db, orgId) {
+  if (!db || !orgId) return;
+  const row = await db
+    .prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'")
+    .bind(orgId)
+    .first()
+    .catch(() => null);
+  if (!row?.data) return;
+  let settings;
+  try { settings = JSON.parse(row.data); } catch { return; }
+  if (!settings?.slack) return;
+  delete settings.slack.postsChannelId;
+  delete settings.slack.releaseNotesChannelId;
+  if (!settings.slack.postsChannelId && !settings.slack.releaseNotesChannelId) {
+    delete settings.slack;
+  }
+  await db
+    .prepare(
+      `INSERT INTO config (org_id, key, data, updated_at)
+       VALUES (?, 'settings', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+       ON CONFLICT(org_id, key) DO UPDATE SET data = excluded.data,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
+    )
+    .bind(orgId, JSON.stringify(settings))
+    .run();
 }
 
 // ---------- Block Kit builders (carried over from v1) ----------

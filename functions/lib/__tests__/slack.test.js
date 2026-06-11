@@ -8,6 +8,8 @@ vi.mock("../crypto", () => ({
 import {
   buildOAuthAuthorizeUrl,
   exchangeOAuthCode,
+  signOAuthState,
+  verifyOAuthState,
   resolveSlackInstall,
   resolveSlackChannels,
   postSlackMessage,
@@ -69,6 +71,46 @@ describe("exchangeOAuthCode", () => {
     });
     await expect(exchangeOAuthCode({ clientId: "c", clientSecret: "s", code: "x", redirectUri: "u" }))
       .rejects.toThrow(/no bot token/);
+  });
+});
+
+describe("HMAC state signing", () => {
+  it("round-trips a payload through sign + verify", async () => {
+    const payload = "nonce-abc:42:alice";
+    const sig = await signOAuthState("secret-1", payload);
+    const verified = await verifyOAuthState("secret-1", `${payload}.${sig}`);
+    expect(verified).toEqual({ orgId: 42, userLogin: "alice" });
+  });
+
+  it("rejects an unsigned state", async () => {
+    expect(await verifyOAuthState("secret-1", "nonce:42:alice")).toBeNull();
+  });
+
+  it("rejects a state signed with a different secret", async () => {
+    const payload = "nonce:42:alice";
+    const sig = await signOAuthState("attacker-secret", payload);
+    expect(await verifyOAuthState("real-secret", `${payload}.${sig}`)).toBeNull();
+  });
+
+  it("rejects a state where the attacker swapped the orgId", async () => {
+    // Attacker has a valid signature for orgId=42, tampers it to 99.
+    const payload = "nonce:42:alice";
+    const sig = await signOAuthState("secret-1", payload);
+    const tampered = `nonce:99:alice.${sig}`;
+    expect(await verifyOAuthState("secret-1", tampered)).toBeNull();
+  });
+
+  it("rejects malformed states", async () => {
+    expect(await verifyOAuthState("secret-1", "")).toBeNull();
+    expect(await verifyOAuthState("secret-1", "no-dot")).toBeNull();
+    expect(await verifyOAuthState("secret-1", "payload.")).toBeNull();
+    expect(await verifyOAuthState("secret-1", null)).toBeNull();
+  });
+
+  it("rejects a state whose orgId isn't a positive integer", async () => {
+    const payload = "nonce:not-a-number:alice";
+    const sig = await signOAuthState("secret-1", payload);
+    expect(await verifyOAuthState("secret-1", `${payload}.${sig}`)).toBeNull();
   });
 });
 
