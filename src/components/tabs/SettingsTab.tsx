@@ -1113,6 +1113,11 @@ function SlackSettingsSection() {
     if (flag === "ok") {
       qc.invalidateQueries({ queryKey: ["slack-status"] });
       qc.invalidateQueries({ queryKey: ["slack-channels"] });
+      // Server side wipes settings.slack.{postsChannelId,releaseNotesChannelId}
+      // when the team_id changes (or on disconnect). Invalidate the local
+      // settings cache too so the UI doesn't show channels selected after a
+      // workspace switch.
+      qc.invalidateQueries({ queryKey: ["settings"] });
     } else if (flag !== "cancelled") {
       setError(`Slack connection failed: ${flag}`);
     }
@@ -1151,7 +1156,12 @@ function SlackSettingsSection() {
     setBusy("disconnect");
     try {
       await disconnectSlack();
-      await qc.invalidateQueries({ queryKey: ["slack-status"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["slack-status"] }),
+        // Server cleared settings.slack.{postsChannelId,releaseNotesChannelId}.
+        // Refetch so the dropdowns don't show stale selections.
+        qc.invalidateQueries({ queryKey: ["settings"] }),
+      ]);
       setPostsDraft(null);
       setNotesDraft(null);
     } catch (err) {
