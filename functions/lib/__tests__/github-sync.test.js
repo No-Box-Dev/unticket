@@ -36,6 +36,8 @@ import {
   removeRepo,
   renameRepo,
   touchRepoPushed,
+  upsertDiscoveredRepo,
+  applyNewRepoExcludePolicy,
   syncRepos,
   syncMembers,
   syncRepo,
@@ -417,6 +419,130 @@ describe("syncRepos", () => {
       statusText: "Internal Server Error",
     });
     await expect(syncRepos(makeDb(), "tok", "org-1", "x")).rejects.toThrow(/500/);
+  });
+
+  it("upsert SQL stamps discovered_at and preserves it on conflict", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => [{ name: "api", language: "TS", pushed_at: "2026-05-01" }],
+    });
+    const db = makeDb();
+    await syncRepos(db, "tok", "org-1", "no-box-dev");
+    // The bind stmt is shared across the batch — peek at the SQL.
+    const batchSql = db._calls.batches[0][0].sql;
+    expect(batchSql).toContain("discovered_at");
+    expect(batchSql).toContain("COALESCE(repos.discovered_at, excluded.discovered_at)");
+  });
+
+  it("does NOT apply exclude policy when settings.newRepoDefault is 'include'", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => [{ name: "api", language: "TS", pushed_at: "2026-05-01" }],
+    });
+    const db = makeDb({
+      "FROM config": { data: JSON.stringify({ newRepoDefault: "include" }) },
+    });
+    await syncRepos(db, "tok", "org-1", "no-box-dev");
+    // Only the repos upsert batch should run — no projects archived batch.
+    const projectBatches = db._calls.batches.filter((b) =>
+      b[0]?.sql?.includes("INSERT INTO projects"),
+    );
+    expect(projectBatches).toHaveLength(0);
+  });
+
+  it("applies exclude policy when settings.newRepoDefault is 'exclude'", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => [{ name: "new-repo", language: "TS", pushed_at: "2026-05-01" }],
+    });
+    // No existing rows → "new-repo" is genuinely a new discovery → policy fires.
+    const db = makeDb({
+      "FROM config": { data: JSON.stringify({ newRepoDefault: "exclude" }) },
+    });
+    await syncRepos(db, "tok", "org-1", "no-box-dev");
+    const projectBatches = db._calls.batches.filter((b) =>
+      b[0]?.sql?.includes("INSERT INTO projects"),
+    );
+    expect(projectBatches).toHaveLength(1);
+    expect(projectBatches[0][0].binds[0]).toBe("proj_no-box-dev_new-repo");
+  });
+
+  it("does NOT re-apply exclude policy for repos already in D1 (idempotent)", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => [{ name: "api", language: "TS", pushed_at: "2026-05-01" }],
+    });
+    // Existing row for "api" → not newly discovered → policy must skip it.
+    const db = makeDb({
+      "SELECT name FROM repos": [{ name: "api" }],
+      "FROM config": { data: JSON.stringify({ newRepoDefault: "exclude" }) },
+    });
+    await syncRepos(db, "tok", "org-1", "no-box-dev");
+    const projectBatches = db._calls.batches.filter((b) =>
+      b[0]?.sql?.includes("INSERT INTO projects"),
+    );
+    expect(projectBatches).toHaveLength(0);
+  });
+});
+
+describe("upsertDiscoveredRepo", () => {
+  it("returns true when row is newly inserted (changes>0)", async () => {
+    const db = makeDb();
+    const wasNew = await upsertDiscoveredRepo(db, "org-1", "new-repo");
+    expect(wasNew).toBe(true);
+    expect(db._calls.runs[0].sql).toContain("INSERT INTO repos");
+    expect(db._calls.runs[0].sql).toContain("ON CONFLICT(org_id, name) DO NOTHING");
+  });
+
+  it("returns false when row already exists (changes=0)", async () => {
+    // Override makeDb's default run() that returns changes=1.
+    const db = makeDb();
+    const orig = db.prepare;
+    db.prepare = (sql) => {
+      const stmt = orig(sql);
+      stmt.run = async () => ({ meta: { changes: 0 } });
+      return stmt;
+    };
+    const wasNew = await upsertDiscoveredRepo(db, "org-1", "existing-repo");
+    expect(wasNew).toBe(false);
+  });
+});
+
+describe("applyNewRepoExcludePolicy", () => {
+  it("is a no-op for empty input (no DB write)", async () => {
+    const db = makeDb();
+    await applyNewRepoExcludePolicy(db, "no-box-dev", []);
+    expect(db._calls.firsts).toHaveLength(0);
+    expect(db._calls.batches).toHaveLength(0);
+  });
+
+  it("is a no-op when policy is 'include'", async () => {
+    const db = makeDb({
+      "FROM config": { data: JSON.stringify({ newRepoDefault: "include" }) },
+    });
+    await applyNewRepoExcludePolicy(db, "no-box-dev", ["new-repo"]);
+    expect(db._calls.batches).toHaveLength(0);
+  });
+
+  it("archives all listed repos when policy is 'exclude'", async () => {
+    const db = makeDb({
+      "FROM config": { data: JSON.stringify({ newRepoDefault: "exclude" }) },
+    });
+    await applyNewRepoExcludePolicy(db, "no-box-dev", ["new-a", "new-b"]);
+    // The production code shares one prepared statement across binds (D1's
+    // .bind() returns a new stmt) — the makeDb fake mutates the shared
+    // object, so we can only assert the batch size and shape here. The end-
+    // to-end correctness of the per-repo binds is covered by the
+    // staging-env verification step in the plan.
+    expect(db._calls.batches).toHaveLength(1);
+    expect(db._calls.batches[0]).toHaveLength(2);
+    const sql = db._calls.batches[0][0].sql;
+    expect(sql).toContain("INSERT INTO projects");
+    expect(sql).toContain("archived");
   });
 });
 

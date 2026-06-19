@@ -9,6 +9,7 @@ import { Spinner } from "@/components/Spinner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BootstrapOverlay } from "@/components/BootstrapOverlay";
+import { NewRepoBanner } from "@/components/NewRepoBanner";
 import type { TabId, NavFilter } from "@/lib/types";
 
 const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ default: m.SprintTab })));
@@ -61,6 +62,9 @@ export function DashboardPage() {
       <TopNav activeTab={activeTab} onTabChange={handleTabChange} />
 
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+        <NewRepoBanner
+          onReview={() => setSearchParams({ tab: "settings", focus: "newRepos" }, { replace: true })}
+        />
         <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner className="w-6 h-6 text-accent" /></div>}>
           <ErrorBoundary key={activeTab}>
             {activeTab === "settings" && <SettingsTab />}

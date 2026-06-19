@@ -69,12 +69,29 @@ export async function syncRepos(db, token, orgId, orgLogin) {
     { sort: "pushed" }
   );
 
+  // Capture which (org_id, name) pairs are NEW so we can apply the
+  // newRepoDefault='exclude' policy below — D1 doesn't expose RETURNING and
+  // we need this anyway for the cheap "did we just discover anything?" check.
+  // Reading existing names up front is one extra query but keeps the upsert
+  // loop simple and idempotent.
+  const existingRows = await db
+    .prepare("SELECT name FROM repos WHERE org_id = ?")
+    .bind(orgId)
+    .all();
+  const existingNames = new Set(
+    (existingRows.results ?? []).map((r) => r.name),
+  );
+  const newlyDiscovered = repos
+    .map((r) => r.name)
+    .filter((n) => !existingNames.has(n));
+
   const stmt = db.prepare(
-    `INSERT INTO repos (org_id, name, language, pushed_at)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO repos (org_id, name, language, pushed_at, discovered_at)
+     VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
      ON CONFLICT(org_id, name) DO UPDATE SET
        language = excluded.language,
-       pushed_at = excluded.pushed_at`
+       pushed_at = excluded.pushed_at,
+       discovered_at = COALESCE(repos.discovered_at, excluded.discovered_at)`
   );
 
   for (let i = 0; i < repos.length; i += 50) {
@@ -84,9 +101,54 @@ export async function syncRepos(db, token, orgId, orgLogin) {
     );
   }
 
+  if (newlyDiscovered.length > 0) {
+    await applyNewRepoPolicy(db, orgLogin, newlyDiscovered);
+  }
+
   await setSyncState(db, orgId, "repos");
 
   return repos.map((r) => r.name);
+}
+
+// When settings.newRepoDefault === 'exclude', stamp each freshly-discovered
+// repo as platform-archived so it doesn't appear in any active scope until an
+// admin opts in via the "Newly detected" Settings section. Mirrors the row
+// shape that POST /api/projects/:id/archive would write, so the existing
+// unarchive endpoint can flip it back cleanly. INSERT OR IGNORE protects
+// against races with the events.js / projects.js auto-registration paths.
+async function applyNewRepoPolicy(db, orgLogin, newRepoNames) {
+  const settingsRow = await db
+    .prepare("SELECT data FROM config WHERE org_id = (SELECT id FROM orgs WHERE github_login = ?) AND key = 'settings'")
+    .bind(orgLogin)
+    .first();
+  if (!settingsRow?.data) return;
+  let policy;
+  try {
+    policy = JSON.parse(settingsRow.data)?.newRepoDefault;
+  } catch (err) {
+    // Corrupt settings is surfaced loudly elsewhere (getInactiveRepoSet
+    // throws on the same row). Log here so this sync-time path doesn't
+    // silently treat a broken row as "include" by default — matches the
+    // CLAUDE.md "Handle errors explicitly / No silent fallbacks" rule.
+    console.warn(`[unticket sync] Corrupt settings JSON for org ${orgLogin} — skipping new-repo policy:`, err?.message ?? err);
+    return;
+  }
+  if (policy !== "exclude") return;
+
+  const stmt = db.prepare(
+    `INSERT INTO projects (id, name, org, repo, owner_id, archived, archived_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+     ON CONFLICT(id) DO UPDATE SET
+       archived = 1,
+       archived_at = COALESCE(projects.archived_at, excluded.archived_at),
+       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
+  );
+  await db.batch(
+    newRepoNames.map((name) => {
+      const projectId = `proj_${orgLogin}_${name}`.toLowerCase();
+      return stmt.bind(projectId, name, orgLogin, name, orgLogin);
+    }),
+  );
 }
 
 // ---------- Sync PRs ----------
@@ -971,6 +1033,38 @@ export async function markRepoArchived(db, orgId, repo) {
     .prepare("UPDATE repos SET archived_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE org_id = ? AND name = ?")
     .bind(orgId, repo)
     .run();
+}
+
+// Insert a single repo row stamped as just-discovered. Used by the
+// `installation_repositories.added` webhook so a repo the admin grants the
+// App access to surfaces in the "Newly detected" UI in seconds instead of
+// waiting for the next 30-min cron syncRepos pass.
+//
+// Returns true when the row was newly inserted (the discovery is real),
+// false when it already existed. Caller uses that signal to decide whether
+// to run the auto-exclude policy.
+//
+// language and pushed_at are NULL on the webhook payload — the next
+// syncRepos pass fills them in. discovered_at is preserved on conflict so a
+// repo that was discovered by cron stays stamped with the cron timestamp
+// when the webhook later replays the same row.
+export async function upsertDiscoveredRepo(db, orgId, repoName) {
+  const result = await db
+    .prepare(
+      `INSERT INTO repos (org_id, name, discovered_at)
+       VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+       ON CONFLICT(org_id, name) DO NOTHING`,
+    )
+    .bind(orgId, repoName)
+    .run();
+  return (result.meta?.changes ?? 0) > 0;
+}
+
+// Public re-export so the webhook can apply the same policy `syncRepos`
+// applies when it discovers a repo. Mirrors the bulk-insert path.
+export async function applyNewRepoExcludePolicy(db, orgLogin, newRepoNames) {
+  if (!Array.isArray(newRepoNames) || newRepoNames.length === 0) return;
+  await applyNewRepoPolicy(db, orgLogin, newRepoNames);
 }
 
 // Drop a repo and all of its dependent rows. Used when GitHub fires

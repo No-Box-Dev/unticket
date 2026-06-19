@@ -86,6 +86,8 @@ describe("fetchRepos", () => {
         language: "TypeScript",
         visibility: "private",
         inactive: false,
+        discoveredAt: null,
+        acknowledgedAt: null,
       },
     ]);
   });

@@ -13,6 +13,8 @@ import {
   removeRepo,
   renameRepo,
   touchRepoPushed,
+  upsertDiscoveredRepo,
+  applyNewRepoExcludePolicy,
 } from "../lib/github-sync";
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
@@ -430,11 +432,24 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
   // Backfill added repos via the queue — one durable, independently-retried
   // job per repo. Keeps the webhook fast and avoids GitHub's 10s timeout for
   // orgs that grant access to many repos at once.
+  //
+  // Inline (before enqueueing) we also upsert the bare `repos` row stamped
+  // with discovered_at so the Newly-detected UI surfaces the repo within
+  // seconds — TASK.SYNC_REPO only syncs PRs/issues and assumes a row exists.
+  // Track which repos were truly new (not re-added) so the auto-exclude
+  // policy only applies to genuinely-fresh discoveries.
   if (orgRow?.id && installationId && Array.isArray(payload.repositories_added) && payload.repositories_added.length > 0) {
     const repoNames = payload.repositories_added
       .map((r) => r?.name ?? (r?.full_name?.split("/")[1] ?? null))
       .filter(Boolean);
+    const newlyDiscovered = [];
     for (const repo of repoNames) {
+      try {
+        const wasNew = await upsertDiscoveredRepo(db, orgRow.id, repo);
+        if (wasNew) newlyDiscovered.push(repo);
+      } catch (err) {
+        console.error(`[unticket webhook] upsertDiscoveredRepo ${repo} failed:`, err);
+      }
       await enqueueTask(context.env, accountLogin, repo, {
         type: TASK.SYNC_REPO,
         orgId: orgRow.id,
@@ -442,6 +457,13 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
         installationId,
         repo,
       });
+    }
+    if (newlyDiscovered.length > 0) {
+      try {
+        await applyNewRepoExcludePolicy(db, accountLogin, newlyDiscovered);
+      } catch (err) {
+        console.error("[unticket webhook] applyNewRepoExcludePolicy failed:", err);
+      }
     }
   }
 
