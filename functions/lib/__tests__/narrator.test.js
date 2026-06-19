@@ -183,6 +183,7 @@ describe("narrateEvent — happy path", () => {
       trigger_event_id: 1,
       trigger_type: "github:pr:merged",
       model: "glm-5",
+      pr_number: 42,
     });
   });
 
@@ -253,7 +254,7 @@ describe("narrateEvent — fallback path", () => {
 });
 
 describe("narrateEvent — idempotency", () => {
-  it("skips when a narrative row already exists for the trigger", async () => {
+  it("skips when a narrative row already exists for the PR", async () => {
     const db = makeDb({
       event: EVENT_ROW,
       project: PROJECT_ROW,
@@ -263,6 +264,20 @@ describe("narrateEvent — idempotency", () => {
     await narrateEvent(ENV(db), 1);
     expect(completeNarrative).not.toHaveBeenCalled();
     expect(db._calls.runs).toHaveLength(0);
+  });
+
+  it("dedups by (owner_id, repo, pr_number), not by trigger_event_id", async () => {
+    // GitHub redelivers webhooks: same PR → new trigger event row with a
+    // different id. The early-exit SELECT must bind on pr_number (42 from
+    // EVENT_ROW.payload_json), not on row.id (1).
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateEvent(ENV(db), 1);
+    const dedupSelect = db._calls.firsts.find(
+      (f) => f.sql.includes("type = 'narrative'") && f.sql.includes("pr_number"),
+    );
+    expect(dedupSelect).toBeDefined();
+    expect(dedupSelect.binds).toEqual(["owner-1", "unticket", 42]);
   });
 
   it("uses INSERT ... ON CONFLICT DO NOTHING so concurrent writers can't double-insert", async () => {
@@ -367,8 +382,12 @@ describe("narrateReleaseNotes", () => {
   });
 });
 
+// PR identity is the dedup unit (migration 0033). Narratable events
+// (github:pr:merged) always carry pr.number, so a missing pr.number means
+// either the row is corrupt or the event type is wrong — short-circuit
+// rather than narrate a row we couldn't dedup later.
 describe("narrateEvent — payload parsing", () => {
-  it("tolerates corrupt payload_json (treats as empty object)", async () => {
+  it("short-circuits on corrupt payload_json (no pr.number means no dedup key)", async () => {
     const db = makeDb({
       event: { ...EVENT_ROW, payload_json: "not json" },
       project: PROJECT_ROW,
@@ -376,10 +395,10 @@ describe("narrateEvent — payload parsing", () => {
     });
     completeNarrative.mockResolvedValue("ok");
     await narrateEvent(ENV(db), 1);
-    expect(completeNarrative).toHaveBeenCalled();
+    expect(completeNarrative).not.toHaveBeenCalled();
   });
 
-  it("tolerates null/empty payload_json", async () => {
+  it("short-circuits on null payload_json", async () => {
     const db = makeDb({
       event: { ...EVENT_ROW, payload_json: null },
       project: PROJECT_ROW,
@@ -387,10 +406,10 @@ describe("narrateEvent — payload parsing", () => {
     });
     completeNarrative.mockResolvedValue("ok");
     await narrateEvent(ENV(db), 1);
-    expect(completeNarrative).toHaveBeenCalled();
+    expect(completeNarrative).not.toHaveBeenCalled();
   });
 
-  it("treats non-object JSON (string/array) as empty object", async () => {
+  it("short-circuits on non-object JSON (string/array)", async () => {
     const db = makeDb({
       event: { ...EVENT_ROW, payload_json: '"just a string"' },
       project: PROJECT_ROW,
@@ -398,7 +417,18 @@ describe("narrateEvent — payload parsing", () => {
     });
     completeNarrative.mockResolvedValue("ok");
     await narrateEvent(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+  });
+
+  it("narrates when payload carries pr.number (happy path for github:pr:merged)", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateEvent(ENV(db), 1);
     expect(completeNarrative).toHaveBeenCalled();
+    // pr_number is denormalized into the narrative payload for the
+    // PR-identity UNIQUE INDEX. Verify it's written.
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(JSON.parse(insert.binds[7]).pr_number).toBe(42);
   });
 });
 
