@@ -23,7 +23,7 @@ import { resolveSlackInstall, resolveSlackChannels, postSlackMessage } from "../
 
 // D1 stub: dispatch by SQL substring. Tests configure what each query returns
 // and inspect _calls.runs/binds for the INSERT side effect.
-function makeDb({ event = null, project = null, actor = null, settings = null, existingReleaseNote = null, org = { id: "org-1" } } = {}) {
+function makeDb({ event = null, project = null, actor = null, settings = null, existingReleaseNote = null, existingNarrative = null, org = { id: "org-1" } } = {}) {
   const calls = { firsts: [], runs: [] };
   function prepare(sql) {
     return {
@@ -33,6 +33,7 @@ function makeDb({ event = null, project = null, actor = null, settings = null, e
       async first() {
         calls.firsts.push({ sql, binds: this._binds });
         if (sql.includes("type = 'release_notes'")) return existingReleaseNote;
+        if (sql.includes("type = 'narrative'")) return existingNarrative;
         if (sql.includes("FROM events")) return event;
         if (sql.includes("FROM projects")) return project;
         if (sql.includes("FROM actors")) return actor;
@@ -247,6 +248,20 @@ describe("narrateEvent — fallback path", () => {
     });
     completeNarrative.mockResolvedValue(null);
     await narrateEvent(ENV(db), 1);
+    expect(db._calls.runs).toHaveLength(0);
+  });
+});
+
+describe("narrateEvent — idempotency", () => {
+  it("skips when a narrative row already exists for the trigger", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      existingNarrative: { id: 99 },
+    });
+    await narrateEvent(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
     expect(db._calls.runs).toHaveLength(0);
   });
 });
