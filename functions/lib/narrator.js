@@ -58,19 +58,23 @@ export async function narrateEvent(env, eventId) {
   ).bind(row.actor_id, row.owner_id).first();
   if (!actor) return;
 
-  // Skip if a narrative for this trigger already exists — keeps the queue,
-  // reconcile, and Posts Backfill paths idempotent without per-row
-  // delivery_id. Mirrors the same guard in narrateReleaseNotes() — without
-  // it, a second backfill click (or a webhook re-delivery, or a reconcile
-  // pass that catches the same merged PR) writes a duplicate narrative.
-  // The renarrate-by-model path in /backfill-prs deletes the existing row
-  // before re-running, so it's unaffected by this short-circuit.
+  // PR identity is the dedup unit, not trigger_event_id. GitHub redelivers
+  // webhooks (auto-retry, network blips, ...) and each delivery becomes a
+  // fresh trigger event — narrating each one produces N posts for the same
+  // PR. The UNIQUE INDEX in migration 0033 is on
+  // (owner_id, repo, type, pr_number); we read pr_number here once for both
+  // the early-exit SELECT (skip LLM spend when a row already exists) and
+  // the INSERT payload (denormalize so the index expression is cheap).
+  const triggerPayload = safeParseObject(row.payload_json);
+  const prNumber = triggerPayload?.pr?.number;
+  if (typeof prNumber !== "number") return; // pr-merged events always carry pr.number
+
   const existing = await env.DB.prepare(
     `SELECT id FROM events
-       WHERE owner_id = ? AND type = 'narrative'
-         AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?
+       WHERE owner_id = ? AND repo = ? AND type = 'narrative'
+         AND CAST(json_extract(payload_json, '$.pr_number') AS INTEGER) = ?
        LIMIT 1`
-  ).bind(row.owner_id, row.id).first();
+  ).bind(row.owner_id, row.repo, prNumber).first();
   if (existing) return;
 
   const userMessage = buildActorMessage({
@@ -80,7 +84,7 @@ export async function narrateEvent(env, eventId) {
     event: {
       type: row.type,
       summary: row.summary,
-      payload: safeParseObject(row.payload_json),
+      payload: triggerPayload,
       created_at: row.created_at,
     },
   });
@@ -115,12 +119,11 @@ export async function narrateEvent(env, eventId) {
     });
   }
 
-  // ON CONFLICT DO NOTHING relies on the partial UNIQUE INDEX added in
-  // migration 0032 (owner_id, type, trigger_event_id for narration rows).
-  // The early-exit SELECT above already short-circuits 99% of duplicate
-  // calls before the LLM spend; this is the at-most-once guarantee for
-  // concurrent writers that both pass the SELECT — high-throughput
-  // backfill flushes used to land 4-5 races per trigger.
+  // ON CONFLICT DO NOTHING relies on the partial UNIQUE INDEX from
+  // migration 0033 — (owner_id, repo, type, pr_number) for narration rows.
+  // The early-exit SELECT above short-circuits ~all duplicates before LLM
+  // spend; this clause is the at-most-once guarantee for concurrent
+  // writers that both pass the SELECT.
   const insertResult = await env.DB.prepare(
     `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -137,6 +140,7 @@ export async function narrateEvent(env, eventId) {
       trigger_event_id: row.id,
       trigger_type: row.type,
       model,
+      pr_number: prNumber,
     }),
     row.owner_id,
     row.created_at,
@@ -185,14 +189,19 @@ export async function narrateReleaseNotes(env, eventId) {
   ).bind(row.actor_id, row.owner_id).first();
   if (!actor) return;
 
-  // Skip if a release-note for this trigger already exists — keeps the
-  // backfill loop idempotent without per-row delivery_id.
+  // PR identity dedup — see narrateEvent's comment for why we don't index
+  // on trigger_event_id (webhook redeliveries create fresh trigger events
+  // for the same PR).
+  const triggerPayload = safeParseObject(row.payload_json);
+  const prNumber = triggerPayload?.pr?.number;
+  if (typeof prNumber !== "number") return;
+
   const existing = await env.DB.prepare(
     `SELECT id FROM events
-       WHERE owner_id = ? AND type = 'release_notes'
-         AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?
+       WHERE owner_id = ? AND repo = ? AND type = 'release_notes'
+         AND CAST(json_extract(payload_json, '$.pr_number') AS INTEGER) = ?
        LIMIT 1`
-  ).bind(row.owner_id, row.id).first();
+  ).bind(row.owner_id, row.repo, prNumber).first();
   if (existing) return;
 
   const userMessage = buildReleaseNotesMessage({
@@ -201,7 +210,7 @@ export async function narrateReleaseNotes(env, eventId) {
     event: {
       type: row.type,
       summary: row.summary,
-      payload: safeParseObject(row.payload_json),
+      payload: triggerPayload,
       created_at: row.created_at,
     },
   });
@@ -233,10 +242,8 @@ export async function narrateReleaseNotes(env, eventId) {
     });
   }
 
-  // Same ON CONFLICT pattern as narrateEvent — see migration 0032 for the
-  // partial UNIQUE INDEX backing this. Without it, concurrent backfill
-  // tasks for the same trigger event would each pass the SELECT above and
-  // each INSERT, leaving multiple release_notes rows in the feed.
+  // Same ON CONFLICT pattern as narrateEvent — migration 0033 holds the
+  // partial UNIQUE INDEX on (owner_id, repo, type, pr_number).
   const insertResult = await env.DB.prepare(
     `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -253,6 +260,7 @@ export async function narrateReleaseNotes(env, eventId) {
       trigger_event_id: row.id,
       trigger_type: row.type,
       model,
+      pr_number: prNumber,
     }),
     row.owner_id,
     row.created_at,
