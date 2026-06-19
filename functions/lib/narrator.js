@@ -115,9 +115,16 @@ export async function narrateEvent(env, eventId) {
     });
   }
 
-  await env.DB.prepare(
+  // ON CONFLICT DO NOTHING relies on the partial UNIQUE INDEX added in
+  // migration 0032 (owner_id, type, trigger_event_id for narration rows).
+  // The early-exit SELECT above already short-circuits 99% of duplicate
+  // calls before the LLM spend; this is the at-most-once guarantee for
+  // concurrent writers that both pass the SELECT — high-throughput
+  // backfill flushes used to land 4-5 races per trigger.
+  const insertResult = await env.DB.prepare(
     `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`
   ).bind(
     "narrator",
     "narrative",
@@ -134,6 +141,11 @@ export async function narrateEvent(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
+
+  // If the unique index suppressed the insert, another concurrent narrator
+  // already produced (or is producing) the row for this trigger — skip the
+  // Slack mirror so we don't double-post.
+  if ((insertResult.meta?.changes ?? 0) === 0) return;
 
   // Slack mirror — fire after the D1 write so a Slack outage never blocks
   // the in-app feed. Failures are recorded to op_failures (admin-visible)
@@ -221,9 +233,14 @@ export async function narrateReleaseNotes(env, eventId) {
     });
   }
 
-  await env.DB.prepare(
+  // Same ON CONFLICT pattern as narrateEvent — see migration 0032 for the
+  // partial UNIQUE INDEX backing this. Without it, concurrent backfill
+  // tasks for the same trigger event would each pass the SELECT above and
+  // each INSERT, leaving multiple release_notes rows in the feed.
+  const insertResult = await env.DB.prepare(
     `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`
   ).bind(
     "release-notes",
     "release_notes",
@@ -240,6 +257,10 @@ export async function narrateReleaseNotes(env, eventId) {
     row.owner_id,
     row.created_at,
   ).run();
+
+  // Suppress the Slack mirror when the unique index ate the insert — a
+  // concurrent writer already produced this release note.
+  if ((insertResult.meta?.changes ?? 0) === 0) return;
 
   await maybePostToSlack(env, {
     kind: "release_notes",

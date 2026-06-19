@@ -264,6 +264,38 @@ describe("narrateEvent — idempotency", () => {
     expect(completeNarrative).not.toHaveBeenCalled();
     expect(db._calls.runs).toHaveLength(0);
   });
+
+  it("uses INSERT ... ON CONFLICT DO NOTHING so concurrent writers can't double-insert", async () => {
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateEvent(ENV(db), 1);
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert.sql).toMatch(/ON CONFLICT\s+DO NOTHING/i);
+  });
+
+  it("skips the Slack mirror when the INSERT was suppressed by the unique index", async () => {
+    // A concurrent narrator beat us to the row — D1 returns changes=0 from
+    // ON CONFLICT DO NOTHING. The Slack mirror must not fire, otherwise the
+    // same merged PR would post twice to the channel.
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    const realPrepare = db.prepare;
+    db.prepare = (sql) => {
+      const stmt = realPrepare(sql);
+      if (sql.includes("INSERT INTO events")) {
+        const orig = stmt.run.bind(stmt);
+        stmt.run = async () => {
+          await orig();
+          return { meta: { changes: 0 } };
+        };
+      }
+      return stmt;
+    };
+    resolveSlackInstall.mockResolvedValue({ teamId: "T1", botToken: "tok" });
+    resolveSlackChannels.mockResolvedValue({ postsChannelId: "C1", releaseNotesChannelId: "" });
+    completeNarrative.mockResolvedValue("ok");
+    await narrateEvent(ENV(db), 1);
+    expect(postSlackMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe("narrateReleaseNotes", () => {
