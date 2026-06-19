@@ -58,6 +58,21 @@ export async function narrateEvent(env, eventId) {
   ).bind(row.actor_id, row.owner_id).first();
   if (!actor) return;
 
+  // Skip if a narrative for this trigger already exists — keeps the queue,
+  // reconcile, and Posts Backfill paths idempotent without per-row
+  // delivery_id. Mirrors the same guard in narrateReleaseNotes() — without
+  // it, a second backfill click (or a webhook re-delivery, or a reconcile
+  // pass that catches the same merged PR) writes a duplicate narrative.
+  // The renarrate-by-model path in /backfill-prs deletes the existing row
+  // before re-running, so it's unaffected by this short-circuit.
+  const existing = await env.DB.prepare(
+    `SELECT id FROM events
+       WHERE owner_id = ? AND type = 'narrative'
+         AND CAST(json_extract(payload_json, '$.trigger_event_id') AS INTEGER) = ?
+       LIMIT 1`
+  ).bind(row.owner_id, row.id).first();
+  if (existing) return;
+
   const userMessage = buildActorMessage({
     actorName: actor.name,
     actorTone: actor.tone,
