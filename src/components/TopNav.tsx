@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useRateLimit } from "@/hooks/useGitHub";
+import { useRateLimit, useUnacknowledgedRepos, useIsAdmin } from "@/hooks/useGitHub";
 import { cn } from "@/lib/cn";
 import { Search, Settings, ChevronDown, ArrowLeftRight, LogOut } from "lucide-react";
 import type { TabId } from "@/lib/types";
@@ -24,6 +24,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
   const { user, setSelectedOrg, logout } = useAuth();
   const { data: rateLimit } = useRateLimit();
   const isRateLimited = rateLimit && rateLimit.remaining < rateLimit.limit * 0.2;
+  const isAdmin = useIsAdmin();
+  const unacked = useUnacknowledgedRepos();
+  const newRepoCount = isAdmin ? unacked.length : 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -95,14 +98,21 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           <button
             onClick={() => onTabChange("settings")}
             className={cn(
-              "p-1.5 rounded-lg transition-colors cursor-pointer",
+              "relative p-1.5 rounded-lg transition-colors cursor-pointer",
               activeTab === "settings"
                 ? "bg-accent/10 text-accent"
                 : "text-stone-400 hover:bg-stone-100 hover:text-stone-600",
             )}
-            title="Settings"
+            title={
+              newRepoCount > 0
+                ? `${newRepoCount} new repo${newRepoCount === 1 ? "" : "s"} detected — review in Settings`
+                : "Settings"
+            }
           >
             <Settings className="w-4 h-4" />
+            {newRepoCount > 0 && (
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-accent ring-2 ring-white" />
+            )}
           </button>
 
           <div className="relative" ref={menuRef}>

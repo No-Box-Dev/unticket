@@ -13,6 +13,16 @@ export interface RepoInfo {
   pushed_at: string | null;
   language: string | null;
   visibility: string;
+  // First time this (org_id, name) was seen by sync. Set on first insert,
+  // preserved via COALESCE on every subsequent reconcile.
+  discoveredAt?: string | null;
+  // Set by POST /api/repos/acknowledge when an admin reviews the repo.
+  // NULL means the repo is "new" and should appear in the NewRepoBanner
+  // + Settings → Newly detected section.
+  acknowledgedAt?: string | null;
+  // True for drafts (platform-archived), GH-archived, or the unticket repo.
+  // Only present when the endpoint is called with `?include=all`.
+  inactive?: boolean;
 }
 
 export interface PRInfo {
@@ -152,6 +162,14 @@ export interface OrgSettings {
   // Per-spec optional link to a feature issue (number from the unticket
   // features board). Used for cross-navigation between Specs and Features.
   specLinks?: Record<string, number>;
+  // Policy for newly-discovered repos.
+  //  - 'include' (default): the repo is active immediately (current behavior).
+  //  - 'exclude':           the repo is platform-archived (draft) on first
+  //                         insert so it stays out of every active scope
+  //                         until an admin clicks Track in the Newly
+  //                         detected section. The discovery banner +
+  //                         TopNav dot still surface either way.
+  newRepoDefault?: "include" | "exclude";
 }
 
 // Extended issue info with repo context

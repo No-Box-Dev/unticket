@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/hooks/useGitHub", () => ({
@@ -7,6 +8,8 @@ vi.mock("@/hooks/useGitHub", () => ({
   useIsAdmin: vi.fn(() => false),
   useRepos: vi.fn(() => ({ data: [], isLoading: false })),
   useTriggerFeatureSync: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUnacknowledgedRepos: vi.fn(() => []),
+  useAcknowledgeRepos: vi.fn(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock("@/components/SyncFromGithub", () => ({
   SyncFromGithubModal: ({ open }: { open: boolean }) =>
@@ -20,6 +23,7 @@ vi.mock("@/hooks/useConfigRepo", () => ({
 }));
 vi.mock("@/hooks/useNoxlink", () => ({
   useFeedProjects: vi.fn(),
+  useSetProjectArchived: vi.fn(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/noxlink-api", () => ({
   backfillProjectPrs: vi.fn(),
@@ -123,7 +127,11 @@ describe("SettingsTab", () => {
 
   it("shows all admin tools for admins", () => {
     mIsAdmin.mockReturnValue(true);
-    render(<SettingsTab />);
+    render(
+      <MemoryRouter>
+        <SettingsTab />
+      </MemoryRouter>,
+    );
     expect(screen.getByText("Admin tools")).toBeInTheDocument();
     expect(screen.getAllByText("Full Re-sync").length).toBeGreaterThan(0);
     expect(screen.getByText("Live Activity Backfill")).toBeInTheDocument();

@@ -3,7 +3,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/lib/auth", () => ({ useAuth: vi.fn() }));
-vi.mock("@/hooks/useGitHub", () => ({ useRepos: vi.fn() }));
+vi.mock("@/hooks/useGitHub", () => ({
+  useRepos: vi.fn(),
+  useUnacknowledgedRepos: vi.fn(() => []),
+  useAcknowledgeRepos: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useIsAdmin: vi.fn(() => false),
+}));
 vi.mock("@/hooks/useConfigRepo", () => ({ useSettings: vi.fn() }));
 vi.mock("@/lib/unticket-repo-name", () => ({ setUnticketRepoName: vi.fn() }));
 

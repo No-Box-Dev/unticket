@@ -307,6 +307,8 @@ interface ApiRepo {
   name: string;
   language: string | null;
   pushed_at: string | null;
+  discoveredAt?: string | null;
+  acknowledgedAt?: string | null;
   inactive?: boolean;
 }
 
@@ -412,7 +414,23 @@ export async function fetchRepos(opts?: { includeAll?: boolean }) {
     language: r.language,
     visibility: "private",
     inactive: r.inactive ?? false,
+    discoveredAt: r.discoveredAt ?? null,
+    acknowledgedAt: r.acknowledgedAt ?? null,
   }));
+}
+
+// Mark one or more repos as reviewed by an admin. Used by:
+//   - NewRepoBanner "Dismiss all" → all unacknowledged names
+//   - Settings → Newly detected "Acknowledge all" → all listed names
+//   - Per-row Track / Mark draft → that one name (after the draft toggle)
+//
+// Backend is idempotent (COALESCE keeps the first-acknowledgment timestamp).
+export async function acknowledgeRepos(names: string[]) {
+  if (names.length === 0) return { acknowledged: [], changes: 0 };
+  return apiPost<{ acknowledged: string[]; changes: number }>(
+    "/api/repos/acknowledge",
+    { names },
+  );
 }
 
 interface PaginatedPRResponse {

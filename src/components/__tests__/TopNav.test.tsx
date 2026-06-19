@@ -6,14 +6,18 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/hooks/useGitHub", () => ({
   useRateLimit: vi.fn(),
+  useUnacknowledgedRepos: vi.fn(),
+  useIsAdmin: vi.fn(),
 }));
 
 import { TopNav } from "../TopNav";
 import { useAuth } from "@/lib/auth";
-import { useRateLimit } from "@/hooks/useGitHub";
+import { useRateLimit, useUnacknowledgedRepos, useIsAdmin } from "@/hooks/useGitHub";
 
 const mockAuth = useAuth as unknown as ReturnType<typeof vi.fn>;
 const mockRate = useRateLimit as unknown as ReturnType<typeof vi.fn>;
+const mockUnacked = useUnacknowledgedRepos as unknown as ReturnType<typeof vi.fn>;
+const mockIsAdmin = useIsAdmin as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockAuth.mockReturnValue({
@@ -22,6 +26,8 @@ beforeEach(() => {
     logout: vi.fn(),
   });
   mockRate.mockReturnValue({ data: { remaining: 1000, limit: 5000 } });
+  mockUnacked.mockReturnValue([]);
+  mockIsAdmin.mockReturnValue(false);
 });
 
 describe("TopNav", () => {

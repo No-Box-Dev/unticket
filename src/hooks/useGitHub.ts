@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import {
   fetchOrgs,
   fetchRepos,
+  acknowledgeRepos,
   fetchOpenPRs,
   fetchOpenIssues,
   fetchClosedIssues,
@@ -52,6 +53,32 @@ export function useRepos(opts?: { includeAll?: boolean }) {
     queryFn: () => fetchRepos({ includeAll }),
     enabled: !!selectedOrg,
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+// Repos discovered by sync but not yet reviewed by an admin. The TopNav dot
+// + NewRepoBanner + Settings "Newly detected" section all read off this.
+// Always pulls the `includeAll` repo list so drafts (auto-excluded by the
+// 'exclude' policy) still surface for acknowledgment.
+export function useUnacknowledgedRepos() {
+  const { data } = useRepos({ includeAll: true });
+  return useMemo(
+    () => (data ?? []).filter((r) => r.acknowledgedAt == null),
+    [data],
+  );
+}
+
+// Mutation: mark repos as acknowledged. Caller passes one or more names.
+// Invalidates the repos query on settle so the banner / Settings section
+// re-fetch with the new acknowledged_at timestamps.
+export function useAcknowledgeRepos() {
+  const { selectedOrg } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => acknowledgeRepos(names),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["repos", selectedOrg] });
+    },
   });
 }
 
