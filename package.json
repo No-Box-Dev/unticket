@@ -2,7 +2,7 @@
   "name": "unticket",
   "private": true,
   "version": "0.0.0",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",

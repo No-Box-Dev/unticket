@@ -2,7 +2,7 @@
 
 _Last updated: 2026-06-03_
 
-These terms govern your use of the **hosted** unticket service at [app.unticket.ai](https://app.unticket.ai), operated by No-Box-Dev ("we", "us"). If you self-host unticket, these terms do not apply — your use is governed solely by the [PolyForm Noncommercial License](./LICENSE).
+These terms govern your use of the **hosted** unticket service at [app.unticket.ai](https://app.unticket.ai), operated by No-Box-Dev ("we", "us"). If you self-host unticket, these terms do not apply — your use is governed solely by the [GNU AGPL-3.0](./LICENSE).
 
 > This document is provided for transparency and is **not legal advice**. Have a lawyer review it before relying on it for your own service.
 
