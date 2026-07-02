@@ -4,7 +4,7 @@ AI-powered project-management dashboard for GitHub organisations. Unticket syncs
 
 **Hosted (free):** [app.unticket.ai](https://app.unticket.ai) · **Self-host:** see [DEPLOY.md](./DEPLOY.md) · **Architecture:** see [ARCHITECTURE.md](./ARCHITECTURE.md)
 
-> **License:** Unticket is **source-available** under the [PolyForm Noncommercial License 1.0.0](./LICENSE) — free for any non-commercial use, modify and self-host freely, but **commercial use is not permitted**. It is not an OSI "open source" license. See [LICENSE](./LICENSE).
+> **License:** Unticket is free, open-source software under the [GNU AGPL-3.0](./LICENSE) (`AGPL-3.0-or-later`). Self-host and modify it freely; if you expose a modified version as a network service, you must share the source under the same license. See [LICENSE](./LICENSE).
 
 ## Quick start (local dev)
 

@@ -1,0 +1,12 @@
+{
+  "name": "unticket-website",
+  "private": true,
+  "type": "module",
+  "description": "Marketing site for unticket (static HTML) + Puppeteer mockup renderer.",
+  "scripts": {
+    "render": "node scripts/render-mockups.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

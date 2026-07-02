@@ -1,6 +1,6 @@
 # Contributing to unticket
 
-Thanks for your interest in improving unticket. This is source-available software, free for non-commercial use under the [PolyForm Noncommercial License 1.0.0](./LICENSE). Contributions are welcome under that same license.
+Thanks for your interest in improving unticket. This is free, open-source software under the [GNU AGPL-3.0](./LICENSE) (`AGPL-3.0-or-later`). Contributions are welcome under that same license.
 
 ## Workflow
 
@@ -44,4 +44,4 @@ This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By partic
 
 ## Licensing of contributions
 
-By submitting a contribution, you agree that it is licensed under the same PolyForm Noncommercial License 1.0.0 that covers the project, and that you have the right to license it under those terms.
+By submitting a contribution, you agree that it is licensed under the same GNU AGPL-3.0 (`AGPL-3.0-or-later`) that covers the project, and that you have the right to license it under those terms.

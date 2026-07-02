@@ -2,7 +2,7 @@
 
 Unticket runs on Cloudflare: a Pages project (frontend + API Functions), a D1 database, a sibling cron Worker, a Queue, and an R2 bucket. This guide walks a fresh deploy end to end.
 
-> Unticket is source-available under the [PolyForm Noncommercial License](./LICENSE). Self-hosting for non-commercial use is fine; commercial use is not.
+> Unticket is open-source software under the [GNU AGPL-3.0](./LICENSE). Self-host freely; if you expose a modified version as a network service, you must share the source under the same license.
 
 ## Prerequisites
 
