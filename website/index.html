@@ -11,8 +11,11 @@
   <meta property="og:description" content="A live dashboard for your GitHub org: features kanban, issue & PR triage, engineer stats, and AI release notes. Open-source, AGPL-3.0." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://unticket.ai" />
-  <meta property="og:image" content="https://unticket.ai/logo-mark.svg" />
+  <meta property="og:image" content="https://unticket.ai/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://unticket.ai/og-image.png" />
   <link rel="canonical" href="https://unticket.ai" />
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -39,7 +42,7 @@
   <header class="hero">
     <div class="container">
       <span class="section-label">Open-source · AGPL-3.0</span>
-      <h1>Project management<br />without the tickets.</h1>
+      <h1>Project management<br /><span class="grad">without the tickets.</span></h1>
       <p class="lead">unticket turns your GitHub org into a live dashboard — a features kanban, issue &amp; PR triage, engineer stats, and AI-written release notes. Everything derived from GitHub. No manual ticket-keeping.</p>
       <div class="hero-ctas">
         <a class="btn-primary" href="https://github.com/No-Box-Dev/unticket">★ Star on GitHub</a>
@@ -50,12 +53,23 @@
       <div class="hero-shot reveal">
         <div class="browser-frame">
           <div class="browser-bar"><span></span><span></span><span></span></div>
-          <!-- swap for <img src="img/sprint.png" alt="unticket Sprint kanban board"> once captured -->
-          <div class="shot-placeholder" data-label="Sprint kanban"></div>
+          <img src="img/sprint.png" alt="unticket Sprint kanban board — features across To do, Testing on staging, Ready for production, and On production columns" loading="lazy" />
         </div>
       </div>
     </div>
   </header>
+
+  <!-- PILLARS -->
+  <section class="pillars">
+    <div class="container">
+      <div class="pillars-grid">
+        <div class="pillar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><div><strong>AGPL-3.0</strong><span>truly open source</span></div></div>
+        <div class="pillar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg><div><strong>Self-host in 5 min</strong><span>on Cloudflare's free tier</span></div></div>
+        <div class="pillar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="12" cy="12" r="2.5" /><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" /></svg><div><strong>Real-time webhooks</strong><span>live + cron-reconciled</span></div></div>
+        <div class="pillar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" /></svg><div><strong>AI release notes</strong><span>auto, in your voice</span></div></div>
+      </div>
+    </div>
+  </section>
 
   <!-- FEATURES -->
   <section class="features" id="features">
@@ -109,18 +123,17 @@
         <p>From triage to release, one window into your org. Mirrors live GitHub data.</p>
       </div>
       <div class="shots-band">
-        <!-- swap each placeholder for <img src="img/..."> once captured -->
         <div class="browser-frame reveal">
           <div class="browser-bar"><span></span><span></span><span></span></div>
-          <div class="shot-placeholder" data-label="Issues dashboard"></div>
+          <img src="img/issues.png" alt="unticket Issues dashboard — open/unassigned/stale/closed stat cards, open-by-repo chart, label breakdown, issues table" loading="lazy" />
         </div>
         <div class="browser-frame reveal">
           <div class="browser-bar"><span></span><span></span><span></span></div>
-          <div class="shot-placeholder" data-label="Pull requests"></div>
+          <img src="img/prs.png" alt="unticket Pull requests view — open and merged PRs with reviewers, stale highlighting, and status pills" loading="lazy" />
         </div>
         <div class="browser-frame reveal">
           <div class="browser-bar"><span></span><span></span><span></span></div>
-          <div class="shot-placeholder" data-label="Engineers & activity feed"></div>
+          <img src="img/engineers.png" alt="unticket Engineers tab — per-engineer stats and a live activity feed with AI-written posts and release notes" loading="lazy" />
         </div>
       </div>
     </div>
@@ -150,6 +163,43 @@
           <h3>Deploy</h3>
           <p><code>wrangler pages deploy</code> — you're live. See the <a href="https://github.com/No-Box-Dev/unticket/blob/main/DEPLOY.md">deploy guide</a>.</p>
         </div>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">deploy.sh</span></div>
+        <pre><code><span class="c"># Fork github.com/No-Box-Dev/unticket, then:</span>
+git clone https://github.com/<span class="u">you</span>/unticket && cd unticket
+npx wrangler d1 create unticket
+npx wrangler d1 migrations apply unticket --remote
+<span class="c"># add GITHUB_APP_* + ENCRYPTION_KEY secrets, then:</span>
+npx wrangler pages deploy . <span class="c"># → live</span></code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <div class="section-header reveal" style="text-align:center;margin-left:auto;margin-right:auto">
+        <span class="section-label">FAQ</span>
+        <h2>Questions, answered.</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item reveal" open>
+          <summary>How is this different from GitHub Projects or Jira?</summary>
+          <p>GitHub Projects is a blank canvas; Jira is a separate system you have to keep in sync. unticket derives everything — the kanban, triage, engineer stats, and release notes — from your existing GitHub data. No duplicate tickets, no manual status updates, no second source of truth.</p>
+        </details>
+        <details class="faq-item reveal">
+          <summary>Is it really free to self-host?</summary>
+          <p>Yes. It runs on Cloudflare Pages + D1 + a cron Worker, comfortably within the free tier for small teams. The code is AGPL-3.0 — free forever, including commercial use, as long as you share any modifications you distribute or serve over a network.</p>
+        </details>
+        <details class="faq-item reveal">
+          <summary>Where does my data live?</summary>
+          <p>In your own Cloudflare account. The hosted app at app.unticket.ai keeps sync data in our D1; a self-hosted instance keeps everything in yours. Either way, GitHub remains the source of truth — unticket is a read of it, plus a thin layer of project-management metadata.</p>
+        </details>
+        <details class="faq-item reveal">
+          <summary>Can I just use the hosted version instead?</summary>
+          <p>Absolutely. Sign in at app.unticket.ai with GitHub, install the app on the orgs you choose, and you're in. Self-hosting is there when you want full control — same product, your infrastructure.</p>
+        </details>
       </div>
     </div>
   </section>
