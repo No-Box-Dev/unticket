@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>unticket — open-source project management for GitHub</title>
+  <meta name="description" content="unticket turns your GitHub org into a live dashboard: a features kanban, issue & PR triage, engineer stats, and AI-written release notes. Open-source under AGPL-3.0. Self-host on Cloudflare or use the hosted app." />
+  <meta name="theme-color" content="#FAFAF8" />
+
+  <meta property="og:title" content="unticket — open-source project management for GitHub" />
+  <meta property="og:description" content="A live dashboard for your GitHub org: features kanban, issue & PR triage, engineer stats, and AI release notes. Open-source, AGPL-3.0." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://unticket.ai" />
+  <meta property="og:image" content="https://unticket.ai/logo-mark.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://unticket.ai" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav nav-light" id="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/">
+        <img src="logo-mark.svg" alt="" width="28" height="28" />
+        <span class="wordmark"><strong>un</strong>ticket</span>
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/No-Box-Dev/unticket#readme">Docs</a>
+        <a href="https://github.com/No-Box-Dev/unticket">GitHub&nbsp;★</a>
+        <a class="nav-cta" href="https://app.unticket.ai">Sign in</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="container">
+      <span class="section-label">Open-source · AGPL-3.0</span>
+      <h1>Project management<br />without the tickets.</h1>
+      <p class="lead">unticket turns your GitHub org into a live dashboard — a features kanban, issue &amp; PR triage, engineer stats, and AI-written release notes. Everything derived from GitHub. No manual ticket-keeping.</p>
+      <div class="hero-ctas">
+        <a class="btn-primary" href="https://github.com/No-Box-Dev/unticket">★ Star on GitHub</a>
+        <a class="btn-secondary" href="https://app.unticket.ai">Try the hosted app&nbsp;→</a>
+      </div>
+      <p class="hero-trust">Self-host on Cloudflare in minutes, or use <strong>app.unticket.ai</strong>.</p>
+
+      <div class="hero-shot reveal">
+        <div class="browser-frame">
+          <div class="browser-bar"><span></span><span></span><span></span></div>
+          <!-- swap for <img src="img/sprint.png" alt="unticket Sprint kanban board"> once captured -->
+          <div class="shot-placeholder" data-label="Sprint kanban"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">Everything in one place</span>
+        <h2>Your GitHub org, finally legible.</h2>
+        <p>Stop juggling Jira, spreadsheets, and a dozen GitHub tabs. unticket pulls it all together and keeps it live.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg></div>
+          <h3>Features kanban</h3>
+          <p>A drag-and-drop board backed by GitHub Issues. Owners, plans, and status columns stay in sync — no double-entry.</p>
+        </div>
+        <div class="feature-card coral reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="5" cy="6" r="2.5" /><circle cx="5" cy="18" r="2.5" /><path d="M5 8.5v7" /><path d="M12 6h4a3 3 0 0 1 3 3v6.5" /><path d="m16 13-3 3 3 3" /><circle cx="19" cy="18" r="2.5" /></svg></div>
+          <h3>Issue &amp; PR triage</h3>
+          <p>Open and merged PRs plus issues across every repo, with stale detection, assignees, and one-click assignment.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="8" /><line x1="18" y1="20" x2="18" y2="11" /><line x1="3" y1="20" x2="21" y2="20" /></svg></div>
+          <h3>Engineer stats</h3>
+          <p>Per-engineer open PRs, reviews, and assignments, plus a live activity feed. Spot blockers at a glance.</p>
+        </div>
+        <div class="feature-card coral reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></div>
+          <h3>Live activity feed</h3>
+          <p>An auto-narrated timeline of merges, releases, and pushes — first-person posts in your team's own voice.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" /></svg></div>
+          <h3>AI release notes</h3>
+          <p>Every merged PR becomes a structured release note and a chat-style post, generated automatically.</p>
+        </div>
+        <div class="feature-card coral reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></div>
+          <h3>Always in sync</h3>
+          <p>Webhooks keep everything live; a 30-minute cron reconciles anything missed. Refresh tokens keep you signed in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="shots">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">The dashboard</span>
+        <h2>Built for the whole team.</h2>
+        <p>From triage to release, one window into your org. Mirrors live GitHub data.</p>
+      </div>
+      <div class="shots-band">
+        <!-- swap each placeholder for <img src="img/..."> once captured -->
+        <div class="browser-frame reveal">
+          <div class="browser-bar"><span></span><span></span><span></span></div>
+          <div class="shot-placeholder" data-label="Issues dashboard"></div>
+        </div>
+        <div class="browser-frame reveal">
+          <div class="browser-bar"><span></span><span></span><span></span></div>
+          <div class="shot-placeholder" data-label="Pull requests"></div>
+        </div>
+        <div class="browser-frame reveal">
+          <div class="browser-bar"><span></span><span></span><span></span></div>
+          <div class="shot-placeholder" data-label="Engineers & activity feed"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SELF-HOST -->
+  <section class="self-host" id="self-host">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">Self-host</span>
+        <h2>Run it on your own Cloudflare.</h2>
+        <p>Pages + D1 + a cron Worker — free-tier friendly. Full source under AGPL-3.0: yours to read, modify, and self-host.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="step-num">1</div>
+          <h3>Fork the repo</h3>
+          <p>Clone <code>No-Box-Dev/unticket</code> and add your Cloudflare + GitHub App secrets.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">2</div>
+          <h3>Provision D1</h3>
+          <p>Run the migrations, bind the database, and point the deploy at your org.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">3</div>
+          <h3>Deploy</h3>
+          <p><code>wrangler pages deploy</code> — you're live. See the <a href="https://github.com/No-Box-Dev/unticket/blob/main/DEPLOY.md">deploy guide</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSING CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <h2 class="reveal">Ship faster. Keep GitHub as the source of truth.</h2>
+      <p class="lead reveal">Open-source today. Self-host or hosted — your call.</p>
+      <div class="hero-ctas reveal">
+        <a class="btn-primary" href="https://github.com/No-Box-Dev/unticket">★ Star on GitHub</a>
+        <a class="btn-secondary" href="https://app.unticket.ai">Try the hosted app&nbsp;→</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div>
+          <div class="footer-brand">
+            <img src="logo-mark.svg" alt="" width="20" height="20" />
+            <span>unticket</span>
+          </div>
+          <form class="footer-form" id="subscribe-form">
+            <input type="email" name="email" placeholder="you@team.com" required />
+            <button type="submit">Subscribe</button>
+          </form>
+          <p class="footer-msg" id="footer-msg"></p>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/No-Box-Dev/unticket">GitHub</a>
+          <a href="https://github.com/No-Box-Dev/unticket#readme">Docs</a>
+          <a href="https://github.com/No-Box-Dev/unticket/blob/main/ARCHITECTURE.md">Architecture</a>
+          <a href="https://github.com/No-Box-Dev/unticket/blob/main/DEPLOY.md">Deploy</a>
+          <a href="https://github.com/No-Box-Dev/unticket/blob/main/PRIVACY.md">Privacy</a>
+          <a href="https://github.com/No-Box-Dev/unticket/blob/main/TERMS.md">Terms</a>
+        </div>
+      </div>
+      <div class="footer-meta">
+        <span>© 2026 No-Box-Dev · <a href="https://noboxdev.com">noboxdev.com</a></span>
+        <span>AGPL-3.0 · Built on Cloudflare</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-reveal
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } }),
+      { threshold: 0.12 }
+    );
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    // Nav shadow on scroll
+    const nav = document.getElementById('nav');
+    const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 10);
+    addEventListener('scroll', onScroll, { passive: true });
+
+    // Email capture -> shared NoBoxDev subscribe endpoint
+    const form = document.getElementById('subscribe-form');
+    const msg = document.getElementById('footer-msg');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = form.email.value.trim();
+      if (!email) return;
+      msg.textContent = ''; msg.style.color = '';
+      try {
+        const r = await fetch('https://api.noboxdev.com/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, source: 'unticket-website-footer', product: 'unticket' })
+        });
+        if (r.ok) { msg.textContent = 'Subscribed — thanks!'; msg.style.color = 'var(--coral-light)'; form.reset(); }
+        else { msg.textContent = 'Could not subscribe right now.'; msg.style.color = 'var(--purple-light)'; }
+      } catch {
+        msg.textContent = 'Network error — try again.';
+        msg.style.color = 'var(--purple-light)';
+      }
+    });
+  </script>
+</body>
+</html>
