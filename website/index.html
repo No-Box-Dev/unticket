@@ -20,11 +20,14 @@
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"unticket","applicationCategory":"DeveloperApplication","operatingSystem":"Web","url":"https://unticket.ai","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Open-source AI-powered project-management dashboard for GitHub organisations."}
+  </script>
 </head>
 <body>
 
   <!-- NAV -->
-  <nav class="nav nav-light" id="nav">
+  <nav class="nav nav-light" id="nav" aria-label="Primary">
     <div class="nav-inner">
       <a class="nav-brand" href="/">
         <img src="logo-mark.svg" alt="" width="28" height="28" />
@@ -225,9 +228,9 @@ npx wrangler pages deploy . <span class="c"># → live</span></code></pre>
             <img src="logo-mark.svg" alt="" width="20" height="20" />
             <span>unticket</span>
           </div>
-          <form class="footer-form" id="subscribe-form">
-            <input type="email" name="email" placeholder="you@team.com" required />
-            <button type="submit">Subscribe</button>
+          <form class="footer-form" id="subscribe-form" aria-label="Subscribe for product updates">
+            <input type="email" name="email" placeholder="you@team.com" required aria-label="Email address" />
+            <button type="submit" aria-label="Subscribe for product updates">Subscribe</button>
           </form>
           <p class="footer-msg" id="footer-msg"></p>
         </div>
