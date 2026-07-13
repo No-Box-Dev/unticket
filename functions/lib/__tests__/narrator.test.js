@@ -664,6 +664,35 @@ describe("narrateEvent — reuse text from pr_narrative row", () => {
     expect(insert.binds[0]).toBe("narrator");
     expect(insert.binds[6]).toBe("I merged the login button.");
   });
+
+  it("does NOT re-post to the Posts Slack channel when reusing pr_narrative text", async () => {
+    // narratePrOpened already posted this exact text to the Posts channel at
+    // PR-open time (both use kind='narrative' → postsChannelId). Posting the
+    // same payload again at merge would duplicate the message. Regression test
+    // for the CodeRabbit finding on PR #365.
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      reusablePrNarrative: { summary: "Fixing the login redirect.", model: "glm-5" },
+    });
+    resolveSlackInstall.mockResolvedValue({ teamId: "T1", botToken: "xoxb-1" });
+    resolveSlackChannels.mockResolvedValue({ postsChannelId: "C1", releaseNotesChannelId: "" });
+    await narrateEvent(ENV(db), 1);
+    expect(postSlackMessage).not.toHaveBeenCalled();
+  });
+
+  it("still posts to Slack when narrateEvent takes the fresh-LLM path (no reuse)", async () => {
+    // Sanity check that the reuse-suppression doesn't accidentally break the
+    // normal Slack mirror. A PR that predates the PRs-feed feature has no
+    // pr_narrative row → fresh LLM call → normal Slack post.
+    const db = makeDb({ event: EVENT_ROW, project: PROJECT_ROW, actor: ACTOR_ROW });
+    resolveSlackInstall.mockResolvedValue({ teamId: "T1", botToken: "xoxb-1" });
+    resolveSlackChannels.mockResolvedValue({ postsChannelId: "C1", releaseNotesChannelId: "" });
+    completeNarrative.mockResolvedValue("I merged it.");
+    await narrateEvent(ENV(db), 1);
+    expect(postSlackMessage).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("narrateReleaseNotes — reuse text from pr_narrative row", () => {

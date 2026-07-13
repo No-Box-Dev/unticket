@@ -180,6 +180,14 @@ export async function narrateEvent(env, eventId) {
   // Slack mirror — fire after the D1 write so a Slack outage never blocks
   // the in-app feed. Failures are recorded to op_failures (admin-visible)
   // and swallowed; the narrative row is already durable.
+  //
+  // When we're reusing the pr_narrative text, the SAME text was already
+  // posted to the Posts Slack channel by narratePrOpened at PR-open time.
+  // Posting it again here — with a different D1 row but identical Slack
+  // payload — reads as duplicate noise. Rule of thumb we now follow: one
+  // Slack post per LLM call. Reused rows spent no tokens, so they don't
+  // get a Slack post either.
+  if (reused) return;
   await maybePostToSlack(env, {
     kind: "narrative",
     orgId,
