@@ -46,6 +46,8 @@ const mEvents = useFeedEvents as unknown as ReturnType<typeof vi.fn>;
 const EMPTY_STATS = {
   openPRs: {},
   reviewing: {},
+  approvalsGiven: {},
+  mergesOfOthers: {},
   assignedIssues: {},
   lifetimePRs: {},
   prsLast4Weeks: {},

@@ -72,6 +72,8 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
         description: person?.description ?? "",
         openPRs: stats?.openPRs?.[member.login] ?? 0,
         reviewing: stats?.reviewing?.[member.login] ?? 0,
+        approvalsGiven: stats?.approvalsGiven?.[member.login] ?? 0,
+        mergesOfOthers: stats?.mergesOfOthers?.[member.login] ?? 0,
         assignedIssues: stats?.assignedIssues?.[member.login] ?? 0,
         ghTeams: ghTeams?.memberships?.[member.login] ?? [],
         kind: member.kind ?? (member.type === "Bot" ? "bot" : "human"),
@@ -147,6 +149,8 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
   const lifetimePRs = detailLogin ? (stats?.lifetimePRs?.[detailLogin] ?? 0) : 0;
   const prsLast4Weeks = detailLogin ? (stats?.prsLast4Weeks?.[detailLogin] ?? 0) : 0;
   const issuesClosed = detailLogin ? (stats?.issuesClosed?.[detailLogin] ?? 0) : 0;
+  const approvalsGiven = detailLogin ? (stats?.approvalsGiven?.[detailLogin] ?? 0) : 0;
+  const mergesOfOthers = detailLogin ? (stats?.mergesOfOthers?.[detailLogin] ?? 0) : 0;
 
   if (membersLoading) {
     return (
@@ -164,8 +168,8 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
   if (!selectedLogin) {
     const sorted = [...engineers].sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === "bot" ? 1 : -1;
-      const ax = a.openPRs + a.reviewing + a.assignedIssues;
-      const bx = b.openPRs + b.reviewing + b.assignedIssues;
+      const ax = a.openPRs + a.reviewing + a.approvalsGiven + a.mergesOfOthers + a.assignedIssues;
+      const bx = b.openPRs + b.reviewing + b.approvalsGiven + b.mergesOfOthers + b.assignedIssues;
       if (bx !== ax) return bx - ax;
       return a.name.localeCompare(b.name);
     });
@@ -223,9 +227,11 @@ export function EngineersTab({ navFilter }: { repoNames: string[]; navFilter?: i
         <ActorVoiceCard githubLogin={selected.login} />
 
         {/* Lifetime / recency stat row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Lifetime PRs" value={lifetimePRs} icon={<GitPullRequest size={14} className="text-stone-400" />} />
           <StatCard label="PRs · last 4 weeks" value={prsLast4Weeks} icon={<GitMerge size={14} className="text-stone-400" />} />
+          <StatCard label="Approvals given" value={approvalsGiven} icon={<CircleCheck size={14} className="text-stone-400" />} />
+          <StatCard label="Merged for others" value={mergesOfOthers} icon={<GitMerge size={14} className="text-stone-400" />} />
           <StatCard label="Issues closed" value={issuesClosed} icon={<CircleCheck size={14} className="text-stone-400" />} />
         </div>
 
@@ -272,6 +278,8 @@ interface EngineerSummary {
   description: string;
   openPRs: number;
   reviewing: number;
+  approvalsGiven: number;
+  mergesOfOthers: number;
   assignedIssues: number;
   ghTeams: string[];
   kind: "human" | "bot";
@@ -317,9 +325,11 @@ function PersonCard({ engineer, onSelect, statsLoading }: { engineer: EngineerSu
         </div>
       )}
 
-      <div className="flex items-center gap-4 text-xs text-stone-500">
+      <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
         <CardStat label="Open PRs" value={engineer.openPRs} loading={statsLoading} />
         <CardStat label="Reviewing" value={engineer.reviewing} loading={statsLoading} />
+        <CardStat label="Approved" value={engineer.approvalsGiven} loading={statsLoading} />
+        <CardStat label="Merged (others)" value={engineer.mergesOfOthers} loading={statsLoading} />
         <CardStat label="Assigned Issues" value={engineer.assignedIssues} loading={statsLoading} />
       </div>
     </button>

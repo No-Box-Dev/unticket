@@ -168,8 +168,8 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
   );
 
   const stmt = db.prepare(
-    `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json, merged_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(org_id, repo, number) DO UPDATE SET
        title = excluded.title,
        state = excluded.state,
@@ -182,7 +182,8 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
        updated_at = excluded.updated_at,
        html_url = excluded.html_url,
        requested_reviewers_json = excluded.requested_reviewers_json,
-       labels_json = excluded.labels_json`
+       labels_json = excluded.labels_json,
+       merged_by = COALESCE(excluded.merged_by, pull_requests.merged_by)`
   );
 
   for (let i = 0; i < prs.length; i += 50) {
@@ -205,7 +206,8 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
           pr.updated_at,
           pr.html_url,
           JSON.stringify(pr.requested_reviewers?.map((r) => ({ login: r.login })) ?? []),
-          JSON.stringify(pr.labels?.map((l) => ({ name: l.name, color: l.color })) ?? [])
+          JSON.stringify(pr.labels?.map((l) => ({ name: l.name, color: l.color })) ?? []),
+          pr.merged_by?.login ?? null
         )
       )
     );
@@ -969,8 +971,8 @@ export async function upsertFeature(db, orgId, issue) {
 export async function upsertPR(db, orgId, repo, pr) {
   await db
     .prepare(
-      `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO pull_requests (org_id, repo, number, title, state, author, author_avatar, draft, head_ref, base_ref, merged_at, created_at, updated_at, html_url, requested_reviewers_json, labels_json, merged_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(org_id, repo, number) DO UPDATE SET
          title = excluded.title,
          state = excluded.state,
@@ -983,7 +985,8 @@ export async function upsertPR(db, orgId, repo, pr) {
          updated_at = excluded.updated_at,
          html_url = excluded.html_url,
          requested_reviewers_json = excluded.requested_reviewers_json,
-         labels_json = excluded.labels_json`
+         labels_json = excluded.labels_json,
+         merged_by = COALESCE(excluded.merged_by, pull_requests.merged_by)`
     )
     .bind(
       orgId,
@@ -1001,7 +1004,8 @@ export async function upsertPR(db, orgId, repo, pr) {
       pr.updated_at,
       pr.html_url,
       JSON.stringify((pr.requested_reviewers ?? []).map((r) => ({ login: r.login }))),
-      JSON.stringify((pr.labels ?? []).map((l) => ({ name: l.name, color: l.color })))
+      JSON.stringify((pr.labels ?? []).map((l) => ({ name: l.name, color: l.color }))),
+      pr.merged_by?.login ?? null
     )
     .run();
 }
