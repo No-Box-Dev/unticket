@@ -325,6 +325,8 @@ describe("fetchEngineerStats", () => {
     const payload = {
       openPRs: { alice: 3 },
       reviewing: { alice: 2 },
+      approvalsGiven: { alice: 12 },
+      mergesOfOthers: { alice: 4 },
       assignedIssues: { bob: 1 },
       lifetimePRs: { alice: 40 },
       prsLast4Weeks: { alice: 5 },

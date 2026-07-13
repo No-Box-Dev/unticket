@@ -720,6 +720,8 @@ export async function fetchPRStats(): Promise<PRStats> {
 export interface EngineerStats {
   openPRs: Record<string, number>;
   reviewing: Record<string, number>;
+  approvalsGiven: Record<string, number>;
+  mergesOfOthers: Record<string, number>;
   assignedIssues: Record<string, number>;
   lifetimePRs: Record<string, number>;
   prsLast4Weeks: Record<string, number>;
