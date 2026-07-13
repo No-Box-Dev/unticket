@@ -88,21 +88,21 @@ export interface PostsFilter {
 
 // "post"           = first-person chat post at merge   (events.type='narrative')
 // "release_notes"  = structured/reused release note    (events.type='release_notes')
-// "pr"             = first-person post at PR-open time (events.type='pr_narrative')
-// The PRs mode uses a different trigger type (github:pr:opened) — all three
+// "opened"         = first-person post at PR-open time (events.type='pr_narrative')
+// The Opened mode uses a different trigger type (github:pr:opened) — all three
 // modes route through the same server endpoint via the events.type filter.
-export type FeedMode = "post" | "release_notes" | "pr";
+export type FeedMode = "post" | "release_notes" | "opened";
 
 const FEED_MODE_TYPE: Record<FeedMode, string> = {
   post: "narrative",
   release_notes: "release_notes",
-  pr: "pr_narrative",
+  opened: "pr_narrative",
 };
 
 const FEED_MODE_TRIGGER_TYPES: Record<FeedMode, string[]> = {
   post: POST_TRIGGER_TYPES,
   release_notes: POST_TRIGGER_TYPES,
-  pr: PR_FEED_TRIGGER_TYPES,
+  opened: PR_FEED_TRIGGER_TYPES,
 };
 
 export function useInfinitePosts(filter: PostsFilter & { mode?: FeedMode } = {}) {
