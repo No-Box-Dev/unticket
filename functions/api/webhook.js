@@ -129,18 +129,28 @@ export async function onRequestPost(context) {
       if (stored?.id) {
         // Narrate via the durable queue so the webhook returns immediately and
         // the work survives a failed attempt (retried, then dead-lettered).
-        // Two siblings: chat-post narration (Posts feed) and structured
-        // release notes (Release notes feed). Same LLM config, different
-        // prompt — kept independent so a failure in one never blocks the
-        // other's retry.
-        await enqueueTask(context.env, orgLogin, deliveryId, {
-          type: TASK.NARRATE,
-          eventId: stored.id,
-        });
-        await enqueueTask(context.env, orgLogin, deliveryId, {
-          type: TASK.RELEASE_NOTES,
-          eventId: stored.id,
-        });
+        // Three narrators, one PR lifecycle:
+        //   - github:pr:opened  → NARRATE_PR_OPENED  (writes pr_narrative for the PRs feed)
+        //   - github:pr:merged  → NARRATE + RELEASE_NOTES  (reuse pr_narrative text if any,
+        //     else fresh LLM call; writes narrative + release_notes rows)
+        // Enqueueing both merged tasks even when the trigger is `pr:opened` would
+        // be wasteful — narrateEvent short-circuits on non-merged types — but we
+        // could also just gate here. Gating here is cheaper (fewer queue msgs).
+        if (stored.type === "github:pr:opened") {
+          await enqueueTask(context.env, orgLogin, deliveryId, {
+            type: TASK.NARRATE_PR_OPENED,
+            eventId: stored.id,
+          });
+        } else {
+          await enqueueTask(context.env, orgLogin, deliveryId, {
+            type: TASK.NARRATE,
+            eventId: stored.id,
+          });
+          await enqueueTask(context.env, orgLogin, deliveryId, {
+            type: TASK.RELEASE_NOTES,
+            eventId: stored.id,
+          });
+        }
       }
     } catch (err) {
       console.error("[unticket webhook] storeEvent failed:", err);

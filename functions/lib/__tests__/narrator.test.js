@@ -15,15 +15,31 @@ vi.mock("../slack.js", () => ({
   buildReleaseNotesBlocks: vi.fn((args) => ({ blocks: ["release", args] })),
 }));
 
-import { narrateEvent, narrateReleaseNotes, NARRATABLE_TYPES } from "../narrator.js";
+import {
+  narrateEvent,
+  narrateReleaseNotes,
+  narratePrOpened,
+  NARRATABLE_TYPES,
+  NARRATABLE_TYPES_OPENED,
+} from "../narrator.js";
 import { completeNarrative } from "../llm.js";
 import { recordFailure } from "../op-failures.js";
-import { RELEASE_NOTES_SYSTEM } from "../prompt.js";
+import { RELEASE_NOTES_SYSTEM, PR_OPENED_SYSTEM } from "../prompt.js";
 import { resolveSlackInstall, resolveSlackChannels, postSlackMessage } from "../slack.js";
 
 // D1 stub: dispatch by SQL substring. Tests configure what each query returns
 // and inspect _calls.runs/binds for the INSERT side effect.
-function makeDb({ event = null, project = null, actor = null, settings = null, existingReleaseNote = null, existingNarrative = null, org = { id: "org-1" } } = {}) {
+function makeDb({
+  event = null,
+  project = null,
+  actor = null,
+  settings = null,
+  existingReleaseNote = null,
+  existingNarrative = null,
+  existingPrNarrative = null,
+  reusablePrNarrative = null, // { summary, model } — from findExistingPrNarrative reuse SELECT
+  org = { id: "org-1" },
+} = {}) {
   const calls = { firsts: [], runs: [] };
   function prepare(sql) {
     return {
@@ -32,6 +48,12 @@ function makeDb({ event = null, project = null, actor = null, settings = null, e
       bind(...binds) { this._binds = binds; return this; },
       async first() {
         calls.firsts.push({ sql, binds: this._binds });
+        // findExistingPrNarrative is the only SELECT that reads `summary` from
+        // a pr_narrative row — route it to reusablePrNarrative so tests can
+        // simulate "same PR was narrated at open time" without also tripping
+        // the pr_narrative *dedup* SELECT below.
+        if (sql.includes("type = 'pr_narrative'") && sql.includes("summary")) return reusablePrNarrative;
+        if (sql.includes("type = 'pr_narrative'")) return existingPrNarrative;
         if (sql.includes("type = 'release_notes'")) return existingReleaseNote;
         if (sql.includes("type = 'narrative'")) return existingNarrative;
         if (sql.includes("FROM events")) return event;
@@ -83,6 +105,14 @@ afterEach(() => vi.restoreAllMocks());
 describe("NARRATABLE_TYPES", () => {
   it("exports the narratable type list with pr:merged", () => {
     expect(NARRATABLE_TYPES).toContain("github:pr:merged");
+  });
+  it("exports the pr-opened narratable type list with pr:opened", () => {
+    expect(NARRATABLE_TYPES_OPENED).toContain("github:pr:opened");
+  });
+  it("keeps merged and opened lists disjoint", () => {
+    for (const t of NARRATABLE_TYPES) {
+      expect(NARRATABLE_TYPES_OPENED).not.toContain(t);
+    }
   });
 });
 
@@ -495,5 +525,163 @@ describe("narrateReleaseNotes — Slack mirror", () => {
     resolveSlackChannels.mockResolvedValue({ postsChannelId: "C1", releaseNotesChannelId: "C2" });
     await narrateReleaseNotes(ENV(db), 1);
     expect(postSlackMessage).not.toHaveBeenCalled();
+  });
+});
+
+// -------- narratePrOpened --------
+// Sibling of narrateEvent, but fires on PR-open events and writes a
+// pr_narrative row that the merge-time narrators later reuse.
+
+const EVENT_ROW_OPENED = {
+  ...EVENT_ROW,
+  type: "github:pr:opened",
+  summary: "PR #42: do thing",
+};
+
+describe("narratePrOpened — preconditions", () => {
+  it("does nothing when the event row is missing", async () => {
+    const db = makeDb();
+    await narratePrOpened(ENV(db), 999);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(db._calls.runs).toHaveLength(0);
+  });
+
+  it("skips events whose type is not pr:opened (e.g. pr:merged)", async () => {
+    const db = makeDb({ event: EVENT_ROW });
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(db._calls.runs).toHaveLength(0);
+  });
+
+  it("skips when the actor row is missing (no author to attribute)", async () => {
+    const db = makeDb({ event: EVENT_ROW_OPENED, project: PROJECT_ROW });
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+  });
+
+  it("skips when narrator_enabled=0", async () => {
+    const db = makeDb({
+      event: EVENT_ROW_OPENED,
+      project: { ...PROJECT_ROW, narrator_enabled: 0 },
+      actor: ACTOR_ROW,
+    });
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+  });
+});
+
+describe("narratePrOpened — happy path", () => {
+  it("calls the LLM with the PR_OPENED_SYSTEM prompt", async () => {
+    const db = makeDb({ event: EVENT_ROW_OPENED, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("Fixing the login redirect.");
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).toHaveBeenCalledTimes(1);
+    const [, systemPrompt] = completeNarrative.mock.calls[0];
+    expect(systemPrompt).toBe(PR_OPENED_SYSTEM);
+  });
+
+  it("inserts a pr_narrative row with source=pr-opened-narrator", async () => {
+    const db = makeDb({ event: EVENT_ROW_OPENED, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue("Fixing the login redirect.");
+    await narratePrOpened(ENV(db), 1);
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert).toBeDefined();
+    const [source, type, , , , , summary, payloadJson] = insert.binds;
+    expect(source).toBe("pr-opened-narrator");
+    expect(type).toBe("pr_narrative");
+    expect(summary).toBe("Fixing the login redirect.");
+    const payload = JSON.parse(payloadJson);
+    expect(payload.pr_number).toBe(42);
+    expect(payload.trigger_type).toBe("github:pr:opened");
+    expect(payload.model).toBe("glm-5");
+  });
+
+  it("dedups by PR identity — skips when pr_narrative row already exists", async () => {
+    const db = makeDb({
+      event: EVENT_ROW_OPENED,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      existingPrNarrative: { id: 99 },
+    });
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(db._calls.runs).toHaveLength(0);
+  });
+
+  it("falls back to row.summary with model=fallback when LLM returns null", async () => {
+    const db = makeDb({ event: EVENT_ROW_OPENED, project: PROJECT_ROW, actor: ACTOR_ROW });
+    completeNarrative.mockResolvedValue(null);
+    await narratePrOpened(ENV(db), 1);
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert.binds[6]).toBe("PR #42: do thing");
+    expect(JSON.parse(insert.binds[7]).model).toBe("fallback");
+    expect(recordFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ op: "narratePrOpened" }),
+    );
+  });
+});
+
+// -------- Reuse-text branch --------
+// The load-bearing invariant of the "PRs feed" feature. When a PR opens,
+// narratePrOpened writes text. When it merges, the merge-time narrators
+// find that text and reuse it verbatim — no fresh LLM call. This drops the
+// per-PR-lifecycle LLM cost from 2 → 1.
+
+describe("narrateEvent — reuse text from pr_narrative row", () => {
+  it("uses the existing pr_narrative text and does NOT call the LLM", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      reusablePrNarrative: { summary: "Fixing the login redirect.", model: "glm-5" },
+    });
+    await narrateEvent(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert).toBeDefined();
+    const [source, type, , , , , summary, payloadJson] = insert.binds;
+    expect(source).toBe("narrator-reused");
+    expect(type).toBe("narrative");
+    expect(summary).toBe("Fixing the login redirect.");
+    const payload = JSON.parse(payloadJson);
+    expect(payload.model).toBe("reused:glm-5");
+  });
+
+  it("falls through to the LLM when the pr_narrative row is a 'fallback' model", async () => {
+    // Reusing a fallback (raw title) row would leave the merged feed stuck on
+    // the PR title — worse than paying for a fresh narration.
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      reusablePrNarrative: { summary: "PR #42: do thing", model: "fallback" },
+    });
+    completeNarrative.mockResolvedValue("I merged the login button.");
+    await narrateEvent(ENV(db), 1);
+    expect(completeNarrative).toHaveBeenCalledTimes(1);
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert.binds[0]).toBe("narrator");
+    expect(insert.binds[6]).toBe("I merged the login button.");
+  });
+});
+
+describe("narrateReleaseNotes — reuse text from pr_narrative row", () => {
+  it("uses the existing pr_narrative text and does NOT call the LLM", async () => {
+    const db = makeDb({
+      event: EVENT_ROW,
+      project: PROJECT_ROW,
+      actor: ACTOR_ROW,
+      reusablePrNarrative: { summary: "Fixing the login redirect.", model: "glm-5" },
+    });
+    await narrateReleaseNotes(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
+    expect(insert).toBeDefined();
+    const [source, type, , , , , summary, payloadJson] = insert.binds;
+    expect(source).toBe("release-notes-reused");
+    expect(type).toBe("release_notes");
+    expect(summary).toBe("Fixing the login redirect.");
+    expect(JSON.parse(payloadJson).model).toBe("reused:glm-5");
   });
 });

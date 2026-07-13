@@ -1,9 +1,15 @@
-// Two voices that ride the same trigger:
-//   - ACTOR_SYSTEM: first-person chat post (the Posts feed).
+// Three voices, one PR lifecycle:
+//   - PR_OPENED_SYSTEM: first-person "just opened this PR" post — written
+//     ONCE at open time. Fires the PRs feed. The text is then reused at merge
+//     time by narrateEvent + narrateReleaseNotes (see narrator.js) so the same
+//     text moves through PRs → Posts → Release-notes as the PR progresses.
+//   - ACTOR_SYSTEM: first-person chat post (the Posts feed). Only invoked as
+//     the merge-time fallback when no pr_narrative row exists (PR predates the
+//     PRs-feed feature, or narratePrOpened failed).
 //   - RELEASE_NOTES_SYSTEM: structured release note (the Release notes feed).
-// Both run on every NARRATABLE event with the same LLM config (BYOK setting
-// applies to both). The release-notes prompt is admin-editable; the actor
-// prompt is not.
+//     Same merge-time-fallback semantics.
+// All three share the org's LLM config (BYOK setting applies to all). The
+// release-notes prompt is admin-editable; the actor + PR-opened prompts are not.
 
 export const ACTOR_SYSTEM = `You write short first-person team chat posts after a real engineering event happens — a PR opens, a release ships, an issue closes. The post is what the engineer themselves would drop in chat.
 
@@ -18,6 +24,36 @@ Voice rules:
 Every event you receive is worth a post. Always write one — never output "SKIP".`;
 
 export function buildActorMessage(args) {
+  const lines = [`You are ${args.actorName}.`];
+  if (args.actorTone?.trim()) {
+    lines.push(`Tone: ${args.actorTone.trim()}`);
+  }
+  lines.push(`Project: ${args.projectName}`);
+  lines.push("", "Event:", formatEventLine(args.event), "", "Write the post in your own voice.");
+  return lines.join("\n");
+}
+
+// First-person "just opened a PR" voice. The narrated text lives on the
+// PR itself: it appears in the PRs feed at open time, then rides along
+// to the Posts + Release-notes feeds when the PR merges (see narrator.js).
+// So the voice needs to read reasonably in both contexts — proposal-mode
+// at open, and shipping-mode when it's echoed at merge. We lean on
+// "here's what I'm changing" rather than "I'm about to change" so the
+// text still parses as a shipping note when it later shows in Posts.
+export const PR_OPENED_SYSTEM = `You write short first-person team chat posts when an engineer opens a PR. The post is what the engineer themselves would drop in chat to flag "here's what I'm working on."
+
+Voice rules:
+- First person ("I", "we" if it's clearly team work). Never third person.
+- One or two sentences. Stop when you have made the point.
+- Sound human. Dry, specific, occasionally a tiny aside. Not a release note.
+- Describe the change itself, not the future ("fixing the SSO redirect" beats "I'm about to fix"). This text will be re-shown later when the PR merges, so it needs to read fine in both contexts.
+- Translate commit-speak into chat-speak. "Bump dep X to Y" → "got dep X off the old version."
+- Frame work in the project's own domain. NoxKey is about secrets and Keychain. A meditation app is about sessions and audio.
+- No markdown, no lists, no emojis, no hashtags.
+
+Every event you receive is worth a post. Always write one — never output "SKIP".`;
+
+export function buildPrOpenedMessage(args) {
   const lines = [`You are ${args.actorName}.`];
   if (args.actorTone?.trim()) {
     lines.push(`Tone: ${args.actorTone.trim()}`);

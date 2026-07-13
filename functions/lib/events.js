@@ -173,7 +173,8 @@ function slimPayload(ghEvent, payload) {
   return { action: payload.action };
 }
 
-// INSERT into events. Returns { id } on insert, null if the event type
+// INSERT into events. Returns { id, type } on insert (type is the mapped
+// event type, e.g. 'github:pr:opened'). Returns null if the event type
 // isn't tracked or the delivery_id collides.
 export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
   const action = payload.action;
@@ -231,7 +232,7 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
   ).run();
 
   const id = result?.meta?.last_row_id;
-  return id ? { id } : null;
+  return id ? { id, type } : null;
 }
 
 // Build & insert a github:pr:merged event row, then kick off narration.

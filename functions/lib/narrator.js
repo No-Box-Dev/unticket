@@ -1,12 +1,19 @@
-// Per-event narrators. Two voices ride the same raw event:
-//   - narrateEvent       → first-person chat post  (type=narrative,    source=narrator)
-//   - narrateReleaseNotes → structured release note (type=release_notes, source=release-notes)
+// Per-event narrators. Three voices, one PR lifecycle:
+//   - narratePrOpened     → first-person "opened a PR" post (type=pr_narrative, source=pr-opened-narrator)
+//   - narrateEvent        → first-person chat post           (type=narrative,    source=narrator)
+//   - narrateReleaseNotes → structured release note          (type=release_notes, source=release-notes)
 //
-// Both share the org's LLM config (BYOK setting applies to both) and the
-// same NARRATABLE_TYPES gate, so the Posts feed and Release-notes feed can
-// never drift to different models. They run in parallel after every webhook
-// merge, reconcile insert, and backfill PR — see the trigger-point list in
-// CLAUDE.md ("Webhooks" / "Live Activity events").
+// PR opens → narratePrOpened writes a pr_narrative row → PRs feed.
+// PR merges → narrateEvent + narrateReleaseNotes look up that pr_narrative row.
+//   If found, they REUSE its text (no LLM call) and insert it as narrative +
+//   release_notes rows. If not found (PR predates this feature or the
+//   open-time narrator failed), they fall back to a fresh LLM call using
+//   ACTOR_SYSTEM / RELEASE_NOTES_SYSTEM. Net cost: 1 LLM call per PR
+//   lifecycle instead of 2, and the same text moves through all three feeds.
+//
+// All three share the org's LLM config (BYOK setting applies to all). Runs at
+// every trigger point: webhook, cron queue handler, reconcile loop —
+// see the trigger-point list in CLAUDE.md ("Narration" / "Live Activity events").
 
 import { completeNarrative } from "./llm";
 import { resolveLlmConfig } from "./llm-config";
@@ -14,6 +21,8 @@ import { recordFailure } from "./op-failures";
 import {
   ACTOR_SYSTEM,
   buildActorMessage,
+  PR_OPENED_SYSTEM,
+  buildPrOpenedMessage,
   RELEASE_NOTES_SYSTEM,
   buildReleaseNotesMessage,
 } from "./prompt";
@@ -31,12 +40,16 @@ const MAX_OUTPUT_LENGTH = 800;
 // notes don't get truncated mid-sentence.
 const RELEASE_NOTES_MAX_OUTPUT_LENGTH = 2400;
 
-// Only narrate "shipped" events. Opens, reviews, comments, pushes etc. crowd
-// the feed and burn LLM tokens on posts the Posts tab now filters out anyway.
-// Issue closes are excluded because a closing PR already produces its own
-// pr:merged narrative — two cards about the same work read as a duplicate.
-// Keep this list in sync with usePosts() in src/hooks/useNoxlink.ts.
+// Merge-time narration gate — narrateEvent + narrateReleaseNotes. Keep in
+// sync with POST_TRIGGER_TYPES in src/hooks/useNoxlink.ts (the client-side
+// filter that must match this list so we don't render narratives triggered
+// by types the server also skips).
 export const NARRATABLE_TYPES = ["github:pr:merged"];
+
+// Open-time narration gate — narratePrOpened. Fires the PRs feed. The
+// resulting pr_narrative row is looked up (and its text reused) by the
+// merge-time narrators when the PR eventually merges.
+export const NARRATABLE_TYPES_OPENED = ["github:pr:opened"];
 
 export async function narrateEvent(env, eventId) {
   const row = await env.DB.prepare(
@@ -77,46 +90,59 @@ export async function narrateEvent(env, eventId) {
   ).bind(row.owner_id, row.repo, prNumber).first();
   if (existing) return;
 
-  const userMessage = buildActorMessage({
-    actorName: actor.name,
-    actorTone: actor.tone,
-    projectName: project.name,
-    event: {
-      type: row.type,
-      summary: row.summary,
-      payload: triggerPayload,
-      created_at: row.created_at,
-    },
-  });
-
-  // Per-org override (BYOK) wins; default falls back to env.ZHIPU_API_KEY.
+  // Reuse-text path: if this PR was already narrated at open time, use that
+  // text instead of paying for a second LLM call. See narratePrOpened for how
+  // the pr_narrative row lands. Falls through to a fresh LLM call for PRs that
+  // predate this feature (no pr_narrative row) or where the open-time
+  // narration failed (row missing, or fallback-only).
   const orgId = await resolveOrgId(env.DB, row.owner_id);
-  const llmConfig = await resolveLlmConfig(env, orgId);
-  const text = await completeNarrative(llmConfig, ACTOR_SYSTEM, userMessage);
-
+  const reused = await findExistingPrNarrative(env.DB, row.owner_id, row.repo, prNumber);
   let summary;
   let model;
-  if (text) {
-    const trimmed = text.trim();
-    summary = trimmed.length > MAX_OUTPUT_LENGTH
-      ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
-      : trimmed;
-    model = llmConfig.model;
+  let source;
+  if (reused) {
+    summary = reused.summary;
+    model = `reused:${reused.model}`;
+    source = "narrator-reused";
   } else {
-    // LLM unavailable (no key, timeout, HTTP error, model rejected the
-    // request). Keep the feed populated with the raw summary so the trigger
-    // event is visible, AND record a row in op_failures so admins see *why*
-    // the narrator skipped — important for BYOK debugging (bad key, wrong
-    // model name) rather than failing silently and forever.
-    if (!row.summary) return;
-    summary = row.summary;
-    model = "fallback";
-    await recordFailure(env.DB, {
-      ownerId: row.owner_id,
-      op: "narrateEvent",
-      deliveryId: `event-${row.id}`,
-      error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+    const userMessage = buildActorMessage({
+      actorName: actor.name,
+      actorTone: actor.tone,
+      projectName: project.name,
+      event: {
+        type: row.type,
+        summary: row.summary,
+        payload: triggerPayload,
+        created_at: row.created_at,
+      },
     });
+    // Per-org override (BYOK) wins; default falls back to env.ZHIPU_API_KEY.
+    const llmConfig = await resolveLlmConfig(env, orgId);
+    const text = await completeNarrative(llmConfig, ACTOR_SYSTEM, userMessage);
+    source = "narrator";
+
+    if (text) {
+      const trimmed = text.trim();
+      summary = trimmed.length > MAX_OUTPUT_LENGTH
+        ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
+        : trimmed;
+      model = llmConfig.model;
+    } else {
+      // LLM unavailable (no key, timeout, HTTP error, model rejected the
+      // request). Keep the feed populated with the raw summary so the trigger
+      // event is visible, AND record a row in op_failures so admins see *why*
+      // the narrator skipped — important for BYOK debugging (bad key, wrong
+      // model name) rather than failing silently and forever.
+      if (!row.summary) return;
+      summary = row.summary;
+      model = "fallback";
+      await recordFailure(env.DB, {
+        ownerId: row.owner_id,
+        op: "narrateEvent",
+        deliveryId: `event-${row.id}`,
+        error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+      });
+    }
   }
 
   // ON CONFLICT DO NOTHING relies on the partial UNIQUE INDEX from
@@ -129,7 +155,7 @@ export async function narrateEvent(env, eventId) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING`
   ).bind(
-    "narrator",
+    source,
     "narrative",
     actor.id,
     row.project_id,
@@ -204,42 +230,57 @@ export async function narrateReleaseNotes(env, eventId) {
   ).bind(row.owner_id, row.repo, prNumber).first();
   if (existing) return;
 
-  const userMessage = buildReleaseNotesMessage({
-    actorName: actor.name,
-    projectName: project.name,
-    event: {
-      type: row.type,
-      summary: row.summary,
-      payload: triggerPayload,
-      created_at: row.created_at,
-    },
-  });
-
+  // Reuse-text path (see narrateEvent for the full reasoning). If an
+  // pr_narrative row exists for this PR, use its text and skip the LLM
+  // call. Release notes lose their structured format when reused — that's
+  // the trade-off for "one LLM call total per PR lifecycle". If admins
+  // want the structured format back, they can delete the pr_narrative
+  // row and re-run the merge narrator (fresh LLM call, structured output).
   const orgId = await resolveOrgId(env.DB, row.owner_id);
-  const [llmConfig, systemPrompt] = await Promise.all([
-    resolveLlmConfig(env, orgId),
-    resolveReleaseNotesPrompt(env.DB, orgId),
-  ]);
-  const text = await completeNarrative(llmConfig, systemPrompt, userMessage);
-
+  const reused = await findExistingPrNarrative(env.DB, row.owner_id, row.repo, prNumber);
   let summary;
   let model;
-  if (text) {
-    const trimmed = text.trim();
-    summary = trimmed.length > RELEASE_NOTES_MAX_OUTPUT_LENGTH
-      ? trimmed.slice(0, RELEASE_NOTES_MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
-      : trimmed;
-    model = llmConfig.model;
+  let source;
+  if (reused) {
+    summary = reused.summary;
+    model = `reused:${reused.model}`;
+    source = "release-notes-reused";
   } else {
-    if (!row.summary) return;
-    summary = row.summary;
-    model = "fallback";
-    await recordFailure(env.DB, {
-      ownerId: row.owner_id,
-      op: "narrateReleaseNotes",
-      deliveryId: `event-${row.id}`,
-      error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+    const userMessage = buildReleaseNotesMessage({
+      actorName: actor.name,
+      projectName: project.name,
+      event: {
+        type: row.type,
+        summary: row.summary,
+        payload: triggerPayload,
+        created_at: row.created_at,
+      },
     });
+
+    const [llmConfig, systemPrompt] = await Promise.all([
+      resolveLlmConfig(env, orgId),
+      resolveReleaseNotesPrompt(env.DB, orgId),
+    ]);
+    const text = await completeNarrative(llmConfig, systemPrompt, userMessage);
+    source = "release-notes";
+
+    if (text) {
+      const trimmed = text.trim();
+      summary = trimmed.length > RELEASE_NOTES_MAX_OUTPUT_LENGTH
+        ? trimmed.slice(0, RELEASE_NOTES_MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
+        : trimmed;
+      model = llmConfig.model;
+    } else {
+      if (!row.summary) return;
+      summary = row.summary;
+      model = "fallback";
+      await recordFailure(env.DB, {
+        ownerId: row.owner_id,
+        op: "narrateReleaseNotes",
+        deliveryId: `event-${row.id}`,
+        error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+      });
+    }
   }
 
   // Same ON CONFLICT pattern as narrateEvent — migration 0033 holds the
@@ -249,7 +290,7 @@ export async function narrateReleaseNotes(env, eventId) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING`
   ).bind(
-    "release-notes",
+    source,
     "release_notes",
     actor.id,
     row.project_id,
@@ -280,6 +321,137 @@ export async function narrateReleaseNotes(env, eventId) {
     summary,
     rawEvent: row,
   });
+}
+
+// Sibling to narrateEvent, but fires on PR *open* rather than merge. Writes
+// the first-person "just opened a PR" post that shows up in the PRs feed
+// (type='pr_narrative'). The same text is reused by narrateEvent +
+// narrateReleaseNotes when the PR later merges (findExistingPrNarrative
+// below), so ONE LLM call covers the whole PR lifecycle instead of two.
+export async function narratePrOpened(env, eventId) {
+  const row = await env.DB.prepare(
+    `SELECT id, type, actor_id, project_id, org, repo, owner_id, summary, payload_json, created_at
+     FROM events WHERE id = ?`
+  ).bind(eventId).first();
+  if (!row) return;
+  if (!NARRATABLE_TYPES_OPENED.includes(row.type)) return;
+  if (!row.actor_id || !row.project_id || !row.owner_id) return;
+
+  const project = await env.DB.prepare(
+    "SELECT name, narrator_enabled FROM projects WHERE id = ? AND owner_id = ?"
+  ).bind(row.project_id, row.owner_id).first();
+  if (!project) return;
+  if (project.narrator_enabled === 0) return;
+
+  const actor = await env.DB.prepare(
+    "SELECT id, name, tone FROM actors WHERE id = ? AND owner_id = ?"
+  ).bind(row.actor_id, row.owner_id).first();
+  if (!actor) return;
+
+  // PR-identity dedup — see narrateEvent's comment. Same partial UNIQUE INDEX
+  // from migration 0033 (extended by 0035 to cover pr_narrative), so concurrent
+  // writers can't produce two pr_narrative rows for the same PR.
+  const triggerPayload = safeParseObject(row.payload_json);
+  const prNumber = triggerPayload?.pr?.number;
+  if (typeof prNumber !== "number") return;
+
+  const existing = await env.DB.prepare(
+    `SELECT id FROM events
+       WHERE owner_id = ? AND repo = ? AND type = 'pr_narrative'
+         AND CAST(json_extract(payload_json, '$.pr_number') AS INTEGER) = ?
+       LIMIT 1`
+  ).bind(row.owner_id, row.repo, prNumber).first();
+  if (existing) return;
+
+  const userMessage = buildPrOpenedMessage({
+    actorName: actor.name,
+    actorTone: actor.tone,
+    projectName: project.name,
+    event: {
+      type: row.type,
+      summary: row.summary,
+      payload: triggerPayload,
+      created_at: row.created_at,
+    },
+  });
+
+  const orgId = await resolveOrgId(env.DB, row.owner_id);
+  const llmConfig = await resolveLlmConfig(env, orgId);
+  const text = await completeNarrative(llmConfig, PR_OPENED_SYSTEM, userMessage);
+
+  let summary;
+  let model;
+  if (text) {
+    const trimmed = text.trim();
+    summary = trimmed.length > MAX_OUTPUT_LENGTH
+      ? trimmed.slice(0, MAX_OUTPUT_LENGTH - 1).trimEnd() + "…"
+      : trimmed;
+    model = llmConfig.model;
+  } else {
+    if (!row.summary) return;
+    summary = row.summary;
+    model = "fallback";
+    await recordFailure(env.DB, {
+      ownerId: row.owner_id,
+      op: "narratePrOpened",
+      deliveryId: `event-${row.id}`,
+      error: `LLM (${llmConfig.source}: ${llmConfig.provider}/${llmConfig.model}) returned no text`,
+    });
+  }
+
+  const insertResult = await env.DB.prepare(
+    `INSERT INTO events (source, type, actor_id, project_id, org, repo, summary, payload_json, owner_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`
+  ).bind(
+    "pr-opened-narrator",
+    "pr_narrative",
+    actor.id,
+    row.project_id,
+    row.org,
+    row.repo,
+    summary,
+    JSON.stringify({
+      trigger_event_id: row.id,
+      trigger_type: row.type,
+      model,
+      pr_number: prNumber,
+    }),
+    row.owner_id,
+    row.created_at,
+  ).run();
+
+  if ((insertResult.meta?.changes ?? 0) === 0) return;
+
+  await maybePostToSlack(env, {
+    kind: "narrative",
+    orgId,
+    ownerId: row.owner_id,
+    triggerEventId: row.id,
+    actor: { id: actor.id, name: actor.name },
+    project,
+    summary,
+    rawEvent: row,
+  });
+}
+
+// Look up the existing pr_narrative row (if any) for this PR. Used by both
+// merge-time narrators to reuse the open-time text instead of paying for a
+// fresh LLM call. Returns null if no row exists OR if the existing row is a
+// 'fallback' (raw summary because LLM was unavailable at open time) — in the
+// latter case the merge-time narrator falls through to a fresh LLM call so
+// the feed doesn't stay stuck on the raw title.
+async function findExistingPrNarrative(db, ownerId, repo, prNumber) {
+  const row = await db.prepare(
+    `SELECT summary, json_extract(payload_json, '$.model') AS model
+       FROM events
+       WHERE owner_id = ? AND repo = ? AND type = 'pr_narrative'
+         AND CAST(json_extract(payload_json, '$.pr_number') AS INTEGER) = ?
+       LIMIT 1`
+  ).bind(ownerId, repo, prNumber).first();
+  if (!row?.summary) return null;
+  if (row.model === "fallback") return null;
+  return { summary: row.summary, model: row.model ?? "unknown" };
 }
 
 // Mirror a narration to Slack via the org's installed Unticket bot. Resolves

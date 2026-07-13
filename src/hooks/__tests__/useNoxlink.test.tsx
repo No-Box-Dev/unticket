@@ -44,6 +44,7 @@ import {
   useBackfillProjectPrs,
   useSetProjectArchived,
   POST_TRIGGER_TYPES,
+  PR_FEED_TRIGGER_TYPES,
 } from "../useNoxlink";
 
 const mockUseAuth = vi.mocked(useAuth);
@@ -69,6 +70,12 @@ afterEach(() => vi.restoreAllMocks());
 describe("POST_TRIGGER_TYPES", () => {
   it("includes pr:merged (load-bearing — must match server NARRATABLE_TYPES)", () => {
     expect(POST_TRIGGER_TYPES).toContain("github:pr:merged");
+  });
+});
+
+describe("PR_FEED_TRIGGER_TYPES", () => {
+  it("includes pr:opened (load-bearing — must match server NARRATABLE_TYPES_OPENED)", () => {
+    expect(PR_FEED_TRIGGER_TYPES).toContain("github:pr:opened");
   });
 });
 
@@ -192,6 +199,26 @@ describe("useInfinitePosts", () => {
     const args = vi.mocked(fetchEventsPage).mock.calls[0][0]!;
     expect(args.actorId).toBe("a1");
     expect(args.projectId).toBe("p1");
+  });
+
+  it("mode='pr' fetches pr_narrative events with pr:opened trigger filter", async () => {
+    vi.mocked(fetchEventsPage).mockResolvedValue({ events: [], nextCursor: null });
+    const { wrapper } = createQueryWrapper();
+    renderHook(() => useInfinitePosts({ mode: "pr" }), { wrapper });
+    await waitFor(() => expect(fetchEventsPage).toHaveBeenCalled());
+    const args = vi.mocked(fetchEventsPage).mock.calls[0][0]!;
+    expect(args.type).toBe("pr_narrative");
+    expect(args.triggerTypes).toEqual(PR_FEED_TRIGGER_TYPES);
+  });
+
+  it("mode='release_notes' still fetches with the merge (POST_TRIGGER_TYPES) filter", async () => {
+    vi.mocked(fetchEventsPage).mockResolvedValue({ events: [], nextCursor: null });
+    const { wrapper } = createQueryWrapper();
+    renderHook(() => useInfinitePosts({ mode: "release_notes" }), { wrapper });
+    await waitFor(() => expect(fetchEventsPage).toHaveBeenCalled());
+    const args = vi.mocked(fetchEventsPage).mock.calls[0][0]!;
+    expect(args.type).toBe("release_notes");
+    expect(args.triggerTypes).toEqual(POST_TRIGGER_TYPES);
   });
 });
 

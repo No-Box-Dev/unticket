@@ -13,7 +13,13 @@
 
 import { resolveActorFromGithub } from "./actors.js";
 import { upsertGhUser } from "./gh-mirror.js";
-import { narrateEvent, narrateReleaseNotes } from "./narrator.js";
+import {
+  narrateEvent,
+  narrateReleaseNotes,
+  narratePrOpened,
+  NARRATABLE_TYPES,
+  NARRATABLE_TYPES_OPENED,
+} from "./narrator.js";
 import { sleep, NARRATOR_PACING_MS } from "./pacing.js";
 
 const GH_EVENTS_MAX_PAGES = 3;
@@ -93,21 +99,24 @@ export async function reconcileRepoEvents(env, db, args) {
   // Pace narrations so a 20-PR backfill doesn't fire 20 LLM calls in
   // <1s. The LLM client retries 429/5xx internally, but spacing the
   // calls out reduces the chance of hitting the limit in the first
-  // place — cheaper than triggering retries. Each event gets both
-  // narrations (chat post + release note) in parallel — one trigger,
-  // two voices, same model.
+  // place — cheaper than triggering retries. Each event gets all three
+  // narrations in parallel — one trigger, up to three voices, same model.
+  // Each narrator self-gates on event type (NARRATABLE_TYPES /
+  // NARRATABLE_TYPES_OPENED), so firing all three for every row is safe:
+  // wrong-type rows return early after one SELECT, no LLM spend.
+  const NARRATOR_LABELS = ["narrateEvent", "narrateReleaseNotes", "narratePrOpened"];
   for (let i = 0; i < newEventIds.length; i++) {
     if (i > 0) await sleep(NARRATOR_PACING_MS);
     const id = newEventIds[i];
     const results = await Promise.allSettled([
       narrateEvent(env, id),
       narrateReleaseNotes(env, id),
+      narratePrOpened(env, id),
     ]);
     results.forEach((r, idx) => {
       if (r.status === "rejected") {
-        const label = idx === 0 ? "narrateEvent" : "narrateReleaseNotes";
         console.error(
-          `[event-reconcile] ${label} ${id} failed:`,
+          `[event-reconcile] ${NARRATOR_LABELS[idx]} ${id} failed:`,
           r.reason?.message ?? r.reason,
         );
       }
