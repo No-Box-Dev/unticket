@@ -110,10 +110,12 @@ describe("storeEvent", () => {
     expect(db._calls.runs).toHaveLength(0);
   });
 
-  it("inserts a project row and an event row, returning the id", async () => {
+  it("inserts a project row and an event row, returning the id + type", async () => {
     const db = makeDb({ insertRowId: 42 });
     const result = await storeEvent(db, "pull_request", "del-1", basePr, "owner-1");
-    expect(result).toEqual({ id: 42 });
+    // The webhook branches on `type` to pick the right narrator task, so
+    // storeEvent's return contract includes the mapped type as well as the id.
+    expect(result).toEqual({ id: 42, type: "github:pr:opened" });
     const sqls = db._calls.runs.map((r) => r.sql).join(" || ");
     expect(sqls).toContain("INSERT OR IGNORE INTO projects");
     expect(sqls).toContain("INSERT INTO events");
@@ -138,7 +140,7 @@ describe("storeEvent", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     upsertGhUser.mockRejectedValueOnce(new Error("D1 boom"));
     const result = await storeEvent(makeDb(), "pull_request", "del-1", basePr, "owner-1");
-    expect(result).toEqual({ id: 100 });
+    expect(result).toEqual({ id: 100, type: "github:pr:opened" });
     expect(err).toHaveBeenCalled();
     err.mockRestore();
   });

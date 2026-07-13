@@ -11,7 +11,7 @@
 import { reconcileOrg } from "./reconcile.js";
 import { archiveOldEvents } from "./archive-events.js";
 import { TASK } from "../../functions/lib/tasks.js";
-import { narrateEvent, narrateReleaseNotes } from "../../functions/lib/narrator.js";
+import { narrateEvent, narrateReleaseNotes, narratePrOpened } from "../../functions/lib/narrator.js";
 import { bootstrapInstallation, syncRepo } from "../../functions/lib/github-sync.js";
 import { getInstallationToken } from "../../functions/lib/github-app.js";
 import { recordFailure } from "../../functions/lib/op-failures.js";
@@ -88,6 +88,8 @@ async function handleTask(env, body) {
       return narrateEvent(env, body.eventId);
     case TASK.RELEASE_NOTES:
       return narrateReleaseNotes(env, body.eventId);
+    case TASK.NARRATE_PR_OPENED:
+      return narratePrOpened(env, body.eventId);
     case TASK.BOOTSTRAP:
       return bootstrapInstallation(env, body.orgId, body.accountLogin, body.installationId);
     case TASK.SYNC_REPO: {

@@ -11,6 +11,7 @@
 export const TASK = {
   NARRATE: "narrate",                 // { eventId }            -> narrateEvent(env, eventId)
   RELEASE_NOTES: "release_notes",     // { eventId }            -> narrateReleaseNotes(env, eventId)
+  NARRATE_PR_OPENED: "narrate_pr_opened", // { eventId }        -> narratePrOpened(env, eventId)
   BOOTSTRAP: "bootstrap",             // { orgId, accountLogin, installationId }
   SYNC_REPO: "sync_repo",             // { orgId, accountLogin, installationId, repo }
 };

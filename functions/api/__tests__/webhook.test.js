@@ -22,7 +22,10 @@ vi.mock("../../lib/github-sync.js", () => ({
   syncRepo: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../../lib/events.js", () => ({
-  storeEvent: vi.fn(async () => ({ id: 1 })),
+  // Default: return a benign merged-PR event so the merge-task enqueue branch
+  // runs on every pass-through test. Individual tests can override with
+  // .mockResolvedValueOnce for the pr:opened branch.
+  storeEvent: vi.fn(async () => ({ id: 1, type: "github:pr:merged" })),
 }));
 vi.mock("../../lib/gh-mirror.js", () => ({
   upsertInstallation: vi.fn(),
@@ -38,6 +41,7 @@ vi.mock("../../lib/narrator.js", () => ({
 
 import { onRequestPost } from "../webhook.js";
 import { upsertIssue, upsertPR, upsertMember, removeMember, touchRepoPushed } from "../../lib/github-sync.js";
+import { storeEvent } from "../../lib/events.js";
 
 const SECRET = "shh";
 
@@ -232,6 +236,50 @@ describe("POST /api/webhook — event routing", () => {
     expect(res.status).toBe(200);
     expect(upsertPR).toHaveBeenCalled();
     expect(upsertMember).toHaveBeenCalled();
+  });
+
+  it("pull_request.opened enqueues NARRATE_PR_OPENED (not merge tasks)", async () => {
+    // Load-bearing: the PRs feed depends on the webhook routing pr:opened
+    // events to a different narrator than pr:merged. If this test fails, PRs
+    // will silently show up in Posts/Release-notes with the wrong voice or
+    // not at all in the PRs feed.
+    vi.mocked(storeEvent).mockResolvedValueOnce({ id: 55, type: "github:pr:opened" });
+    const db = makeDb({ firstByFragment: { "SELECT id FROM orgs": { id: 7 } } });
+    const send = vi.fn();
+    const req = await makeRequest({
+      event: "pull_request",
+      payload: {
+        action: "opened",
+        organization: { login: "acme" },
+        repository: { name: "api" },
+        pull_request: { number: 100, user: { login: "alice", type: "User" }, head: { ref: "branch" }, body: "" },
+      },
+    });
+    await onRequestPost(makeCtx({ db, request: req, env: { TASK_QUEUE: { send } } }));
+    const enqueuedTypes = send.mock.calls.map((c) => c[0]?.type);
+    expect(enqueuedTypes).toContain("narrate_pr_opened");
+    expect(enqueuedTypes).not.toContain("narrate");
+    expect(enqueuedTypes).not.toContain("release_notes");
+  });
+
+  it("pull_request.closed(merged=true) enqueues NARRATE + RELEASE_NOTES (not pr-opened)", async () => {
+    vi.mocked(storeEvent).mockResolvedValueOnce({ id: 56, type: "github:pr:merged" });
+    const db = makeDb({ firstByFragment: { "SELECT id FROM orgs": { id: 7 } } });
+    const send = vi.fn();
+    const req = await makeRequest({
+      event: "pull_request",
+      payload: {
+        action: "closed",
+        organization: { login: "acme" },
+        repository: { name: "api" },
+        pull_request: { number: 100, merged: true, user: { login: "alice", type: "User" }, head: { ref: "branch" }, body: "" },
+      },
+    });
+    await onRequestPost(makeCtx({ db, request: req, env: { TASK_QUEUE: { send } } }));
+    const enqueuedTypes = send.mock.calls.map((c) => c[0]?.type);
+    expect(enqueuedTypes).toContain("narrate");
+    expect(enqueuedTypes).toContain("release_notes");
+    expect(enqueuedTypes).not.toContain("narrate_pr_opened");
   });
 
   it("routes member.removed to removeMember", async () => {

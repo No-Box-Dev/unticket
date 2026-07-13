@@ -11,6 +11,9 @@ vi.mock("../gh-mirror.js", () => ({
 vi.mock("../narrator.js", () => ({
   narrateEvent: vi.fn(async () => {}),
   narrateReleaseNotes: vi.fn(async () => {}),
+  narratePrOpened: vi.fn(async () => {}),
+  NARRATABLE_TYPES: ["github:pr:merged"],
+  NARRATABLE_TYPES_OPENED: ["github:pr:opened"],
 }));
 vi.mock("../pacing.js", () => ({
   NARRATOR_PACING_MS: 0,
@@ -20,7 +23,7 @@ vi.mock("../pacing.js", () => ({
 import { reconcileRepoEvents, translateGithubEvent } from "../event-reconcile.js";
 import { resolveActorFromGithub } from "../actors.js";
 import { upsertGhUser } from "../gh-mirror.js";
-import { narrateEvent } from "../narrator.js";
+import { narrateEvent, narratePrOpened } from "../narrator.js";
 
 // Tiny D1 stand-in. Routes prepare() to handlers keyed on a substring of the
 // SQL string. Each handler returns the rows / row / run-result it wants.
@@ -200,6 +203,11 @@ describe("reconcileRepoEvents — D1 PR backfill", () => {
     expect(binds[1]).toBe("github:pr:opened"); // type
     expect(binds[9]).toBe("2026-05-18T10:00:00Z"); // created_at = PR created_at
     expect(narrateEvent).toHaveBeenCalled();
+    // Load-bearing: reconciled pr:opened rows must also fan out to the
+    // pr-opened narrator so backfilled PRs show up in the PRs feed. Without
+    // this, the reconcile cron would populate the events table for open PRs
+    // but leave the PRs feed empty until the PR eventually merges.
+    expect(narratePrOpened).toHaveBeenCalled();
   });
 
   it("skips PR rows without an upserted gh_user (user_id null)", async () => {
