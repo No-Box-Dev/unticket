@@ -201,10 +201,10 @@ describe("useInfinitePosts", () => {
     expect(args.projectId).toBe("p1");
   });
 
-  it("mode='pr' fetches pr_narrative events with pr:opened trigger filter", async () => {
+  it("mode='opened' fetches pr_narrative events with pr:opened trigger filter", async () => {
     vi.mocked(fetchEventsPage).mockResolvedValue({ events: [], nextCursor: null });
     const { wrapper } = createQueryWrapper();
-    renderHook(() => useInfinitePosts({ mode: "pr" }), { wrapper });
+    renderHook(() => useInfinitePosts({ mode: "opened" }), { wrapper });
     await waitFor(() => expect(fetchEventsPage).toHaveBeenCalled());
     const args = vi.mocked(fetchEventsPage).mock.calls[0][0]!;
     expect(args.type).toBe("pr_narrative");

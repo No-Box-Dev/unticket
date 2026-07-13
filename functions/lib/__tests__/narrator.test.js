@@ -623,7 +623,7 @@ describe("narratePrOpened — happy path", () => {
 });
 
 // -------- Reuse-text branch --------
-// The load-bearing invariant of the "PRs feed" feature. When a PR opens,
+// The load-bearing invariant of the "Opened feed" feature. When a PR opens,
 // narratePrOpened writes text. When it merges, the merge-time narrators
 // find that text and reuse it verbatim — no fresh LLM call. This drops the
 // per-PR-lifecycle LLM cost from 2 → 1.
