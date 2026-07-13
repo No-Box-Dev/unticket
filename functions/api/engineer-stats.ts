@@ -79,15 +79,30 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
       // rows missing either field (some pre-slimPayload reconciled reviews) drop
       // out via the IS NOT NULL guard, which undercounts safely rather than
       // double-counting self-approvals.
+      //
+      // Dedup: the same approval lands twice — once from the pull_request_review
+      // webhook (storeEvent, GitHub-delivery-id), once from the 30-min reconcile
+      // over /repos/{owner}/{repo}/events (reconcile:<org>:<repo>:gh-event-<id>).
+      // Different delivery_ids, so the UNIQUE constraint can't dedupe them. We
+      // group by the true review identity (reviewer + repo + PR# + submitted_at)
+      // inside a subquery, then count reviewers. COALESCE to events.id keeps
+      // rows with missing metadata from collapsing into a single bucket.
       db
         .prepare(
-          `SELECT json_extract(payload_json, '$.review.author') AS login, COUNT(*) AS c
-           FROM events
-           WHERE org = ? AND type = 'github:pr:review:approved'
-             AND ${repoIn}
-             AND json_extract(payload_json, '$.review.author') IS NOT NULL
-             AND json_extract(payload_json, '$.review.author')
-                 != json_extract(payload_json, '$.pr.author')
+          `SELECT login, COUNT(*) AS c FROM (
+             SELECT
+               json_extract(payload_json, '$.review.author') AS login,
+               repo AS r,
+               COALESCE(CAST(json_extract(payload_json, '$.pr.number') AS INTEGER), id) AS pr_num,
+               COALESCE(json_extract(payload_json, '$.review.submitted_at'), id) AS ts
+             FROM events
+             WHERE org = ? AND type = 'github:pr:review:approved'
+               AND ${repoIn}
+               AND json_extract(payload_json, '$.review.author') IS NOT NULL
+               AND json_extract(payload_json, '$.review.author')
+                   != json_extract(payload_json, '$.pr.author')
+             GROUP BY login, r, pr_num, ts
+           )
            GROUP BY login`,
         )
         .bind(orgLogin, ...activeRepos),
