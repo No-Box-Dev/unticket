@@ -1,6 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+// FeatureCard now calls useSpecs to render inline spec chips. Stub it to
+// return an empty list so these tests can render without an AuthProvider
+// or TanStack QueryClient — they exist to assert card behaviour, not
+// spec-fetching wiring.
+vi.mock("@/hooks/useSpecs", () => ({
+  useSpecs: () => ({ data: [] }),
+}));
+
 import { FeatureCard } from "../FeatureCard";
 import { DEFAULT_BOARD_STAGES } from "@/lib/board-stages";
 import type { Feature } from "@/lib/types";
@@ -62,17 +71,10 @@ describe("FeatureCard", () => {
     expect(wrapper.className).not.toContain("opacity-60");
   });
 
-  it("uses the configured stage color for the status dot", () => {
-    // Custom stage palette — the dot should pick up the configured color, not
-    // a hardcoded class.
-    const stages = [
-      { id: "todo", label: "To do", color: "#ff0000" },
-      { id: "done", label: "Done", color: "#00ff00" },
-    ];
-    const { container } = render(<FeatureCard {...defaultProps} stages={stages} />);
-    const dot = container.querySelector('[style*="background-color"]') as HTMLElement;
-    expect(dot.style.backgroundColor).toBe("rgb(255, 0, 0)");
-  });
+  // The stage-color bullet next to the assignee was removed — the kanban
+  // column header already communicates stage. Test kept as a skip marker
+  // for provenance so the intent is discoverable in future sweeps.
+  it.skip("uses the configured stage color for the status dot (removed)", () => {});
 
   it("arrow keys move the feature between configured stages", async () => {
     const onUpdate = vi.fn();

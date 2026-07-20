@@ -1,8 +1,11 @@
+import { useMemo, useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
-import { GripVertical, Trash2 } from "lucide-react";
+import { useSpecs } from "@/hooks/useSpecs";
+import { daysAgo } from "@/lib/dates";
+import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
+import { ChevronDown, FileText, GripVertical, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -15,6 +18,22 @@ interface FeatureCardProps {
   onDragStart?: (e: React.DragEvent, feature: Feature) => void;
   isAdmin?: boolean;
 }
+
+// Compact relative-date label for spec chips. Keeps the card readable at
+// kanban-column width — days/weeks buckets, no seconds.
+function relDays(iso: string): string {
+  const d = daysAgo(iso);
+  if (d <= 0) return "today";
+  if (d === 1) return "1d";
+  if (d < 7) return `${d}d`;
+  const w = Math.floor(d / 7);
+  if (w < 5) return `${w}w`;
+  const m = Math.floor(d / 30);
+  if (m < 12) return `${m}mo`;
+  return `${Math.floor(d / 365)}y`;
+}
+
+const MAX_INLINE_SPECS = 3;
 
 export function FeatureCard({
   feature,
@@ -29,9 +48,20 @@ export function FeatureCard({
 }: FeatureCardProps) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
-  const currentStage = stages.find((s) => s.id === feature.status);
-  const dotColor = currentStage?.color ?? "#d6d3d1"; // stone-300 fallback
   const isLastStage = stages.length > 0 && stages[stages.length - 1].id === feature.status;
+
+  // One useSpecs call per card looks wasteful but TanStack Query dedupes:
+  // every card shares the same cache entry and hits D1 once per board load.
+  const specsQ = useSpecs({ featureNumber: "all" });
+  const ownSpecs = useMemo<Spec[]>(() => {
+    const all = specsQ.data ?? [];
+    return all
+      .filter((s) => s.featureNumber === feature.id && !s.archived)
+      .sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
+  }, [specsQ.data, feature.id]);
+
+  const inlineSpecs = ownSpecs.slice(0, MAX_INLINE_SPECS);
+  const overflowSpecs = ownSpecs.slice(MAX_INLINE_SPECS);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!draggable) return;
@@ -76,12 +106,9 @@ export function FeatureCard({
         </button>
       </div>
 
-      {/* Row 2: tags + people + hover actions */}
+      {/* Row 2: assignee + hover actions. No stage-color bullet — the column
+          header already conveys stage and the dot was visual noise here. */}
       <div className="flex items-center gap-2 mt-1.5 ml-6 flex-wrap">
-        <span
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ backgroundColor: dotColor }}
-        />
         <AssignDropdown
           owners={feature.owners}
           allPeople={allPeople}
@@ -100,6 +127,95 @@ export function FeatureCard({
           )}
         </div>
       </div>
+
+      {/* Row 3: linked specs — top 3 latest inline, rest behind a dropdown. */}
+      {ownSpecs.length > 0 && (
+        <div className="mt-2 ml-6 space-y-1">
+          {inlineSpecs.map((s) => (
+            <SpecChip key={s.id} spec={s} />
+          ))}
+          {overflowSpecs.length > 0 && <SpecOverflow specs={overflowSpecs} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpecChip({ spec }: { spec: Spec }) {
+  return (
+    <a
+      href={`/?tab=specs&spec=${spec.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => e.preventDefault()}
+      className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-accent group/spec"
+      title={spec.title}
+    >
+      <FileText size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
+      <span className="truncate flex-1">
+        {spec.title || <span className="text-stone-400">Untitled</span>}
+      </span>
+      <span className="shrink-0 text-[10px] text-stone-400 tabular-nums">
+        {relDays(spec.updatedAt ?? spec.createdAt)}
+      </span>
+    </a>
+  );
+}
+
+function SpecOverflow({ specs }: { specs: Spec[] }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-accent cursor-pointer"
+      >
+        <ChevronDown size={11} className={cn("transition-transform", open && "rotate-180")} />
+        +{specs.length} more spec{specs.length === 1 ? "" : "s"}
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full mt-1 z-30 min-w-[220px] max-w-[280px] bg-white border border-stone-200 rounded-lg shadow-md py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {specs.map((s) => (
+            <a
+              key={s.id}
+              href={`/?tab=specs&spec=${s.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.preventDefault()}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 hover:text-accent"
+              title={s.title}
+            >
+              <FileText size={11} className="shrink-0 text-stone-400" />
+              <span className="flex-1 truncate">
+                {s.title || <span className="text-stone-400">Untitled</span>}
+              </span>
+              <span className="shrink-0 text-[10px] text-stone-400 tabular-nums">
+                {relDays(s.updatedAt ?? s.createdAt)}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
