@@ -44,19 +44,19 @@ export function unarchiveSpecFolder(id: number): Promise<ArchiveFolderResponse> 
 
 // ---------- Specs ----------
 
-export type SpecFolderFilter = number | "unfiled" | "all";
+export type SpecFeatureFilter = number | "unfiled" | "all";
 
 export interface SpecListResponse {
   specs: Spec[];
 }
 
 export function fetchSpecs(opts: {
-  folderId?: SpecFolderFilter;
+  featureNumber?: SpecFeatureFilter;
   includeArchived?: boolean;
 } = {}): Promise<SpecListResponse> {
   const params = new URLSearchParams();
-  if (opts.folderId !== undefined && opts.folderId !== "all") {
-    params.set("folderId", String(opts.folderId));
+  if (opts.featureNumber !== undefined && opts.featureNumber !== "all") {
+    params.set("featureNumber", String(opts.featureNumber));
   }
   if (opts.includeArchived) params.set("include", "all");
   const qs = params.toString();
@@ -70,7 +70,7 @@ export function fetchSpec(id: number): Promise<Spec> {
 export function createSpec(input: {
   title: string;
   description?: string;
-  folderId?: number | null;
+  featureNumber?: number | null;
   links?: SpecLink[];
 }): Promise<Spec> {
   return apiPost<Spec>("/api/specs", input);
@@ -81,7 +81,7 @@ export function updateSpec(
   patch: {
     title?: string;
     description?: string;
-    folderId?: number | null;
+    featureNumber?: number | null;
     links?: SpecLink[];
   },
 ): Promise<Spec> {

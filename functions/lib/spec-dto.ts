@@ -8,6 +8,8 @@ export interface SpecRow {
   id: number;
   org_id: number;
   folder_id: number | null;
+  feature_number: number | null;
+  legacy_folder_name: string | null;
   title: string;
   description: string;
   links_json: string;
@@ -20,7 +22,15 @@ export interface SpecRow {
 
 export interface SpecDto {
   id: number;
+  /**
+   * @deprecated Unified into featureNumber (migration 0037). Kept in the DTO
+   * so existing clients that still send folderId don't crash mid-rollout.
+   */
   folderId: number | null;
+  /** Issue number of the Feature this spec belongs to, or null when unfiled. */
+  featureNumber: number | null;
+  /** Breadcrumb: name of the pre-unification project this spec came from. */
+  legacyFolderName: string | null;
   title: string;
   description: string;
   links: SpecLink[];
@@ -42,6 +52,8 @@ export function specRowToDto(row: SpecRow): SpecDto {
   return {
     id: row.id,
     folderId: row.folder_id,
+    featureNumber: row.feature_number,
+    legacyFolderName: row.legacy_folder_name,
     title: row.title,
     description: row.description ?? "",
     links,

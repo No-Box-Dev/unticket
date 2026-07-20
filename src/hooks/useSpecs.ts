@@ -12,7 +12,7 @@ import {
   unarchiveSpecFolder,
   updateSpec,
   updateSpecFolder,
-  type SpecFolderFilter,
+  type SpecFeatureFilter,
 } from "@/lib/specs-api";
 import type { Spec, SpecFolder, SpecLink } from "@/lib/types";
 
@@ -21,7 +21,7 @@ const folderKey = (org: string | null, includeArchived: boolean) =>
   ["specFolders", org, { includeArchived }] as const;
 const specsKey = (
   org: string | null,
-  filter: { folderId?: SpecFolderFilter; includeArchived?: boolean },
+  filter: { featureNumber?: SpecFeatureFilter; includeArchived?: boolean },
 ) => ["specs", org, filter] as const;
 const specKey = (org: string | null, id: number | null) => ["spec", org, id] as const;
 
@@ -181,7 +181,7 @@ export function useSetSpecFolderArchived() {
 // ---------- Specs ----------
 
 export function useSpecs(
-  filter: { folderId?: SpecFolderFilter; includeArchived?: boolean } = {},
+  filter: { featureNumber?: SpecFeatureFilter; includeArchived?: boolean } = {},
 ) {
   const { selectedOrg } = useAuth();
   return useQuery({
@@ -207,7 +207,7 @@ export function useCreateSpec() {
     mutationFn: (input: {
       title: string;
       description?: string;
-      folderId?: number | null;
+      featureNumber?: number | null;
       links?: SpecLink[];
     }) => createSpec(input),
     onMutate: async (input) => {
@@ -215,7 +215,9 @@ export function useCreateSpec() {
       const tempId = nextTempSpecId--;
       const optimistic: Spec = {
         id: tempId,
-        folderId: input.folderId ?? null,
+        folderId: null,
+        featureNumber: input.featureNumber ?? null,
+        legacyFolderName: null,
         title: input.title,
         description: input.description ?? "",
         links: input.links ?? [],
@@ -225,18 +227,19 @@ export function useCreateSpec() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      // Optimistically insert into every specs cache that could plausibly
-      // show it — "all folders" and the specific folder / unfiled slot.
+      // Insert into every specs cache slot this spec could plausibly appear
+      // in — "all", "unfiled" (when it has no feature), or the matching
+      // featureNumber bucket.
       qc.getQueryCache()
         .findAll({ queryKey: ["specs", selectedOrg] })
         .forEach((entry) => {
           const key = entry.queryKey;
-          const filter = key[2] as { folderId?: SpecFolderFilter; includeArchived?: boolean };
+          const filter = key[2] as { featureNumber?: SpecFeatureFilter; includeArchived?: boolean };
           const belongs =
-            filter.folderId === undefined ||
-            filter.folderId === "all" ||
-            (filter.folderId === "unfiled" && optimistic.folderId === null) ||
-            (typeof filter.folderId === "number" && filter.folderId === optimistic.folderId);
+            filter.featureNumber === undefined ||
+            filter.featureNumber === "all" ||
+            (filter.featureNumber === "unfiled" && optimistic.featureNumber === null) ||
+            (typeof filter.featureNumber === "number" && filter.featureNumber === optimistic.featureNumber);
           if (!belongs) return;
           const data = entry.state.data as Spec[] | undefined;
           qc.setQueryData<Spec[]>(key, data ? [optimistic, ...data] : [optimistic]);
@@ -282,13 +285,13 @@ export function useUpdateSpec() {
       id: number;
       title?: string;
       description?: string;
-      folderId?: number | null;
+      featureNumber?: number | null;
       links?: SpecLink[];
     }) =>
       updateSpec(args.id, {
         title: args.title,
         description: args.description,
-        folderId: args.folderId,
+        featureNumber: args.featureNumber,
         links: args.links,
       }),
     onMutate: async (args) => {

@@ -15,6 +15,10 @@ interface Ctx {
   params: { id: string };
 }
 
+const SPEC_COLUMNS =
+  "id, org_id, folder_id, feature_number, legacy_folder_name, title, description, " +
+  "links_json, archived, archived_at, created_by, created_at, updated_at";
+
 const SpecLinkSchema = z.object({
   url: z.string(),
   label: z.string().optional(),
@@ -24,20 +28,20 @@ const UpdateSpecBody = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
     description: z.string().max(20_000).optional(),
-    // null explicitly moves the spec to Unfiled; undefined leaves it alone.
-    folderId: z.number().int().positive().nullable().optional(),
+    /** null moves to Unfiled; undefined leaves unchanged. */
+    featureNumber: z.number().int().positive().nullable().optional(),
     links: z.array(SpecLinkSchema).max(50).optional(),
   })
   .refine(
     (v) =>
       v.title !== undefined ||
       v.description !== undefined ||
-      v.folderId !== undefined ||
+      v.featureNumber !== undefined ||
       v.links !== undefined,
     { message: "Nothing to update" },
   );
 
-// GET /api/specs/:id — fetch a single spec (used by the detail-modal deep link).
+// GET /api/specs/:id — fetch a single spec.
 export async function onRequestGet(context: Ctx): Promise<Response> {
   const { orgId } = getCtx(context) as { orgId: number };
   if (!orgId) return errorResponse("Missing org context", 400);
@@ -46,10 +50,7 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   if (!Number.isFinite(id) || id <= 0) return errorResponse("Invalid spec id", 400);
 
   const row = await context.env.DB.prepare(
-    `SELECT id, org_id, folder_id, title, description, links_json,
-            archived, archived_at, created_by, created_at, updated_at
-       FROM specs
-      WHERE id = ? AND org_id = ?`,
+    `SELECT ${SPEC_COLUMNS} FROM specs WHERE id = ? AND org_id = ?`,
   )
     .bind(id, orgId)
     .first<SpecRow>();
@@ -58,8 +59,8 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   return jsonResponse(specRowToDto(row));
 }
 
-// PATCH /api/specs/:id — partial update. `folderId: null` moves to Unfiled;
-// omit `folderId` to leave it unchanged.
+// PATCH /api/specs/:id — partial update. featureNumber: null moves to Unfiled;
+// omit to leave unchanged.
 export async function onRequestPatch(context: Ctx): Promise<Response> {
   const { orgId } = getCtx(context) as { orgId: number };
   if (!orgId) return errorResponse("Missing org context", 400);
@@ -77,15 +78,13 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
   if (!parsed.ok) return parsed.response;
   const patch = parsed.data;
 
-  // Verify folder ownership before writing so a bad id doesn't leave a
-  // half-applied update (D1 batches don't roll back on constraint errors).
-  if (patch.folderId != null) {
-    const folder = await context.env.DB.prepare(
-      "SELECT id FROM spec_folders WHERE id = ? AND org_id = ? AND archived = 0",
+  if (patch.featureNumber != null) {
+    const feature = await context.env.DB.prepare(
+      "SELECT 1 FROM features WHERE org_id = ? AND number = ?",
     )
-      .bind(patch.folderId, orgId)
-      .first<{ id: number }>();
-    if (!folder) return errorResponse(`Unknown or archived folder ${patch.folderId}`, 400);
+      .bind(orgId, patch.featureNumber)
+      .first<{ 1: number }>();
+    if (!feature) return errorResponse(`Unknown feature #${patch.featureNumber}`, 400);
   }
 
   const sets: string[] = [];
@@ -98,9 +97,9 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     sets.push("description = ?");
     binds.push(patch.description);
   }
-  if (patch.folderId !== undefined) {
-    sets.push("folder_id = ?");
-    binds.push(patch.folderId);
+  if (patch.featureNumber !== undefined) {
+    sets.push("feature_number = ?");
+    binds.push(patch.featureNumber);
   }
   if (patch.links !== undefined) {
     sets.push("links_json = ?");
@@ -112,8 +111,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     `UPDATE specs
         SET ${sets.join(", ")}
       WHERE id = ? AND org_id = ?
-      RETURNING id, org_id, folder_id, title, description, links_json,
-                archived, archived_at, created_by, created_at, updated_at`,
+      RETURNING ${SPEC_COLUMNS}`,
   )
     .bind(...binds, id, orgId)
     .first<SpecRow>();
