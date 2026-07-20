@@ -61,7 +61,13 @@ export function useCreateFeature() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { title: string; status: FeatureStatus; owners?: string[]; plan?: string }) =>
+    mutationFn: (args: {
+      title: string;
+      status: FeatureStatus;
+      owners?: string[];
+      plan?: string;
+      linkedSpecIds?: number[];
+    }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     // Optimistic: drop a pending card into the target column immediately, then
     // swap it for the real feature once GitHub assigns an issue number. Without
