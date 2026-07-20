@@ -66,15 +66,18 @@ function issueToFeature(issue: any): Feature {
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
   const status: FeatureStatus = labelStatus ?? "todo";
 
+  // Feature body still contains a legacy plan-text prefix on rows written
+  // before the plan concept was removed — parseMetadata splits it off so
+  // metadata stays readable, but we drop the content and rely on Specs
+  // for all rich content going forward.
   const rawBody = issue.body ?? "";
-  const { content, metadata } = parseMetadata(rawBody);
+  const { metadata } = parseMetadata(rawBody);
 
   return {
     id: issue.number,
     title: issue.title,
     owners: (issue.assignees ?? []).map((a: any) => a.login),
     status,
-    plan: content || undefined,
     url: issue.html_url,
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
@@ -121,7 +124,6 @@ export async function createFeature(
   opts: {
     status: FeatureStatus;
     owners?: string[];
-    plan?: string;
     linkedSpecIds?: number[];
   },
 ): Promise<Feature> {
@@ -129,7 +131,6 @@ export async function createFeature(
     title,
     status: opts.status,
     owners: opts.owners ?? [],
-    plan: opts.plan ?? "",
     ...(opts.linkedSpecIds && opts.linkedSpecIds.length > 0
       ? { linkedSpecIds: opts.linkedSpecIds }
       : {}),
@@ -141,7 +142,6 @@ export async function updateFeature(_org: string, updated: Feature): Promise<Fea
     title: updated.title,
     status: updated.status,
     owners: updated.owners,
-    plan: updated.plan ?? "",
     specLinks: updated.specLinks ?? [],
     linkedSpecIds: updated.linkedSpecIds ?? [],
   });

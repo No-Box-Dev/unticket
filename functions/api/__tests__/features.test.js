@@ -163,7 +163,7 @@ describe("POST /api/features", () => {
     const db = makeDb({ allResult: { results: [] } });
     const res = await onRequestPost(makeCtx({
       db, method: "POST",
-      body: { title: "Login", status: "todo", owners: ["alice"], plan: "plan" },
+      body: { title: "Login", status: "todo", owners: ["alice"] },
     }));
     expect(res.status).toBe(201);
     const data = await res.json();

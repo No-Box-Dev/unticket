@@ -124,7 +124,6 @@ export interface Feature {
   title: string;
   owners: string[];
   status: FeatureStatus;
-  plan?: string;
   url?: string;
   updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];

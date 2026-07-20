@@ -65,7 +65,6 @@ export function useCreateFeature() {
       title: string;
       status: FeatureStatus;
       owners?: string[];
-      plan?: string;
       linkedSpecIds?: number[];
     }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
@@ -81,7 +80,6 @@ export function useCreateFeature() {
         title: args.title,
         owners: args.owners ?? [],
         status: args.status,
-        plan: args.plan,
         pending: true,
       };
       qc.setQueryData<Feature[]>(["features", selectedOrg], (old) =>

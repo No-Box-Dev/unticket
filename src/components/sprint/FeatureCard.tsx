@@ -27,7 +27,6 @@ export function FeatureCard({
   onDragStart,
   isAdmin,
 }: FeatureCardProps) {
-  const hasPlan = !!feature.plan?.trim();
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
   const currentStage = stages.find((s) => s.id === feature.status);
@@ -59,7 +58,6 @@ export function FeatureCard({
         "group bg-white  rounded-lg border border-stone-200  p-3 shadow-sm hover:shadow-md transition-shadow",
         draggable && !feature.pending && "cursor-grab active:cursor-grabbing",
         isLastStage && "opacity-60",
-        !hasPlan && "border-l-2 border-l-amber-300",
         // Optimistic create in flight: faded + fully non-interactive until the
         // real issue number arrives (its temp negative id can't be PATCHed).
         feature.pending && "opacity-50 pointer-events-none",

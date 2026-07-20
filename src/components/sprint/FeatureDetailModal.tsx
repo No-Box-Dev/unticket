@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { X, ExternalLink, Pencil, Save } from "lucide-react";
-import Markdown from "react-markdown";
+import { X, ExternalLink, Pencil } from "lucide-react";
 import { AssignDropdown } from "./AssignDropdown";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
 import { FeatureLinkedSpecsSection } from "./FeatureLinkedSpecsSection";
@@ -37,8 +36,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     return [...stages, { id: draft.status, label: draft.status || "—", color: "#94a3b8" }];
   }, [stages, draft.status]);
   const currentStage = stageLookup(stages, draft.status);
-  const [editMode, setEditMode] = useState(false);
-  const [editContent, setEditContent] = useState("");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasUnsavedChanges = useRef(false);
@@ -81,8 +78,6 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     }
     onClose();
   }
-
-  const plan = draft.plan ?? "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
@@ -148,75 +143,9 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             </div>
           </div>
 
-          {/* Description (issue body) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500">Description</span>
-              <div className="flex items-center gap-2">
-                {draft.url && (
-                  <a
-                    href={draft.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-stone-400 hover:text-accent flex items-center gap-1"
-                    title="View on GitHub"
-                  >
-                    <ExternalLink size={12} />
-                  </a>
-                )}
-                {!editMode && (
-                  <button
-                    onClick={() => { setEditContent(plan); setEditMode(true); }}
-                    className="text-xs text-stone-400 hover:text-accent flex items-center gap-1 cursor-pointer"
-                  >
-                    <Pencil size={12} />
-                    Edit
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {!editMode && (
-              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone max-w-none">
-                {plan
-                  ? <Markdown>{plan}</Markdown>
-                  : <span className="text-stone-400">No description.</span>}
-              </div>
-            )}
-
-            {editMode && (
-              <div className="space-y-2">
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y min-h-[200px] max-h-[50vh]"
-                  rows={12}
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      update({ plan: editContent });
-                      setEditMode(false);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 cursor-pointer"
-                  >
-                    <Save size={12} />
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditMode(false)}
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Linked specs (from the manual Specs library) */}
-          {/* Specs for this feature — the feature owns them via
-              spec.feature_number under the unified model (migration 0037). */}
+          {/* All rich content on a feature lives in its Specs — a feature
+              no longer has its own description/plan field. The Specs
+              section is the only content surface. */}
           <FeatureLinkedSpecsSection featureNumber={draft.id} />
 
           {/* Spec links (free external URLs — Figma / Notion / etc.) */}

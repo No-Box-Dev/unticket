@@ -260,14 +260,16 @@ export async function upsertFeatureRow(db, orgId, ghIssue, opts = {}) {
 }
 
 // Convert a GitHub issue response to the Feature shape the frontend uses.
+// Feature body's leading text (legacy plan) is intentionally dropped from the
+// wire response — Specs are the sole content surface. parseFeatureMetadata
+// still runs so the metadata block behind it comes through.
 export function ghIssueToFeature(ghIssue) {
-  const { content, metadata } = parseFeatureMetadata(ghIssue.body ?? "");
+  const { metadata } = parseFeatureMetadata(ghIssue.body ?? "");
   return {
     id: ghIssue.number,
     title: ghIssue.title,
     owners: (ghIssue.assignees ?? []).map((a) => a.login),
     status: extractStatusFromLabels(ghIssue.labels),
-    plan: content || undefined,
     url: ghIssue.html_url ?? undefined,
     updatedAt: ghIssue.updated_at,
     statusHistory: metadata.statusHistory,
