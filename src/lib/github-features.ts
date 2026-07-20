@@ -122,6 +122,7 @@ export async function createFeature(
     status: FeatureStatus;
     owners?: string[];
     plan?: string;
+    linkedSpecIds?: number[];
   },
 ): Promise<Feature> {
   return apiPost<Feature>("/api/features", {
@@ -129,6 +130,9 @@ export async function createFeature(
     status: opts.status,
     owners: opts.owners ?? [],
     plan: opts.plan ?? "",
+    ...(opts.linkedSpecIds && opts.linkedSpecIds.length > 0
+      ? { linkedSpecIds: opts.linkedSpecIds }
+      : {}),
   });
 }
 

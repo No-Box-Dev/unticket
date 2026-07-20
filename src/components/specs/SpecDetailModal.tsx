@@ -4,6 +4,7 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsAdmin } from "@/hooks/useGitHub";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
+import { SpecLinkedFeaturesSection } from "@/components/specs/SpecLinkedFeaturesSection";
 import { useSetSpecArchived, useUpdateSpec } from "@/hooks/useSpecs";
 import type { Spec, SpecFolder, SpecLink } from "@/lib/types";
 
@@ -200,6 +201,8 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
           </div>
 
           <SpecLinksSection value={draft.links} onChange={setLinks} label="Links" />
+
+          <SpecLinkedFeaturesSection specId={draft.id} />
 
           {isAdmin && (
             <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
