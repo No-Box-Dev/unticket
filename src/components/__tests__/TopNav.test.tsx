@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
+// Un-mock TopNav — the global test-setup stubs it (so PageShell-based
+// pages don't need to wire AuthProvider) but this file is where we
+// exercise the real component.
+vi.unmock("@/components/TopNav");
+
 vi.mock("@/lib/auth", () => ({
   useAuth: vi.fn(),
 }));

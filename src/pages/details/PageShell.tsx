@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { TopNav } from "@/components/TopNav";
+import type { TabId } from "@/lib/types";
 
 interface PageShellProps {
   // Fallback destination used only when this page was loaded directly
@@ -10,6 +12,18 @@ interface PageShellProps {
   backTo?: string;
   backLabel?: string;
   children: ReactNode;
+}
+
+// Derive the "active" top-nav tab from the current pathname so the tab
+// highlight makes sense on detail/list pages that came from a tab. Falls
+// through to the settings-invalid "issues" default when nothing matches,
+// which just means no tab renders as active — safe visual state.
+function tabFromPath(pathname: string): TabId {
+  if (pathname.startsWith("/prs/")) return "prs";
+  if (pathname.startsWith("/issues/")) return "issues";
+  // fallthrough: return a TabId value the nav bar won't render as active
+  // in the top row (settings is a gear icon, not a nav item).
+  return "settings";
 }
 
 export function PageShell({ backTo, backLabel = "Back", children }: PageShellProps) {
@@ -31,9 +45,19 @@ export function PageShell({ backTo, backLabel = "Back", children }: PageShellPro
     }
   };
 
+  // Clicking any top-nav tab from a detail page routes back to the
+  // dashboard with that tab selected. Settings gear routes similarly.
+  const onTabChange = (tab: TabId) => {
+    if (tab === "issues") navigate("/");
+    else navigate(`/?tab=${tab}`);
+  };
+
+  const activeTab = tabFromPath(location.pathname);
+
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white px-4 sm:px-8 py-3 sticky top-0 z-10">
+    <div className="min-h-screen bg-stone-50 flex flex-col">
+      <TopNav activeTab={activeTab} onTabChange={onTabChange} />
+      <header className="border-b border-stone-200 bg-white px-4 sm:px-8 py-3 sticky top-14 z-10">
         <a
           href={backTo ?? "#"}
           onClick={onBack}
@@ -43,7 +67,7 @@ export function PageShell({ backTo, backLabel = "Back", children }: PageShellPro
           {backLabel}
         </a>
       </header>
-      <main className="max-w-5xl mx-auto px-4 sm:px-8 py-6">{children}</main>
+      <main className="max-w-5xl mx-auto px-4 sm:px-8 py-6 w-full">{children}</main>
     </div>
   );
 }
