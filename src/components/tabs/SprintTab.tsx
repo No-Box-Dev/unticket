@@ -220,23 +220,6 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
 
   return (
     <div className="space-y-4 pb-8">
-      {/* Header: actions */}
-      <div className="flex items-center justify-end flex-wrap gap-2">
-        {isAdmin && (
-          <button
-            onClick={handleCleanDone}
-            disabled={doneCount === 0 || cleanDoneMut.isPending}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer disabled:opacity-50 disabled:hover:text-stone-500 disabled:hover:border-stone-200"
-            title={doneCount === 0 ? `No features in ${lastStage?.label ?? "the last stage"} to clean` : `Clean ${doneCount} done feature${doneCount === 1 ? "" : "s"}`}
-          >
-            <Sparkles size={12} />
-            <span className="hidden sm:inline">
-              {cleanDoneMut.isPending ? "Cleaning..." : `Clean done${doneCount > 0 ? ` (${doneCount})` : ""}`}
-            </span>
-          </button>
-        )}
-      </div>
-
       <FeaturesView
         stages={stages}
         stageBuckets={stageBuckets}
@@ -258,6 +241,14 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
         onOpenDetail={openDetail}
         onAdd={addFeature}
         isAdmin={isAdmin}
+        onCleanDone={handleCleanDone}
+        doneCount={doneCount}
+        cleanDonePending={cleanDoneMut.isPending}
+        cleanDoneTitle={
+          doneCount === 0
+            ? `No features in ${lastStage?.label ?? "the last stage"} to clean`
+            : `Clean ${doneCount} done feature${doneCount === 1 ? "" : "s"}`
+        }
       />
 
       {detailFeature && (
@@ -297,6 +288,10 @@ interface FeaturesViewProps {
   onOpenDetail: (f: Feature) => void;
   onAdd: (title: string) => void;
   isAdmin: boolean;
+  onCleanDone: () => void;
+  doneCount: number;
+  cleanDonePending: boolean;
+  cleanDoneTitle: string;
 }
 
 function FeaturesView({
@@ -304,13 +299,16 @@ function FeaturesView({
   personPills, allPeopleNames,
   sortBy, setSortBy, dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
   onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+  onCleanDone, doneCount, cleanDonePending, cleanDoneTitle,
 }: FeaturesViewProps) {
   return (
     <div className="space-y-2">
-      <AddFeatureInput onAdd={onAdd} />
-
-      {/* Search + filters row */}
+      {/* One-row toolbar: Add · Search · People · Sort · Clean done.
+          Wraps on narrow screens via flex-wrap but everything stays inline
+          on ~640px+ where the tab is mostly used. */}
       <div className="flex items-center gap-2 flex-wrap">
+        <AddFeatureInput onAdd={onAdd} />
+
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
@@ -335,6 +333,20 @@ function FeaturesView({
             <option value="title">Title A-Z</option>
           </select>
         </div>
+
+        {isAdmin && (
+          <button
+            onClick={onCleanDone}
+            disabled={doneCount === 0 || cleanDonePending}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-500 hover:text-accent hover:border-accent/30 transition-colors cursor-pointer disabled:opacity-50 disabled:hover:text-stone-500 disabled:hover:border-stone-200"
+            title={cleanDoneTitle}
+          >
+            <Sparkles size={12} />
+            <span className="hidden sm:inline">
+              {cleanDonePending ? "Cleaning..." : `Clean done${doneCount > 0 ? ` (${doneCount})` : ""}`}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Kanban columns — fixed-width tracks so >4 stages scroll horizontally
