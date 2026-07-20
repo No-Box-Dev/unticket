@@ -46,7 +46,8 @@ export function useCreateSpecFolder() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; description?: string }) => createSpecFolder(input),
+    mutationFn: (input: { name: string; description?: string; owner?: string | null }) =>
+      createSpecFolder(input),
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: ["specFolders", selectedOrg] });
       const tempId = nextTempFolderId--;
@@ -54,6 +55,7 @@ export function useCreateSpecFolder() {
         id: tempId,
         name: input.name,
         description: input.description ?? null,
+        owner: input.owner ?? null,
         archived: false,
         archivedAt: null,
         createdBy: "",
@@ -94,8 +96,17 @@ export function useUpdateSpecFolder() {
   const { selectedOrg } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: number; name?: string; description?: string | null }) =>
-      updateSpecFolder(args.id, { name: args.name, description: args.description }),
+    mutationFn: (args: {
+      id: number;
+      name?: string;
+      description?: string | null;
+      owner?: string | null;
+    }) =>
+      updateSpecFolder(args.id, {
+        name: args.name,
+        description: args.description,
+        owner: args.owner,
+      }),
     onMutate: async (args) => {
       await qc.cancelQueries({ queryKey: ["specFolders", selectedOrg] });
       const snapshots: { key: readonly unknown[]; prev: SpecFolder[] | undefined }[] = [];
@@ -109,6 +120,7 @@ export function useUpdateSpecFolder() {
                   ...f,
                   name: args.name ?? f.name,
                   description: args.description !== undefined ? args.description : f.description,
+                  owner: args.owner !== undefined ? args.owner : f.owner,
                 }
               : f,
           ) ?? [],

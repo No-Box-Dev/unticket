@@ -18,6 +18,7 @@ interface FolderRow {
   org_id: number;
   name: string;
   description: string | null;
+  owner: string | null;
   archived: number;
   archived_at: string | null;
   created_by: string;
@@ -25,13 +26,25 @@ interface FolderRow {
   updated_at: string;
 }
 
+const OwnerLogin = z
+  .string()
+  .trim()
+  .min(1)
+  .max(39)
+  .regex(/^[a-zA-Z0-9-]+$/, "Invalid owner username");
+
 const UpdateFolderBody = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     description: z.string().trim().max(500).nullable().optional(),
+    // null clears the owner; undefined leaves it alone.
+    owner: OwnerLogin.nullable().optional(),
   })
   .refine(
-    (v) => v.name !== undefined || v.description !== undefined,
+    (v) =>
+      v.name !== undefined ||
+      v.description !== undefined ||
+      v.owner !== undefined,
     { message: "Nothing to update" },
   );
 
@@ -66,6 +79,10 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     sets.push("description = ?");
     binds.push(patch.description);
   }
+  if (patch.owner !== undefined) {
+    sets.push("owner = ?");
+    binds.push(patch.owner);
+  }
   sets.push("updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')");
 
   try {
@@ -73,7 +90,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
       `UPDATE spec_folders
           SET ${sets.join(", ")}
         WHERE id = ? AND org_id = ?
-        RETURNING id, org_id, name, description, archived, archived_at,
+        RETURNING id, org_id, name, description, owner, archived, archived_at,
                   created_by, created_at, updated_at`,
     )
       .bind(...binds, id, orgId)
@@ -93,6 +110,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
       id: row.id,
       name: row.name,
       description: row.description,
+      owner: row.owner,
       archived: row.archived === 1,
       archivedAt: row.archived_at,
       createdBy: row.created_by,

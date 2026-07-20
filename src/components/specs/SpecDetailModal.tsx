@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Pencil, Save, Undo2, X } from "lucide-react";
-import Markdown from "react-markdown";
+import { Archive, Pencil, Undo2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsAdmin } from "@/hooks/useGitHub";
@@ -19,8 +18,6 @@ interface Props {
 // `hasUnsavedChanges` ref lets us flush pending edits on close.
 export function SpecDetailModal({ spec, folders, onClose }: Props) {
   const [draft, setDraft] = useState<Spec>(spec);
-  const [editMode, setEditMode] = useState(false);
-  const [editContent, setEditContent] = useState("");
 
   const updateMut = useUpdateSpec();
   const setArchivedMut = useSetSpecArchived();
@@ -63,9 +60,7 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
     setDraft((d) => {
       const next = { ...d, description };
       hasUnsavedChanges.current = true;
-      // Description-edit uses an explicit Save button, so this is called
-      // once from the Save handler — no debounce needed.
-      save({ id: next.id, description });
+      saveDebounced({ id: next.id, description });
       return next;
     });
   };
@@ -194,58 +189,14 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-stone-500">Description</span>
-              {!editMode && (
-                <button
-                  onClick={() => {
-                    setEditContent(draft.description);
-                    setEditMode(true);
-                  }}
-                  className="text-xs text-stone-400 hover:text-accent flex items-center gap-1 cursor-pointer"
-                >
-                  <Pencil size={12} />
-                  Edit
-                </button>
-              )}
-            </div>
-
-            {!editMode && (
-              <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 overflow-y-auto max-h-[40vh] prose prose-sm prose-stone max-w-none">
-                {draft.description
-                  ? <Markdown>{draft.description}</Markdown>
-                  : <span className="text-stone-400">No description.</span>}
-              </div>
-            )}
-
-            {editMode && (
-              <div className="space-y-2">
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y min-h-[200px] max-h-[50vh]"
-                  rows={12}
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setDescription(editContent);
-                      setEditMode(false);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 cursor-pointer"
-                  >
-                    <Save size={12} />
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditMode(false)}
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+            <span className="text-xs text-stone-500 block mb-1.5">Description</span>
+            <textarea
+              value={draft.description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Notes, context, links to raw research… (Markdown)"
+              className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent resize-y min-h-[160px] max-h-[50vh]"
+              rows={8}
+            />
           </div>
 
           <SpecLinksSection value={draft.links} onChange={setLinks} label="Links" />
