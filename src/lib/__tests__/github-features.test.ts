@@ -149,18 +149,21 @@ describe("updateFeature", () => {
       id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
     });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "ready", owners: ["alice"], plan: "do it", specLinks: [],
+      title: "X", status: "ready", owners: ["alice"], plan: "do it",
+      specLinks: [], linkedSpecIds: [],
     });
     expect(result.id).toBe(5);
   });
 
   it("sends an empty string plan when feature.plan is undefined", async () => {
-    // Also sends specLinks: [] so that "the user removed all spec links" is
-    // faithfully patched through (undefined would be ambiguous vs. omitted).
+    // Also sends specLinks: [] and linkedSpecIds: [] so that "the user
+    // removed all links" is faithfully patched through (undefined would be
+    // ambiguous vs. omitted).
     mockPatch.mockResolvedValue({ id: 5, title: "X", status: "todo", owners: [] });
     await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "todo", owners: [], plan: "", specLinks: [],
+      title: "X", status: "todo", owners: [], plan: "",
+      specLinks: [], linkedSpecIds: [],
     });
   });
 

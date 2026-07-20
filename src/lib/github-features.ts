@@ -30,6 +30,7 @@ const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
   specLinks?: SpecLink[];
+  linkedSpecIds?: number[];
 }
 
 function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
@@ -78,6 +79,7 @@ function issueToFeature(issue: any): Feature {
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
     specLinks: metadata.specLinks,
+    linkedSpecIds: metadata.linkedSpecIds,
   };
 }
 
@@ -137,6 +139,7 @@ export async function updateFeature(_org: string, updated: Feature): Promise<Fea
     owners: updated.owners,
     plan: updated.plan ?? "",
     specLinks: updated.specLinks ?? [],
+    linkedSpecIds: updated.linkedSpecIds ?? [],
   });
 }
 

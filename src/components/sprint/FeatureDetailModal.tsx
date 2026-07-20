@@ -3,6 +3,7 @@ import { X, ExternalLink, Pencil, Save } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
+import { FeatureLinkedSpecsSection } from "./FeatureLinkedSpecsSection";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
 import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
@@ -213,7 +214,13 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             )}
           </div>
 
-          {/* Spec links */}
+          {/* Linked specs (from the manual Specs library) */}
+          <FeatureLinkedSpecsSection
+            value={draft.linkedSpecIds ?? []}
+            onChange={(ids) => update({ linkedSpecIds: ids }, true)}
+          />
+
+          {/* Spec links (free external URLs — Figma / Notion / etc.) */}
           <SpecLinksSection
             value={draft.specLinks ?? []}
             onChange={(links) => update({ specLinks: links }, true)}

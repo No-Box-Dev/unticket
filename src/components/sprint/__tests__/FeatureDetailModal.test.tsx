@@ -5,6 +5,12 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: () => ({ data: null }),
 }));
+// The Linked Specs section fires useSpecs/useSpecFolders which need auth +
+// react-query context — this stub keeps the modal test focused on the
+// non-Specs behaviour that these cases actually assert.
+vi.mock("../FeatureLinkedSpecsSection", () => ({
+  FeatureLinkedSpecsSection: () => null,
+}));
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
 }));
