@@ -715,6 +715,13 @@ export async function fetchPRStats(): Promise<PRStats> {
   return apiGet<PRStats>("/api/prs?meta=stats");
 }
 
+// Admin-only. Closes a PR on GitHub via /api/prs/close and mirrors the
+// state=closed change to D1 so the caller can invalidate PR queries and see
+// the row drop out immediately.
+export async function closePR(repo: string, number: number): Promise<void> {
+  await apiPost<{ ok: true }>("/api/prs/close", { repo, number });
+}
+
 // Per-member counts for the Engineers tab, aggregated server-side. Each map is
 // keyed by GitHub login. See functions/api/engineer-stats.ts.
 export interface EngineerStats {

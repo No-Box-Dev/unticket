@@ -5,7 +5,9 @@ import { SpecFolderSidebar, type SidebarSelection } from "@/components/specs/Spe
 import { SpecListPane } from "@/components/specs/SpecListPane";
 import { SpecDetailModal } from "@/components/specs/SpecDetailModal";
 import { SpecEditorForm } from "@/components/specs/SpecEditorForm";
+import { PersonSelect } from "@/components/ui/PersonSelect";
 import { useSpecFolders, useSpecs } from "@/hooks/useSpecs";
+import { useActiveMembers } from "@/hooks/useGitHub";
 import type { Spec, SpecFolder } from "@/lib/types";
 
 // URL params:
@@ -45,6 +47,20 @@ export function SpecsTab() {
   const openSpecId = specParam && Number.isFinite(Number(specParam)) ? Number(specParam) : null;
 
   const [createOpen, setCreateOpen] = useState(false);
+  // Person filter: matches the spec's project owner. Unfiled specs and
+  // specs in projects with no owner are excluded when this filter is on
+  // — matches Features' "owner-driven" filter behavior.
+  const personFilter = searchParams.get("person") ?? "";
+  const setPersonFilter = useCallback(
+    (login: string | null) => {
+      const params = new URLSearchParams(searchParams);
+      if (login) params.set("person", login);
+      else params.delete("person");
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const { data: members } = useActiveMembers();
 
   // Folder list — always fetch both variants so the sidebar can render
   // "Archive (n)" counts without a second click. Two separate queries keeps
@@ -91,17 +107,37 @@ export function SpecsTab() {
     [searchParams, setSearchParams],
   );
 
+  const activeFolders: SpecFolder[] = activeFoldersQ.data ?? [];
+  const allFolders: SpecFolder[] = useMemo(
+    () => allFoldersQ.data ?? [],
+    [allFoldersQ.data],
+  );
+  const archivedFolders = allFolders.filter((f) => f.archived);
+
+  // Person filter: keep only specs whose project (folder) is owned by the
+  // selected login. Specs with no folder (Unfiled) OR whose folder has no
+  // owner drop out when the filter is on. This matches "specs someone owns"
+  // more accurately than filtering by created_by.
+  const ownerByFolderId = useMemo(() => {
+    const m = new Map<number, string | null>();
+    allFolders.forEach((f) => m.set(f.id, f.owner));
+    return m;
+  }, [allFolders]);
+
   // For the Archive view, filter down to archived rows client-side. The API
   // returned everything for that scope (include=all with no folderId).
   const displayedSpecs = useMemo<Spec[]>(() => {
-    const list = specsQ.data ?? [];
-    if (selection.kind === "archive") return list.filter((s) => s.archived);
-    return list.filter((s) => !s.archived);
-  }, [specsQ.data, selection]);
-
-  const activeFolders: SpecFolder[] = activeFoldersQ.data ?? [];
-  const allFolders: SpecFolder[] = allFoldersQ.data ?? [];
-  const archivedFolders = allFolders.filter((f) => f.archived);
+    let list = specsQ.data ?? [];
+    if (selection.kind === "archive") list = list.filter((s) => s.archived);
+    else list = list.filter((s) => !s.archived);
+    if (personFilter) {
+      list = list.filter((s) => {
+        if (s.folderId == null) return false;
+        return ownerByFolderId.get(s.folderId) === personFilter;
+      });
+    }
+    return list;
+  }, [specsQ.data, selection, personFilter, ownerByFolderId]);
 
   // Unfiled spec count for the sidebar. Only cheap when the active folders
   // query already loaded the full active-spec set — otherwise fall back to a
@@ -125,12 +161,20 @@ export function SpecsTab() {
             comes from GitHub.
           </p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 cursor-pointer"
-        >
-          <Plus size={14} /> New spec
-        </button>
+        <div className="flex items-center gap-2">
+          <PersonSelect
+            value={personFilter || null}
+            onChange={(v) => setPersonFilter(Array.isArray(v) ? v[0] ?? null : v)}
+            options={(members ?? []).map((m) => ({ value: m.login, label: m.login }))}
+            placeholder="All owners"
+          />
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 cursor-pointer"
+          >
+            <Plus size={14} /> New spec
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
