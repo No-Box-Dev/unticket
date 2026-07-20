@@ -23,6 +23,7 @@ import {
   upsertFeatureRow,
 } from "../lib/feature-issues";
 import { sanitizeSpecLinks } from "../lib/spec-links";
+import { filterExistingSpecIds, sanitizeLinkedSpecIds } from "../lib/linked-spec-ids";
 import { validate } from "../lib/validate";
 
 interface Env {
@@ -46,6 +47,9 @@ const CreateFeatureBody = z.object({
   plan: z.string().optional(),
   // Validated by sanitizeSpecLinks (http/https only) before storage.
   specLinks: z.array(z.unknown()).optional(),
+  // Validated by sanitizeLinkedSpecIds + filterExistingSpecIds (drops any
+  // that don't belong to this org) before storage.
+  linkedSpecIds: z.array(z.unknown()).optional(),
 }).passthrough();
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
@@ -113,6 +117,11 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
     : [];
   const plan = typeof payload?.plan === "string" ? payload.plan : "";
   const specLinks = sanitizeSpecLinks(payload?.specLinks);
+  const linkedSpecIds = await filterExistingSpecIds(
+    context.env.DB,
+    orgId,
+    sanitizeLinkedSpecIds(payload?.linkedSpecIds),
+  );
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
@@ -131,6 +140,7 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
     const body = buildIssueBody(plan, {
       statusHistory: [{ status, timestamp: new Date().toISOString() }],
       ...(specLinks.length > 0 ? { specLinks } : {}),
+      ...(linkedSpecIds.length > 0 ? { linkedSpecIds } : {}),
     });
 
     const ghIssue = await createFeatureIssue(token, orgLogin, {

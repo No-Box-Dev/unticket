@@ -129,6 +129,8 @@ export interface Feature {
   updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];
   specLinks?: SpecLink[];
+  /** IDs of manual Specs (from the Specs tab) linked to this feature. */
+  linkedSpecIds?: number[];
   // True while an optimistic create is in flight — the card carries a
   // temporary negative id and renders non-interactive until GitHub assigns
   // the real issue number. Never set on features returned by the server.

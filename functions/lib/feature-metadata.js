@@ -27,7 +27,8 @@ export function serializeFeatureMetadata(content, metadata) {
   const hasData =
     (metadata.statusHistory && metadata.statusHistory.length > 0) ||
     (metadata.linkedPRs && metadata.linkedPRs.length > 0) ||
-    (metadata.specLinks && metadata.specLinks.length > 0);
+    (metadata.specLinks && metadata.specLinks.length > 0) ||
+    (metadata.linkedSpecIds && metadata.linkedSpecIds.length > 0);
   if (!hasData) return content;
   return `${content}\n\n<!-- unticket:metadata\n${JSON.stringify(metadata)}\n-->`;
 }

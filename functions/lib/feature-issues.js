@@ -272,5 +272,6 @@ export function ghIssueToFeature(ghIssue) {
     updatedAt: ghIssue.updated_at,
     statusHistory: metadata.statusHistory,
     specLinks: metadata.specLinks,
+    linkedSpecIds: metadata.linkedSpecIds,
   };
 }
