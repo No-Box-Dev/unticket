@@ -10,13 +10,15 @@ import {
   MoreHorizontal,
   Pencil,
   Undo2,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useIsAdmin } from "@/hooks/useGitHub";
+import { useActiveMembers, useIsAdmin } from "@/hooks/useGitHub";
 import { useConfirm, ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useSetSpecFolderArchived, useUpdateSpecFolder } from "@/hooks/useSpecs";
 import type { SpecFolder } from "@/lib/types";
 import { FolderCreateInline } from "./FolderCreateInline";
+import { FolderOwnerModal } from "./FolderOwnerModal";
 
 export type SidebarSelection =
   | { kind: "all" }
@@ -43,7 +45,10 @@ export function SpecFolderSidebar({
 }: Props) {
   const [archiveOpen, setArchiveOpen] = useState(selection.kind === "archive");
   const [renaming, setRenaming] = useState<number | null>(null);
+  const [ownerModalFor, setOwnerModalFor] = useState<SpecFolder | null>(null);
   const isAdmin = useIsAdmin();
+  const { data: members } = useActiveMembers();
+  const membersByLogin = new Map((members ?? []).map((m) => [m.login, m]));
   const { confirm, dialogProps } = useConfirm();
   const setArchivedMut = useSetSpecFolderArchived();
 
@@ -95,10 +100,12 @@ export function SpecFolderSidebar({
               <FolderRow
                 key={f.id}
                 folder={f}
+                ownerAvatarUrl={f.owner ? membersByLogin.get(f.owner)?.avatar_url ?? null : null}
                 active={isActive({ kind: "folder", folderId: f.id })}
                 onSelect={() => onSelect({ kind: "folder", folderId: f.id })}
                 isAdmin={isAdmin}
                 onRename={() => setRenaming(f.id)}
+                onSetOwner={() => setOwnerModalFor(f)}
                 onArchive={async () => {
                   const ok = await confirm({
                     title: `Archive "${f.name}"?`,
@@ -161,6 +168,9 @@ export function SpecFolderSidebar({
       ) : null}
 
       <ConfirmDialog {...dialogProps} />
+      {ownerModalFor && (
+        <FolderOwnerModal folder={ownerModalFor} onClose={() => setOwnerModalFor(null)} />
+      )}
     </aside>
   );
 }
@@ -199,14 +209,25 @@ function SidebarItem({ active, onClick, icon, label, count }: SidebarItemProps) 
 
 interface FolderRowProps {
   folder: SpecFolder;
+  ownerAvatarUrl: string | null;
   active: boolean;
   onSelect: () => void;
   isAdmin: boolean;
   onRename: () => void;
+  onSetOwner: () => void;
   onArchive: () => void;
 }
 
-function FolderRow({ folder, active, onSelect, isAdmin, onRename, onArchive }: FolderRowProps) {
+function FolderRow({
+  folder,
+  ownerAvatarUrl,
+  active,
+  onSelect,
+  isAdmin,
+  onRename,
+  onSetOwner,
+  onArchive,
+}: FolderRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -234,34 +255,60 @@ function FolderRow({ folder, active, onSelect, isAdmin, onRename, onArchive }: F
       >
         {active ? <FolderOpen size={14} /> : <Folder size={14} />}
         <span className="flex-1 truncate">{folder.name}</span>
+        {folder.owner && (
+          ownerAvatarUrl ? (
+            <img
+              src={ownerAvatarUrl}
+              alt={folder.owner}
+              title={folder.owner}
+              className="w-4 h-4 rounded-full shrink-0"
+            />
+          ) : (
+            <span
+              title={folder.owner}
+              className="w-4 h-4 rounded-full shrink-0 bg-stone-200 text-[8px] text-stone-500 flex items-center justify-center"
+            >
+              {folder.owner.slice(0, 1).toUpperCase()}
+            </span>
+          )
+        )}
         {folder.specCount > 0 && (
           <span className="text-[10px] text-stone-400">{folder.specCount}</span>
         )}
       </button>
-      {isAdmin && (
-        <div className="absolute right-1 top-1/2 -translate-y-1/2" ref={menuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((v) => !v);
-            }}
-            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-stone-200 text-stone-500 cursor-pointer"
-            title="Project options"
-            aria-label="Project options"
-          >
-            <MoreHorizontal size={12} />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[160px] z-40">
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  onRename();
-                }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
-              >
-                <Pencil size={12} /> Rename
-              </button>
+      <div className="absolute right-1 top-1/2 -translate-y-1/2" ref={menuRef}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-stone-200 text-stone-500 cursor-pointer"
+          title="Project options"
+          aria-label="Project options"
+        >
+          <MoreHorizontal size={12} />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-md py-1 min-w-[160px] z-40">
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onRename();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
+            >
+              <Pencil size={12} /> Rename
+            </button>
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onSetOwner();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
+            >
+              <UserRound size={12} /> {folder.owner ? "Change owner" : "Set owner"}
+            </button>
+            {isAdmin && (
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -271,10 +318,10 @@ function FolderRow({ folder, active, onSelect, isAdmin, onRename, onArchive }: F
               >
                 <Archive size={12} /> Archive project
               </button>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </li>
   );
 }

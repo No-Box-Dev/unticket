@@ -151,6 +151,8 @@ export interface SpecFolder {
   id: number;
   name: string;
   description: string | null;
+  /** GitHub login of the project owner, or null when unset. */
+  owner: string | null;
   archived: boolean;
   archivedAt: string | null;
   createdBy: string;

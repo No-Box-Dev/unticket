@@ -15,13 +15,14 @@ export function fetchSpecFolders(includeArchived = false): Promise<FolderListRes
 export function createSpecFolder(input: {
   name: string;
   description?: string;
+  owner?: string | null;
 }): Promise<SpecFolder> {
   return apiPost<SpecFolder>("/api/spec-folders", input);
 }
 
 export function updateSpecFolder(
   id: number,
-  patch: { name?: string; description?: string | null },
+  patch: { name?: string; description?: string | null; owner?: string | null },
 ): Promise<SpecFolder> {
   return apiPatch<SpecFolder>(`/api/spec-folders/${id}`, patch);
 }
