@@ -1,12 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { useOrgMembers, useIsAdmin, useRepos, useTriggerFeatureSync, useUnacknowledgedRepos, useAcknowledgeRepos } from "@/hooks/useGitHub";
+import { useOrgMembers, useIsAdmin, useTriggerFeatureSync, useUnacknowledgedRepos, useAcknowledgeRepos } from "@/hooks/useGitHub";
 import { useSetProjectArchived } from "@/hooks/useNoxlink";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useSettings, useSaveSettings, usePeople, useSavePeople } from "@/hooks/useConfigRepo";
 import { useFeedProjects } from "@/hooks/useNoxlink";
-import { useRepoFolders } from "@/hooks/useSpecs";
 import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { PeopleManagement } from "@/components/settings/PeopleManagement";
 import { BoardStagesSection } from "@/components/settings/BoardStagesSection";
@@ -115,7 +114,6 @@ export function SettingsTab() {
             </span>
           </div>
           <FeaturesRepoSection />
-          <SpecsSourceSection />
           <BoardStagesSection />
           <LlmSettingsSection />
           <ReleaseNotesPromptSection />
@@ -782,199 +780,6 @@ function FeaturesRepoSection() {
           className="text-xs text-stone-500 hover:text-stone-700 disabled:opacity-50 cursor-pointer"
         >
           Reset to default
-        </button>
-        {savedAt && !isDirty && !error && (
-          <span className="inline-flex items-center gap-1 text-xs text-green-600">
-            <Check size={12} /> Saved
-          </span>
-        )}
-        {error && <span className="text-xs text-red-500">{error}</span>}
-      </div>
-    </div>
-  );
-}
-
-function SpecsSourceSection() {
-  const { selectedOrg } = useAuth();
-  const { data: settings } = useSettings();
-  const { data: repos, isLoading: reposLoading } = useRepos({ includeAll: true });
-  const saveSettings = useSaveSettings();
-  const persistedRepo = settings?.specs?.repo ?? "";
-  const persistedRoot = settings?.specs?.rootPath ?? "";
-
-  const [repoDraft, setRepoDraft] = useState<string | null>(null);
-  const [rootDraft, setRootDraft] = useState<string | null>(null);
-  const repo = repoDraft ?? persistedRepo;
-  const root = rootDraft ?? persistedRoot;
-  const folders = useRepoFolders(repo);
-
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // owner/repo (matching what's in settings.unticketRepo logic) but here we
-  // accept a full slug because the spec source can live in a different repo.
-  const repoValid = repo.trim() === "" || /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo.trim());
-  // rootPath: per-segment validation matches functions/lib/specs.js
-  // hasUnsafePathSegment — only reject literal `.` / `..` / empty / `\`
-  // segments. Legitimate names like `design..v2` are fine.
-  const rootValid = (() => {
-    const normalized = root.trim().replace(/^\/+|\/+$/g, "");
-    if (!normalized) return true;
-    for (const seg of normalized.split("/")) {
-      if (!seg || seg === "." || seg === ".." || seg.includes("\\")) return false;
-      if (!/^[A-Za-z0-9._-]+$/.test(seg)) return false;
-    }
-    return true;
-  })();
-
-  const isDirty =
-    (repoDraft !== null && repoDraft.trim() !== persistedRepo.trim()) ||
-    (rootDraft !== null && rootDraft.trim() !== persistedRoot.trim());
-
-  // Build the dropdown options from the current org's repos. `useRepos`
-  // returns just the bare name, so we prefix the org login to land at the
-  // owner/repo shape the backend expects. We don't list cross-org repos
-  // here — admins who need a spec source outside the selected org can
-  // switch orgs first.
-  const repoOptions = useMemo(() => {
-    const opts = (repos ?? [])
-      .filter((r) => !r.inactive)
-      .map((r) => ({
-        value: selectedOrg ? `${selectedOrg}/${r.name}` : r.name,
-        label: selectedOrg ? `${selectedOrg}/${r.name}` : r.name,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-    // Empty option = clear / disable the Specs source.
-    const result = [{ value: "", label: "— Disable specs source —" }, ...opts];
-    // Preserve a persisted value pointing at a cross-org repo or one no
-    // longer in /api/repos (archived, removed) so the dropdown can still
-    // render it instead of silently looking unset.
-    if (persistedRepo && !result.some((o) => o.value === persistedRepo)) {
-      result.push({ value: persistedRepo, label: `${persistedRepo}  (other org / archived)` });
-    }
-    return result;
-  }, [repos, selectedOrg, persistedRepo]);
-
-  // Build the Root folder dropdown from the selected repo's actual folder
-  // tree. The repo-root option always comes first so admins can ship a
-  // tiny demo (`hello-world/` directly at the root) without typing.
-  // Always include the persisted value as an entry too, so an existing
-  // config (or a value that was removed from the repo) still renders.
-  const rootOptions = useMemo(() => {
-    const base = [{ value: "", label: "— Repo root —" }];
-    for (const path of folders.data?.folders ?? []) {
-      base.push({ value: path, label: path });
-    }
-    if (root && !base.some((o) => o.value === root)) {
-      base.push({ value: root, label: `${root}  (not in repo tree)` });
-    }
-    return base;
-  }, [folders.data, root]);
-
-  // When the user picks a different repo, reset root to the new repo's
-  // root — stale folder paths from the previous repo almost certainly
-  // don't exist there. Inlined in the onChange below (NOT a useEffect on
-  // `repo`) because the effect would also fire on initial settings
-  // hydration (repo: "" → persistedRepo) and silently clobber a
-  // persisted rootPath. Only a user-initiated repo switch should reset.
-  function handleRepoChange(next: string) {
-    if (next !== repo) setRootDraft("");
-    setRepoDraft(next);
-  }
-
-  async function handleSave() {
-    if (!settings) return;
-    if (!repoValid || !rootValid) {
-      setError("Invalid format. Repo must be 'owner/repo'; root path is slash-separated.");
-      return;
-    }
-    setError(null);
-    try {
-      const trimmedRepo = repo.trim();
-      const trimmedRoot = root.trim().replace(/^\/+|\/+$/g, "");
-      const next: OrgSettings = { ...settings };
-      if (!trimmedRepo) {
-        delete next.specs;
-      } else {
-        next.specs = {
-          repo: trimmedRepo,
-          ...(trimmedRoot ? { rootPath: trimmedRoot } : {}),
-        };
-      }
-      await saveSettings.mutateAsync(next);
-      setRepoDraft(null);
-      setRootDraft(null);
-      setSavedAt(Date.now());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const configured = !!persistedRepo.trim();
-
-  return (
-    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-stone-900">Specs source</h2>
-        {!configured && (
-          <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
-            disabled
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-stone-400">
-        Pick a GitHub repo + folder. Each top-level directory under that folder
-        becomes one spec on the Specs tab. Files inside render inline (Markdown)
-        or open via{" "}
-        <code className="font-mono text-stone-600">/specs-content/</code>{" "}
-        (HTML + their relative assets). The Unticket GitHub App must be
-        installed on the owning org.
-      </p>
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-        HTML specs render same-origin on app.unticket.ai — only point this at a
-        repo whose maintainers you trust to author safe HTML.
-      </div>
-      <div className="grid sm:grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="text-xs text-stone-500">Repo</span>
-          <SearchableSelect
-            value={repo}
-            onChange={handleRepoChange}
-            options={repoOptions}
-            placeholder={reposLoading ? "Loading repos…" : "Pick a repo"}
-            className="w-full"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-stone-500">Root folder</span>
-          <SearchableSelect
-            value={root}
-            onChange={setRootDraft}
-            options={rootOptions}
-            placeholder={
-              !repo ? "Pick a repo first" :
-              folders.isLoading ? "Loading folders…" :
-              folders.isError ? "Failed to load folders" :
-              "— Repo root —"
-            }
-            className="w-full"
-          />
-          {folders.data?.truncated && (
-            <span className="text-[10px] text-stone-400">
-              Folder list capped — only the first {folders.data.folders.length} entries shown.
-            </span>
-          )}
-        </label>
-      </div>
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!isDirty || !repoValid || !rootValid || saveSettings.isPending}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
-        >
-          {saveSettings.isPending && <Loader2 size={12} className="animate-spin" />}
-          Save
         </button>
         {savedAt && !isDirty && !error && (
           <span className="inline-flex items-center gap-1 text-xs text-green-600">

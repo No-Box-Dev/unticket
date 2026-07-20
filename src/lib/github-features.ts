@@ -5,7 +5,7 @@
 // never talks to Octokit for features anymore: the read path hits D1
 // directly (fetchFeaturesFromD1) and writes hit /api/features.
 import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
-import type { Feature, FeatureStatus, StatusHistoryEntry } from "./types";
+import type { Feature, FeatureStatus, SpecLink, StatusHistoryEntry } from "./types";
 
 // D1-backed row shape returned by /api/features
 interface D1FeatureRow {
@@ -29,6 +29,7 @@ const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
+  specLinks?: SpecLink[];
 }
 
 function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
@@ -76,6 +77,7 @@ function issueToFeature(issue: any): Feature {
     url: issue.html_url,
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
+    specLinks: metadata.specLinks,
   };
 }
 
@@ -134,6 +136,7 @@ export async function updateFeature(_org: string, updated: Feature): Promise<Fea
     status: updated.status,
     owners: updated.owners,
     plan: updated.plan ?? "",
+    specLinks: updated.specLinks ?? [],
   });
 }
 

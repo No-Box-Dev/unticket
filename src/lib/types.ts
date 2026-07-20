@@ -57,10 +57,10 @@ export interface IssueInfo {
 
 export type TabId =
   | "sprint"
+  | "specs"
   | "prs"
   | "issues"
   | "posts"
-  | "specs"
   | "repos"
   | "engineers"
   | "settings";
@@ -113,6 +113,12 @@ export interface StatusHistoryEntry {
   timestamp: string; // ISO 8601
 }
 
+/** A link from a feature out to a spec / doc / design (any external URL). */
+export interface SpecLink {
+  url: string;       // http(s) only — sanitized server-side before storage
+  label?: string;    // optional friendly name; falls back to the URL when absent
+}
+
 export interface Feature {
   id: number;
   title: string;
@@ -122,6 +128,7 @@ export interface Feature {
   url?: string;
   updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];
+  specLinks?: SpecLink[];
   // True while an optimistic create is in flight — the card carries a
   // temporary negative id and renders non-interactive until GitHub assigns
   // the real issue number. Never set on features returned by the server.
@@ -134,6 +141,36 @@ export interface Person {
   role: string;
   team?: string;
   description?: string;
+}
+
+// Manual Specs feature (see /api/specs, /api/spec-folders).
+// Specs live entirely in D1 — no GitHub round-trip, no repo folder proxy.
+
+/** A user-created "Project" that groups specs. Org-scoped. */
+export interface SpecFolder {
+  id: number;
+  name: string;
+  description: string | null;
+  archived: boolean;
+  archivedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  specCount: number;
+}
+
+/** A single spec: Markdown description + a list of external links, in a folder or Unfiled. */
+export interface Spec {
+  id: number;
+  folderId: number | null;
+  title: string;
+  description: string;
+  links: SpecLink[];
+  archived: boolean;
+  archivedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface OrgSettings {
@@ -152,16 +189,6 @@ export interface OrgSettings {
     postsChannelId?: string;
     releaseNotesChannelId?: string;
   };
-  // Specs page source — which repo + path holds the spec folders. Each
-  // top-level directory under `rootPath` becomes one spec on the Specs tab.
-  // Empty repo disables the Specs tab.
-  specs?: {
-    repo?: string;       // "owner/repo" — defaults to {selectedOrg}/{unticketRepo} when unset
-    rootPath?: string;   // "" = repo root; otherwise a slash-relative path like "specs"
-  };
-  // Per-spec optional link to a feature issue (number from the unticket
-  // features board). Used for cross-navigation between Specs and Features.
-  specLinks?: Record<string, number>;
   // Policy for newly-discovered repos.
   //  - 'include' (default): the repo is active immediately (current behavior).
   //  - 'exclude':           the repo is platform-archived (draft) on first

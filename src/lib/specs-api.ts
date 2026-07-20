@@ -1,59 +1,102 @@
-import { apiGet } from "./api";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import type { Spec, SpecFolder, SpecLink } from "@/lib/types";
 
-export interface RepoFolders {
-  defaultBranch: string | null;
-  folders: string[];
-  truncated: boolean;
+// ---------- Folders ----------
+
+export interface FolderListResponse {
+  folders: SpecFolder[];
 }
 
-export function fetchRepoFolders(repo: string): Promise<RepoFolders> {
-  return apiGet<RepoFolders>(`/api/specs/repo-folders?repo=${encodeURIComponent(repo)}`);
+export function fetchSpecFolders(includeArchived = false): Promise<FolderListResponse> {
+  const qs = includeArchived ? "?include=all" : "";
+  return apiGet<FolderListResponse>(`/api/spec-folders${qs}`);
 }
 
-export interface SpecsList {
-  configured: boolean;
-  repo?: string;
-  rootPath?: string;
-  specs: { name: string }[];
-}
-
-export interface SpecFile {
-  relative: string;
-  size: number;
-  ext: string;
-}
-
-export interface SpecFileTree {
+export function createSpecFolder(input: {
   name: string;
-  files: SpecFile[];
+  description?: string;
+}): Promise<SpecFolder> {
+  return apiPost<SpecFolder>("/api/spec-folders", input);
 }
 
-export interface SpecFileContent {
-  content: string;
-  contentType: string;
-  name: string;
-  size: number;
+export function updateSpecFolder(
+  id: number,
+  patch: { name?: string; description?: string | null },
+): Promise<SpecFolder> {
+  return apiPatch<SpecFolder>(`/api/spec-folders/${id}`, patch);
 }
 
-export function fetchSpecs(): Promise<SpecsList> {
-  return apiGet<SpecsList>("/api/specs");
+export interface ArchiveFolderResponse {
+  ok: true;
+  id: number;
+  archived: boolean;
+  cascadedSpecIds?: number[];
 }
 
-export function fetchSpec(name: string): Promise<SpecFileTree> {
-  return apiGet<SpecFileTree>(`/api/specs/${encodeURIComponent(name)}`);
+export function archiveSpecFolder(id: number): Promise<ArchiveFolderResponse> {
+  return apiPost<ArchiveFolderResponse>(`/api/spec-folders/${id}/archive`);
 }
 
-export function fetchSpecFileContent(name: string, path: string): Promise<SpecFileContent> {
-  return apiGet<SpecFileContent>(
-    `/api/specs/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`,
-  );
+export function unarchiveSpecFolder(id: number): Promise<ArchiveFolderResponse> {
+  return apiDelete<ArchiveFolderResponse>(`/api/spec-folders/${id}/archive`);
 }
 
-// Build the proxy URL for opening an HTML file (or downloading a binary)
-// in a new tab. The proxy auths via the ut_session cookie set by auth.tsx.
-export function specContentUrl(orgLogin: string, specName: string, relative: string): string {
-  return `/specs-content/${encodeURIComponent(orgLogin)}/${encodeURIComponent(specName)}/${relative
-    .split("/")
-    .map(encodeURIComponent)
-    .join("/")}`;
+// ---------- Specs ----------
+
+export type SpecFolderFilter = number | "unfiled" | "all";
+
+export interface SpecListResponse {
+  specs: Spec[];
+}
+
+export function fetchSpecs(opts: {
+  folderId?: SpecFolderFilter;
+  includeArchived?: boolean;
+} = {}): Promise<SpecListResponse> {
+  const params = new URLSearchParams();
+  if (opts.folderId !== undefined && opts.folderId !== "all") {
+    params.set("folderId", String(opts.folderId));
+  }
+  if (opts.includeArchived) params.set("include", "all");
+  const qs = params.toString();
+  return apiGet<SpecListResponse>(`/api/specs${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchSpec(id: number): Promise<Spec> {
+  return apiGet<Spec>(`/api/specs/${id}`);
+}
+
+export function createSpec(input: {
+  title: string;
+  description?: string;
+  folderId?: number | null;
+  links?: SpecLink[];
+}): Promise<Spec> {
+  return apiPost<Spec>("/api/specs", input);
+}
+
+export function updateSpec(
+  id: number,
+  patch: {
+    title?: string;
+    description?: string;
+    folderId?: number | null;
+    links?: SpecLink[];
+  },
+): Promise<Spec> {
+  return apiPatch<Spec>(`/api/specs/${id}`, patch);
+}
+
+export interface ArchiveSpecResponse {
+  ok: true;
+  id: number;
+  archived: boolean;
+}
+
+export function archiveSpec(id: number): Promise<ArchiveSpecResponse> {
+  return apiPost<ArchiveSpecResponse>(`/api/specs/${id}/archive`);
+}
+
+export function unarchiveSpec(id: number): Promise<ArchiveSpecResponse> {
+  return apiDelete<ArchiveSpecResponse>(`/api/specs/${id}/archive`);
 }

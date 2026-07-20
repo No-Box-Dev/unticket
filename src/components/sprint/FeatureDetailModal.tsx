@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { X, ExternalLink, Pencil, Save } from "lucide-react";
 import Markdown from "react-markdown";
 import { AssignDropdown } from "./AssignDropdown";
+import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
 import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
@@ -211,6 +212,12 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               </div>
             )}
           </div>
+
+          {/* Spec links */}
+          <SpecLinksSection
+            value={draft.specLinks ?? []}
+            onChange={(links) => update({ specLinks: links }, true)}
+          />
 
           {/* Status History Timeline */}
           {draft.statusHistory && draft.statusHistory.length > 0 && (
