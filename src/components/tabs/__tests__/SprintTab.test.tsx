@@ -22,6 +22,11 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children: string }) => <div>{children}</div>,
 }));
+// FeatureCard now calls useSpecs to render inline spec chips. Stub so
+// SprintTab tests don't need a QueryClient / AuthProvider.
+vi.mock("@/hooks/useSpecs", () => ({
+  useSpecs: () => ({ data: [] }),
+}));
 
 import { SprintTab } from "../SprintTab";
 import {
