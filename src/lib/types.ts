@@ -117,6 +117,10 @@ export interface StatusHistoryEntry {
 export interface SpecLink {
   url: string;       // http(s) only — sanitized server-side before storage
   label?: string;    // optional friendly name; falls back to the URL when absent
+  /** At most one link per Spec's `links` array may be primary. When set,
+   * external chip-clicks (e.g. on FeatureCard) open this link; when unset
+   * the first link is the effective primary. */
+  primary?: boolean;
 }
 
 export interface Feature {

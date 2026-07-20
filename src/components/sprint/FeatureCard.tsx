@@ -5,7 +5,7 @@ import { withStatusTransition } from "@/lib/github-features";
 import { useSpecs } from "@/hooks/useSpecs";
 import { daysAgo } from "@/lib/dates";
 import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
-import { ChevronDown, FileText, GripVertical, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, FileText, GripVertical, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -141,18 +141,33 @@ export function FeatureCard({
   );
 }
 
+// Effective primary link URL for a spec: explicit `primary: true` wins,
+// otherwise the first link is the implicit primary. Returns null when the
+// spec has no links at all — chip falls back to opening the spec detail.
+function primaryUrl(spec: Spec): string | null {
+  if (!spec.links.length) return null;
+  const explicit = spec.links.find((l) => l.primary);
+  return (explicit ?? spec.links[0]).url;
+}
+
 function SpecChip({ spec }: { spec: Spec }) {
+  const href = primaryUrl(spec) ?? `/?tab=specs&spec=${spec.id}`;
+  const opensExternal = primaryUrl(spec) !== null;
   return (
     <a
-      href={`/?tab=specs&spec=${spec.id}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       onDragStart={(e) => e.preventDefault()}
       className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-accent group/spec"
-      title={spec.title}
+      title={opensExternal ? `Open primary link: ${href}` : spec.title}
     >
-      <FileText size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
+      {opensExternal ? (
+        <ExternalLink size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
+      ) : (
+        <FileText size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
+      )}
       <span className="truncate flex-1">
         {spec.title || <span className="text-stone-400">Untitled</span>}
       </span>
@@ -194,18 +209,26 @@ function SpecOverflow({ specs }: { specs: Spec[] }) {
           className="absolute left-0 top-full mt-1 z-30 min-w-[220px] max-w-[280px] bg-white border border-stone-200 rounded-lg shadow-md py-1"
           onClick={(e) => e.stopPropagation()}
         >
-          {specs.map((s) => (
+          {specs.map((s) => {
+            const primary = primaryUrl(s);
+            const href = primary ?? `/?tab=specs&spec=${s.id}`;
+            const external = primary !== null;
+            return (
             <a
               key={s.id}
-              href={`/?tab=specs&spec=${s.id}`}
+              href={href}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               onDragStart={(e) => e.preventDefault()}
               className="flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 hover:text-accent"
-              title={s.title}
+              title={external ? `Open primary link: ${href}` : s.title}
             >
-              <FileText size={11} className="shrink-0 text-stone-400" />
+              {external ? (
+                <ExternalLink size={11} className="shrink-0 text-stone-400" />
+              ) : (
+                <FileText size={11} className="shrink-0 text-stone-400" />
+              )}
               <span className="flex-1 truncate">
                 {s.title || <span className="text-stone-400">Untitled</span>}
               </span>
@@ -213,7 +236,8 @@ function SpecOverflow({ specs }: { specs: Spec[] }) {
                 {relDays(s.updatedAt ?? s.createdAt)}
               </span>
             </a>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
