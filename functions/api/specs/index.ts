@@ -14,6 +14,10 @@ interface Ctx {
   request: Request;
 }
 
+const SPEC_COLUMNS =
+  "id, org_id, folder_id, feature_number, legacy_folder_name, title, description, " +
+  "links_json, archived, archived_at, created_by, created_at, updated_at";
+
 const SpecLinkSchema = z.object({
   url: z.string(),
   label: z.string().optional(),
@@ -22,43 +26,57 @@ const SpecLinkSchema = z.object({
 const CreateSpecBody = z.object({
   title: z.string().trim().min(1, "Title is required").max(200, "Title too long (max 200)"),
   description: z.string().max(20_000, "Description too long (max 20000)").optional(),
+  // Feature the spec belongs to. `null` explicitly means Unfiled.
+  featureNumber: z.number().int().positive().nullable().optional(),
+  // Kept for backwards compatibility while any old client is still deployed;
+  // NEVER surface a folder-based UI — the migration froze that concept.
   folderId: z.number().int().positive().nullable().optional(),
   links: z.array(SpecLinkSchema).max(50).optional(),
 });
 
-// GET /api/specs?folderId=<n|unfiled>&include=all
+// GET /api/specs?featureNumber=<n|unfiled>&include=all
 // Lists specs for the current org. Filters:
-//   folderId=<n>       — specs in that folder (must belong to this org)
-//   folderId=unfiled   — specs with folder_id IS NULL
-//   (omitted)          — all folders
-//   include=all        — include archived specs (default hides them)
+//   featureNumber=<n>       — specs owned by that Feature (issue number)
+//   featureNumber=unfiled   — specs with feature_number IS NULL
+//   (omitted)               — every spec in the org
+//   include=all             — include archived (default hides them)
+//
+// The legacy `folderId=` query stays for backwards compat with any client
+// deployed briefly before this cut. Ignored otherwise.
 export async function onRequestGet(context: Ctx): Promise<Response> {
   const { orgId } = getCtx(context) as { orgId: number };
   if (!orgId) return errorResponse("Missing org context", 400);
 
   const url = new URL(context.request.url);
   const includeArchived = url.searchParams.get("include") === "all";
-  const folderIdParam = url.searchParams.get("folderId");
+  const featureParam = url.searchParams.get("featureNumber");
+  const folderParam = url.searchParams.get("folderId");
 
   const clauses: string[] = ["org_id = ?"];
   const binds: (string | number)[] = [orgId];
 
-  if (folderIdParam === "unfiled") {
-    clauses.push("folder_id IS NULL");
-  } else if (folderIdParam !== null && folderIdParam !== "") {
-    const folderId = Number.parseInt(folderIdParam, 10);
-    if (!Number.isFinite(folderId) || folderId <= 0) {
-      return errorResponse("Invalid folderId", 400);
-    }
+  if (featureParam === "unfiled") {
+    clauses.push("feature_number IS NULL");
+  } else if (featureParam !== null && featureParam !== "") {
+    const n = Number.parseInt(featureParam, 10);
+    if (!Number.isFinite(n) || n <= 0) return errorResponse("Invalid featureNumber", 400);
+    clauses.push("feature_number = ?");
+    binds.push(n);
+  } else if (folderParam === "unfiled") {
+    // Legacy path: pre-unification clients used folderId=unfiled to mean
+    // "no folder". Under the new model that's now the "no feature" bucket.
+    clauses.push("feature_number IS NULL");
+  } else if (folderParam !== null && folderParam !== "") {
+    const n = Number.parseInt(folderParam, 10);
+    if (!Number.isFinite(n) || n <= 0) return errorResponse("Invalid folderId", 400);
     clauses.push("folder_id = ?");
-    binds.push(folderId);
+    binds.push(n);
   }
 
   if (!includeArchived) clauses.push("archived = 0");
 
   const { results } = await context.env.DB.prepare(
-    `SELECT id, org_id, folder_id, title, description, links_json,
-            archived, archived_at, created_by, created_at, updated_at
+    `SELECT ${SPEC_COLUMNS}
        FROM specs
       WHERE ${clauses.join(" AND ")}
       ORDER BY archived ASC, updated_at DESC`,
@@ -69,8 +87,8 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   return jsonResponse({ specs: (results ?? []).map(specRowToDto) });
 }
 
-// POST /api/specs — create a spec. Server sanitizes links (http/https only,
-// cap 50, label ≤ 200 chars) before storage.
+// POST /api/specs — create a spec. Server verifies the target feature (if
+// any) exists in this org and sanitizes links before storage.
 export async function onRequestPost(context: Ctx): Promise<Response> {
   const { orgId, userLogin } = getCtx(context) as { orgId: number; userLogin: string };
   if (!orgId) return errorResponse("Missing org context", 400);
@@ -84,29 +102,26 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
   }
   const parsed = validate(CreateSpecBody, rawBody);
   if (!parsed.ok) return parsed.response;
-  const { title, description, folderId, links } = parsed.data;
+  const { title, description, featureNumber, links } = parsed.data;
 
-  // Verify the target folder (if any) belongs to this org and isn't archived.
-  // Cheap safeguard against a client accidentally posting a foreign folder id.
-  if (folderId != null) {
-    const folder = await context.env.DB.prepare(
-      "SELECT id FROM spec_folders WHERE id = ? AND org_id = ? AND archived = 0",
+  if (featureNumber != null) {
+    const feature = await context.env.DB.prepare(
+      "SELECT 1 FROM features WHERE org_id = ? AND number = ?",
     )
-      .bind(folderId, orgId)
-      .first<{ id: number }>();
-    if (!folder) return errorResponse(`Unknown or archived folder ${folderId}`, 400);
+      .bind(orgId, featureNumber)
+      .first<{ 1: number }>();
+    if (!feature) return errorResponse(`Unknown feature #${featureNumber}`, 400);
   }
 
   const cleanLinks = sanitizeSpecLinks(links ?? []);
   const linksJson = JSON.stringify(cleanLinks);
 
   const row = await context.env.DB.prepare(
-    `INSERT INTO specs (org_id, folder_id, title, description, links_json, created_by)
+    `INSERT INTO specs (org_id, feature_number, title, description, links_json, created_by)
      VALUES (?, ?, ?, ?, ?, ?)
-     RETURNING id, org_id, folder_id, title, description, links_json,
-               archived, archived_at, created_by, created_at, updated_at`,
+     RETURNING ${SPEC_COLUMNS}`,
   )
-    .bind(orgId, folderId ?? null, title, description ?? "", linksJson, userLogin)
+    .bind(orgId, featureNumber ?? null, title, description ?? "", linksJson, userLogin)
     .first<SpecRow>();
 
   if (!row) return errorResponse("Failed to create spec", 500);

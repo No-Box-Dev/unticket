@@ -3,22 +3,23 @@ import { Archive, Pencil, Undo2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsAdmin } from "@/hooks/useGitHub";
+import { useBoardStages } from "@/lib/board-stages";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
-import { SpecLinkedFeaturesSection } from "@/components/specs/SpecLinkedFeaturesSection";
 import { useSetSpecArchived, useUpdateSpec } from "@/hooks/useSpecs";
-import type { Spec, SpecFolder, SpecLink } from "@/lib/types";
+import type { Feature, Spec, SpecLink } from "@/lib/types";
 
 interface Props {
   spec: Spec;
-  folders: SpecFolder[];
+  features: Feature[];
   onClose: () => void;
 }
 
 // Local draft mirrors FeatureDetailModal's shape: debounced text saves via
-// `saveDebounced`, immediate saves for structural changes (folder, links).
+// `saveDebounced`, immediate saves for structural changes (feature, links).
 // `hasUnsavedChanges` ref lets us flush pending edits on close.
-export function SpecDetailModal({ spec, folders, onClose }: Props) {
+export function SpecDetailModal({ spec, features, onClose }: Props) {
   const [draft, setDraft] = useState<Spec>(spec);
+  const stages = useBoardStages();
 
   const updateMut = useUpdateSpec();
   const setArchivedMut = useSetSpecArchived();
@@ -28,7 +29,7 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasUnsavedChanges = useRef(false);
 
-  type SpecPatch = { id: number; title?: string; description?: string; folderId?: number | null; links?: SpecLink[] };
+  type SpecPatch = { id: number; title?: string; description?: string; featureNumber?: number | null; links?: SpecLink[] };
 
   const save = useCallback(
     (patch: SpecPatch) => {
@@ -75,14 +76,14 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
     });
   };
 
-  const setFolderId = (folderIdRaw: string) => {
-    const folderId = folderIdRaw === "" ? null : Number.parseInt(folderIdRaw, 10);
-    if (folderIdRaw !== "" && !Number.isFinite(folderId)) return;
+  const setFeatureNumber = (raw: string) => {
+    const featureNumber = raw === "" ? null : Number.parseInt(raw, 10);
+    if (raw !== "" && !Number.isFinite(featureNumber)) return;
     setDraft((d) => {
-      const next = { ...d, folderId };
+      const next = { ...d, featureNumber };
       hasUnsavedChanges.current = false;
       clearTimeout(debounceRef.current);
-      save({ id: next.id, folderId });
+      save({ id: next.id, featureNumber });
       return next;
     });
   };
@@ -92,14 +93,11 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
       clearTimeout(debounceRef.current);
       debounceRef.current = undefined;
       if (hasUnsavedChanges.current) {
-        // Flush all currently-dirty fields in one final PATCH — cheaper than
-        // remembering which ones the user touched, and the server merges
-        // partial patches identically.
         updateMut.mutate({
           id: draft.id,
           title: draft.title,
           description: draft.description,
-          folderId: draft.folderId,
+          featureNumber: draft.featureNumber,
           links: draft.links,
         });
         hasUnsavedChanges.current = false;
@@ -108,27 +106,30 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
     onClose();
   }
 
-  const folderOptions = useMemo(() => {
-    // Show only active folders in the picker. If the spec is currently in
-    // an archived folder, include that folder at the top so the user can
-    // still see where it lives (and move it out).
-    const opts = [{ value: "", label: "Unfiled" }, ...folders
-      .filter((f) => !f.archived)
-      .map((f) => ({ value: String(f.id), label: f.name }))];
-    if (draft.folderId != null) {
-      const current = folders.find((f) => f.id === draft.folderId);
-      if (current && current.archived) {
-        opts.unshift({ value: String(current.id), label: `${current.name} (archived)` });
-      }
-    }
-    return opts;
-  }, [folders, draft.folderId]);
+  const featureOptions = useMemo(() => {
+    // Every feature (including "done"-column ones) so a spec can be filed
+    // even against a shipped feature. Sorted by title.
+    return [
+      { value: "", label: "Unfiled" },
+      ...features
+        .slice()
+        .sort((a, b) => a.title.localeCompare(b.title))
+        .map((f) => ({ value: String(f.id), label: f.title || `#${f.id}` })),
+    ];
+  }, [features]);
+
+  const currentFeature = draft.featureNumber != null
+    ? features.find((f) => f.id === draft.featureNumber) ?? null
+    : null;
+  const currentFeatureStage = currentFeature
+    ? stages.find((s) => s.id === currentFeature.status) ?? null
+    : null;
 
   async function handleArchive() {
     const ok = await confirm({
       title: draft.archived ? "Restore this spec?" : "Archive this spec?",
       message: draft.archived
-        ? "The spec will move back to its project (or Unfiled)."
+        ? "The spec will move back into its feature (or Unfiled)."
         : "You can restore it later from the Archive section.",
       confirmLabel: draft.archived ? "Restore" : "Archive",
       variant: draft.archived ? "default" : "danger",
@@ -172,15 +173,38 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
 
         <div className="px-5 py-4 space-y-5">
           <div className="flex items-end gap-4 flex-wrap">
-            <div className="min-w-[200px]">
-              <span className="text-xs text-stone-500 block mb-1">Project</span>
+            <div className="min-w-[240px]">
+              <span className="text-xs text-stone-500 block mb-1">Feature</span>
               <SearchableSelect
-                value={draft.folderId != null ? String(draft.folderId) : ""}
-                onChange={setFolderId}
-                options={folderOptions}
+                value={draft.featureNumber != null ? String(draft.featureNumber) : ""}
+                onChange={setFeatureNumber}
+                options={featureOptions}
                 placeholder="Unfiled"
                 className="w-full"
               />
+              {currentFeature && (
+                <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-stone-500">
+                  {currentFeatureStage && (
+                    <>
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: currentFeatureStage.color }}
+                      />
+                      {currentFeatureStage.label}
+                    </>
+                  )}
+                  {currentFeature.owners.length > 0 && (
+                    <span className="text-stone-400">
+                      · {currentFeature.owners.join(", ")}
+                    </span>
+                  )}
+                </div>
+              )}
+              {!currentFeature && draft.legacyFolderName && (
+                <div className="mt-1.5 text-[11px] text-stone-400 italic">
+                  Was in project: {draft.legacyFolderName}
+                </div>
+              )}
             </div>
             {draft.archived && (
               <div className="text-xs text-stone-400 italic">
@@ -201,8 +225,6 @@ export function SpecDetailModal({ spec, folders, onClose }: Props) {
           </div>
 
           <SpecLinksSection value={draft.links} onChange={setLinks} label="Links" />
-
-          <SpecLinkedFeaturesSection specId={draft.id} />
 
           {isAdmin && (
             <div className="pt-3 border-t border-stone-100 flex items-center justify-between">

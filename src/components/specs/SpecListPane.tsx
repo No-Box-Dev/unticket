@@ -1,20 +1,20 @@
 import { useMemo } from "react";
-import { ExternalLink, FileText, Folder, Plus, Archive } from "lucide-react";
+import { Archive, ExternalLink, FileText, Plus, Rocket } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
-import type { Spec, SpecFolder } from "@/lib/types";
-import type { SidebarSelection } from "./SpecFolderSidebar";
+import type { Feature, Spec } from "@/lib/types";
+import type { SidebarSelection } from "./SpecFeatureSidebar";
 
 interface Props {
   selection: SidebarSelection;
-  folders: SpecFolder[];
+  features: Feature[];
   specs: Spec[];
   loading: boolean;
   onOpen: (spec: Spec) => void;
   onCreate: () => void;
 }
 
-function headerLabel(selection: SidebarSelection, folders: SpecFolder[]): string {
+function headerLabel(selection: SidebarSelection, features: Feature[]): string {
   switch (selection.kind) {
     case "all":
       return "All specs";
@@ -22,21 +22,21 @@ function headerLabel(selection: SidebarSelection, folders: SpecFolder[]): string
       return "Unfiled";
     case "archive":
       return "Archive";
-    case "folder": {
-      const f = folders.find((x) => x.id === selection.folderId);
-      return f?.name ?? "Project";
+    case "feature": {
+      const f = features.find((x) => x.id === selection.featureNumber);
+      return f?.title ?? `Feature #${selection.featureNumber}`;
     }
   }
 }
 
-export function SpecListPane({ selection, folders, specs, loading, onOpen, onCreate }: Props) {
-  const folderById = useMemo(() => {
-    const map = new Map<number, SpecFolder>();
-    folders.forEach((f) => map.set(f.id, f));
-    return map;
-  }, [folders]);
+export function SpecListPane({ selection, features, specs, loading, onOpen, onCreate }: Props) {
+  const featureById = useMemo(() => {
+    const m = new Map<number, Feature>();
+    features.forEach((f) => m.set(f.id, f));
+    return m;
+  }, [features]);
 
-  const label = headerLabel(selection, folders);
+  const label = headerLabel(selection, features);
 
   return (
     <section className="min-w-0">
@@ -44,8 +44,8 @@ export function SpecListPane({ selection, folders, specs, loading, onOpen, onCre
         <h2 className="text-sm font-medium text-stone-700 flex items-center gap-2">
           {selection.kind === "archive" ? (
             <Archive size={14} className="text-stone-400" />
-          ) : selection.kind === "folder" ? (
-            <Folder size={14} className="text-stone-400" />
+          ) : selection.kind === "feature" ? (
+            <Rocket size={14} className="text-stone-400" />
           ) : (
             <FileText size={14} className="text-stone-400" />
           )}
@@ -86,8 +86,8 @@ export function SpecListPane({ selection, folders, specs, loading, onOpen, onCre
             <SpecCard
               key={s.id}
               spec={s}
-              folder={s.folderId != null ? folderById.get(s.folderId) ?? null : null}
-              showFolder={selection.kind === "all" || selection.kind === "archive"}
+              feature={s.featureNumber != null ? featureById.get(s.featureNumber) ?? null : null}
+              showFeature={selection.kind === "all" || selection.kind === "archive"}
               onClick={() => onOpen(s)}
             />
           ))}
@@ -99,12 +99,12 @@ export function SpecListPane({ selection, folders, specs, loading, onOpen, onCre
 
 interface SpecCardProps {
   spec: Spec;
-  folder: SpecFolder | null;
-  showFolder: boolean;
+  feature: Feature | null;
+  showFeature: boolean;
   onClick: () => void;
 }
 
-function SpecCard({ spec, folder, showFolder, onClick }: SpecCardProps) {
+function SpecCard({ spec, feature, showFeature, onClick }: SpecCardProps) {
   const linkCount = spec.links.length;
   const description = spec.description.trim();
 
@@ -134,11 +134,15 @@ function SpecCard({ spec, folder, showFolder, onClick }: SpecCardProps) {
         <p className="text-xs text-stone-300 italic">No description</p>
       )}
       <div className="flex items-center gap-3 mt-auto text-[11px] text-stone-400">
-        {showFolder && (
+        {showFeature && (
           <span className="inline-flex items-center gap-1 truncate">
-            {folder ? (
+            {feature ? (
               <>
-                <Folder size={11} /> {folder.name}
+                <Rocket size={11} /> {feature.title}
+              </>
+            ) : spec.legacyFolderName ? (
+              <>
+                <FileText size={11} /> Was in: {spec.legacyFolderName}
               </>
             ) : (
               <>

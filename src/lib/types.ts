@@ -163,10 +163,19 @@ export interface SpecFolder {
   specCount: number;
 }
 
-/** A single spec: Markdown description + a list of external links, in a folder or Unfiled. */
+/** A single spec: Markdown description + external links, belonging to a
+ * Feature (via issue number) or Unfiled. */
 export interface Spec {
   id: number;
+  /** @deprecated The Projects/folders concept was unified into Features
+   * (migration 0037). Server still returns this for backwards-compat but
+   * new code should use `featureNumber`. */
   folderId: number | null;
+  /** Issue number of the Feature this spec belongs to, or null when unfiled. */
+  featureNumber: number | null;
+  /** Breadcrumb from the pre-unification Projects world so specs that were
+   * in a folder can display "was in X" instead of losing the association. */
+  legacyFolderName: string | null;
   title: string;
   description: string;
   links: SpecLink[];

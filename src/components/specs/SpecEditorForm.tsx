@@ -1,67 +1,75 @@
-import { useState, useRef } from "react";
-import { X, Plus } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
-import { useCreateSpec, useCreateSpecFolder } from "@/hooks/useSpecs";
-import type { Spec, SpecFolder, SpecLink } from "@/lib/types";
+import { useCreateSpec } from "@/hooks/useSpecs";
+import { useCreateFeature } from "@/hooks/useConfigRepo";
+import { useBoardStages } from "@/lib/board-stages";
+import type { Feature, Spec, SpecLink } from "@/lib/types";
 
 interface Props {
-  folders: SpecFolder[];
-  initialFolderId: number | null;
+  features: Feature[];
+  initialFeatureNumber: number | null;
   onClose: () => void;
   onCreated: (spec: Spec) => void;
 }
 
-// Modal for creating a new spec. Shape mirrors SpecDetailModal so users get a
-// consistent editor between "new" and "edit."
-//
-// The Project select shows a synthetic "+ Create new project…" row on top —
-// picking it swaps the select for a compact create-inline input so a spec can
-// be filed into a brand-new project without leaving this modal.
-export function SpecEditorForm({ folders, initialFolderId, onClose, onCreated }: Props) {
+// Modal for creating a new spec under the unified Features model. The
+// feature picker has a synthetic "+ Create new feature…" row at the top —
+// choosing it swaps in a compact create-inline input so a spec can be
+// filed against a brand-new feature without leaving this modal.
+export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCreated }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [folderId, setFolderId] = useState<number | null>(initialFolderId);
+  const [featureNumber, setFeatureNumber] = useState<number | null>(initialFeatureNumber);
   const [links, setLinks] = useState<SpecLink[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [creatingFolder, setCreatingFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
+  const [creatingFeature, setCreatingFeature] = useState(false);
+  const [newFeatureTitle, setNewFeatureTitle] = useState("");
   const submitRef = useRef<HTMLButtonElement>(null);
 
   const createSpecMut = useCreateSpec();
-  const createFolderMut = useCreateSpecFolder();
+  const createFeatureMut = useCreateFeature();
+  const stages = useBoardStages();
 
-  const folderOptions = [
-    { value: "__new__", label: "+ Create new project…" },
-    { value: "", label: "Unfiled" },
-    ...folders
-      .filter((f) => !f.archived)
-      .map((f) => ({ value: String(f.id), label: f.name })),
-  ];
+  const featureOptions = useMemo(
+    () => [
+      { value: "__new__", label: "+ Create new feature…" },
+      { value: "", label: "Unfiled" },
+      ...features
+        .slice()
+        .sort((a, b) => a.title.localeCompare(b.title))
+        .map((f) => ({ value: String(f.id), label: f.title || `#${f.id}` })),
+    ],
+    [features],
+  );
 
-  function handleFolderPick(raw: string) {
+  function handleFeaturePick(raw: string) {
     if (raw === "__new__") {
-      setCreatingFolder(true);
+      setCreatingFeature(true);
       return;
     }
-    setFolderId(raw === "" ? null : Number.parseInt(raw, 10));
+    setFeatureNumber(raw === "" ? null : Number.parseInt(raw, 10));
   }
 
-  async function confirmNewFolder() {
-    const name = newFolderName.trim();
-    if (!name) {
-      setCreatingFolder(false);
-      setNewFolderName("");
+  async function confirmNewFeature() {
+    const featTitle = newFeatureTitle.trim();
+    if (!featTitle) {
+      setCreatingFeature(false);
+      setNewFeatureTitle("");
       return;
     }
     try {
-      const folder = await createFolderMut.mutateAsync({ name });
-      setFolderId(folder.id);
-      setCreatingFolder(false);
-      setNewFolderName("");
+      const created = await createFeatureMut.mutateAsync({
+        title: featTitle,
+        status: stages[0]?.id ?? "todo",
+      });
+      setFeatureNumber(created.id);
+      setCreatingFeature(false);
+      setNewFeatureTitle("");
     } catch {
       // apiFetch already surfaced the error via toast — leave the input open
-      // so the user can retry or cancel.
+      // for retry / cancel.
     }
   }
 
@@ -76,7 +84,7 @@ export function SpecEditorForm({ folders, initialFolderId, onClose, onCreated }:
       const spec = await createSpecMut.mutateAsync({
         title: t,
         description: description.trim() || undefined,
-        folderId,
+        featureNumber,
         links: links.length ? links : undefined,
       });
       onCreated(spec);
@@ -126,33 +134,34 @@ export function SpecEditorForm({ folders, initialFolderId, onClose, onCreated }:
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Project</label>
-            {creatingFolder ? (
+            <label className="text-xs text-stone-500 block mb-1">Feature</label>
+            {creatingFeature ? (
               <div className="flex items-center gap-2">
                 <input
                   autoFocus
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
+                  value={newFeatureTitle}
+                  onChange={(e) => setNewFeatureTitle(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") confirmNewFolder();
+                    if (e.key === "Enter") confirmNewFeature();
                     if (e.key === "Escape") {
-                      setCreatingFolder(false);
-                      setNewFolderName("");
+                      setCreatingFeature(false);
+                      setNewFeatureTitle("");
                     }
                   }}
-                  placeholder="Project name"
+                  placeholder="Feature title"
                   className="flex-1 rounded-md border border-accent bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none"
                 />
                 <button
-                  onClick={confirmNewFolder}
-                  className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs text-white hover:bg-accent/90 cursor-pointer"
+                  onClick={confirmNewFeature}
+                  disabled={createFeatureMut.isPending}
+                  className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs text-white hover:bg-accent/90 disabled:opacity-60 cursor-pointer"
                 >
-                  <Plus size={12} /> Create
+                  <Plus size={12} /> {createFeatureMut.isPending ? "Creating…" : "Create"}
                 </button>
                 <button
                   onClick={() => {
-                    setCreatingFolder(false);
-                    setNewFolderName("");
+                    setCreatingFeature(false);
+                    setNewFeatureTitle("");
                   }}
                   className="rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-600 hover:bg-stone-50 cursor-pointer"
                 >
@@ -161,12 +170,18 @@ export function SpecEditorForm({ folders, initialFolderId, onClose, onCreated }:
               </div>
             ) : (
               <SearchableSelect
-                value={folderId != null ? String(folderId) : ""}
-                onChange={handleFolderPick}
-                options={folderOptions}
+                value={featureNumber != null ? String(featureNumber) : ""}
+                onChange={handleFeaturePick}
+                options={featureOptions}
                 placeholder="Unfiled"
                 className="w-full"
               />
+            )}
+            {!creatingFeature && (
+              <p className="text-[11px] text-stone-400 mt-1">
+                New features land in the first board stage ({stages[0]?.label ?? "todo"}). Fine-tune
+                status, owners and plan on the Features tab.
+              </p>
             )}
           </div>
 

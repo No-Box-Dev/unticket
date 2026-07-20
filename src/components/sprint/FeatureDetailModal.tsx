@@ -215,10 +215,9 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           </div>
 
           {/* Linked specs (from the manual Specs library) */}
-          <FeatureLinkedSpecsSection
-            value={draft.linkedSpecIds ?? []}
-            onChange={(ids) => update({ linkedSpecIds: ids }, true)}
-          />
+          {/* Specs for this feature — the feature owns them via
+              spec.feature_number under the unified model (migration 0037). */}
+          <FeatureLinkedSpecsSection featureNumber={draft.id} />
 
           {/* Spec links (free external URLs — Figma / Notion / etc.) */}
           <SpecLinksSection
