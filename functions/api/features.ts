@@ -44,7 +44,6 @@ const CreateFeatureBody = z.object({
   title: z.string().optional(),
   status: z.string().optional(),
   owners: z.array(z.unknown()).optional(),
-  plan: z.string().optional(),
   // Validated by sanitizeSpecLinks (http/https only) before storage.
   specLinks: z.array(z.unknown()).optional(),
   // Validated by sanitizeLinkedSpecIds + filterExistingSpecIds (drops any
@@ -115,7 +114,9 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
   const owners = Array.isArray(payload?.owners)
     ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o)) as string[]
     : [];
-  const plan = typeof payload?.plan === "string" ? payload.plan : "";
+  // Features no longer carry a plan/description — all rich content lives
+  // in linked Specs. The issue body is just the metadata block.
+  const plan = "";
   const specLinks = sanitizeSpecLinks(payload?.specLinks);
   const linkedSpecIds = await filterExistingSpecIds(
     context.env.DB,

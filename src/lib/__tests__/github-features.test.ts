@@ -80,6 +80,9 @@ describe("fetchFeaturesFromD1", () => {
   });
 
   it("parses metadata block in body for statusHistory", async () => {
+    // Feature bodies used to prefix a plan-text section before the metadata
+    // block; that concept is retired — issueToFeature no longer surfaces
+    // the body content on the wire. Metadata still comes through.
     const body = `Plan content here\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "2026-01-01T00:00:00Z" }],
     })}\n-->`;
@@ -91,10 +94,6 @@ describe("fetchFeaturesFromD1", () => {
     ]);
     const result = await fetchFeaturesFromD1();
     expect(result[0].statusHistory).toEqual([{ status: "todo", timestamp: "2026-01-01T00:00:00Z" }]);
-    // parseMetadata only consumes ONE of the two leading newlines (regex is
-    // `\n?<!-- ...`) — the remaining newline stays in the plan content. This
-    // is also documented in the feature-metadata tests.
-    expect(result[0].plan).toBe("Plan content here\n");
   });
 
   it("tolerates corrupt metadata block (treats as plain body)", async () => {
@@ -106,8 +105,9 @@ describe("fetchFeaturesFromD1", () => {
         labels: [{ name: "unticket" }, { name: "feature" }],
       },
     ]);
-    const result = await fetchFeaturesFromD1();
-    expect(result[0].plan).toBe(body);
+    await fetchFeaturesFromD1();
+    // Corrupt metadata falls through as plain body — but Feature.plan no
+    // longer exists on the wire, so just assert the warn fired.
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -116,21 +116,21 @@ describe("fetchFeaturesFromD1", () => {
 describe("createFeature", () => {
   it("POSTs to /api/features with the requested fields", async () => {
     mockPost.mockResolvedValue({
-      id: 5, title: "Add login", status: "todo", owners: [], plan: "Build it",
+      id: 5, title: "Add login", status: "todo", owners: [],
     });
-    const result = await createFeature("org", "Add login", { status: "todo", plan: "Build it" });
+    const result = await createFeature("org", "Add login", { status: "todo" });
     expect(mockPost).toHaveBeenCalledWith("/api/features", {
-      title: "Add login", status: "todo", owners: [], plan: "Build it",
+      title: "Add login", status: "todo", owners: [],
     });
     expect(result.id).toBe(5);
     expect(result.title).toBe("Add login");
   });
 
-  it("forwards owners when provided, defaults plan to empty string", async () => {
+  it("forwards owners when provided (no plan field — retired)", async () => {
     mockPost.mockResolvedValue({ id: 5, title: "X", status: "staging", owners: ["alice"] });
     await createFeature("org", "X", { status: "staging", owners: ["alice"] });
     expect(mockPost).toHaveBeenCalledWith("/api/features", {
-      title: "X", status: "staging", owners: ["alice"], plan: "",
+      title: "X", status: "staging", owners: ["alice"],
     });
   });
 
@@ -141,28 +141,25 @@ describe("createFeature", () => {
 });
 
 describe("updateFeature", () => {
-  it("PATCHes /api/features/:id with title, status, owners, plan", async () => {
+  it("PATCHes /api/features/:id with title, status, owners (no plan)", async () => {
     mockPatch.mockResolvedValue({
-      id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
+      id: 5, title: "X", status: "ready", owners: ["alice"],
     });
     const result = await updateFeature("org", {
-      id: 5, title: "X", status: "ready", owners: ["alice"], plan: "do it",
+      id: 5, title: "X", status: "ready", owners: ["alice"],
     });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "ready", owners: ["alice"], plan: "do it",
+      title: "X", status: "ready", owners: ["alice"],
       specLinks: [], linkedSpecIds: [],
     });
     expect(result.id).toBe(5);
   });
 
-  it("sends an empty string plan when feature.plan is undefined", async () => {
-    // Also sends specLinks: [] and linkedSpecIds: [] so that "the user
-    // removed all links" is faithfully patched through (undefined would be
-    // ambiguous vs. omitted).
+  it("always sends specLinks + linkedSpecIds so cleared lists patch through", async () => {
     mockPatch.mockResolvedValue({ id: 5, title: "X", status: "todo", owners: [] });
     await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "todo", owners: [], plan: "",
+      title: "X", status: "todo", owners: [],
       specLinks: [], linkedSpecIds: [],
     });
   });

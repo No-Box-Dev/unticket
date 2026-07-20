@@ -39,16 +39,14 @@ const baseFeature: Feature = {
   title: "Login flow",
   owners: ["alice"],
   status: "todo",
-  plan: "Some markdown plan",
   url: "https://github.com/x/y/issues/42",
 };
 
 describe("FeatureDetailModal", () => {
-  it("renders title and plan markdown", () => {
+  it("renders the title input", () => {
     renderModal(baseFeature);
     const titleInput = screen.getByDisplayValue("Login flow") as HTMLInputElement;
     expect(titleInput).toBeInTheDocument();
-    expect(screen.getByTestId("markdown").textContent).toBe("Some markdown plan");
   });
 
   it("clicking the backdrop calls onClose", () => {
@@ -76,16 +74,31 @@ describe("FeatureDetailModal", () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "ready" }));
   });
 
-  it("shows 'No description.' when plan is empty", () => {
-    renderModal({ ...baseFeature, plan: "" });
-    expect(screen.getByText("No description.")).toBeInTheDocument();
+  it("editing the title fires onUpdate with the new title (debounced 500ms)", async () => {
+    vi.useFakeTimers();
+    const onUpdate = vi.fn();
+    renderModal(baseFeature, { onUpdate });
+    const title = screen.getByDisplayValue("Login flow") as HTMLInputElement;
+    fireEvent.change(title, { target: { value: "Login flow v2" } });
+    vi.advanceTimersByTime(500);
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ title: "Login flow v2" }));
+    vi.useRealTimers();
   });
 
-  it("clicking Edit opens the textarea and Save fires onUpdate with the new plan", () => {
+  it("no longer renders a Description section (Specs replace it)", () => {
+    renderModal(baseFeature);
+    expect(screen.queryByText(/description/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+  });
+});
+
+// Legacy plan-block tests removed: FeatureDetailModal no longer renders a
+// Description section — all content lives in linked Specs.
+describe.skip("FeatureDetailModal plan (retired)", () => {
+  it("legacy Edit → textarea → Save flow", () => {
     const onUpdate = vi.fn();
     renderModal(baseFeature, { onUpdate });
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
-    // The title input is also a textbox — find the one prefilled with the plan content.
     const textarea = screen.getByDisplayValue("Some markdown plan") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Updated plan" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));

@@ -56,7 +56,6 @@ const PatchFeatureBody = z.object({
   title: z.string().optional(),
   status: z.string().optional(),
   owners: z.array(z.unknown()).optional(),
-  plan: z.string().optional(),
   // Shape is intentionally loose — sanitizeSpecLinks does the real
   // validation (http/https only, drops empty rows) at the storage boundary.
   specLinks: z.array(z.unknown()).optional(),
@@ -143,7 +142,10 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     ) as string[];
   }
 
-  const plan = typeof payload?.plan === "string" ? payload.plan : currentPlan;
+  // Plan is retired — features no longer carry a description of their own,
+  // Specs are the sole content surface. Preserve any legacy content already
+  // in the body so we don't wipe historical plans on the GitHub side.
+  const plan = currentPlan;
 
   // Status history: append on transition only. Re-saves with the same status
   // don't duplicate entries.
