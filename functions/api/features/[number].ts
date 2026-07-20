@@ -18,6 +18,7 @@ import { z } from "zod";
 import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
+import { sanitizeSpecLinks } from "../../lib/spec-links";
 import { recordFailure } from "../../lib/op-failures";
 import { resolveBoardStages } from "../../lib/board-stages.js";
 import {
@@ -55,6 +56,9 @@ const PatchFeatureBody = z.object({
   status: z.string().optional(),
   owners: z.array(z.unknown()).optional(),
   plan: z.string().optional(),
+  // Shape is intentionally loose — sanitizeSpecLinks does the real
+  // validation (http/https only, drops empty rows) at the storage boundary.
+  specLinks: z.array(z.unknown()).optional(),
 }).passthrough();
 
 function parseFeatureNumber(context: Ctx): number | null {
@@ -144,8 +148,20 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     statusHistory.push({ status, timestamp: new Date().toISOString() });
   }
 
+  // Spec links: replace wholesale when the field is present (the UI always
+  // sends the full list), otherwise keep what's stored. Sanitized to http(s)
+  // URLs before they're written into the issue body.
+  const specLinks = payload?.specLinks !== undefined
+    ? sanitizeSpecLinks(payload.specLinks)
+    : (currentMetadata.specLinks ?? []);
+
+  // Spread currentMetadata so any field this endpoint doesn't manage
+  // (e.g. linkedPRs) survives the round-trip instead of being silently
+  // dropped when the body is rebuilt.
   const body = buildIssueBody(plan, {
+    ...currentMetadata,
     statusHistory,
+    specLinks,
   });
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);

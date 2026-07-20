@@ -13,15 +13,15 @@ import { NewRepoBanner } from "@/components/NewRepoBanner";
 import type { TabId, NavFilter } from "@/lib/types";
 
 const SprintTab = lazy(() => import("@/components/tabs/SprintTab").then(m => ({ default: m.SprintTab })));
+const SpecsTab = lazy(() => import("@/components/tabs/SpecsTab").then(m => ({ default: m.SpecsTab })));
 const PRsTab = lazy(() => import("@/components/tabs/PRsTab").then(m => ({ default: m.PRsTab })));
 const IssuesTab = lazy(() => import("@/components/tabs/IssuesTab").then(m => ({ default: m.IssuesTab })));
 const PostsTab = lazy(() => import("@/components/tabs/PostsTab").then(m => ({ default: m.PostsTab })));
-const SpecsTab = lazy(() => import("@/components/tabs/SpecsTab").then(m => ({ default: m.SpecsTab })));
 const ReposTab = lazy(() => import("@/components/tabs/ReposTab").then(m => ({ default: m.ReposTab })));
 const EngineersTab = lazy(() => import("@/components/tabs/EngineersTab").then(m => ({ default: m.EngineersTab })));
 const SettingsTab = lazy(() => import("@/components/tabs/SettingsTab").then(m => ({ default: m.SettingsTab })));
 
-const VALID_TABS = new Set<string>(["sprint", "prs", "issues", "posts", "specs", "repos", "engineers", "settings"]);
+const VALID_TABS = new Set<string>(["sprint", "specs", "prs", "issues", "posts", "repos", "engineers", "settings"]);
 
 export function DashboardPage() {
   const { selectedOrg } = useAuth();
@@ -75,10 +75,10 @@ export function DashboardPage() {
               if (viewParam) params.view = viewParam;
               setSearchParams(params, { replace: true });
             }} />}
+            {activeTab === "specs" && <SpecsTab />}
             {activeTab === "prs" && <PRsTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "issues" && <IssuesTab repoNames={repoNames} navFilter={navFilter} />}
             {activeTab === "posts" && <PostsTab />}
-            {activeTab === "specs" && <SpecsTab />}
             {activeTab === "repos" && <ReposTab repoNames={repoNames} />}
             {activeTab === "engineers" && <EngineersTab repoNames={repoNames} navFilter={navFilter} />}
           </ErrorBoundary>

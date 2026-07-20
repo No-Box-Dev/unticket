@@ -271,5 +271,6 @@ export function ghIssueToFeature(ghIssue) {
     url: ghIssue.html_url ?? undefined,
     updatedAt: ghIssue.updated_at,
     statusHistory: metadata.statusHistory,
+    specLinks: metadata.specLinks,
   };
 }

@@ -22,6 +22,7 @@ import {
   ghIssueToFeature,
   upsertFeatureRow,
 } from "../lib/feature-issues";
+import { sanitizeSpecLinks } from "../lib/spec-links";
 import { validate } from "../lib/validate";
 
 interface Env {
@@ -43,6 +44,8 @@ const CreateFeatureBody = z.object({
   status: z.string().optional(),
   owners: z.array(z.unknown()).optional(),
   plan: z.string().optional(),
+  // Validated by sanitizeSpecLinks (http/https only) before storage.
+  specLinks: z.array(z.unknown()).optional(),
 }).passthrough();
 
 // Explicit projection — never SELECT * so adding a column doesn't silently leak it.
@@ -109,6 +112,7 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
     ? payload.owners.filter((o) => typeof o === "string" && /^[a-zA-Z0-9-]+$/.test(o)) as string[]
     : [];
   const plan = typeof payload?.plan === "string" ? payload.plan : "";
+  const specLinks = sanitizeSpecLinks(payload?.specLinks);
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
   if (!installationId) return errorResponse("GitHub App not installed for this org", 412);
@@ -126,6 +130,7 @@ export async function onRequestPost(context: Ctx): Promise<Response> {
 
     const body = buildIssueBody(plan, {
       statusHistory: [{ status, timestamp: new Date().toISOString() }],
+      ...(specLinks.length > 0 ? { specLinks } : {}),
     });
 
     const ghIssue = await createFeatureIssue(token, orgLogin, {

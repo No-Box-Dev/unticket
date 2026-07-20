@@ -71,12 +71,6 @@ export async function refreshAccessToken(expiredToken: string): Promise<string |
       const body = (await res.json().catch(() => null)) as { token?: string } | null;
       if (!body?.token) return null;
       localStorage.setItem("ut_token", body.token);
-      // Keep ut_session cookie in sync — /specs-content/ reads only the
-      // cookie, so a refreshed token that doesn't update the cookie would
-      // immediately stop authenticating asset loads.
-      if (typeof document !== "undefined") {
-        document.cookie = `ut_session=${encodeURIComponent(body.token)}; Path=/; Max-Age=86400; SameSite=Lax; Secure`;
-      }
       return body.token;
     } catch {
       return null;

@@ -38,12 +38,6 @@ vi.mock("@/lib/slack-api", () => ({
   startSlackOAuth: vi.fn(),
   disconnectSlack: vi.fn(),
 }));
-vi.mock("@/lib/specs-api", () => ({
-  fetchRepoFolders: vi.fn(),
-}));
-vi.mock("@/hooks/useSpecs", () => ({
-  useRepoFolders: vi.fn(() => ({ data: { folders: [] }, isLoading: false, isError: false })),
-}));
 vi.mock("@tanstack/react-query", () => {
   const qc = { invalidateQueries: vi.fn() };
   return {
