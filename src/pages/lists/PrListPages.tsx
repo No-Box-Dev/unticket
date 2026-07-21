@@ -5,7 +5,7 @@ import { PageShell } from "@/pages/details/PageShell";
 export function RepoPrsPage() {
   const { repo } = useParams<{ repo: string }>();
   return (
-    <PageShell backTo="/?tab=prs" backLabel="Back to PRs">
+    <PageShell backTo="/?tab=current" backLabel="Back to Current">
       <PrList
         title={`PRs in ${repo}`}
         filter={{ repo, state: "all" }}
@@ -19,7 +19,7 @@ export function RepoPrsPage() {
 export function AuthorPrsPage() {
   const { login } = useParams<{ login: string }>();
   return (
-    <PageShell backTo="/?tab=prs" backLabel="Back to PRs">
+    <PageShell backTo="/?tab=current" backLabel="Back to Current">
       <PrList
         title={`PRs by ${login}`}
         filter={{ author: login, state: "all" }}
@@ -31,7 +31,7 @@ export function AuthorPrsPage() {
 
 export function DraftPrsPage() {
   return (
-    <PageShell backTo="/?tab=prs" backLabel="Back to PRs">
+    <PageShell backTo="/?tab=current" backLabel="Back to Current">
       <PrList
         title="Draft pull requests"
         filter={{ state: "open", draft: true }}
@@ -43,7 +43,7 @@ export function DraftPrsPage() {
 
 export function StalePrsPage() {
   return (
-    <PageShell backTo="/?tab=prs" backLabel="Back to PRs">
+    <PageShell backTo="/?tab=current" backLabel="Back to Current">
       <PrList
         title="Stale pull requests"
         filter={{ state: "open", stale: true }}

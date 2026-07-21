@@ -107,7 +107,7 @@ describe("ErrorBoundary", () => {
     );
 
     function ChunkErrorChild(): React.JSX.Element {
-      throw new Error("Failed to fetch dynamically imported module: https://app.unticket.ai/assets/PRsTab-XYZ.js");
+      throw new Error("Failed to fetch dynamically imported module: https://app.unticket.ai/assets/CurrentTab-XYZ.js");
     }
 
     render(

@@ -164,16 +164,13 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
         <div className="flex items-center justify-center py-16">
           <Spinner className="w-6 h-6 text-accent" />
         </div>
-      ) : scoped.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-200 bg-white/50 px-6 py-16 text-center text-sm text-stone-500">
-          No {view} issues.
-        </div>
       ) : (
         <CardGrid
           issues={scoped}
           groupBy={groupBy}
           view={view}
           members={members ?? []}
+          repos={activeRepoNames}
           onOpen={(key) =>
             setUrl(groupBy === "people" ? { assignee: key, repo: null } : { repo: key, assignee: null })
           }
@@ -202,10 +199,11 @@ interface CardGridProps {
   groupBy: GroupBy;
   view: IssueView;
   members: { login: string; avatar_url: string }[];
+  repos: string[];
   onOpen: (key: string) => void;
 }
 
-function CardGrid({ issues, groupBy, view, members, onOpen }: CardGridProps) {
+function CardGrid({ issues, groupBy, view, members, repos, onOpen }: CardGridProps) {
   const avatarByLogin = useMemo(() => {
     const m = new Map<string, string>();
     members.forEach((mem) => m.set(mem.login, mem.avatar_url));
@@ -227,6 +225,16 @@ function CardGrid({ issues, groupBy, view, members, onOpen }: CardGridProps) {
       }
       return map.get(key)!;
     };
+
+    // Seed all active members / repos up front so a zero-count bucket
+    // still surfaces a card. Same intent as the PRs tab: the grid is a
+    // team/portfolio overview, not just a list of who happens to have
+    // activity.
+    if (groupBy === "people") {
+      for (const m of members) ensure(m.login, m.login, false, m.avatar_url ?? null, "");
+    } else {
+      for (const r of repos) ensure(r, r, false, null, "");
+    }
 
     for (const issue of issues) {
       const upd = issue.updated_at ?? issue.created_at;
@@ -290,17 +298,24 @@ function CardGrid({ issues, groupBy, view, members, onOpen }: CardGridProps) {
       avgAgeDays: b.ages.length ? Math.round(b.ages.reduce((a, c) => a + c, 0) / b.ages.length) : 0,
       newestUpdatedAt: b.newest,
     }));
-  }, [issues, groupBy, avatarByLogin]);
+  }, [issues, groupBy, avatarByLogin, members, repos]);
 
-  // Sort by count descending (user's explicit ask), tiebreak by most-recent
-  // activity. Unassigned stays at the top so triage attention doesn't
-  // depend on how many issues someone happened to leave for later.
+  // Sort:
+  //   1. Unassigned (people view) first — triage priority.
+  //   2. Non-empty buckets by count desc, tiebreak most-recent.
+  //   3. Zero-count buckets alphabetical, at the bottom, so the grid
+  //      layout stays stable when someone opens an issue.
   const sorted = useMemo(() => {
     return [...buckets].sort((a, b) => {
       if (a.isUnassigned && !b.isUnassigned) return -1;
       if (!a.isUnassigned && b.isUnassigned) return 1;
-      if (b.count !== a.count) return b.count - a.count;
-      return b.newestUpdatedAt.localeCompare(a.newestUpdatedAt);
+      if (a.count > 0 && b.count === 0) return -1;
+      if (b.count > 0 && a.count === 0) return 1;
+      if (a.count > 0) {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.newestUpdatedAt.localeCompare(a.newestUpdatedAt);
+      }
+      return a.label.localeCompare(b.label);
     });
   }, [buckets]);
 

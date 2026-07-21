@@ -19,7 +19,7 @@ interface PageShellProps {
 // through to the settings-invalid "issues" default when nothing matches,
 // which just means no tab renders as active — safe visual state.
 function tabFromPath(pathname: string): TabId {
-  if (pathname.startsWith("/prs/")) return "prs";
+  if (pathname.startsWith("/prs/")) return "current";
   if (pathname.startsWith("/issues/")) return "issues";
   // fallthrough: return a TabId value the nav bar won't render as active
   // in the top row (settings is a gear icon, not a nav item).

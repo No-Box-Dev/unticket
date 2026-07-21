@@ -70,11 +70,14 @@ function renderTab() {
 }
 
 describe("IssuesTab (card grid)", () => {
-  it("shows an empty state when there are no issues", () => {
+  it("renders the toolbar count when no issues match (grid still shows every repo with 0)", () => {
     mOpen.mockReturnValue({ data: [], isLoading: false });
     mClosed.mockReturnValue({ data: [], isLoading: false });
     renderTab();
-    expect(screen.getByText(/No open issues/i)).toBeInTheDocument();
+    // Empty-state banner is retired — the grid always seeds a card per
+    // active repo/member so the tab renders "0 open issues" in the
+    // toolbar and a card grid rather than a "no issues" panel.
+    expect(screen.getByText(/0 open issues?/i)).toBeInTheDocument();
   });
 
   it("renders a card per assignee with issue count", () => {

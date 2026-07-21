@@ -112,6 +112,12 @@ export async function onRequest(context) {
     return context.next();
   }
 
+  // Slack Events API — the link_shared unfurl webhook. Verified inside
+  // the handler with the signing secret + timestamp, so no bearer here.
+  if (url.pathname === "/api/slack/events") {
+    return context.next();
+  }
+
   // Skip middleware for non-API routes
   if (!url.pathname.startsWith("/api/")) {
     return context.next();
