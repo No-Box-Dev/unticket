@@ -695,22 +695,27 @@ describe("narrateEvent — reuse text from pr_narrative row", () => {
   });
 });
 
-describe("narrateReleaseNotes — reuse text from pr_narrative row", () => {
-  it("uses the existing pr_narrative text and does NOT call the LLM", async () => {
+describe("narrateReleaseNotes — always calls the LLM", () => {
+  // Release notes need the structured RELEASE_NOTES_SYSTEM format — the
+  // opened-time chat voice we reuse for the Posts feed reads like a Post
+  // in the Release-notes feed. So even when a pr_narrative row exists, we
+  // do NOT reuse it here.
+  it("calls the LLM with the release-notes prompt, ignoring any existing pr_narrative", async () => {
     const db = makeDb({
       event: EVENT_ROW,
       project: PROJECT_ROW,
       actor: ACTOR_ROW,
       reusablePrNarrative: { summary: "Fixing the login redirect.", model: "glm-5" },
     });
+    completeNarrative.mockResolvedValue("## Change Summary\nStructured note.");
     await narrateReleaseNotes(ENV(db), 1);
-    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(completeNarrative).toHaveBeenCalledTimes(1);
     const insert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
     expect(insert).toBeDefined();
     const [source, type, , , , , summary, payloadJson] = insert.binds;
-    expect(source).toBe("release-notes-reused");
+    expect(source).toBe("release-notes");
     expect(type).toBe("release_notes");
-    expect(summary).toBe("Fixing the login redirect.");
-    expect(JSON.parse(payloadJson).model).toBe("reused:glm-5");
+    expect(summary).toBe("## Change Summary\nStructured note.");
+    expect(JSON.parse(payloadJson).model).not.toMatch(/^reused:/);
   });
 });

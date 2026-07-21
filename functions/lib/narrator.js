@@ -4,12 +4,15 @@
 //   - narrateReleaseNotes → structured release note          (type=release_notes, source=release-notes)
 //
 // PR opens → narratePrOpened writes a pr_narrative row → PRs feed.
-// PR merges → narrateEvent + narrateReleaseNotes look up that pr_narrative row.
-//   If found, they REUSE its text (no LLM call) and insert it as narrative +
-//   release_notes rows. If not found (PR predates this feature or the
-//   open-time narrator failed), they fall back to a fresh LLM call using
-//   ACTOR_SYSTEM / RELEASE_NOTES_SYSTEM. Net cost: 1 LLM call per PR
-//   lifecycle instead of 2, and the same text moves through all three feeds.
+// PR merges:
+//   - narrateEvent looks up that pr_narrative row and REUSES its text
+//     (no LLM call) — Posts feed voice matches opened voice, so the reuse
+//     is free and coherent.
+//   - narrateReleaseNotes ALWAYS calls the LLM with RELEASE_NOTES_SYSTEM.
+//     Reuse was attempted here too, but the chat-style opened voice looked
+//     like a Post inside the Release-notes feed (missing the "Change
+//     Summary / Breaking Changes / Affected Areas" structure). One extra
+//     LLM call per merge is worth the format guarantee.
 //
 // All three share the org's LLM config (BYOK setting applies to all). Runs at
 // every trigger point: webhook, cron queue handler, reconcile loop —
@@ -238,22 +241,16 @@ export async function narrateReleaseNotes(env, eventId) {
   ).bind(row.owner_id, row.repo, prNumber).first();
   if (existing) return;
 
-  // Reuse-text path (see narrateEvent for the full reasoning). If an
-  // pr_narrative row exists for this PR, use its text and skip the LLM
-  // call. Release notes lose their structured format when reused — that's
-  // the trade-off for "one LLM call total per PR lifecycle". If admins
-  // want the structured format back, they can delete the pr_narrative
-  // row and re-run the merge narrator (fresh LLM call, structured output).
+  // Release notes ALWAYS call the LLM with the structured RELEASE_NOTES_SYSTEM
+  // prompt — no reuse of the pr_narrative row. Reusing that row inside the
+  // Release-notes feed produced chat-style entries that looked like Posts,
+  // not release notes (see the header comment). The 1 extra LLM call per
+  // merge is the price of the structured format.
   const orgId = await resolveOrgId(env.DB, row.owner_id);
-  const reused = await findExistingPrNarrative(env.DB, row.owner_id, row.repo, prNumber);
   let summary;
   let model;
-  let source;
-  if (reused) {
-    summary = reused.summary;
-    model = `reused:${reused.model}`;
-    source = "release-notes-reused";
-  } else {
+  let source = "release-notes";
+  {
     const userMessage = buildReleaseNotesMessage({
       actorName: actor.name,
       projectName: project.name,
@@ -270,7 +267,6 @@ export async function narrateReleaseNotes(env, eventId) {
       resolveReleaseNotesPrompt(env.DB, orgId),
     ]);
     const text = await completeNarrative(llmConfig, systemPrompt, userMessage);
-    source = "release-notes";
 
     if (text) {
       const trimmed = text.trim();
