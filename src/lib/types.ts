@@ -170,6 +170,21 @@ export interface SpecFolder {
   specCount: number;
 }
 
+/** A file attached to a Spec. Bytes live in R2; this row carries the
+ * metadata + a serverside-derived kind so the client picks the right
+ * viewer without re-sniffing the filename. */
+export type SpecAttachmentKind = "markdown" | "pdf" | "docx" | "html" | "other";
+
+export interface SpecAttachment {
+  id: number;
+  filename: string;
+  contentType: string;
+  size: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  kind: SpecAttachmentKind;
+}
+
 /** A single spec: Markdown description + external links, belonging to a
  * Feature (via issue number) or Unfiled. */
 export interface Spec {
