@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Download,
   ExternalLink,
-  Eye,
   FileText,
   Link as LinkIcon,
   Loader2,
@@ -255,7 +254,7 @@ export function SpecSourcesSection({ specId, links, onLinksChange }: Props) {
             key={`att-${a.id}`}
             attachment={a}
             specId={specId}
-            onOpen={() => setViewer(a)}
+            onOpenInModal={() => setViewer(a)}
             onDelete={() => deleteAttachMut.mutate(a.id)}
             deleting={deleteAttachMut.isPending && deleteAttachMut.variables === a.id}
           />
@@ -313,14 +312,52 @@ export function SpecSourcesSection({ specId, links, onLinksChange }: Props) {
 interface RowProps {
   attachment: SpecAttachment;
   specId: number;
-  onOpen: () => void;
+  onOpenInModal: () => void;
   onDelete: () => void;
   deleting: boolean;
 }
 
-function AttachmentRow({ attachment, specId, onOpen, onDelete, deleting }: RowProps) {
+function AttachmentRow({ attachment, specId, onOpenInModal, onDelete, deleting }: RowProps) {
   const [downloading, setDownloading] = useState(false);
+  const [opening, setOpening] = useState(false);
   const openable = attachment.kind !== "docx" && attachment.kind !== "other";
+
+  // HTML uploads open in a brand new browser tab (blob URL, rendered by
+  // the browser as a real page). Everything else openable — Markdown, PDF
+  // — uses the in-app modal viewer.
+  async function openInNewTab() {
+    // Open the tab synchronously so we're still inside the user gesture
+    // window and popup blockers don't kill it. We swap the location to
+    // the blob URL once it's ready.
+    const w = window.open("about:blank", "_blank");
+    setOpening(true);
+    try {
+      const blob = await fetchAttachmentBlob(specId, attachment.id);
+      const url = URL.createObjectURL(blob);
+      if (w) {
+        w.location.href = url;
+        // Give the tab time to actually load the resource before
+        // dropping the blob URL. 60s is generous — Chromium keeps the
+        // resource cached in the tab once loaded, so revocation just
+        // frees the URL entry.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        // Popup blocked — fall back to opening in the current tab.
+        window.location.href = url;
+      }
+    } catch (err) {
+      if (w) w.close();
+      broadcastError(err instanceof Error ? err.message : "Failed to open");
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  const handleOpen = () => {
+    if (opening) return;
+    if (attachment.kind === "html") openInNewTab();
+    else onOpenInModal();
+  };
 
   async function triggerDownload() {
     setDownloading(true);
@@ -344,25 +381,34 @@ function AttachmentRow({ attachment, specId, onOpen, onDelete, deleting }: RowPr
   return (
     <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1.5">
       <FileText size={12} className="shrink-0 text-stone-400" />
-      <span className="flex-1 truncate text-xs text-stone-700" title={attachment.filename}>
-        {attachment.filename}
-      </span>
+      {openable ? (
+        <button
+          type="button"
+          onClick={handleOpen}
+          disabled={opening}
+          className="flex-1 min-w-0 truncate text-left text-xs text-stone-700 hover:text-accent hover:underline cursor-pointer disabled:opacity-60"
+          title={attachment.filename}
+          aria-label={`Open ${attachment.filename}${attachment.kind === "html" ? " in new tab" : ""}`}
+        >
+          {attachment.filename}
+        </button>
+      ) : (
+        <span className="flex-1 truncate text-xs text-stone-700" title={attachment.filename}>
+          {attachment.filename}
+        </span>
+      )}
       <span
         className="shrink-0 text-[10px] text-stone-400 tabular-nums"
         title={`${attachment.size} bytes`}
       >
         {attachment.kind.toUpperCase()} · {fmtSize(attachment.size)}
       </span>
-      {openable && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="shrink-0 text-stone-400 hover:text-accent cursor-pointer"
-          title="Open"
-          aria-label={`Open ${attachment.filename}`}
-        >
-          <Eye size={13} />
-        </button>
+      {attachment.kind === "html" && (
+        <ExternalLink
+          size={11}
+          className="shrink-0 text-stone-400"
+          aria-label="Opens in a new tab"
+        />
       )}
       <button
         type="button"
