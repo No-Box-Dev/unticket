@@ -8,6 +8,7 @@ vi.mock("@/hooks/useGitHub", () => ({
   useMergedPRs: vi.fn(),
   useIsAdmin: vi.fn(() => false),
   useActiveMembers: vi.fn(() => ({ data: [] })),
+  useEngineerStats: vi.fn(() => ({ data: undefined, isLoading: false })),
 }));
 vi.mock("@/hooks/useNoxlink", () => ({
   useFeedProjects: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock("@/lib/auth", () => ({
   useAuth: vi.fn(() => ({ selectedOrg: "acme" })),
 }));
 
-import { PRsTab } from "../PRsTab";
+import { CurrentTab } from "../CurrentTab";
 import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 
@@ -35,7 +36,7 @@ function renderTab(repoNames: string[] = ["api"]) {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <PRsTab repoNames={repoNames} />
+        <CurrentTab repoNames={repoNames} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -57,7 +58,7 @@ const samplePR = (over: object = {}) => ({
   ...over,
 });
 
-describe("PRsTab (card grid)", () => {
+describe("CurrentTab (card grid)", () => {
   it("shows the spinner while open PRs load", () => {
     mOpen.mockReturnValue({ data: undefined, isLoading: true });
     mMerged.mockReturnValue({ data: [], isLoading: false });
@@ -65,11 +66,14 @@ describe("PRsTab (card grid)", () => {
     expect(container.querySelector(".animate-spin")).not.toBeNull();
   });
 
-  it("shows empty state when no PRs match", () => {
+  it("renders the toolbar count when no PRs match (grid still shows every member with 0)", () => {
     mOpen.mockReturnValue({ data: [], isLoading: false });
     mMerged.mockReturnValue({ data: [], isLoading: false });
     renderTab();
-    expect(screen.getByText(/No ready PRs/)).toBeInTheDocument();
+    // Empty-state banner is retired — the grid always seeds a card per
+    // active member so the tab renders "0 ready PRs" in the toolbar
+    // and a card grid rather than a "no PRs" panel.
+    expect(screen.getByText(/0 ready PRs?/i)).toBeInTheDocument();
   });
 
   it("renders a card per author with count", () => {
@@ -108,7 +112,7 @@ describe("PRsTab (card grid)", () => {
     fireEvent.click(screen.getByText("alice"));
     // Drill-in view shows the PR title + author + Back button.
     expect(screen.getByText("Fix crash")).toBeInTheDocument();
-    expect(screen.getByText(/Back to all PRs/)).toBeInTheDocument();
+    expect(screen.getByText(/Back to all/)).toBeInTheDocument();
   });
 
   it("group toggle switches to repo cards", () => {

@@ -27,7 +27,7 @@ export function PrDetailPage() {
   if (!isValidNumber) return <Navigate to="/" replace />;
 
   return (
-    <PageShell backTo="/?tab=prs" backLabel="Back to PRs">
+    <PageShell backTo="/?tab=current" backLabel="Back to Current">
       {isLoading && (
         <div className="flex items-center justify-center py-20">
           <Spinner className="w-6 h-6 text-accent" />

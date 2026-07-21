@@ -19,10 +19,9 @@ interface SearchResult {
 }
 
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
-  { id: "engineers", label: "People", keywords: "people engineers team members" },
+  { id: "current", label: "Current", keywords: "current people engineers team members prs pull requests" },
   { id: "sprint", label: "Features", keywords: "features kanban board" },
   { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
-  { id: "prs", label: "PR", keywords: "prs pull requests" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
@@ -118,7 +117,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           type: "person",
           label: p.name || p.login,
           detail: p.role || p.login,
-          action: () => { onNavigate("engineers"); setOpen(false); },
+          action: () => { onNavigate("current"); setOpen(false); },
         });
       }
     }

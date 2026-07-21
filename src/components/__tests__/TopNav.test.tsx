@@ -40,15 +40,15 @@ describe("TopNav", () => {
     render(<TopNav activeTab="sprint" onTabChange={vi.fn()} />);
     // Both desktop + mobile nav lists render — multiple matches expected.
     expect(screen.getAllByText("Features").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("PR").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Issues").length).toBeGreaterThan(0);
   });
 
   it("calls onTabChange when a nav item is clicked", () => {
     const onTabChange = vi.fn();
     render(<TopNav activeTab="sprint" onTabChange={onTabChange} />);
-    fireEvent.click(screen.getAllByText("PR")[0]);
-    expect(onTabChange).toHaveBeenCalledWith("prs");
+    fireEvent.click(screen.getAllByText("Current")[0]);
+    expect(onTabChange).toHaveBeenCalledWith("current");
   });
 
   it("clicking the gear icon switches to settings", () => {

@@ -56,6 +56,7 @@ export interface IssueInfo {
 }
 
 export type TabId =
+  | "current"
   | "sprint"
   | "specs"
   | "prs"

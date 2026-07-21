@@ -7,11 +7,13 @@ import {
   useMergedPRs,
   useIsAdmin,
   useActiveMembers,
+  useEngineerStats,
 } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import {
   ArrowLeft,
+  CircleCheck,
   ExternalLink,
   Folder,
   GitMerge,
@@ -30,6 +32,7 @@ type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
 type GroupBy = "people" | "repo";
 type PRView = "draft" | "ready" | "merged";
+type PersonPane = "prs" | "stats";
 
 const VIEW_LABELS: Record<PRView, string> = {
   draft: "Draft",
@@ -37,20 +40,21 @@ const VIEW_LABELS: Record<PRView, string> = {
   merged: "Merged",
 };
 
-interface PRsTabProps {
+interface CurrentTabProps {
   repoNames: string[];
   navFilter?: import("@/lib/types").NavFilter | null;
 }
 
 // URL params drive every navigation in this tab so links + browser-back
 // stay coherent:
-//   ?tab=prs                          — Ready (open, non-draft) — the default
-//   ?tab=prs&view=draft               — Draft PRs
-//   ?tab=prs&view=merged              — Merged PRs
-//   ?tab=prs&by=repo                  — grid grouped by Repo
-//   ?tab=prs&author=<login>           — drilled into a person's PRs
-//   ?tab=prs&repo=<name>              — drilled into a repo's PRs
-export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
+//   ?tab=current                          — Ready (open, non-draft) — the default
+//   ?tab=current&view=draft               — Draft PRs
+//   ?tab=current&view=merged              — Merged PRs
+//   ?tab=current&by=repo                  — grid grouped by Repo
+//   ?tab=current&author=<login>           — drilled into a person, PRs sub-tab
+//   ?tab=current&author=<login>&pane=stats — drilled into a person, Stats sub-tab
+//   ?tab=current&repo=<name>              — drilled into a repo's PRs
+export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawView = searchParams.get("view");
   const view: PRView =
@@ -59,6 +63,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const drillAuthor = searchParams.get("author") ?? navFilter?.person ?? null;
   const drillRepo = searchParams.get("repo") ?? null;
   const isDrilled = Boolean(drillAuthor || drillRepo);
+  const pane: PersonPane = searchParams.get("pane") === "stats" ? "stats" : "prs";
 
   const { data: feedProjects } = useFeedProjects();
   const archivedRepos = useMemo(
@@ -93,7 +98,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const setUrl = useCallback(
     (next: Record<string, string | null>) => {
       const params = new URLSearchParams(searchParams);
-      params.set("tab", "prs");
+      params.set("tab", "current");
       for (const [k, v] of Object.entries(next)) {
         if (v == null) params.delete(k);
         else params.set(k, v);
@@ -103,33 +108,41 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
     [searchParams, setSearchParams],
   );
 
+  // Only show the PR filter (Draft/Ready/Merged) when we're actually
+  // rendering PR data — the grid, or the person drill-in on the PRs
+  // sub-tab, or any repo drill-in. On the person Stats sub-tab it's noise.
+  const showPrFilter = !isDrilled || !drillAuthor || pane === "prs";
+
   return (
-    <div className="space-y-4" data-tab="prs">
+    <div className="space-y-4" data-tab="current">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-stone-200 overflow-hidden">
-          {(["draft", "ready", "merged"] as PRView[]).map((v, i) => (
-            <button
-              key={v}
-              onClick={() =>
-                setUrl({
-                  view: v === "ready" ? null : v,
-                  author: null,
-                  repo: null,
-                })
-              }
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
-                view === v
-                  ? "bg-accent text-white"
-                  : "bg-white text-stone-600 hover:bg-stone-50",
-                i > 0 && "border-l border-stone-200",
-              )}
-            >
-              {VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
+        {showPrFilter && (
+          <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+            {(["draft", "ready", "merged"] as PRView[]).map((v, i) => (
+              <button
+                key={v}
+                onClick={() =>
+                  setUrl({
+                    view: v === "ready" ? null : v,
+                    author: null,
+                    repo: null,
+                    pane: null,
+                  })
+                }
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
+                  view === v
+                    ? "bg-accent text-white"
+                    : "bg-white text-stone-600 hover:bg-stone-50",
+                  i > 0 && "border-l border-stone-200",
+                )}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!isDrilled && (
           <div className="flex rounded-lg border border-stone-200 overflow-hidden">
@@ -166,15 +179,14 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           isLoading={isLoading}
           drillAuthor={drillAuthor}
           drillRepo={drillRepo}
-          onBack={() => setUrl({ author: null, repo: null })}
+          pane={pane}
+          members={members ?? []}
+          onBack={() => setUrl({ author: null, repo: null, pane: null })}
+          onPaneChange={(p) => setUrl({ pane: p === "prs" ? null : p })}
         />
       ) : isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Spinner className="w-6 h-6 text-accent" />
-        </div>
-      ) : scopedPrs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-200 bg-white/50 px-6 py-16 text-center text-sm text-stone-500">
-          No {view} PRs.
         </div>
       ) : (
         <CardGrid
@@ -182,6 +194,7 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
           groupBy={groupBy}
           view={view}
           members={members ?? []}
+          repos={activeRepoNames}
           onOpen={(key) =>
             setUrl(groupBy === "people" ? { author: key, repo: null } : { repo: key, author: null })
           }
@@ -209,10 +222,11 @@ interface CardGridProps {
   groupBy: GroupBy;
   view: PRView;
   members: { login: string; avatar_url: string }[];
+  repos: string[];
   onOpen: (key: string) => void;
 }
 
-function CardGrid({ prs, groupBy, view, members, onOpen }: CardGridProps) {
+function CardGrid({ prs, groupBy, view, members, repos, onOpen }: CardGridProps) {
   const avatarByLogin = useMemo(() => {
     const m = new Map<string, string>();
     members.forEach((mem) => m.set(mem.login, mem.avatar_url));
@@ -224,24 +238,37 @@ function CardGrid({ prs, groupBy, view, members, onOpen }: CardGridProps) {
       key: string; label: string; avatarUrl: string | null;
       ages: number[]; draft: number; stale: number; newest: string; prs: any[];
     }>();
+
+    const seed = (key: string, avatarUrl: string | null) => {
+      map.set(key, {
+        key, label: key, avatarUrl,
+        ages: [], draft: 0, stale: 0, newest: "", prs: [],
+      });
+    };
+
+    // Seed every active member (or repo) up front so a bucket with 0 PRs
+    // still shows a card. "always show everyone on the PR page" — the
+    // grid becomes a stable overview of the team/portfolio, not just a
+    // list of people who happened to open something recently.
+    if (groupBy === "people") {
+      for (const m of members) seed(m.login, m.avatar_url ?? null);
+    } else {
+      for (const r of repos) seed(r, null);
+    }
+
     for (const pr of prs) {
       const key = groupBy === "people"
         ? (pr.user?.login ?? "(unknown)")
         : (pr.head.repo?.name ?? "(unknown)");
       if (!map.has(key)) {
-        map.set(key, {
+        // Falls back to auto-seeding for logins/repos we don't know about
+        // yet (e.g. a bot author, a repo pre-discovery).
+        seed(
           key,
-          label: key,
-          avatarUrl:
-            groupBy === "people"
-              ? avatarByLogin.get(key) ?? pr.user?.avatar_url ?? null
-              : null,
-          ages: [],
-          draft: 0,
-          stale: 0,
-          newest: pr.updated_at ?? pr.created_at,
-          prs: [],
-        });
+          groupBy === "people"
+            ? avatarByLogin.get(key) ?? pr.user?.avatar_url ?? null
+            : null,
+        );
       }
       const b = map.get(key)!;
       const age = daysAgo(pr.created_at);
@@ -249,7 +276,7 @@ function CardGrid({ prs, groupBy, view, members, onOpen }: CardGridProps) {
       if (pr.draft) b.draft += 1;
       if (age > STALE_PR_DAYS) b.stale += 1;
       const upd = pr.updated_at ?? pr.created_at;
-      if (upd > b.newest) b.newest = upd;
+      if (!b.newest || upd > b.newest) b.newest = upd;
       b.prs.push(pr);
     }
     return Array.from(map.values()).map((b) => ({
@@ -262,13 +289,20 @@ function CardGrid({ prs, groupBy, view, members, onOpen }: CardGridProps) {
       avgAgeDays: b.ages.length ? Math.round(b.ages.reduce((a, c) => a + c, 0) / b.ages.length) : 0,
       newestUpdatedAt: b.newest,
     }));
-  }, [prs, groupBy, avatarByLogin]);
+  }, [prs, groupBy, avatarByLogin, members, repos]);
 
   const sorted = useMemo(() => {
-    // Highest count first, ties broken by most recent activity.
+    // Buckets with PRs first (most-recent-activity tiebreak). Empty
+    // buckets alphabetical so the grid layout stays stable across
+    // renders instead of jumping around when someone opens a PR.
     return [...buckets].sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      return b.newestUpdatedAt.localeCompare(a.newestUpdatedAt);
+      if (a.count > 0 && b.count === 0) return -1;
+      if (b.count > 0 && a.count === 0) return 1;
+      if (a.count > 0) {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.newestUpdatedAt.localeCompare(a.newestUpdatedAt);
+      }
+      return a.label.localeCompare(b.label);
     });
   }, [buckets]);
 
@@ -345,10 +379,13 @@ interface DrilledViewProps {
   isLoading: boolean;
   drillAuthor: string | null;
   drillRepo: string | null;
+  pane: PersonPane;
+  members: { login: string; avatar_url: string }[];
   onBack: () => void;
+  onPaneChange: (pane: PersonPane) => void;
 }
 
-function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: DrilledViewProps) {
+function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, pane, members, onBack, onPaneChange }: DrilledViewProps) {
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const { selectedOrg } = useAuth();
@@ -404,6 +441,10 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
   };
 
   const scopeLabel = drillAuthor ? `@${drillAuthor}` : drillRepo ?? "";
+  const isPersonDrill = Boolean(drillAuthor);
+  const personMember = drillAuthor
+    ? members.find((m) => m.login === drillAuthor)
+    : undefined;
 
   async function handleClose(repo: string, number: number, title: string) {
     const ok = await confirm({
@@ -422,16 +463,54 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
         className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to all PRs
+        Back to all
       </button>
 
-      <h2 className="text-lg font-semibold text-stone-800">
-        {scopeLabel}
-        <span className="ml-2 text-xs font-normal text-stone-400">
-          {sorted.length} {view} PR{sorted.length === 1 ? "" : "s"}
-        </span>
-      </h2>
+      {isPersonDrill && (
+        <div className="flex items-center gap-3">
+          {personMember?.avatar_url ? (
+            <img src={personMember.avatar_url} alt="" className="w-10 h-10 rounded-full shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-sm font-semibold text-stone-500">
+              {drillAuthor?.[0]?.toUpperCase() ?? "?"}
+            </div>
+          )}
+          <h2 className="text-lg font-semibold text-stone-800">{scopeLabel}</h2>
+        </div>
+      )}
 
+      {isPersonDrill && (
+        <div className="flex rounded-lg border border-stone-200 overflow-hidden w-fit">
+          {(["prs", "stats"] as PersonPane[]).map((p, i) => (
+            <button
+              key={p}
+              onClick={() => onPaneChange(p)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
+                pane === p
+                  ? "bg-accent text-white"
+                  : "bg-white text-stone-600 hover:bg-stone-50",
+                i > 0 && "border-l border-stone-200",
+              )}
+            >
+              {p === "prs" ? "PRs" : "Stats"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!isPersonDrill && (
+        <h2 className="text-lg font-semibold text-stone-800">
+          {scopeLabel}
+          <span className="ml-2 text-xs font-normal text-stone-400">
+            {sorted.length} {view} PR{sorted.length === 1 ? "" : "s"}
+          </span>
+        </h2>
+      )}
+
+      {isPersonDrill && pane === "stats" ? (
+        <PersonStats login={drillAuthor!} />
+      ) : (
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -577,8 +656,44 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
           </tbody>
         </table>
       </div>
+      )}
 
       <ConfirmDialog {...dialogProps} />
+    </div>
+  );
+}
+
+// ---------- Person Stats pane (5 headline stat cards only) ----------
+
+function PersonStats({ login }: { login: string }) {
+  const { data: stats, isLoading } = useEngineerStats();
+  const cards = [
+    { label: "Lifetime PRs", value: stats?.lifetimePRs?.[login] ?? 0, icon: <GitPullRequest size={14} className="text-stone-400" /> },
+    { label: "PRs · last 4 weeks", value: stats?.prsLast4Weeks?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
+    { label: "Approvals given", value: stats?.approvalsGiven?.[login] ?? 0, icon: <CircleCheck size={14} className="text-stone-400" /> },
+    { label: "Merged for others", value: stats?.mergesOfOthers?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
+    { label: "Issues closed", value: stats?.issuesClosed?.[login] ?? 0, icon: <CircleCheck size={14} className="text-stone-400" /> },
+  ];
+
+  if (isLoading && !stats) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Spinner className="w-6 h-6 text-accent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {cards.map((c) => (
+        <div key={c.label} className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className="flex items-center gap-1.5 text-[10px] font-medium text-stone-400 uppercase tracking-wider">
+            {c.icon}
+            <span>{c.label}</span>
+          </div>
+          <div className="text-2xl font-bold font-display text-stone-800 mt-2 leading-none">{c.value}</div>
+        </div>
+      ))}
     </div>
   );
 }

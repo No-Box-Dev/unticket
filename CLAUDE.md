@@ -184,8 +184,14 @@ Manual, GitHub-independent spec library. Two-pane layout: left sidebar with fold
 #### Issues (`issues` tab)
 Issues dashboard. Top section: four stat cards (open, unassigned, stale >30d, closed in last 30d). Middle section: horizontal bar chart of open issues by repo, label distribution breakdown, and closed-per-week trend chart. Bottom section: full paginated table of open + closed issues (closed within the last 30 days). Stats powered by `meta=stats` endpoint on `/api/issues` (single D1 batch query). Filters: repo (searchable), assignee, assignment status, label. Sortable columns (issue #, title, repo, age). Pagination controls per section (open / closed). Uses `usePaginatedIssues` + `useIssueStats` hooks backed by `/api/issues` with D1 pagination. Sync button with progress modal (`triggerSyncWithProgress`). Interactive assignee column using `AssignDropdown` — click to assign/unassign org members, syncs to GitHub via `POST /api/assign` with optimistic UI updates.
 
-#### PRs (`prs` tab)
-Open + merged PR view with toggle. Filters: author, repo (searchable). Sortable columns (repo, title, author, reviewers, age). Stale PR highlighting (>7 days). Sync button with progress modal (`triggerSyncWithProgress`).
+#### Current (`current` tab — replaces the old `prs` + `engineers` tabs)
+Unified "what's happening right now" view. The grid at top is a card per **active member** (default) or **repo**, always seeded — a person with 0 open PRs still gets a card, so the grid is a stable team/portfolio overview rather than a list of whoever happened to open something. The Draft/Ready/Merged toggle filters the underlying PR set; **Ready** is the default. Clicking a person card drills into a person page with a **PRs / Stats** sub-tab bar:
+- **PRs** (default) — the sortable PR table (repo, title, author, reviewers, age). Stale (>7 days) highlighted amber. Admin-only Close-PR action.
+- **Stats** — just the 5 headline stat cards from `useEngineerStats`: Lifetime PRs · PRs · last 4 weeks · Approvals given · Merged for others · Issues closed. No activity table, no lists, no activity feed — deliberately minimal so the drill-in is a quick "how is this person tracking?" glance, not a whole dashboard.
+
+Clicking a repo card drills into that repo's PR table (no sub-tabs).
+
+URL params: `?tab=current` · `?tab=current&view=draft|merged` · `?tab=current&by=repo` · `?tab=current&author=<login>` · `?tab=current&author=<login>&pane=stats` · `?tab=current&repo=<name>`. Legacy `?tab=prs` and `?tab=engineers` URLs still resolve — `DashboardPage.tsx` routes all three to `CurrentTab.tsx`. Person drill-ins arriving via CommandPalette also land here. The old `EngineersTab.tsx` (activity table + item lists + activity feed) has been removed; its 5 headline stats live on the Stats sub-tab, the activity feed / voice card were dropped as unused surface area.
 
 ### Other Features
 

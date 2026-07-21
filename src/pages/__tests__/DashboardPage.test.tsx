@@ -32,8 +32,8 @@ vi.mock("@/components/ErrorBoundary", () => ({
 vi.mock("@/components/tabs/SprintTab", () => ({
   SprintTab: () => <div data-testid="tab-sprint" />,
 }));
-vi.mock("@/components/tabs/PRsTab", () => ({
-  PRsTab: () => <div data-testid="tab-prs" />,
+vi.mock("@/components/tabs/CurrentTab", () => ({
+  CurrentTab: () => <div data-testid="tab-current" />,
 }));
 vi.mock("@/components/tabs/IssuesTab", () => ({
   IssuesTab: () => <div data-testid="tab-issues" />,
@@ -43,9 +43,6 @@ vi.mock("@/components/tabs/PostsTab", () => ({
 }));
 vi.mock("@/components/tabs/ReposTab", () => ({
   ReposTab: () => <div data-testid="tab-repos" />,
-}));
-vi.mock("@/components/tabs/EngineersTab", () => ({
-  EngineersTab: () => <div data-testid="tab-engineers" />,
 }));
 vi.mock("@/components/tabs/SettingsTab", () => ({
   SettingsTab: () => <div data-testid="tab-settings" />,
