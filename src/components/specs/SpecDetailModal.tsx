@@ -200,11 +200,6 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
                   )}
                 </div>
               )}
-              {!currentFeature && draft.legacyFolderName && (
-                <div className="mt-1.5 text-[11px] text-stone-400 italic">
-                  Was in project: {draft.legacyFolderName}
-                </div>
-              )}
             </div>
             {draft.archived && (
               <div className="text-xs text-stone-400 italic">

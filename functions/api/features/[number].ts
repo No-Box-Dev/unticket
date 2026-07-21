@@ -19,7 +19,6 @@ import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
 import { sanitizeSpecLinks } from "../../lib/spec-links";
-import { filterExistingSpecIds, sanitizeLinkedSpecIds } from "../../lib/linked-spec-ids";
 import { recordFailure } from "../../lib/op-failures";
 import { resolveBoardStages } from "../../lib/board-stages.js";
 import {
@@ -64,9 +63,6 @@ const PatchFeatureBody = z.object({
   // Shape is intentionally loose — sanitizeSpecLinks does the real
   // validation (http/https only, drops empty rows) at the storage boundary.
   specLinks: z.array(z.unknown()).optional(),
-  // Same treatment for linked spec ids — the server verifies they exist
-  // for this org (drops any that don't) before storage.
-  linkedSpecIds: z.array(z.unknown()).optional(),
 }).passthrough();
 
 function parseFeatureNumber(context: Ctx): number | null {
@@ -169,25 +165,12 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     ? sanitizeSpecLinks(payload.specLinks)
     : (currentMetadata.specLinks ?? []);
 
-  // Linked spec ids: same replace-wholesale semantics. Server verifies
-  // each id belongs to this org (drops any that don't) so a client can't
-  // reach across orgs by guessing spec ids.
-  const linkedSpecIds = payload?.linkedSpecIds !== undefined
-    ? await filterExistingSpecIds(
-        context.env.DB,
-        orgId,
-        sanitizeLinkedSpecIds(payload.linkedSpecIds),
-      )
-    : (currentMetadata.linkedSpecIds ?? []);
-
-  // Spread currentMetadata so any field this endpoint doesn't manage
-  // (e.g. linkedPRs) survives the round-trip instead of being silently
-  // dropped when the body is rebuilt.
+  // Spread currentMetadata so any unknown-to-us field survives the
+  // round-trip instead of being silently dropped when the body is rebuilt.
   const body = buildIssueBody(plan, {
     ...currentMetadata,
     statusHistory,
     specLinks,
-    linkedSpecIds,
   });
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);
@@ -201,17 +184,37 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
   const optimistic = synthesizeIssue({ row, number, title, body, status, backlog, owners });
   await upsertFeatureRow(context.env.DB, orgId, optimistic, { from: "local" });
 
+  // Only send the fields the caller actually changed. GitHub PATCH is
+  // additive per-field — anything omitted stays as-is. Blindly sending
+  // title/body/labels/assignees on every PATCH created a lost-update race:
+  // two concurrent PATCHes that read the same D1 snapshot would each
+  // overwrite the other's field. This diff keeps concurrent edits from
+  // stepping on each other (as long as they touch different fields).
+  const titleChanged = payload?.title !== undefined && title !== row.title;
+  const ownersChanged = payload?.owners !== undefined;
+  const statusChanged = status !== currentStatus;
+  const backlogChanged = backlog !== currentBacklog;
+  const specLinksChanged = payload?.specLinks !== undefined;
+  const labelsChanged = statusChanged || backlogChanged;
+  const bodyChanged = statusChanged || specLinksChanged;
+
+  const ghPatch: Record<string, unknown> = {};
+  if (titleChanged) ghPatch.title = title;
+  if (bodyChanged) ghPatch.body = body;
+  if (labelsChanged) ghPatch.labels = buildFeatureLabels(status, backlog);
+  if (ownersChanged) ghPatch.assignees = owners;
+
   const ghWrite = (async () => {
+    // No fields changed — the caller sent a no-op PATCH (or the values
+    // matched what was already there). Skip the GitHub round-trip
+    // entirely; the D1 row already reflects the identity write above.
+    if (Object.keys(ghPatch).length === 0) return;
     const token = await getInstallationToken(context.env, installationId);
     // Make sure the status:<id> label exists on GitHub before patching —
-    // GitHub rejects PATCHes referencing nonexistent labels.
+    // GitHub rejects PATCHes referencing nonexistent labels. The helper is
+    // cached per-org so this is a no-op after the first hit.
     await ensureUnticketRepoLabels(token, orgLogin, stages);
-    const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
-      title,
-      body,
-      labels: buildFeatureLabels(status, backlog),
-      assignees: owners,
-    });
+    const ghIssue = await patchFeatureIssue(token, orgLogin, number, ghPatch);
     await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
   })();
   context.waitUntil(
@@ -259,21 +262,32 @@ export async function onRequestDelete(context: Ctx): Promise<Response> {
   // Optimistic D1 close marked as a local edit — bumps updated_at but
   // leaves gh_synced_at, so cron syncFeatures will push the close to
   // GitHub on the next tick if the inline waitUntil fails.
-  await context.env.DB
-    .prepare(
+  //
+  // Detach any specs that pointed at this feature in the same batch so
+  // they don't become orphans referencing a closed issue. Since migration
+  // 0037 the truth is `spec.feature_number`, and no cascade FK exists
+  // yet — this is the natural moment to null it out.
+  await context.env.DB.batch([
+    context.env.DB.prepare(
       `UPDATE features
           SET state = 'closed',
               labels_json = ?,
               updated_at = ?
         WHERE org_id = ? AND number = ?`,
     )
-    .bind(
-      JSON.stringify(keepLabels.map((name: string) => ({ name, color: "" }))),
-      new Date().toISOString(),
-      orgId,
-      number,
-    )
-    .run();
+      .bind(
+        JSON.stringify(keepLabels.map((name: string) => ({ name, color: "" }))),
+        new Date().toISOString(),
+        orgId,
+        number,
+      ),
+    context.env.DB.prepare(
+      `UPDATE specs
+          SET feature_number = NULL,
+              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE org_id = ? AND feature_number = ?`,
+    ).bind(orgId, number),
+  ]);
 
   const ghWrite = (async () => {
     const token = await getInstallationToken(context.env, installationId);

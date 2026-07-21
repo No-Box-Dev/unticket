@@ -79,7 +79,6 @@ export function useCreateFeature() {
       title: string;
       status: FeatureStatus;
       owners?: string[];
-      linkedSpecIds?: number[];
     }) =>
       ghCreateFeature(selectedOrg!, args.title, args),
     // Optimistic: drop a pending card into the target column immediately, then

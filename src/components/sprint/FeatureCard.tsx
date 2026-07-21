@@ -1,8 +1,7 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
-import { useSpecs } from "@/hooks/useSpecs";
 import { daysAgo } from "@/lib/dates";
 import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
 import { Archive, ChevronDown, ExternalLink, FileText, GripVertical, Trash2 } from "lucide-react";
@@ -11,6 +10,10 @@ interface FeatureCardProps {
   feature: Feature;
   stages: BoardStage[];
   allPeople: string[];
+  /** Non-archived specs already scoped to this feature. SprintTab loads
+   * the org's spec list once and passes each card its slice, so we
+   * don't fan out N useSpecs subscriptions across a dense board. */
+  ownSpecs: Spec[];
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
@@ -40,6 +43,7 @@ export function FeatureCard({
   feature,
   stages,
   allPeople,
+  ownSpecs,
   onUpdate,
   onDelete,
   onOpenDetail,
@@ -51,16 +55,6 @@ export function FeatureCard({
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
   const isLastStage = stages.length > 0 && stages[stages.length - 1].id === feature.status;
-
-  // One useSpecs call per card looks wasteful but TanStack Query dedupes:
-  // every card shares the same cache entry and hits D1 once per board load.
-  const specsQ = useSpecs({ featureNumber: "all" });
-  const ownSpecs = useMemo<Spec[]>(() => {
-    const all = specsQ.data ?? [];
-    return all
-      .filter((s) => s.featureNumber === feature.id && !s.archived)
-      .sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
-  }, [specsQ.data, feature.id]);
 
   const inlineSpecs = ownSpecs.slice(0, MAX_INLINE_SPECS);
   const overflowSpecs = ownSpecs.slice(MAX_INLINE_SPECS);

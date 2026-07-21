@@ -6,11 +6,8 @@ import { usePrDetail, usePrBody } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
+import { daysAgo } from "@/lib/dates";
 import { PageShell } from "./PageShell";
-
-function daysAgo(date: string): number {
-  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-}
 
 export function PrDetailPage() {
   const { repo, number: numberStr } = useParams<{ repo: string; number: string }>();

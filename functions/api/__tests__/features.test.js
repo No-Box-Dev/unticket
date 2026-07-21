@@ -112,8 +112,8 @@ describe("GET /api/features", () => {
     const res = await onRequestGet(makeCtx({ db }));
     const data = await res.json();
     expect(data).toHaveLength(2);
-    expect(data[0].linkedPRs).toBeUndefined();
-    expect(data[1].linkedPRs).toBeUndefined();
+    expect(data[0].number).toBe(42);
+    expect(data[1].number).toBe(43);
   });
 
   it("filters by state from query param (default 'open')", async () => {
@@ -309,7 +309,12 @@ describe("PATCH /api/features/:number", () => {
     );
   });
 
-  it("does not append statusHistory when status is unchanged", async () => {
+  it("sends only the changed fields — a title-only PATCH omits body/labels/assignees", async () => {
+    // Regression guard for the lost-update race: two concurrent PATCHes
+    // that both blindly echoed title+body+labels+assignees would overwrite
+    // each other's untouched fields. This asserts a title-only PATCH ships
+    // ONLY the title, so a concurrent status PATCH can land labels/body
+    // without collision.
     const initialBody = `do it\n\n<!-- unticket:metadata\n${JSON.stringify({
       statusHistory: [{ status: "todo", timestamp: "t1" }],
     })}\n-->`;
@@ -340,8 +345,10 @@ describe("PATCH /api/features/:number", () => {
     await waitUntil.mock.calls[0][0];
     const ghCall = global.fetch.mock.calls[1];
     const ghBody = JSON.parse(ghCall[1].body);
-    const meta = JSON.parse(ghBody.body.match(/<!-- unticket:metadata\n([\s\S]+)\n-->/)[1]);
-    expect(meta.statusHistory).toHaveLength(1);
+    expect(ghBody.title).toBe("New title");
+    expect(ghBody.body).toBeUndefined();
+    expect(ghBody.labels).toBeUndefined();
+    expect(ghBody.assignees).toBeUndefined();
   });
 
   it("rejects invalid owner usernames", async () => {
@@ -424,12 +431,19 @@ describe("DELETE /api/features/:number", () => {
     const waitUntil = vi.fn((p) => p);
     const res = await onRequestDelete(makeCtx({ db, method: "DELETE", params: { number: "5" }, waitUntil }));
     expect(res.status).toBe(200);
-    // D1 close ran optimistically before the GitHub PATCH was awaited.
-    const closeRun = db._calls.run.find((r) => r.sql.includes("UPDATE features"));
-    expect(closeRun).toBeTruthy();
-    expect(closeRun.binds[0]).toContain("bug");
-    expect(closeRun.binds[0]).not.toContain("unticket");
-    expect(closeRun.binds[0]).not.toContain("status:");
+    // D1 close + spec detach run in one batch, before the GitHub PATCH is
+    // awaited. First statement closes the feature, second detaches specs
+    // that pointed at it (so they don't become orphans pointing at a
+    // closed issue).
+    expect(db._calls.batch).toHaveLength(1);
+    const [closeStmt, detachStmt] = db._calls.batch[0];
+    expect(closeStmt.sql).toContain("UPDATE features");
+    expect(closeStmt.binds[0]).toContain("bug");
+    expect(closeStmt.binds[0]).not.toContain("unticket");
+    expect(closeStmt.binds[0]).not.toContain("status:");
+    expect(detachStmt.sql).toContain("UPDATE specs");
+    expect(detachStmt.sql).toContain("feature_number = NULL");
+    expect(detachStmt.binds).toEqual([1, 5]);
     // Drive the GitHub call.
     await waitUntil.mock.calls[0][0];
     const ghCall = global.fetch.mock.calls[0];

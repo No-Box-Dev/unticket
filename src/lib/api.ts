@@ -56,6 +56,15 @@ function forceLogout() {
 // Coalesce concurrent refresh attempts: if N requests 401 at once we only
 // want one round-trip to /api/auth/refresh, not N. Subsequent callers await
 // the in-flight promise instead.
+//
+// After the refresh resolves we hold the result for REFRESH_DEBOUNCE_MS
+// before allowing another attempt. The previous implementation cleared the
+// coalescing lock on the very next microtask — a burst of 401s from a tab
+// waking from sleep would fire multiple refresh calls milliseconds apart,
+// each rotating the refresh_token and invalidating the previous one, which
+// force-logged the user out. A 1.5s debounce covers the burst without
+// changing steady-state behaviour: legitimate refreshes are 8 hours apart.
+const REFRESH_DEBOUNCE_MS = 1500;
 let refreshPromise: Promise<string | null> | null = null;
 
 export async function refreshAccessToken(expiredToken: string): Promise<string | null> {
@@ -74,15 +83,18 @@ export async function refreshAccessToken(expiredToken: string): Promise<string |
       return body.token;
     } catch {
       return null;
-    } finally {
-      // Clear *after* the next microtask so any 401 retries in this batch
-      // share the same result before the next round starts a fresh attempt.
-      queueMicrotask(() => {
-        refreshPromise = null;
-      });
     }
   })();
-  return refreshPromise;
+  const p = refreshPromise;
+  // Reset the coalescing slot only after both the request resolves AND a
+  // short debounce window. Late arrivals during that window keep sharing
+  // this result; anything after gets a fresh attempt.
+  p.finally(() => {
+    setTimeout(() => {
+      if (refreshPromise === p) refreshPromise = null;
+    }, REFRESH_DEBOUNCE_MS);
+  });
+  return p;
 }
 
 function buildRequestInit(token: string | null, options?: RequestInit): RequestInit {

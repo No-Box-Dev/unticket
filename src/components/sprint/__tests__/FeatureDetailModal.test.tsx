@@ -5,9 +5,9 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("@/hooks/useConfigRepo", () => ({
   useSettings: () => ({ data: null }),
 }));
-// The Linked Specs section fires useSpecs/useSpecFolders which need auth +
-// react-query context — this stub keeps the modal test focused on the
-// non-Specs behaviour that these cases actually assert.
+// The Linked Specs section fires useSpecs which needs auth + react-query
+// context — this stub keeps the modal test focused on the non-Specs
+// behaviour that these cases actually assert.
 vi.mock("../FeatureLinkedSpecsSection", () => ({
   FeatureLinkedSpecsSection: () => null,
 }));
@@ -92,16 +92,3 @@ describe("FeatureDetailModal", () => {
   });
 });
 
-// Legacy plan-block tests removed: FeatureDetailModal no longer renders a
-// Description section — all content lives in linked Specs.
-describe.skip("FeatureDetailModal plan (retired)", () => {
-  it("legacy Edit → textarea → Save flow", () => {
-    const onUpdate = vi.fn();
-    renderModal(baseFeature, { onUpdate });
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
-    const textarea = screen.getByDisplayValue("Some markdown plan") as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "Updated plan" } });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
-    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ plan: "Updated plan" }));
-  });
-});

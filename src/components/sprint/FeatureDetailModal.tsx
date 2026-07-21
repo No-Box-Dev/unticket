@@ -52,6 +52,26 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
+  // Re-sync from parent when the source feature refetches and there are
+  // no unsaved local edits. Without this, a webhook or cron refetch mid-
+  // view would leave the modal showing the stale snapshot the user first
+  // opened — and any subsequent Save would silently revert whoever
+  // changed the row in the meantime. Guarded on hasUnsavedChanges so we
+  // don't stomp the user's in-progress edit; if they have local changes,
+  // let their next Save win instead of clobbering the draft.
+  //
+  // Fingerprint the identifying fields so we don't re-fire on every parent
+  // re-render — only when something the modal actually reads changes.
+  const featureFingerprint =
+    `${feature.id}|${feature.title}|${feature.status}|${!!feature.backlog}|` +
+    `${feature.updatedAt ?? ""}|${(feature.owners ?? []).join(",")}|` +
+    `${feature.specLinks?.length ?? 0}`;
+  useEffect(() => {
+    if (hasUnsavedChanges.current) return;
+    setDraft({ ...feature });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featureFingerprint]);
+
   function update(patch: Partial<Feature>, debounce = false) {
     setDraft((d) => {
       const next = { ...d, ...patch };

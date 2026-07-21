@@ -243,10 +243,25 @@ export async function onRequest(context) {
   // of sessions older than 30 days. Keeping this here (vs a cron) means cleanup is
   // free-rolling and self-throttling at request volume.
   if (Math.random() < SESSION_CLEANUP_RATE) {
+    // Route failures through recordFailure so a schema drift on the
+    // sessions table surfaces in Settings → Background failures instead
+    // of silently letting the table grow. Import inline — this file is
+    // hot-path middleware and we don't want the require every request.
     context.waitUntil(
       context.env.DB.prepare(
         "DELETE FROM sessions WHERE updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')"
-      ).run().catch((err) => console.error("[unticket] Session cleanup failed:", err))
+      ).run().catch(async (err) => {
+        console.error("[unticket] Session cleanup failed:", err);
+        try {
+          const { recordFailure } = await import("./lib/op-failures.js");
+          await recordFailure(context.env.DB, {
+            ownerId: orgLogin,
+            op: "middleware.session_cleanup",
+            deliveryId: null,
+            error: err,
+          });
+        } catch { /* recordFailure swallows its own errors; ignore any import miss too */ }
+      })
     );
   }
 

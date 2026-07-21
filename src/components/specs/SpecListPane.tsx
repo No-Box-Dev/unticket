@@ -140,10 +140,6 @@ function SpecCard({ spec, feature, showFeature, onClick }: SpecCardProps) {
               <>
                 <Rocket size={11} /> {feature.title}
               </>
-            ) : spec.legacyFolderName ? (
-              <>
-                <FileText size={11} /> Was in: {spec.legacyFolderName}
-              </>
             ) : (
               <>
                 <FileText size={11} /> Unfiled

@@ -18,9 +18,6 @@ import type { Spec } from "@/lib/types";
 //   ?tab=specs&feature=archive        — archived specs
 //   ?tab=specs&spec=<id>              — open detail modal for that spec
 //   ?tab=specs&person=<login>         — filter to features owned by that login
-//
-// Also supports the legacy `folder=` param from before the unification
-// (parsed but silently mapped to the new meaning).
 
 function parseSelection(raw: string | null): SidebarSelection {
   if (raw === "unfiled") return { kind: "unfiled" };
@@ -47,9 +44,7 @@ function selectionToParam(sel: SidebarSelection): string | null {
 
 export function SpecsTab() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const selection = parseSelection(
-    searchParams.get("feature") ?? searchParams.get("folder"),
-  );
+  const selection = parseSelection(searchParams.get("feature"));
   const specParam = searchParams.get("spec");
   const openSpecId = specParam && Number.isFinite(Number(specParam)) ? Number(specParam) : null;
 
@@ -87,8 +82,6 @@ export function SpecsTab() {
       const p = selectionToParam(next);
       if (p) params.set("feature", p);
       else params.delete("feature");
-      // Migrate the legacy param off the URL when the user actively navigates.
-      params.delete("folder");
       params.delete("spec");
       setSearchParams(params, { replace: true });
     },
