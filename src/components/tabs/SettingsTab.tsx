@@ -900,11 +900,16 @@ function SlackSettingsSection() {
 
   const persistedPosts = settings?.slack?.postsChannelId ?? "";
   const persistedNotes = settings?.slack?.releaseNotesChannelId ?? "";
+  // One channel receives both feeds. If an existing install has different
+  // per-feed channels (legacy state from before this section was
+  // simplified), we treat the Posts channel as the primary — saving will
+  // unify them, but a note in the UI warns the admin first.
+  const persistedChannel = persistedPosts || persistedNotes;
+  const hasSplitChannels =
+    persistedPosts !== "" && persistedNotes !== "" && persistedPosts !== persistedNotes;
 
-  const [postsDraft, setPostsDraft] = useState<string | null>(null);
-  const [notesDraft, setNotesDraft] = useState<string | null>(null);
-  const postsValue = postsDraft ?? persistedPosts;
-  const notesValue = notesDraft ?? persistedNotes;
+  const [channelDraft, setChannelDraft] = useState<string | null>(null);
+  const channelValue = channelDraft ?? persistedChannel;
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -944,9 +949,11 @@ function SlackSettingsSection() {
     return [{ value: "", label: "— No channel —" }, ...opts];
   }, [channels.data]);
 
+  // Dirty when the single-channel selector deviates from what's persisted,
+  // OR when the persisted state is split across two channels (saving will
+  // unify them, so the admin still needs the Save button to light up).
   const isDirty =
-    (postsDraft !== null && postsDraft !== persistedPosts) ||
-    (notesDraft !== null && notesDraft !== persistedNotes);
+    (channelDraft !== null && channelDraft !== persistedChannel) || hasSplitChannels;
 
   async function handleConnect() {
     setError(null);
@@ -971,8 +978,7 @@ function SlackSettingsSection() {
         // Refetch so the dropdowns don't show stale selections.
         qc.invalidateQueries({ queryKey: ["settings"] }),
       ]);
-      setPostsDraft(null);
-      setNotesDraft(null);
+      setChannelDraft(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -984,19 +990,22 @@ function SlackSettingsSection() {
     if (!settings) return;
     setError(null);
     try {
+      // One channel receives both feeds. We keep the two per-feed fields on
+      // disk (backend already resolves them separately) so this refactor
+      // stays reversible — we just point both at the same ID.
+      const id = channelValue.trim();
       const next: OrgSettings = {
         ...settings,
         slack: {
-          postsChannelId: postsValue.trim() || undefined,
-          releaseNotesChannelId: notesValue.trim() || undefined,
+          postsChannelId: id || undefined,
+          releaseNotesChannelId: id || undefined,
         },
       };
       if (!next.slack?.postsChannelId && !next.slack?.releaseNotesChannelId) {
         delete next.slack;
       }
       await saveSettings.mutateAsync(next);
-      setPostsDraft(null);
-      setNotesDraft(null);
+      setChannelDraft(null);
       setSavedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1004,7 +1013,7 @@ function SlackSettingsSection() {
   }
 
   async function handleTest(kind: SlackKind) {
-    const channelId = kind === "release_notes" ? notesValue.trim() : postsValue.trim();
+    const channelId = channelValue.trim();
     if (!channelId) {
       setTestStatus({ kind, ok: false, msg: "Pick a channel first." });
       return;
@@ -1050,9 +1059,10 @@ function SlackSettingsSection() {
         )}
       </div>
       <p className="text-xs text-stone-400">
-        Mirror Posts and Release notes to Slack via the Unticket Slack app. Connect once,
-        then pick which channel each feed posts to. The bot must be added to private
-        channels before it can post there; public channels work without an invite.
+        Mirror Posts + Release notes to Slack via the Unticket Slack app.
+        Connect once, then pick one channel to receive both feeds. The bot must
+        be added to private channels before it can post there; public channels
+        work without an invite.
       </p>
 
       {!data?.appConfigured && (
@@ -1076,10 +1086,10 @@ function SlackSettingsSection() {
       ) : (
         <>
           <SlackChannelField
-            label="Posts feed"
-            helpText="First-person chat-style narratives. One message per merged PR."
-            value={postsValue}
-            onChange={setPostsDraft}
+            label="Channel"
+            helpText="One message per merged PR (Posts + Release notes both post here)."
+            value={channelValue}
+            onChange={setChannelDraft}
             options={channelOptions}
             channelsLoading={channels.isLoading}
             channelsError={channels.isError}
@@ -1087,18 +1097,12 @@ function SlackSettingsSection() {
             testing={testingKind === "narrative"}
             testStatus={testStatus?.kind === "narrative" ? testStatus : null}
           />
-          <SlackChannelField
-            label="Release notes feed"
-            helpText="Structured release notes. One message per merged PR."
-            value={notesValue}
-            onChange={setNotesDraft}
-            options={channelOptions}
-            channelsLoading={channels.isLoading}
-            channelsError={channels.isError}
-            onTest={() => handleTest("release_notes")}
-            testing={testingKind === "release_notes"}
-            testStatus={testStatus?.kind === "release_notes" ? testStatus : null}
-          />
+          {hasSplitChannels && (
+            <p className="text-xs text-amber-600">
+              This workspace had different Posts / Release-notes channels
+              configured. Saving will unify them under the channel above.
+            </p>
+          )}
 
           <div className="flex items-center gap-3 flex-wrap border-t border-stone-100 pt-3">
             <button
