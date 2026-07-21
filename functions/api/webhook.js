@@ -47,6 +47,11 @@ function reportWebhookFailure(db, orgLogin, op, deliveryId, err, extra) {
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
   if (!signature) return false;
+  // Belt-and-braces preflight: signature must look like `sha256=<64 hex>`.
+  // The constant-time compare below also handles it, but rejecting a
+  // malformed header early keeps the HMAC path away from any weird
+  // header shape that could sneak past.
+  if (!/^sha256=[0-9a-f]{64}$/i.test(signature)) return false;
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(

@@ -48,6 +48,22 @@ export function AssignDropdown({ owners, allPeople, onChange }: AssignDropdownPr
     }
   }, [open, updatePos]);
 
+  // Reposition the portal on scroll / resize while it's open — otherwise
+  // the fixed-position dropdown drifts away from the trigger the moment
+  // the user scrolls the underlying kanban column or resizes the window.
+  // Mirrors the same guard SearchableSelect already has.
+  useEffect(() => {
+    if (!open) return;
+    // Capture-phase listener catches scroll on any ancestor (including
+    // internal scroll containers) rather than only the document.
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [open, updatePos]);
+
   const filtered = allPeople.filter((p) =>
     p.toLowerCase().includes(search.toLowerCase()),
   );
