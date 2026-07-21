@@ -12,6 +12,12 @@ export function mapEventType(ghEvent, action, payload) {
   switch (ghEvent) {
     case "pull_request":
       if (action === "opened") return "github:pr:opened";
+      // A draft flipping to "ready for review" is what actually belongs in
+      // the Opened feed — the previous opened event was gated out because
+      // pr.draft was true. Map it to the same type so narratePrOpened runs
+      // with draft=false and the pr_narrative UNIQUE INDEX dedups against
+      // any accidental double-open.
+      if (action === "ready_for_review") return "github:pr:opened";
       if (action === "closed") return payload.pull_request?.merged ? "github:pr:merged" : "github:pr:closed";
       if (action === "reopened") return "github:pr:reopened";
       return null;
@@ -127,6 +133,9 @@ function slimPayload(ghEvent, payload) {
         body: pr.body?.slice(0, 16000),
         state: pr.state,
         merged: pr.merged,
+        // Carry draft so narratePrOpened can skip drafts — see the
+        // Opened-feed gate in narrator.js.
+        draft: !!pr.draft,
         author: pr.user?.login,
         additions: pr.additions,
         deletions: pr.deletions,

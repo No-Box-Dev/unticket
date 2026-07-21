@@ -44,6 +44,10 @@ afterEach(() => vi.restoreAllMocks());
 describe("mapEventType", () => {
   it("maps pull_request actions", () => {
     expect(mapEventType("pull_request", "opened", {})).toBe("github:pr:opened");
+    // ready_for_review reuses the pr:opened lane so a draft → ready
+    // flip lands in the Opened feed (draft-time opens are gated out by
+    // the narrator).
+    expect(mapEventType("pull_request", "ready_for_review", {})).toBe("github:pr:opened");
     expect(mapEventType("pull_request", "closed", { pull_request: { merged: true } })).toBe("github:pr:merged");
     expect(mapEventType("pull_request", "closed", { pull_request: { merged: false } })).toBe("github:pr:closed");
     expect(mapEventType("pull_request", "reopened", {})).toBe("github:pr:reopened");
