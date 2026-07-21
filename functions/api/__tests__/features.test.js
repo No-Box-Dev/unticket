@@ -22,6 +22,7 @@ const LABELS_OK_RESPONSE = {
   json: async () => [
     { name: "unticket", color: "1B6971" },
     { name: "feature", color: "1B6971" },
+    { name: "backlog", color: "94A3B8" },
     { name: "status:todo", color: "94a3b8" },
     { name: "status:staging", color: "b89464" },
     { name: "status:ready", color: "6a9991" },

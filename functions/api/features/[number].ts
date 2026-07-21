@@ -26,6 +26,7 @@ import {
   buildFeatureLabels,
   buildIssueBody,
   ensureUnticketRepoLabels,
+  extractBacklogFromLabels,
   extractStatusFromLabels,
   ghIssueToFeature,
   patchFeatureIssue,
@@ -56,6 +57,10 @@ const PatchFeatureBody = z.object({
   title: z.string().optional(),
   status: z.string().optional(),
   owners: z.array(z.unknown()).optional(),
+  // Move to backlog / return to board via the `backlog` label. Orthogonal
+  // to status — the status label stays put so returning to the board
+  // lands the feature in the column it left.
+  backlog: z.boolean().optional(),
   // Shape is intentionally loose — sanitizeSpecLinks does the real
   // validation (http/https only, drops empty rows) at the storage boundary.
   specLinks: z.array(z.unknown()).optional(),
@@ -74,15 +79,15 @@ function parseFeatureNumber(context: Ctx): number | null {
 // Build an issue-shaped object from the desired new state so we can write D1
 // before GitHub. Mirrors the column set upsertFeatureRow expects.
 function synthesizeIssue(
-  { row, number, title, body, status, owners }:
-  { row: Record<string, any>; number: number; title: string; body: string; status: string; owners: string[] },
+  { row, number, title, body, status, backlog, owners }:
+  { row: Record<string, any>; number: number; title: string; body: string; status: string; backlog: boolean; owners: string[] },
 ) {
   return {
     number,
     title,
     state: "open",
     body,
-    labels: buildFeatureLabels(status).map((name: string) => ({ name, color: "" })),
+    labels: buildFeatureLabels(status, backlog).map((name: string) => ({ name, color: "" })),
     assignees: owners.map((login) => ({ login, avatar_url: "" })),
     milestone: row.milestone_title ? { title: row.milestone_title } : null,
     html_url: row.html_url,
@@ -134,6 +139,9 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     }
     status = payload.status;
   }
+
+  const currentBacklog = extractBacklogFromLabels(currentLabels);
+  const backlog = payload?.backlog !== undefined ? payload.backlog : currentBacklog;
 
   let owners = currentAssignees.map((a: { login: string }) => a.login);
   if (Array.isArray(payload?.owners)) {
@@ -190,7 +198,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
   // if it succeeds the row gets re-mirrored as in-sync. If it fails, the
   // 30-min cron's syncFeatures will detect d1.updated_at > d1.gh_synced_at
   // and push the change to GitHub on the next tick — no more silent reverts.
-  const optimistic = synthesizeIssue({ row, number, title, body, status, owners });
+  const optimistic = synthesizeIssue({ row, number, title, body, status, backlog, owners });
   await upsertFeatureRow(context.env.DB, orgId, optimistic, { from: "local" });
 
   const ghWrite = (async () => {
@@ -201,7 +209,7 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     const ghIssue = await patchFeatureIssue(token, orgLogin, number, {
       title,
       body,
-      labels: buildFeatureLabels(status),
+      labels: buildFeatureLabels(status, backlog),
       assignees: owners,
     });
     await upsertFeatureRow(context.env.DB, orgId, ghIssue, { from: "github" });
