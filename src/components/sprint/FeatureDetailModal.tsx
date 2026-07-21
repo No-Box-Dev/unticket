@@ -146,7 +146,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* All rich content on a feature lives in its Specs — a feature
               no longer has its own description/plan field. The Specs
               section is the only content surface. */}
-          <FeatureLinkedSpecsSection featureNumber={draft.id} />
+          <FeatureLinkedSpecsSection featureNumber={draft.id} featureTitle={draft.title} />
 
           {/* Spec links (free external URLs — Figma / Notion / etc.) */}
           <SpecLinksSection

@@ -6,13 +6,14 @@ import type { Spec } from "@/lib/types";
 
 interface Props {
   featureNumber: number;
+  featureTitle: string;
 }
 
 // Renders the "Specs" section inside FeatureDetailModal under the unified
 // model — a spec belongs to at most one feature (Spec.featureNumber). This
 // section lists everything where featureNumber === this feature, offers to
 // attach existing (Unfiled) specs, and creates new specs pre-attached.
-export function FeatureLinkedSpecsSection({ featureNumber }: Props) {
+export function FeatureLinkedSpecsSection({ featureNumber, featureTitle }: Props) {
   // One query pulls every active spec org-wide; filtered locally so both
   // the chip list AND the picker use the same cached data.
   const specsQ = useSpecs({ featureNumber: "all" });
@@ -88,6 +89,7 @@ export function FeatureLinkedSpecsSection({ featureNumber }: Props) {
         <SpecPickerModal
           available={availableSpecs}
           featureNumber={featureNumber}
+          featureTitle={featureTitle}
           onAttach={(s) => {
             attach(s);
             setPickerOpen(false);
@@ -102,11 +104,12 @@ export function FeatureLinkedSpecsSection({ featureNumber }: Props) {
 interface SpecPickerModalProps {
   available: Spec[];
   featureNumber: number;
+  featureTitle: string;
   onAttach: (spec: Spec) => void;
   onClose: () => void;
 }
 
-function SpecPickerModal({ available, featureNumber, onAttach, onClose }: SpecPickerModalProps) {
+function SpecPickerModal({ available, featureNumber, featureTitle, onAttach, onClose }: SpecPickerModalProps) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -124,7 +127,11 @@ function SpecPickerModal({ available, featureNumber, onAttach, onClose }: SpecPi
   }, [available, search]);
 
   async function submitNewSpec() {
-    const t = newTitle.trim();
+    // Title is optional when a feature is preset — fall back to the
+    // feature's own title so "create spec here" is one click even when
+    // the field is left blank. Only silently no-op when the feature has
+    // no title either (extremely rare — brand-new draft).
+    const t = newTitle.trim() || featureTitle.trim();
     if (!t) {
       setCreating(false);
       setNewTitle("");
@@ -188,7 +195,11 @@ function SpecPickerModal({ available, featureNumber, onAttach, onClose }: SpecPi
                       setNewTitle("");
                     }
                   }}
-                  placeholder="What's the spec about?"
+                  placeholder={
+                    featureTitle
+                      ? `Optional (defaults to "${featureTitle}")`
+                      : "What's the spec about?"
+                  }
                   className="flex-1 rounded-md border border-accent bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none"
                 />
                 <button
