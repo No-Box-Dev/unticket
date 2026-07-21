@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useExcludedMembers } from "@/hooks/useGitHub";
 import {
   fetchPeople,
   savePeople,
@@ -28,10 +29,23 @@ export function useConfigRepoExists() {
 
 export function useFeatures() {
   const { selectedOrg } = useAuth();
+  const excluded = useExcludedMembers();
   return useQuery({
     queryKey: ["features", selectedOrg],
     queryFn: fetchFeaturesFromD1,
     enabled: !!selectedOrg,
+    // Strip excluded members from feature.owners at the source so every
+    // downstream render — kanban card, backlog list, detail modal,
+    // person-filter dropdown — automatically respects the admin config
+    // without repeating the check in each place.
+    select: (data) => {
+      if (excluded.size === 0) return data;
+      return data.map((f) => {
+        if (!f.owners.length) return f;
+        const filtered = f.owners.filter((o) => !excluded.has(o));
+        return filtered.length === f.owners.length ? f : { ...f, owners: filtered };
+      });
+    },
   });
 }
 
