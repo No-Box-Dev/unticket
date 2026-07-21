@@ -153,7 +153,9 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
     () =>
       (features ?? [])
         .filter((f) => f.backlog && searchAndOwnerMatch(f))
-        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+        // Alphabetical by title (case-insensitive via localeCompare's
+        // default) — backlog is a park-and-scan list, not a recency feed.
+        .sort((a, b) => a.title.localeCompare(b.title)),
     [features, searchAndOwnerMatch],
   );
 
