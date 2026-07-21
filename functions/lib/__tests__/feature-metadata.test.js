@@ -25,11 +25,11 @@ describe("parseFeatureMetadata", () => {
     // markdown (which collapses it).
     const body =
       "Plan goes here\n\n<!-- unticket:metadata\n" +
-      JSON.stringify({ linkedPRs: [{ repo: "api", number: 7 }] }) +
+      JSON.stringify({ statusHistory: [{ status: "todo", at: "2025-01-01" }] }) +
       "\n-->";
     const { content, metadata } = parseFeatureMetadata(body);
     expect(content).toBe("Plan goes here\n");
-    expect(metadata).toEqual({ linkedPRs: [{ repo: "api", number: 7 }] });
+    expect(metadata).toEqual({ statusHistory: [{ status: "todo", at: "2025-01-01" }] });
   });
 
   it("treats a corrupt metadata block as no metadata (warns, keeps body)", () => {
@@ -56,16 +56,7 @@ describe("parseFeatureMetadata", () => {
 describe("serializeFeatureMetadata", () => {
   it("returns content unchanged when metadata has nothing worth persisting", () => {
     expect(serializeFeatureMetadata("hello", {})).toBe("hello");
-    expect(serializeFeatureMetadata("hello", { linkedPRs: [], statusHistory: [] })).toBe("hello");
-  });
-
-  it("appends a metadata block when linkedPRs is non-empty", () => {
-    const out = serializeFeatureMetadata("plan", {
-      linkedPRs: [{ repo: "api", number: 5 }],
-    });
-    expect(out).toContain("plan\n\n<!-- unticket:metadata\n");
-    expect(out).toMatch(/-->$/);
-    expect(out).toContain('"linkedPRs":[{"repo":"api","number":5}]');
+    expect(serializeFeatureMetadata("hello", { statusHistory: [], specLinks: [] })).toBe("hello");
   });
 
   it("appends a metadata block when statusHistory is non-empty", () => {
@@ -73,11 +64,20 @@ describe("serializeFeatureMetadata", () => {
       statusHistory: [{ status: "production", at: "2026-05-01" }],
     });
     expect(out).toContain('"statusHistory"');
+    expect(out).toContain("plan\n\n<!-- unticket:metadata\n");
+    expect(out).toMatch(/-->$/);
+  });
+
+  it("appends a metadata block when specLinks is non-empty", () => {
+    const out = serializeFeatureMetadata("plan", {
+      specLinks: [{ url: "https://example.test/spec", label: "Spec" }],
+    });
+    expect(out).toContain('"specLinks"');
   });
 
   it("roundtrips parse → serialize → parse (metadata preserved exactly)", () => {
     const original = {
-      linkedPRs: [{ repo: "api", number: 1 }, { repo: "web", number: 42 }],
+      specLinks: [{ url: "https://example.test/spec", label: "Spec" }],
       statusHistory: [{ status: "staging", at: "2026-05-10T12:00:00Z" }],
     };
     const body = serializeFeatureMetadata("Plan content", original);

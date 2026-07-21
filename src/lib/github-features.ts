@@ -31,7 +31,6 @@ const METADATA_RE = /\n?<!-- unticket:metadata\n([\s\S]*?)\n-->\s*$/;
 interface FeatureMetadata {
   statusHistory?: StatusHistoryEntry[];
   specLinks?: SpecLink[];
-  linkedSpecIds?: number[];
 }
 
 function parseMetadata(body: string): { content: string; metadata: FeatureMetadata } {
@@ -85,7 +84,6 @@ function issueToFeature(issue: any): Feature {
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
     specLinks: metadata.specLinks,
-    linkedSpecIds: metadata.linkedSpecIds,
   };
 }
 
@@ -127,16 +125,12 @@ export async function createFeature(
   opts: {
     status: FeatureStatus;
     owners?: string[];
-    linkedSpecIds?: number[];
   },
 ): Promise<Feature> {
   return apiPost<Feature>("/api/features", {
     title,
     status: opts.status,
     owners: opts.owners ?? [],
-    ...(opts.linkedSpecIds && opts.linkedSpecIds.length > 0
-      ? { linkedSpecIds: opts.linkedSpecIds }
-      : {}),
   });
 }
 
@@ -147,7 +141,6 @@ export async function updateFeature(_org: string, updated: Feature): Promise<Fea
     owners: updated.owners,
     backlog: updated.backlog ?? false,
     specLinks: updated.specLinks ?? [],
-    linkedSpecIds: updated.linkedSpecIds ?? [],
   });
 }
 

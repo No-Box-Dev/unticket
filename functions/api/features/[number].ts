@@ -19,7 +19,6 @@ import { getCtx, jsonResponse, errorResponse } from "../../lib/db";
 import { getInstallationIdForOrg, getInstallationToken } from "../../lib/github-app";
 import { parseFeatureMetadata } from "../../lib/feature-metadata";
 import { sanitizeSpecLinks } from "../../lib/spec-links";
-import { filterExistingSpecIds, sanitizeLinkedSpecIds } from "../../lib/linked-spec-ids";
 import { recordFailure } from "../../lib/op-failures";
 import { resolveBoardStages } from "../../lib/board-stages.js";
 import {
@@ -64,9 +63,6 @@ const PatchFeatureBody = z.object({
   // Shape is intentionally loose — sanitizeSpecLinks does the real
   // validation (http/https only, drops empty rows) at the storage boundary.
   specLinks: z.array(z.unknown()).optional(),
-  // Same treatment for linked spec ids — the server verifies they exist
-  // for this org (drops any that don't) before storage.
-  linkedSpecIds: z.array(z.unknown()).optional(),
 }).passthrough();
 
 function parseFeatureNumber(context: Ctx): number | null {
@@ -169,25 +165,12 @@ export async function onRequestPatch(context: Ctx): Promise<Response> {
     ? sanitizeSpecLinks(payload.specLinks)
     : (currentMetadata.specLinks ?? []);
 
-  // Linked spec ids: same replace-wholesale semantics. Server verifies
-  // each id belongs to this org (drops any that don't) so a client can't
-  // reach across orgs by guessing spec ids.
-  const linkedSpecIds = payload?.linkedSpecIds !== undefined
-    ? await filterExistingSpecIds(
-        context.env.DB,
-        orgId,
-        sanitizeLinkedSpecIds(payload.linkedSpecIds),
-      )
-    : (currentMetadata.linkedSpecIds ?? []);
-
-  // Spread currentMetadata so any field this endpoint doesn't manage
-  // (e.g. linkedPRs) survives the round-trip instead of being silently
-  // dropped when the body is rebuilt.
+  // Spread currentMetadata so any unknown-to-us field survives the
+  // round-trip instead of being silently dropped when the body is rebuilt.
   const body = buildIssueBody(plan, {
     ...currentMetadata,
     statusHistory,
     specLinks,
-    linkedSpecIds,
   });
 
   const installationId = await getInstallationIdForOrg(context.env.DB, orgId);

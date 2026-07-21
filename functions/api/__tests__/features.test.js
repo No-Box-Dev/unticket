@@ -112,8 +112,8 @@ describe("GET /api/features", () => {
     const res = await onRequestGet(makeCtx({ db }));
     const data = await res.json();
     expect(data).toHaveLength(2);
-    expect(data[0].linkedPRs).toBeUndefined();
-    expect(data[1].linkedPRs).toBeUndefined();
+    expect(data[0].number).toBe(42);
+    expect(data[1].number).toBe(43);
   });
 
   it("filters by state from query param (default 'open')", async () => {

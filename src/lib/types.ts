@@ -133,8 +133,6 @@ export interface Feature {
   updatedAt?: string;
   statusHistory?: StatusHistoryEntry[];
   specLinks?: SpecLink[];
-  /** IDs of manual Specs (from the Specs tab) linked to this feature. */
-  linkedSpecIds?: number[];
   /** Backlogged features are parked out of the kanban board — they keep
    * their status label so returning to the board lands them in the
    * column they left. Derived from the `backlog` GitHub label. */

@@ -150,17 +150,17 @@ describe("updateFeature", () => {
     });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
       title: "X", status: "ready", owners: ["alice"], backlog: false,
-      specLinks: [], linkedSpecIds: [],
+      specLinks: [],
     });
     expect(result.id).toBe(5);
   });
 
-  it("always sends specLinks + linkedSpecIds so cleared lists patch through", async () => {
+  it("always sends specLinks so a cleared list patches through", async () => {
     mockPatch.mockResolvedValue({ id: 5, title: "X", status: "todo", owners: [] });
     await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
       title: "X", status: "todo", owners: [], backlog: false,
-      specLinks: [], linkedSpecIds: [],
+      specLinks: [],
     });
   });
 
