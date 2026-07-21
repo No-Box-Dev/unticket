@@ -251,11 +251,6 @@ function SpecPickerModal({ available, featureNumber, featureTitle, onAttach, onC
                       <span className="block truncate text-sm text-stone-700">
                         {s.title || <span className="text-stone-400">Untitled</span>}
                       </span>
-                      {s.legacyFolderName && (
-                        <span className="block truncate text-[11px] text-stone-400">
-                          was in: {s.legacyFolderName}
-                        </span>
-                      )}
                     </span>
                   </button>
                 ))

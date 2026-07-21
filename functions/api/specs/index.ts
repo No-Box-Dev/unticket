@@ -15,7 +15,7 @@ interface Ctx {
 }
 
 const SPEC_COLUMNS =
-  "id, org_id, folder_id, feature_number, legacy_folder_name, title, description, " +
+  "id, org_id, feature_number, title, description, " +
   "links_json, archived, archived_at, created_by, created_at, updated_at";
 
 const SpecLinkSchema = z.object({
@@ -28,9 +28,6 @@ const CreateSpecBody = z.object({
   description: z.string().max(20_000, "Description too long (max 20000)").optional(),
   // Feature the spec belongs to. `null` explicitly means Unfiled.
   featureNumber: z.number().int().positive().nullable().optional(),
-  // Kept for backwards compatibility while any old client is still deployed;
-  // NEVER surface a folder-based UI — the migration froze that concept.
-  folderId: z.number().int().positive().nullable().optional(),
   links: z.array(SpecLinkSchema).max(50).optional(),
 });
 
@@ -40,9 +37,6 @@ const CreateSpecBody = z.object({
 //   featureNumber=unfiled   — specs with feature_number IS NULL
 //   (omitted)               — every spec in the org
 //   include=all             — include archived (default hides them)
-//
-// The legacy `folderId=` query stays for backwards compat with any client
-// deployed briefly before this cut. Ignored otherwise.
 export async function onRequestGet(context: Ctx): Promise<Response> {
   const { orgId } = getCtx(context) as { orgId: number };
   if (!orgId) return errorResponse("Missing org context", 400);
@@ -50,7 +44,6 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   const url = new URL(context.request.url);
   const includeArchived = url.searchParams.get("include") === "all";
   const featureParam = url.searchParams.get("featureNumber");
-  const folderParam = url.searchParams.get("folderId");
 
   const clauses: string[] = ["org_id = ?"];
   const binds: (string | number)[] = [orgId];
@@ -61,15 +54,6 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     const n = Number.parseInt(featureParam, 10);
     if (!Number.isFinite(n) || n <= 0) return errorResponse("Invalid featureNumber", 400);
     clauses.push("feature_number = ?");
-    binds.push(n);
-  } else if (folderParam === "unfiled") {
-    // Legacy path: pre-unification clients used folderId=unfiled to mean
-    // "no folder". Under the new model that's now the "no feature" bucket.
-    clauses.push("feature_number IS NULL");
-  } else if (folderParam !== null && folderParam !== "") {
-    const n = Number.parseInt(folderParam, 10);
-    if (!Number.isFinite(n) || n <= 0) return errorResponse("Invalid folderId", 400);
-    clauses.push("folder_id = ?");
     binds.push(n);
   }
 

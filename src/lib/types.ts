@@ -153,23 +153,8 @@ export interface Person {
   description?: string;
 }
 
-// Manual Specs feature (see /api/specs, /api/spec-folders).
-// Specs live entirely in D1 — no GitHub round-trip, no repo folder proxy.
-
-/** A user-created "Project" that groups specs. Org-scoped. */
-export interface SpecFolder {
-  id: number;
-  name: string;
-  description: string | null;
-  /** GitHub login of the project owner, or null when unset. */
-  owner: string | null;
-  archived: boolean;
-  archivedAt: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  specCount: number;
-}
+// Manual Specs feature (see /api/specs). Specs live entirely in D1 —
+// no GitHub round-trip, no repo folder proxy.
 
 /** A file attached to a Spec. Bytes live in R2; this row carries the
  * metadata + a serverside-derived kind so the client picks the right
@@ -190,15 +175,8 @@ export interface SpecAttachment {
  * Feature (via issue number) or Unfiled. */
 export interface Spec {
   id: number;
-  /** @deprecated The Projects/folders concept was unified into Features
-   * (migration 0037). Server still returns this for backwards-compat but
-   * new code should use `featureNumber`. */
-  folderId: number | null;
   /** Issue number of the Feature this spec belongs to, or null when unfiled. */
   featureNumber: number | null;
-  /** Breadcrumb from the pre-unification Projects world so specs that were
-   * in a folder can display "was in X" instead of losing the association. */
-  legacyFolderName: string | null;
   title: string;
   description: string;
   links: SpecLink[];

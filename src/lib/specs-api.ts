@@ -1,46 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from "@/lib/api";
-import type { Spec, SpecAttachment, SpecFolder, SpecLink } from "@/lib/types";
-
-// ---------- Folders ----------
-
-export interface FolderListResponse {
-  folders: SpecFolder[];
-}
-
-export function fetchSpecFolders(includeArchived = false): Promise<FolderListResponse> {
-  const qs = includeArchived ? "?include=all" : "";
-  return apiGet<FolderListResponse>(`/api/spec-folders${qs}`);
-}
-
-export function createSpecFolder(input: {
-  name: string;
-  description?: string;
-  owner?: string | null;
-}): Promise<SpecFolder> {
-  return apiPost<SpecFolder>("/api/spec-folders", input);
-}
-
-export function updateSpecFolder(
-  id: number,
-  patch: { name?: string; description?: string | null; owner?: string | null },
-): Promise<SpecFolder> {
-  return apiPatch<SpecFolder>(`/api/spec-folders/${id}`, patch);
-}
-
-export interface ArchiveFolderResponse {
-  ok: true;
-  id: number;
-  archived: boolean;
-  cascadedSpecIds?: number[];
-}
-
-export function archiveSpecFolder(id: number): Promise<ArchiveFolderResponse> {
-  return apiPost<ArchiveFolderResponse>(`/api/spec-folders/${id}/archive`);
-}
-
-export function unarchiveSpecFolder(id: number): Promise<ArchiveFolderResponse> {
-  return apiDelete<ArchiveFolderResponse>(`/api/spec-folders/${id}/archive`);
-}
+import type { Spec, SpecAttachment, SpecLink } from "@/lib/types";
 
 // ---------- Specs ----------
 
