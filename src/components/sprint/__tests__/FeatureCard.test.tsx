@@ -71,11 +71,6 @@ describe("FeatureCard", () => {
     expect(wrapper.className).not.toContain("opacity-60");
   });
 
-  // The stage-color bullet next to the assignee was removed — the kanban
-  // column header already communicates stage. Test kept as a skip marker
-  // for provenance so the intent is discoverable in future sweeps.
-  it.skip("uses the configured stage color for the status dot (removed)", () => {});
-
   it("arrow keys move the feature between configured stages", async () => {
     const onUpdate = vi.fn();
     render(<FeatureCard {...defaultProps} onUpdate={onUpdate} draggable />);
