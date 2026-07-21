@@ -135,7 +135,10 @@ async function reconcilePrKind(db, args, newEventIds) {
   let where;
   let eventAtCol;
   if (kind === "opened") {
-    where = "pr.created_at IS NOT NULL AND pr.created_at > datetime('now', ?)";
+    // Skip draft PRs — the Opened feed only surfaces ready-for-review PRs.
+    // A draft that later flips to ready re-arrives via the ready_for_review
+    // webhook path (mapped to github:pr:opened in mapEventType).
+    where = "pr.created_at IS NOT NULL AND pr.created_at > datetime('now', ?) AND COALESCE(pr.draft, 0) = 0";
     eventAtCol = "pr.created_at";
   } else if (kind === "merged") {
     where = "pr.merged_at IS NOT NULL AND pr.merged_at > datetime('now', ?)";

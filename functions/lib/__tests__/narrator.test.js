@@ -568,6 +568,17 @@ describe("narratePrOpened — preconditions", () => {
     await narratePrOpened(ENV(db), 1);
     expect(completeNarrative).not.toHaveBeenCalled();
   });
+
+  it("skips draft PRs — the Opened feed only surfaces ready-for-review", async () => {
+    const draftRow = {
+      ...EVENT_ROW_OPENED,
+      payload_json: JSON.stringify({ pr: { number: 42, title: "wip: do thing", draft: true } }),
+    };
+    const db = makeDb({ event: draftRow, project: PROJECT_ROW, actor: ACTOR_ROW });
+    await narratePrOpened(ENV(db), 1);
+    expect(completeNarrative).not.toHaveBeenCalled();
+    expect(db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"))).toBeUndefined();
+  });
 });
 
 describe("narratePrOpened — happy path", () => {

@@ -352,10 +352,16 @@ export async function narratePrOpened(env, eventId) {
   ).bind(row.actor_id, row.owner_id).first();
   if (!actor) return;
 
+  // Only ready-for-review PRs belong in the Opened feed. Drafts skip
+  // narration entirely; when the author flips draft → ready, the
+  // pull_request.ready_for_review webhook maps to github:pr:opened
+  // (see mapEventType) and this narrator runs then with draft=false.
+  const triggerPayload = safeParseObject(row.payload_json);
+  if (triggerPayload?.pr?.draft) return;
+
   // PR-identity dedup — see narrateEvent's comment. Same partial UNIQUE INDEX
   // from migration 0033 (extended by 0035 to cover pr_narrative), so concurrent
   // writers can't produce two pr_narrative rows for the same PR.
-  const triggerPayload = safeParseObject(row.payload_json);
   const prNumber = triggerPayload?.pr?.number;
   if (typeof prNumber !== "number") return;
 
