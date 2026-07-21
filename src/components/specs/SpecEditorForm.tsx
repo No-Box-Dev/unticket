@@ -74,9 +74,15 @@ export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCrea
   }
 
   async function submit() {
-    const t = title.trim();
+    // Either a title or a feature is enough — if the user leaves the
+    // title blank but picked a feature, fall back to that feature's
+    // title (matches the Feature-modal "+ Create new spec" flow).
+    const selectedFeature = featureNumber != null
+      ? features.find((f) => f.id === featureNumber)
+      : null;
+    const t = title.trim() || (selectedFeature?.title.trim() ?? "");
     if (!t) {
-      setError("Title is required");
+      setError("Title is required (or pick a feature)");
       return;
     }
     setError(null);
@@ -116,7 +122,12 @@ export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCrea
 
         <div className="px-5 py-4 space-y-4">
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Title</label>
+            <label className="text-xs text-stone-500 block mb-1">
+              Title{" "}
+              <span className="text-stone-400 font-normal">
+                (optional if a feature is selected)
+              </span>
+            </label>
             <input
               autoFocus
               value={title}
@@ -127,7 +138,13 @@ export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCrea
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
               }}
-              placeholder="What's this spec about?"
+              placeholder={
+                featureNumber != null
+                  ? (features.find((f) => f.id === featureNumber)?.title
+                      ? `Optional — defaults to the feature's title`
+                      : "What's this spec about?")
+                  : "What's this spec about?"
+              }
               className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:border-accent"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
