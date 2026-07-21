@@ -15,6 +15,10 @@ import { decryptToken, encryptToken } from "./crypto";
 const SLACK_API = "https://slack.com";
 const TIMEOUT_MS = 5000;
 
+// Max age (seconds) for a Slack Events API request. Slack recommends 5min
+// — anything older is a replay attempt and we drop it.
+const EVENTS_MAX_AGE_S = 60 * 5;
+
 // ---------- Storage ----------
 
 /**
@@ -168,6 +172,64 @@ export function postSlackMessage(token, channelId, payload) {
   return slackPost(token, "chat.postMessage", { channel: channelId, ...payload });
 }
 
+// Attach Block Kit unfurls to a Slack message. `unfurls` is a map keyed by
+// the original URL that was shared. Slack accepts an empty `unfurls: {}`
+// as a no-op which we use when nothing in the shared list matches an
+// unticket URL.
+export function unfurlSlackLinks(token, { channel, ts, unfurls }) {
+  return slackPost(token, "chat.unfurl", { channel, ts, unfurls });
+}
+
+// Look up a Slack install by workspace ID. link_shared events arrive with
+// team_id, not org_id, so this is the reverse of resolveSlackInstall().
+// Returns { orgId, botToken } or null. A missing / corrupt row → null so
+// a stale workspace never wedges the endpoint.
+export async function resolveInstallByTeamId(env, teamId) {
+  const db = env?.DB;
+  if (!db || !teamId) return null;
+  const row = await db
+    .prepare("SELECT org_id, encrypted_bot_token FROM slack_settings WHERE team_id = ?")
+    .bind(teamId)
+    .first()
+    .catch(() => null);
+  if (!row?.encrypted_bot_token) return null;
+  if (!env.ENCRYPTION_KEY) return null;
+  try {
+    const botToken = await decryptToken(row.encrypted_bot_token, env.ENCRYPTION_KEY);
+    if (!botToken) return null;
+    return { orgId: row.org_id, botToken };
+  } catch {
+    return null;
+  }
+}
+
+// Verify a Slack Events API request per the Signing Secret protocol:
+// https://api.slack.com/authentication/verifying-requests-from-slack
+// - Reject requests older than EVENTS_MAX_AGE_S (replay protection)
+// - Reject if the HMAC-SHA256 of `v0:{ts}:{rawBody}` doesn't match the
+//   `X-Slack-Signature` header. Constant-time comparison so a mismatch
+//   in a leading byte doesn't leak the correct byte via timing.
+export async function verifySlackSignature({ signingSecret, timestamp, signature, rawBody }) {
+  if (!signingSecret || !timestamp || !signature) return false;
+  const now = Math.floor(Date.now() / 1000);
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(now - ts) > EVENTS_MAX_AGE_S) return false;
+  const base = `v0:${timestamp}:${rawBody}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(signingSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(base));
+  const expected = "v0=" + [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (signature.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < signature.length; i++) diff |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
 // List public + private channels the bot has access to. Auto-paginates up
 // to 1000 channels (Slack's default page is 100). Returns
 //   [{ id, name, is_private, is_archived, is_member }, ...]
@@ -200,7 +262,10 @@ export async function listSlackChannels(token) {
 // ---------- OAuth helpers ----------
 
 const REDIRECT_PATH = "/api/slack/oauth/callback";
-const BOT_SCOPES = ["channels:read", "groups:read", "chat:write", "chat:write.public"];
+// `links:read` + `links:write` power the link-shared unfurl handler at
+// /api/slack/events. Existing installs that didn't get these scopes will
+// stop unfurling until an admin re-runs the Connect flow.
+const BOT_SCOPES = ["channels:read", "groups:read", "chat:write", "chat:write.public", "links:read", "links:write"];
 
 export function buildOAuthAuthorizeUrl(clientId, origin, state) {
   const u = new URL(`${SLACK_API}/oauth/v2/authorize`);
