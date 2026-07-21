@@ -14,10 +14,11 @@ import { FeatureCard } from "@/components/sprint/FeatureCard";
 import { FeatureDetailModal } from "@/components/sprint/FeatureDetailModal";
 import { AddFeatureInput } from "@/components/sprint/AddFeatureInput";
 import { useIsAdmin, useActiveMembers } from "@/hooks/useGitHub";
+import { useSpecs } from "@/hooks/useSpecs";
 import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
-import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
+import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
 import { ArrowUpDown, Archive, LayoutGrid, Rocket, Search, Sparkles, Undo2 } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
@@ -46,6 +47,29 @@ interface SprintTabProps {
 
 export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabProps) {
   const { data: features, isLoading: featuresLoading } = useFeatures();
+
+  // Fetch every non-archived spec once and bucket by feature number so each
+  // FeatureCard renders from a static prop instead of subscribing to its own
+  // useSpecs observer. Cheaper on dense boards, and re-renders only when the
+  // spec cache actually changes.
+  const { data: allSpecs } = useSpecs({ featureNumber: "all" });
+  const specsByFeature = useMemo(() => {
+    const m = new Map<number, Spec[]>();
+    for (const s of allSpecs ?? []) {
+      if (s.archived) continue;
+      if (s.featureNumber == null) continue;
+      const list = m.get(s.featureNumber);
+      if (list) list.push(s);
+      else m.set(s.featureNumber, [s]);
+    }
+    // Sort each bucket newest-updated first so the card slice picks the
+    // most relevant specs.
+    for (const list of m.values()) {
+      list.sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
+    }
+    return m;
+  }, [allSpecs]);
+  const EMPTY_SPECS: Spec[] = useMemo(() => [], []);
   const { data: people } = usePeople();
   const { data: orgMembers } = useActiveMembers();
   const stages = useBoardStages();
@@ -270,6 +294,8 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
         backlogFeatures={backlogFeatures}
         stages={stages}
         stageBuckets={stageBuckets}
+        specsByFeature={specsByFeature}
+        emptySpecs={EMPTY_SPECS}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         selectedPersons={selectedPersons}
@@ -322,6 +348,11 @@ interface FeaturesViewProps {
   backlogFeatures: Feature[];
   stages: BoardStage[];
   stageBuckets: Map<string, Feature[]>;
+  /** Every non-archived spec bucketed by its owning feature number.
+   * Cards read their slice out of this Map instead of subscribing to
+   * their own useSpecs observer. */
+  specsByFeature: Map<number, Spec[]>;
+  emptySpecs: Spec[];
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedPersons: string[];
@@ -349,7 +380,8 @@ interface FeaturesViewProps {
 
 function FeaturesView({
   view, onViewChange, backlogCount, backlogFeatures,
-  stages, stageBuckets, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
+  stages, stageBuckets, specsByFeature, emptySpecs,
+  searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
   personPills, allPeopleNames,
   sortBy, setSortBy, dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
   onUpdate, onDelete, onOpenDetail, onAdd, onToggleBacklog, isAdmin,
@@ -479,6 +511,7 @@ function FeaturesView({
                       feature={feature}
                       stages={stages}
                       allPeople={allPeopleNames}
+                      ownSpecs={specsByFeature.get(feature.id) ?? emptySpecs}
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onOpenDetail={onOpenDetail}

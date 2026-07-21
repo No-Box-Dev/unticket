@@ -2,14 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-// FeatureCard now calls useSpecs to render inline spec chips. Stub it to
-// return an empty list so these tests can render without an AuthProvider
-// or TanStack QueryClient — they exist to assert card behaviour, not
-// spec-fetching wiring.
-vi.mock("@/hooks/useSpecs", () => ({
-  useSpecs: () => ({ data: [] }),
-}));
-
 import { FeatureCard } from "../FeatureCard";
 import { DEFAULT_BOARD_STAGES } from "@/lib/board-stages";
 import type { Feature } from "@/lib/types";
@@ -25,6 +17,10 @@ const defaultProps = {
   feature: baseFeature,
   stages: DEFAULT_BOARD_STAGES,
   allPeople: ["alice", "bob"],
+  // FeatureCard now reads its specs from a prop passed down by SprintTab
+  // (which fetches once and buckets by feature number). Empty list keeps
+  // these tests focused on card behaviour.
+  ownSpecs: [],
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
