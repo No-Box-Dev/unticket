@@ -34,6 +34,7 @@ import type { RateLimitInfo, IssueQueryParams, PrQueryParams, PaginatedResponse,
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
+import { useFeedProjects } from "@/hooks/useNoxlink";
 
 export function useOrgs() {
   const { user } = useAuth();
@@ -107,99 +108,129 @@ export function useExcludedMembers(): Set<string> {
   );
 }
 
+/**
+ * Repo names that admins have unchecked in Settings → Tracked repos. Same
+ * shape as useExcludedMembers so downstream `select` code is symmetric.
+ * Sourced from noxlink projects — a project is "not tracked" when its
+ * `archived` flag is true. That mirror is already how the app knows to
+ * hide a repo everywhere else (kanban stages, sync, narrator), so we
+ * lean on it rather than introduce a second source of truth.
+ */
+export function useExcludedRepos(): Set<string> {
+  const { data: projects } = useFeedProjects();
+  return useMemo(() => {
+    const s = new Set<string>();
+    for (const p of projects ?? []) {
+      if (p.archived && p.repo) s.add(p.repo);
+    }
+    return s;
+  }, [projects]);
+}
+
 // Filter helpers — kept out here so `select` receives a stable reference
 // when the excluded set is stable.
-function filterPrs<T extends { user?: { login?: string } | null; requested_reviewers?: { login: string }[] }>(
+function filterPrs<T extends { user?: { login?: string } | null; head?: { repo?: { name?: string } | null } | null; requested_reviewers?: { login: string }[] }>(
   list: T[] | undefined,
-  excluded: Set<string>,
+  excludedMembers: Set<string>,
+  excludedRepos: Set<string>,
 ): T[] | undefined {
   if (!list) return list;
-  if (excluded.size === 0) return list;
+  if (excludedMembers.size === 0 && excludedRepos.size === 0) return list;
   return list
-    .filter((pr) => !excluded.has(pr.user?.login ?? ""))
+    .filter((pr) => !excludedRepos.has(pr.head?.repo?.name ?? ""))
+    .filter((pr) => !excludedMembers.has(pr.user?.login ?? ""))
     .map((pr) => {
       if (!pr.requested_reviewers?.length) return pr;
-      const rr = pr.requested_reviewers.filter((r) => !excluded.has(r.login));
+      const rr = pr.requested_reviewers.filter((r) => !excludedMembers.has(r.login));
       return rr.length === pr.requested_reviewers.length ? pr : { ...pr, requested_reviewers: rr };
     });
 }
 
-function filterIssues<T extends { assignees?: { login: string }[] }>(
+function filterIssues<T extends { repo?: string; assignees?: { login: string }[] }>(
   list: T[] | undefined,
-  excluded: Set<string>,
+  excludedMembers: Set<string>,
+  excludedRepos: Set<string>,
 ): T[] | undefined {
   if (!list) return list;
-  if (excluded.size === 0) return list;
-  return list.map((issue) => {
-    if (!issue.assignees?.length) return issue;
-    const filtered = issue.assignees.filter((a) => !excluded.has(a.login));
-    return filtered.length === issue.assignees.length ? issue : { ...issue, assignees: filtered };
-  });
+  if (excludedMembers.size === 0 && excludedRepos.size === 0) return list;
+  return list
+    .filter((issue) => !excludedRepos.has(issue.repo ?? ""))
+    .map((issue) => {
+      if (!issue.assignees?.length) return issue;
+      const filtered = issue.assignees.filter((a) => !excludedMembers.has(a.login));
+      return filtered.length === issue.assignees.length ? issue : { ...issue, assignees: filtered };
+    });
 }
 
 export function useOpenPRs(repos: string[]) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["prs", selectedOrg, repos],
     queryFn: fetchOpenPRs,
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterPrs(data, excluded),
+    select: (data) => filterPrs(data, excludedMembers, excludedRepos),
   });
 }
 
 export function useOpenIssues(repos: string[]) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["issues", selectedOrg, repos],
     queryFn: fetchOpenIssues,
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterIssues(data, excluded),
+    select: (data) => filterIssues(data, excludedMembers, excludedRepos),
   });
 }
 
 export function useClosedIssues(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["closedIssues", selectedOrg, repos, since],
     queryFn: () => fetchClosedIssues(since),
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterIssues(data, excluded),
+    select: (data) => filterIssues(data, excludedMembers, excludedRepos),
   });
 }
 
 export function useMergedPRs(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["mergedPRs", selectedOrg, repos, since],
     queryFn: () => fetchMergedPRs(since),
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterPrs(data, excluded),
+    select: (data) => filterPrs(data, excludedMembers, excludedRepos),
   });
 }
 
 export function useAllPRs(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["allPRs", selectedOrg, repos, since],
     queryFn: () => fetchAllPRs(since),
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterPrs(data, excluded),
+    select: (data) => filterPrs(data, excludedMembers, excludedRepos),
   });
 }
 
 export function useAllIssues(repos: string[], since?: string) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["allIssues", selectedOrg, repos, since],
     queryFn: () => fetchAllIssues(since),
     enabled: !!selectedOrg && repos.length > 0,
-    select: (data) => filterIssues(data, excluded),
+    select: (data) => filterIssues(data, excludedMembers, excludedRepos),
   });
 }
 
@@ -257,7 +288,8 @@ export function useActiveMembers() {
 
 export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["issues", selectedOrg, params],
     queryFn: () => fetchPaginatedIssues(params),
@@ -265,7 +297,7 @@ export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
     placeholderData: keepPreviousData,
     select: (data) => {
       if (!data?.data) return data;
-      const filtered = filterIssues(data.data, excluded) ?? [];
+      const filtered = filterIssues(data.data, excludedMembers, excludedRepos) ?? [];
       return filtered === data.data ? data : { ...data, data: filtered };
     },
   });
@@ -273,7 +305,8 @@ export function usePaginatedIssues(params: IssueQueryParams, enabled = true) {
 
 export function usePaginatedPrs(params: PrQueryParams, enabled = true) {
   const { selectedOrg } = useAuth();
-  const excluded = useExcludedMembers();
+  const excludedMembers = useExcludedMembers();
+  const excludedRepos = useExcludedRepos();
   return useQuery({
     queryKey: ["prs", selectedOrg, params],
     queryFn: () => fetchPaginatedPrs(params),
@@ -281,7 +314,7 @@ export function usePaginatedPrs(params: PrQueryParams, enabled = true) {
     placeholderData: keepPreviousData,
     select: (data) => {
       if (!data?.data) return data;
-      const filtered = filterPrs(data.data, excluded) ?? [];
+      const filtered = filterPrs(data.data, excludedMembers, excludedRepos) ?? [];
       return filtered === data.data ? data : { ...data, data: filtered };
     },
   });
