@@ -19,6 +19,30 @@ import {
 import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { TASK, enqueueTask } from "../lib/tasks";
+import { recordFailure } from "../lib/op-failures";
+
+// Every `waitUntil` handler that logs a failure runs after the webhook
+// response has already been returned — a plain console.error is invisible
+// from the app. This helper mirrors the pattern used elsewhere: log a
+// human-readable line to the runtime logs AND persist to op_failures so
+// admins see it in Settings → Background failures.
+function reportWebhookFailure(db, orgLogin, op, deliveryId, err, extra) {
+  console.error(`[unticket webhook] ${op} failed`, {
+    delivery: deliveryId,
+    msg: err?.message ?? String(err),
+    ...(extra ?? {}),
+  });
+  // op_failures rows are keyed on ownerId (orgLogin). Some webhook paths
+  // fire before we know which org (e.g. installation.created for a brand
+  // new install) — swallow those since there's no bucket to file them in.
+  if (!db || !orgLogin) return;
+  return recordFailure(db, {
+    ownerId: orgLogin,
+    op: `webhook.${op}`,
+    deliveryId,
+    error: err,
+  });
+}
 
 // Verify GitHub webhook signature (HMAC-SHA256)
 async function verifySignature(secret, body, signature) {
@@ -117,7 +141,7 @@ export async function onRequestPost(context) {
       .bind(orgId)
       .run();
   } catch (err) {
-    console.error("[unticket webhook] last_event_at bump failed:", err);
+    await reportWebhookFailure(db, orgLogin, "last_event_at_bump", deliveryId, err);
   }
 
   try {
@@ -153,7 +177,7 @@ export async function onRequestPost(context) {
         }
       }
     } catch (err) {
-      console.error("[unticket webhook] storeEvent failed:", err);
+      await reportWebhookFailure(db, orgLogin, "storeEvent", deliveryId, err, { event, action });
     }
 
     if (event === "issues") {
@@ -185,7 +209,7 @@ export async function onRequestPost(context) {
         try {
           await upsertMember(db, orgId, payload.issue.user, payload.issue.user.type === "Bot" ? "bot" : "human");
         } catch (err) {
-          console.error("[unticket webhook] upsertMember from issue failed:", err?.message ?? err);
+          await reportWebhookFailure(db, orgLogin, "upsertMember_from_issue", deliveryId, err, { login: payload.issue?.user?.login });
         }
       }
 
@@ -209,7 +233,7 @@ export async function onRequestPost(context) {
         try {
           await upsertMember(db, orgId, pr.user, pr.user.type === "Bot" ? "bot" : "human");
         } catch (err) {
-          console.error("[unticket webhook] upsertMember from PR failed:", err?.message ?? err);
+          await reportWebhookFailure(db, orgLogin, "upsertMember_from_pr", deliveryId, err, { login: pr.user?.login });
         }
       }
 
@@ -260,7 +284,7 @@ export async function onRequestPost(context) {
       try {
         await touchRepoPushed(db, orgId, repo);
       } catch (err) {
-        console.error(`[unticket webhook] touchRepoPushed ${repo} failed:`, err);
+        await reportWebhookFailure(db, orgLogin, "touchRepoPushed", deliveryId, err, { repo });
       }
       return jsonResponse({ ok: true, event, repo });
     }
@@ -346,7 +370,7 @@ async function handleInstallationEvent(context, payload, deliveryId) {
       await upsertInstallation(db, payload.installation, repos);
       await storeEvent(db, "installation", deliveryId, payload, accountLogin);
     } catch (err) {
-      console.error("[unticket webhook] installations sync failed:", err);
+      await reportWebhookFailure(db, accountLogin, "installation_sync", deliveryId, err, { action });
     }
 
     // Auto-bootstrap: backfill repos+members+features+per-repo issues/PRs.
@@ -376,7 +400,7 @@ async function handleInstallationEvent(context, payload, deliveryId) {
     try {
       await storeEvent(db, "installation", deliveryId, payload, accountLogin);
     } catch (err) {
-      console.error("[unticket webhook] installation event log failed:", err);
+      await reportWebhookFailure(db, accountLogin, "installation_event_log", deliveryId, err, { action });
     }
     return jsonResponse({ ok: true, event: "installation", action, org: accountLogin });
   }
@@ -408,7 +432,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
       }
       await setInstallationRepos(db, installationId, [...current]);
     } catch (err) {
-      console.error("[unticket webhook] setInstallationRepos failed:", err);
+      await reportWebhookFailure(db, accountLogin, "setInstallationRepos", deliveryId, err);
     }
   }
 
@@ -416,7 +440,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
     try {
       await storeEvent(db, "installation_repositories", deliveryId, payload, accountLogin);
     } catch (err) {
-      console.error("[unticket webhook] storeEvent (installation_repositories) failed:", err);
+      await reportWebhookFailure(db, accountLogin, "storeEvent_installation_repositories", deliveryId, err);
     }
   }
 
@@ -434,7 +458,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
       try {
         await removeRepo(db, orgRow.id, name);
       } catch (err) {
-        console.error(`[unticket webhook] removeRepo ${name} failed:`, err);
+        await reportWebhookFailure(db, accountLogin, "removeRepo", deliveryId, err, { repo: name });
       }
     }
   }
@@ -458,7 +482,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
         const wasNew = await upsertDiscoveredRepo(db, orgRow.id, repo);
         if (wasNew) newlyDiscovered.push(repo);
       } catch (err) {
-        console.error(`[unticket webhook] upsertDiscoveredRepo ${repo} failed:`, err);
+        await reportWebhookFailure(db, accountLogin, "upsertDiscoveredRepo", deliveryId, err, { repo });
       }
       await enqueueTask(context.env, accountLogin, repo, {
         type: TASK.SYNC_REPO,
@@ -472,7 +496,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
       try {
         await applyNewRepoExcludePolicy(db, accountLogin, newlyDiscovered);
       } catch (err) {
-        console.error("[unticket webhook] applyNewRepoExcludePolicy failed:", err);
+        await reportWebhookFailure(db, accountLogin, "applyNewRepoExcludePolicy", deliveryId, err);
       }
     }
   }
