@@ -117,10 +117,10 @@ export function fetchAttachments(specId: number): Promise<AttachmentListResponse
 export async function uploadAttachment(specId: number, file: File): Promise<SpecAttachment> {
   const form = new FormData();
   form.append("file", file);
+  // apiFetch detects FormData and skips its default Content-Type so the
+  // browser can set `multipart/form-data; boundary=...` itself.
   const res = await apiFetch(`/api/specs/${specId}/attachments`, {
     method: "POST",
-    // Let the browser set Content-Type with the multipart boundary.
-    headers: {},
     body: form,
   });
   if (!res.ok) {
