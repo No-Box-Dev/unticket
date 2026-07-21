@@ -87,12 +87,18 @@ export async function refreshAccessToken(expiredToken: string): Promise<string |
 
 function buildRequestInit(token: string | null, options?: RequestInit): RequestInit {
   const org = localStorage.getItem("ut_org");
+  // FormData bodies need the browser to set Content-Type itself so it can
+  // include the `boundary=...` parameter. Setting a plain
+  // `application/json` here would strip the boundary and the server would
+  // read the raw multipart bytes as JSON — reproducibly failing at parse.
+  const isFormData =
+    typeof FormData !== "undefined" && options?.body instanceof FormData;
   return {
     ...options,
     headers: {
       "Authorization": `Bearer ${token ?? ""}`,
       "X-Org": org ?? "",
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...options?.headers,
     },
   };
