@@ -149,7 +149,7 @@ describe("updateFeature", () => {
       id: 5, title: "X", status: "ready", owners: ["alice"],
     });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "ready", owners: ["alice"],
+      title: "X", status: "ready", owners: ["alice"], backlog: false,
       specLinks: [], linkedSpecIds: [],
     });
     expect(result.id).toBe(5);
@@ -159,7 +159,7 @@ describe("updateFeature", () => {
     mockPatch.mockResolvedValue({ id: 5, title: "X", status: "todo", owners: [] });
     await updateFeature("org", { id: 5, title: "X", status: "todo", owners: [] });
     expect(mockPatch).toHaveBeenCalledWith("/api/features/5", {
-      title: "X", status: "todo", owners: [],
+      title: "X", status: "todo", owners: [], backlog: false,
       specLinks: [], linkedSpecIds: [],
     });
   });

@@ -21,6 +21,7 @@ interface D1FeatureRow {
 
 const UNTICKET_LABEL = "unticket";
 const FEATURE_LABEL = "feature";
+const BACKLOG_LABEL = "backlog";
 const STATUS_PREFIX = "status:";
 
 // ---------- Metadata (hidden in issue body) ----------
@@ -65,6 +66,7 @@ function issueToFeature(issue: any): Feature {
 
   const labelStatus = extractLabel(labelNames, STATUS_PREFIX) as FeatureStatus | undefined;
   const status: FeatureStatus = labelStatus ?? "todo";
+  const backlog = labelNames.includes(BACKLOG_LABEL);
 
   // Feature body still contains a legacy plan-text prefix on rows written
   // before the plan concept was removed — parseMetadata splits it off so
@@ -78,6 +80,7 @@ function issueToFeature(issue: any): Feature {
     title: issue.title,
     owners: (issue.assignees ?? []).map((a: any) => a.login),
     status,
+    backlog,
     url: issue.html_url,
     updatedAt: issue.updated_at,
     statusHistory: metadata.statusHistory,
@@ -142,6 +145,7 @@ export async function updateFeature(_org: string, updated: Feature): Promise<Fea
     title: updated.title,
     status: updated.status,
     owners: updated.owners,
+    backlog: updated.backlog ?? false,
     specLinks: updated.specLinks ?? [],
     linkedSpecIds: updated.linkedSpecIds ?? [],
   });

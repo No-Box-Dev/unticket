@@ -134,6 +134,10 @@ export interface Feature {
   specLinks?: SpecLink[];
   /** IDs of manual Specs (from the Specs tab) linked to this feature. */
   linkedSpecIds?: number[];
+  /** Backlogged features are parked out of the kanban board — they keep
+   * their status label so returning to the board lands them in the
+   * column they left. Derived from the `backlog` GitHub label. */
+  backlog?: boolean;
   // True while an optimistic create is in flight — the card carries a
   // temporary negative id and renders non-interactive until GitHub assigns
   // the real issue number. Never set on features returned by the server.

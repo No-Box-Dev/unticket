@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   useFeatures,
@@ -17,12 +18,13 @@ import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
 import type { BoardStage, Feature, FeatureStatus } from "@/lib/types";
-import { ArrowUpDown, Rocket, Search, Sparkles } from "lucide-react";
+import { ArrowUpDown, Archive, LayoutGrid, Rocket, Search, Sparkles, Undo2 } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "title";
+type SprintView = "board" | "backlog";
 
 function sortFeatures(features: Feature[], key: SortKey): Feature[] {
   if (key === "default") return features;
@@ -57,6 +59,28 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   const { user } = useAuth();
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+
+  // Board vs Backlog view is URL-synced so a bookmarked backlog stays put.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: SprintView = searchParams.get("view") === "backlog" ? "backlog" : "board";
+  const setView = useCallback(
+    (next: SprintView) => {
+      const params = new URLSearchParams(searchParams);
+      if (next === "board") params.delete("view");
+      else params.set("view", "backlog");
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const toggleBacklog = useCallback(
+    (feature: Feature) => {
+      const next: Feature = { ...feature, backlog: !feature.backlog };
+      updateFeatureMut.mutate(next);
+      if (detailFeature?.id === feature.id) setDetailFeature(next);
+    },
+    [updateFeatureMut, detailFeature],
+  );
 
   // Open/close feature from URL
   useEffect(() => {
@@ -107,14 +131,31 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
     return pairs;
   }, [orgMembers, people, user]);
 
-  const filteredFeatures = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    return (features ?? []).filter((f) => {
+  const searchAndOwnerMatch = useCallback(
+    (f: Feature) => {
+      const q = searchQuery.toLowerCase().trim();
       if (selectedPersons.length > 0 && !f.owners.some((o) => selectedPersons.some((p) => o.toLowerCase() === p.toLowerCase()))) return false;
       if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) return false;
       return true;
-    });
-  }, [features, selectedPersons, searchQuery]);
+    },
+    [selectedPersons, searchQuery],
+  );
+
+  // Board view drops backlogged features; backlog view shows only them.
+  // Both share the same search + person filter so the toolbar behaves
+  // identically across views.
+  const filteredFeatures = useMemo(
+    () => (features ?? []).filter((f) => !f.backlog && searchAndOwnerMatch(f)),
+    [features, searchAndOwnerMatch],
+  );
+
+  const backlogFeatures = useMemo(
+    () =>
+      (features ?? [])
+        .filter((f) => f.backlog && searchAndOwnerMatch(f))
+        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+    [features, searchAndOwnerMatch],
+  );
 
   // Bucket features into the configured stages. Features carrying a status not
   // in the current stage set (e.g. legacy `future` after the admin removed
@@ -221,6 +262,10 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   return (
     <div className="space-y-4 pb-8">
       <FeaturesView
+        view={view}
+        onViewChange={setView}
+        backlogCount={backlogFeatures.length}
+        backlogFeatures={backlogFeatures}
         stages={stages}
         stageBuckets={stageBuckets}
         searchQuery={searchQuery}
@@ -240,6 +285,7 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
         onDelete={deleteFeature}
         onOpenDetail={openDetail}
         onAdd={addFeature}
+        onToggleBacklog={toggleBacklog}
         isAdmin={isAdmin}
         onCleanDone={handleCleanDone}
         doneCount={doneCount}
@@ -268,6 +314,10 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
 // ─── Features (Kanban) View ────────────────────────────────────────────
 
 interface FeaturesViewProps {
+  view: SprintView;
+  onViewChange: (v: SprintView) => void;
+  backlogCount: number;
+  backlogFeatures: Feature[];
   stages: BoardStage[];
   stageBuckets: Map<string, Feature[]>;
   searchQuery: string;
@@ -287,6 +337,7 @@ interface FeaturesViewProps {
   onDelete: (id: number) => void;
   onOpenDetail: (f: Feature) => void;
   onAdd: (title: string) => void;
+  onToggleBacklog: (f: Feature) => void;
   isAdmin: boolean;
   onCleanDone: () => void;
   doneCount: number;
@@ -295,10 +346,11 @@ interface FeaturesViewProps {
 }
 
 function FeaturesView({
+  view, onViewChange, backlogCount, backlogFeatures,
   stages, stageBuckets, searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
   personPills, allPeopleNames,
   sortBy, setSortBy, dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
-  onUpdate, onDelete, onOpenDetail, onAdd, isAdmin,
+  onUpdate, onDelete, onOpenDetail, onAdd, onToggleBacklog, isAdmin,
   onCleanDone, doneCount, cleanDonePending, cleanDoneTitle,
 }: FeaturesViewProps) {
   return (
@@ -307,7 +359,39 @@ function FeaturesView({
           Wraps on narrow screens via flex-wrap but everything stays inline
           on ~640px+ where the tab is mostly used. */}
       <div className="flex items-center gap-2 flex-wrap">
-        <AddFeatureInput onAdd={onAdd} />
+        {/* Board / Backlog toggle. Board is default; badge shows backlog
+            count so nothing gets forgotten in there. */}
+        <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+          <button
+            onClick={() => onViewChange("board")}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
+              view === "board"
+                ? "bg-accent text-white"
+                : "bg-white text-stone-600 hover:bg-stone-50",
+            )}
+          >
+            <LayoutGrid size={12} /> Board
+          </button>
+          <button
+            onClick={() => onViewChange("backlog")}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l border-stone-200 cursor-pointer transition-colors",
+              view === "backlog"
+                ? "bg-accent text-white"
+                : "bg-white text-stone-600 hover:bg-stone-50",
+            )}
+          >
+            <Archive size={12} /> Backlog
+            {backlogCount > 0 && view !== "backlog" && (
+              <span className="text-[10px] text-stone-400 tabular-nums">
+                {backlogCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {view === "board" && <AddFeatureInput onAdd={onAdd} />}
 
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -334,7 +418,7 @@ function FeaturesView({
           </select>
         </div>
 
-        {isAdmin && (
+        {view === "board" && isAdmin && (
           <button
             onClick={onCleanDone}
             disabled={doneCount === 0 || cleanDonePending}
@@ -349,9 +433,17 @@ function FeaturesView({
         )}
       </div>
 
-      {/* Kanban columns — fixed-width tracks so >4 stages scroll horizontally
-          rather than squashing each card. */}
-      <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+      {view === "backlog" ? (
+        <BacklogList
+          features={backlogFeatures}
+          stages={stages}
+          onOpenDetail={onOpenDetail}
+          onRestore={onToggleBacklog}
+        />
+      ) : (
+        /* Kanban columns — fixed-width tracks so >4 stages scroll horizontally
+           rather than squashing each card. */
+        <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
         <div className="flex gap-3 min-w-min">
           {stages.map((stage) => {
             const items = stageBuckets.get(stage.id) ?? [];
@@ -388,6 +480,7 @@ function FeaturesView({
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onOpenDetail={onOpenDetail}
+                      onSendToBacklog={onToggleBacklog}
                       isAdmin={isAdmin}
                       draggable
                       onDragStart={onDragStart}
@@ -404,6 +497,82 @@ function FeaturesView({
           })}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Backlog view ──────────────────────────────────────────────────────
+
+interface BacklogListProps {
+  features: Feature[];
+  stages: BoardStage[];
+  onOpenDetail: (f: Feature) => void;
+  onRestore: (f: Feature) => void;
+}
+
+function BacklogList({ features, stages, onOpenDetail, onRestore }: BacklogListProps) {
+  const stageLookup = useMemo(() => {
+    const m = new Map<string, BoardStage>();
+    stages.forEach((s) => m.set(s.id, s));
+    return m;
+  }, [stages]);
+
+  if (features.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-stone-200 bg-white/50 px-6 py-16 text-center text-sm text-stone-500">
+        Nothing in the backlog. Send a feature here from the board when you want
+        to park it out of sight without losing it.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <ul className="divide-y divide-stone-100">
+        {features.map((f) => {
+          const stage = stageLookup.get(f.status);
+          return (
+            <li
+              key={f.id}
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 cursor-pointer"
+              onClick={() => onOpenDetail(f)}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore(f);
+                }}
+                className="shrink-0 p-1.5 rounded-md border border-stone-200 text-stone-500 hover:text-accent hover:border-accent/40 cursor-pointer"
+                title="Move back to board"
+                aria-label={`Move ${f.title} back to board`}
+              >
+                <Undo2 size={12} />
+              </button>
+              <span className="flex-1 truncate text-sm text-stone-700">
+                {f.title}
+              </span>
+              {stage && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-stone-50 px-2 py-0.5 text-[10px] uppercase tracking-wider text-stone-500 border border-stone-200 shrink-0"
+                  title={`Column when it left: ${stage.label}`}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: stage.color }}
+                  />
+                  {stage.label}
+                </span>
+              )}
+              {f.owners.length > 0 && (
+                <span className="text-[11px] text-stone-400 truncate max-w-[160px]">
+                  {f.owners.join(", ")}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

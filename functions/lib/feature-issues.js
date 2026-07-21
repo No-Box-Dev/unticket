@@ -11,6 +11,7 @@ import { parseFeatureMetadata, serializeFeatureMetadata } from "./feature-metada
 export const UNTICKET_REPO = "unticket";
 export const UNTICKET_LABEL = "unticket";
 export const FEATURE_LABEL = "feature";
+export const BACKLOG_LABEL = "backlog";
 const STATUS_PREFIX = "status:";
 
 // Fixed labels that always exist on the unticket repo. `status:*` labels are
@@ -18,6 +19,7 @@ const STATUS_PREFIX = "status:";
 export const FEATURE_LABELS = [
   { name: "unticket", color: "1B6971", description: "Tracked by unticket.ai" },
   { name: "feature", color: "1B6971", description: "Feature managed by unticket.ai" },
+  { name: "backlog", color: "94A3B8", description: "Feature parked in the backlog (hidden from the board)" },
 ];
 
 // "todo" is the implicit default — no explicit status label. Only emit a
@@ -25,9 +27,13 @@ export const FEATURE_LABELS = [
 // non-default stage labels/colors via Settings → Board stages, but `todo`
 // remains the implicit-default id; features without a `status:*` label keep
 // resolving to it.
-export function buildFeatureLabels(status) {
+//
+// `backlog` is orthogonal to status — a backlogged feature keeps its status
+// label so moving back to the board lands it in the same column it left.
+export function buildFeatureLabels(status, backlog = false) {
   const labels = [UNTICKET_LABEL, FEATURE_LABEL];
   if (status && status !== "todo") labels.push(`${STATUS_PREFIX}${status}`);
+  if (backlog) labels.push(BACKLOG_LABEL);
   return labels;
 }
 
@@ -37,6 +43,12 @@ export function extractStatusFromLabels(labels) {
     .filter(Boolean);
   const found = names.find((n) => n.startsWith(STATUS_PREFIX));
   return found ? found.slice(STATUS_PREFIX.length) : "todo";
+}
+
+export function extractBacklogFromLabels(labels) {
+  return (labels ?? [])
+    .map((l) => (typeof l === "string" ? l : l?.name))
+    .some((n) => n === BACKLOG_LABEL);
 }
 
 const GH_HEADERS = (token) => ({
@@ -270,6 +282,7 @@ export function ghIssueToFeature(ghIssue) {
     title: ghIssue.title,
     owners: (ghIssue.assignees ?? []).map((a) => a.login),
     status: extractStatusFromLabels(ghIssue.labels),
+    backlog: extractBacklogFromLabels(ghIssue.labels),
     url: ghIssue.html_url ?? undefined,
     updatedAt: ghIssue.updated_at,
     statusHistory: metadata.statusHistory,

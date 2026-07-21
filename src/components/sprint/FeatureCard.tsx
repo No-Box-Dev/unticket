@@ -5,7 +5,7 @@ import { withStatusTransition } from "@/lib/github-features";
 import { useSpecs } from "@/hooks/useSpecs";
 import { daysAgo } from "@/lib/dates";
 import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
-import { ChevronDown, ExternalLink, FileText, GripVertical, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ExternalLink, FileText, GripVertical, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -14,6 +14,7 @@ interface FeatureCardProps {
   onUpdate: (updated: Feature) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (feature: Feature) => void;
+  onSendToBacklog?: (feature: Feature) => void;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, feature: Feature) => void;
   isAdmin?: boolean;
@@ -42,6 +43,7 @@ export function FeatureCard({
   onUpdate,
   onDelete,
   onOpenDetail,
+  onSendToBacklog,
   draggable,
   onDragStart,
   isAdmin,
@@ -116,6 +118,16 @@ export function FeatureCard({
         />
         <div className="flex-1 min-w-0" />
         <div className="flex items-center gap-1.5">
+          {onSendToBacklog && (
+            <button
+              onClick={stop(() => onSendToBacklog(feature))}
+              className="p-1 text-stone-300 hover:text-accent cursor-pointer rounded hover:bg-accent/10 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Send to backlog"
+              aria-label={`Send ${feature.title} to backlog`}
+            >
+              <Archive size={13} />
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={stop(() => onDelete(feature.id))}
