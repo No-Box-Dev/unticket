@@ -5,6 +5,7 @@ import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsAdmin } from "@/hooks/useGitHub";
 import { useBoardStages } from "@/lib/board-stages";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
+import { SpecAttachmentsSection } from "@/components/specs/SpecAttachmentsSection";
 import { useSetSpecArchived, useUpdateSpec } from "@/hooks/useSpecs";
 import type { Feature, Spec, SpecLink } from "@/lib/types";
 
@@ -225,6 +226,8 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
           </div>
 
           <SpecLinksSection value={draft.links} onChange={setLinks} label="Links" />
+
+          <SpecAttachmentsSection specId={draft.id} />
 
           {isAdmin && (
             <div className="pt-3 border-t border-stone-100 flex items-center justify-between">

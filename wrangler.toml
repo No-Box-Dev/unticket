@@ -15,3 +15,12 @@ database_id = "c94084e6-d0be-423c-8de6-249e7cf8bf25"
 [[queues.producers]]
 binding = "TASK_QUEUE"
 queue = "unticket-tasks"
+
+# Spec attachments — user-uploaded documents (.md, .pdf, .docx, .html)
+# attached to a Spec. Objects are keyed `spec/<org_id>/<spec_id>/<attachment_id>`
+# for tenant isolation. See functions/api/specs/[id]/attachments/*.
+# PROVISION BEFORE DEPLOY: `wrangler r2 bucket create unticket-spec-attachments`.
+# Absent binding = attachment endpoints 503 with a clear message.
+[[r2_buckets]]
+binding = "SPEC_ATTACHMENTS"
+bucket_name = "unticket-spec-attachments"
