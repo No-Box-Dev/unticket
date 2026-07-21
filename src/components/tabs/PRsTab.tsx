@@ -29,7 +29,13 @@ import { closePR } from "@/lib/github";
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
 type SortDir = "asc" | "desc";
 type GroupBy = "people" | "repo";
-type PRView = "open" | "merged";
+type PRView = "draft" | "ready" | "merged";
+
+const VIEW_LABELS: Record<PRView, string> = {
+  draft: "Draft",
+  ready: "Ready",
+  merged: "Merged",
+};
 
 interface PRsTabProps {
   repoNames: string[];
@@ -38,14 +44,17 @@ interface PRsTabProps {
 
 // URL params drive every navigation in this tab so links + browser-back
 // stay coherent:
-//   ?tab=prs                          — Open, grouped by People (default)
-//   ?tab=prs&view=merged              — Merged, grouped by People
+//   ?tab=prs                          — Ready (open, non-draft) — the default
+//   ?tab=prs&view=draft               — Draft PRs
+//   ?tab=prs&view=merged              — Merged PRs
 //   ?tab=prs&by=repo                  — grid grouped by Repo
 //   ?tab=prs&author=<login>           — drilled into a person's PRs
 //   ?tab=prs&repo=<name>              — drilled into a repo's PRs
 export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const view = (searchParams.get("view") as PRView) === "merged" ? "merged" : "open";
+  const rawView = searchParams.get("view");
+  const view: PRView =
+    rawView === "draft" ? "draft" : rawView === "merged" ? "merged" : "ready";
   const groupBy = (searchParams.get("by") as GroupBy) === "repo" ? "repo" : "people";
   const drillAuthor = searchParams.get("author") ?? navFilter?.person ?? null;
   const drillRepo = searchParams.get("repo") ?? null;
@@ -65,16 +74,21 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
   const { data: mergedPRs, isLoading: mergedLoading } = useMergedPRs(activeRepoNames);
   const { data: members } = useActiveMembers();
 
-  const prs = view === "open" ? openPRs : mergedPRs;
-  const isLoading = view === "open" ? openLoading : mergedLoading;
+  // Draft and Ready share the same underlying fetch (open PRs), split
+  // client-side by `pr.draft`. Merged uses the dedicated merged fetch.
+  const prs = view === "merged" ? mergedPRs : openPRs;
+  const isLoading = view === "merged" ? mergedLoading : openLoading;
 
-  // Drop PRs from archived repos regardless of source — the fetch pulled
-  // them all, but the archived-project setting is our authority.
+  // Drop PRs from archived repos + apply the draft/ready split.
   const scopedPrs = useMemo(() => {
-    const list = prs ?? [];
-    if (archivedRepos.size === 0) return list;
-    return list.filter((pr: any) => !archivedRepos.has(pr.head.repo?.name));
-  }, [prs, archivedRepos]);
+    let list = prs ?? [];
+    if (archivedRepos.size > 0) {
+      list = list.filter((pr: any) => !archivedRepos.has(pr.head.repo?.name));
+    }
+    if (view === "draft") list = list.filter((pr: any) => pr.draft);
+    else if (view === "ready") list = list.filter((pr: any) => !pr.draft);
+    return list;
+  }, [prs, archivedRepos, view]);
 
   const setUrl = useCallback(
     (next: Record<string, string | null>) => {
@@ -94,19 +108,25 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
-          {(["open", "merged"] as PRView[]).map((v) => (
+          {(["draft", "ready", "merged"] as PRView[]).map((v, i) => (
             <button
               key={v}
-              onClick={() => setUrl({ view: v === "open" ? null : v, author: null, repo: null })}
+              onClick={() =>
+                setUrl({
+                  view: v === "ready" ? null : v,
+                  author: null,
+                  repo: null,
+                })
+              }
               className={cn(
                 "px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors",
                 view === v
                   ? "bg-accent text-white"
                   : "bg-white text-stone-600 hover:bg-stone-50",
-                v === "merged" && "border-l border-stone-200",
+                i > 0 && "border-l border-stone-200",
               )}
             >
-              {v === "open" ? "Open" : "Merged"}
+              {VIEW_LABELS[v]}
             </button>
           ))}
         </div>
@@ -133,7 +153,9 @@ export function PRsTab({ repoNames, navFilter }: PRsTabProps) {
         )}
 
         <span className="text-xs text-stone-400 ml-auto flex items-center gap-1.5">
-          {isLoading ? <Spinner size="sm" /> : `${scopedPrs.length} ${view} PR${scopedPrs.length === 1 ? "" : "s"}`}
+          {isLoading
+            ? <Spinner size="sm" />
+            : `${scopedPrs.length} ${VIEW_LABELS[view].toLowerCase()} PR${scopedPrs.length === 1 ? "" : "s"}`}
         </span>
       </div>
 
@@ -284,7 +306,7 @@ function BucketCard({ bucket, groupBy, view, onOpen }: {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-stone-900 truncate">{bucket.label}</div>
           <div className="text-xs text-stone-400 truncate">
-            {view === "open" ? "Open PRs" : "Merged PRs"}
+            {VIEW_LABELS[view]} PRs
           </div>
         </div>
       </div>
@@ -302,20 +324,12 @@ function BucketCard({ bucket, groupBy, view, onOpen }: {
           </span>
           <span className="text-[10px] uppercase tracking-wider text-stone-400">avg age (d)</span>
         </div>
-        {view === "open" && bucket.staleCount > 0 && (
+        {view !== "merged" && bucket.staleCount > 0 && (
           <div className="flex items-baseline gap-1 text-amber-600">
             <span className="text-lg font-semibold font-display tabular-nums">
               {bucket.staleCount}
             </span>
             <span className="text-[10px] uppercase tracking-wider">stale</span>
-          </div>
-        )}
-        {view === "open" && bucket.draft > 0 && (
-          <div className="flex items-baseline gap-1">
-            <span className="text-lg font-semibold text-stone-500 font-display tabular-nums">
-              {bucket.draft}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-stone-400">draft</span>
           </div>
         )}
       </div>
@@ -438,7 +452,7 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
                 Age <SortIcon column="age" activeSortKey={sortKey} activeSortDirection={sortDir} />
               </th>
               <th className="px-4 py-2.5 w-8"></th>
-              {isAdmin && view === "open" && (
+              {isAdmin && view !== "merged" && (
                 <th className="px-4 py-2.5 w-8"></th>
               )}
             </tr>
@@ -446,13 +460,13 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
           <tbody className="divide-y divide-stone-50">
             {isLoading ? (
               <tr>
-                <td colSpan={isAdmin && view === "open" ? 7 : 6} className="px-4 py-8 text-center">
+                <td colSpan={isAdmin && view !== "merged" ? 7 : 6} className="px-4 py-8 text-center">
                   <Spinner className="mx-auto" />
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin && view === "open" ? 7 : 6} className="px-4 py-8 text-center text-stone-400">
+                <td colSpan={isAdmin && view !== "merged" ? 7 : 6} className="px-4 py-8 text-center text-stone-400">
                   No pull requests found.
                 </td>
               </tr>
@@ -540,7 +554,7 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, onBack }: D
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </td>
-                    {isAdmin && view === "open" && (
+                    {isAdmin && view !== "merged" && (
                       <td className="px-4 py-2.5">
                         <button
                           onClick={(e) => {
