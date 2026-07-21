@@ -69,7 +69,7 @@ describe("PRsTab (card grid)", () => {
     mOpen.mockReturnValue({ data: [], isLoading: false });
     mMerged.mockReturnValue({ data: [], isLoading: false });
     renderTab();
-    expect(screen.getByText(/No open PRs/)).toBeInTheDocument();
+    expect(screen.getByText(/No ready PRs/)).toBeInTheDocument();
   });
 
   it("renders a card per author with count", () => {
