@@ -900,13 +900,12 @@ function SlackSettingsSection() {
 
   const persistedPosts = settings?.slack?.postsChannelId ?? "";
   const persistedNotes = settings?.slack?.releaseNotesChannelId ?? "";
-  // One channel receives both feeds. If an existing install has different
-  // per-feed channels (legacy state from before this section was
-  // simplified), we treat the Posts channel as the primary — saving will
-  // unify them, but a note in the UI warns the admin first.
+  // One channel receives both feeds. If an existing install has the two
+  // feed IDs pointing at different channels — including the partial case
+  // where only ONE feed was ever set — the UI collapses to a single
+  // dropdown and Save writes the shown value to both, unifying them.
   const persistedChannel = persistedPosts || persistedNotes;
-  const hasSplitChannels =
-    persistedPosts !== "" && persistedNotes !== "" && persistedPosts !== persistedNotes;
+  const hasSplitChannels = persistedPosts !== persistedNotes;
 
   const [channelDraft, setChannelDraft] = useState<string | null>(null);
   const channelValue = channelDraft ?? persistedChannel;
@@ -1099,8 +1098,9 @@ function SlackSettingsSection() {
           />
           {hasSplitChannels && (
             <p className="text-xs text-amber-600">
-              This workspace had different Posts / Release-notes channels
-              configured. Saving will unify them under the channel above.
+              This workspace has Posts and Release notes pointing at
+              different channels (or only one of the two set). Saving will
+              route both feeds to the channel above.
             </p>
           )}
 
