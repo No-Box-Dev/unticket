@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useFeedProjects,
+  useFeedActors,
   useBackfillProjectPrs,
   useSetProjectArchived,
   useFeedEvents,
@@ -13,6 +14,7 @@ import { backfillProjectPrs } from "@/lib/noxlink-api";
 import { useAuth } from "@/lib/auth";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/cn";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
 import {
   Archive,
   ArchiveRestore,
@@ -386,8 +388,8 @@ const FILTER_BUTTONS: Array<{ id: "all" | Category; label: string }> = [
   { id: "other", label: "Other" },
 ];
 
-function RepoActivityFeed({ projectId }: { projectId: string }) {
-  const events = useFeedEvents({ projectId, limit: 100 });
+function RepoActivityFeed({ projectId, actorId }: { projectId: string; actorId?: string }) {
+  const events = useFeedEvents({ projectId, actorId, limit: 100 });
 
   const items = useMemo<ActivityItem[]>(
     () => (events.data ?? []).map(buildActivityItem).filter((x): x is ActivityItem => x !== null),
@@ -582,11 +584,15 @@ function RepoPrsSubPage({
   onBack,
   openPRs,
   mergedPRs,
+  meOnly,
+  onScopeChange,
 }: {
   repoName: string;
   onBack: () => void;
   openPRs: ListPanelItem[];
   mergedPRs: ListPanelItem[];
+  meOnly: boolean;
+  onScopeChange: (me: boolean) => void;
 }) {
   const [view, setView] = useState<"open" | "merged">("open");
   const items = view === "open" ? openPRs : mergedPRs;
@@ -603,6 +609,8 @@ function RepoPrsSubPage({
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-stone-900 font-display">PRs</h2>
+        <div className="flex items-center gap-2">
+        <AllMeToggle me={meOnly} onChange={onScopeChange} />
         <div className="flex items-center rounded-lg border border-stone-200 overflow-hidden">
           <button
             onClick={() => setView("open")}
@@ -622,6 +630,7 @@ function RepoPrsSubPage({
           >
             Merged ({mergedPRs.length})
           </button>
+        </div>
         </div>
       </div>
 
@@ -666,11 +675,15 @@ function RepoIssuesSubPage({
   onBack,
   openIssues,
   closedIssues,
+  meOnly,
+  onScopeChange,
 }: {
   repoName: string;
   onBack: () => void;
   openIssues: ListPanelItem[];
   closedIssues: ListPanelItem[];
+  meOnly: boolean;
+  onScopeChange: (me: boolean) => void;
 }) {
   const [view, setView] = useState<"open" | "closed">("open");
   const items = view === "open" ? openIssues : closedIssues;
@@ -687,6 +700,8 @@ function RepoIssuesSubPage({
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-stone-900 font-display">Issues</h2>
+        <div className="flex items-center gap-2">
+        <AllMeToggle me={meOnly} onChange={onScopeChange} />
         <div className="flex items-center rounded-lg border border-stone-200 overflow-hidden">
           <button
             onClick={() => setView("open")}
@@ -706,6 +721,7 @@ function RepoIssuesSubPage({
           >
             Closed ({closedIssues.length})
           </button>
+        </div>
         </div>
       </div>
 
@@ -750,11 +766,44 @@ function RepoIssuesSubPage({
 // ---------- Main Component ----------
 
 export function ReposTab({ repoNames }: { repoNames: string[] }) {
+  const { user } = useAuth();
+  const userLogin = user?.login.toLowerCase() ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const meOnly = searchParams.get("scope") === "me";
+  const setMeOnly = (me: boolean) => {
+    const params = new URLSearchParams(searchParams);
+    if (me) params.set("scope", "me");
+    else params.delete("scope");
+    setSearchParams(params, { replace: true });
+  };
   const projects = useFeedProjects();
+  const actors = useFeedActors();
   const { data: allPRs, isLoading: allPRsLoading } = useAllPRs(repoNames);
   const { data: openIssues, isLoading: openIssuesLoading } = useOpenIssues(repoNames);
   const { data: closedIssues } = useClosedIssues(repoNames);
   const statsLoading = allPRsLoading || openIssuesLoading;
+  const meActorId = (actors.data ?? []).find(
+    (a) => a.github_login?.toLowerCase() === userLogin,
+  )?.id;
+
+  const scopedPRs = useMemo(
+    () => meOnly && userLogin
+      ? (allPRs ?? []).filter((pr: any) => pr.user?.login?.toLowerCase() === userLogin)
+      : (allPRs ?? []),
+    [allPRs, meOnly, userLogin],
+  );
+  const scopedOpenIssues = useMemo(
+    () => meOnly && userLogin
+      ? (openIssues ?? []).filter((i: any) => (i.assignees ?? []).some((a: any) => a.login?.toLowerCase() === userLogin))
+      : (openIssues ?? []),
+    [openIssues, meOnly, userLogin],
+  );
+  const scopedClosedIssues = useMemo(
+    () => meOnly && userLogin
+      ? (closedIssues ?? []).filter((i: any) => (i.assignees ?? []).some((a: any) => a.login?.toLowerCase() === userLogin))
+      : (closedIssues ?? []),
+    [closedIssues, meOnly, userLogin],
+  );
 
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [subPage, setSubPage] = useState<"prs" | "issues" | null>(null);
@@ -771,27 +820,31 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
       description: p.description,
       narrator_enabled: p.narrator_enabled,
       archived: p.archived,
-      openPRs: allPRs?.filter((pr: any) => pr.repo === p.repo && pr.state === "open")?.length ?? 0,
-      openIssues: openIssues?.filter((i: any) => i.repo === p.repo)?.length ?? 0,
+      openPRs: scopedPRs.filter((pr: any) => pr.repo === p.repo && pr.state === "open").length,
+      openIssues: scopedOpenIssues.filter((i: any) => i.repo === p.repo).length,
     }));
-  }, [projects.data, allPRs, openIssues]);
+  }, [projects.data, scopedPRs, scopedOpenIssues]);
 
   const active = useMemo(
     () =>
       repos
         .filter((r) => !r.archived)
+        .filter((r) => !meOnly || scopedPRs.some((pr: any) => pr.repo === r.repo) || scopedOpenIssues.some((i: any) => i.repo === r.repo) || scopedClosedIssues.some((i: any) => i.repo === r.repo))
         .sort((a, b) => {
           const ax = a.openPRs + a.openIssues;
           const bx = b.openPRs + b.openIssues;
           if (bx !== ax) return bx - ax;
           return (a.repo || a.name).localeCompare(b.repo || b.name);
         }),
-    [repos],
+    [repos, meOnly, scopedPRs, scopedOpenIssues, scopedClosedIssues],
   );
 
   const archived = useMemo(
-    () => repos.filter((r) => !!r.archived).sort((a, b) => (a.repo || a.name).localeCompare(b.repo || b.name)),
-    [repos],
+    () => repos
+      .filter((r) => !!r.archived)
+      .filter((r) => !meOnly || scopedPRs.some((pr: any) => pr.repo === r.repo) || scopedOpenIssues.some((i: any) => i.repo === r.repo) || scopedClosedIssues.some((i: any) => i.repo === r.repo))
+      .sort((a, b) => (a.repo || a.name).localeCompare(b.repo || b.name)),
+    [repos, meOnly, scopedPRs, scopedOpenIssues, scopedClosedIssues],
   );
 
   const selected = useMemo(
@@ -801,7 +854,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
 
   const detailOpenPRs = useMemo<ListPanelItem[]>(() => {
     if (!selected?.repo) return [];
-    return (allPRs ?? [])
+    return scopedPRs
       .filter((pr: any) => pr.repo === selected.repo && pr.state === "open")
       .map((pr: any) => ({
         kind: "pr" as const,
@@ -813,11 +866,11 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         draft: pr.draft,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, allPRs]);
+  }, [selected, scopedPRs]);
 
   const detailOpenIssues = useMemo<ListPanelItem[]>(() => {
     if (!selected?.repo) return [];
-    return (openIssues ?? [])
+    return scopedOpenIssues
       .filter((i: any) => i.repo === selected.repo)
       .map((i: any) => ({
         kind: "issue" as const,
@@ -828,21 +881,21 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         timestamp: i.updated_at,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, openIssues]);
+  }, [selected, scopedOpenIssues]);
 
   const mergedCount = useMemo(() => {
     if (!selected?.repo) return 0;
-    return (allPRs ?? []).filter((pr: any) => pr.repo === selected.repo && pr.merged_at).length;
-  }, [selected, allPRs]);
+    return scopedPRs.filter((pr: any) => pr.repo === selected.repo && pr.merged_at).length;
+  }, [selected, scopedPRs]);
 
   const closedCount = useMemo(() => {
     if (!selected?.repo) return 0;
-    return (closedIssues ?? []).filter((i: any) => i.repo === selected.repo).length;
-  }, [selected, closedIssues]);
+    return scopedClosedIssues.filter((i: any) => i.repo === selected.repo).length;
+  }, [selected, scopedClosedIssues]);
 
   const detailMergedPRs = useMemo<ListPanelItem[]>(() => {
     if (!selected?.repo) return [];
-    return (allPRs ?? [])
+    return scopedPRs
       .filter((pr: any) => pr.repo === selected.repo && pr.merged_at)
       .map((pr: any) => ({
         kind: "pr" as const,
@@ -854,11 +907,11 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         draft: pr.draft,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, allPRs]);
+  }, [selected, scopedPRs]);
 
   const detailClosedIssues = useMemo<ListPanelItem[]>(() => {
     if (!selected?.repo) return [];
-    return (closedIssues ?? [])
+    return scopedClosedIssues
       .filter((i: any) => i.repo === selected.repo)
       .map((i: any) => ({
         kind: "issue" as const,
@@ -869,7 +922,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         timestamp: i.closed_at ?? i.updated_at,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [selected, closedIssues]);
+  }, [selected, scopedClosedIssues]);
 
   // Loading / error / empty
   if (projects.isLoading) {
@@ -904,6 +957,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            <AllMeToggle me={meOnly} onChange={setMeOnly} />
             <label className="text-xs text-stone-600 flex items-center gap-2">
               Days:
               <input
@@ -976,6 +1030,8 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         onBack={() => setSubPage(null)}
         openPRs={openPRs}
         mergedPRs={mergedPRs}
+        meOnly={meOnly}
+        onScopeChange={setMeOnly}
       />
     );
   }
@@ -988,6 +1044,8 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
         onBack={() => setSubPage(null)}
         openIssues={detailOpenIssues}
         closedIssues={detailClosedIssues}
+        meOnly={meOnly}
+        onScopeChange={setMeOnly}
       />
     );
   }
@@ -1014,6 +1072,7 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <AllMeToggle me={meOnly} onChange={setMeOnly} />
           {selected.repo && (
             <>
               <Link
@@ -1071,7 +1130,10 @@ export function ReposTab({ repoNames }: { repoNames: string[] }) {
       </div>
 
       {/* Activity Feed */}
-      <RepoActivityFeed projectId={selected.id} />
+      <RepoActivityFeed
+        projectId={selected.id}
+        actorId={meOnly ? (meActorId ?? "__missing_me_actor__") : undefined}
+      />
 
       {/* Lifetime stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

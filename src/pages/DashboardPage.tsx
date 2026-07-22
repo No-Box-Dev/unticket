@@ -72,6 +72,7 @@ export function DashboardPage() {
               if (f != null) params.f = String(f);
               if (personParam) params.person = personParam;
               if (viewParam) params.view = viewParam;
+              if (searchParams.get("scope") === "me") params.scope = "me";
               setSearchParams(params, { replace: true });
             }} />}
             {activeTab === "specs" && <SpecsTab />}

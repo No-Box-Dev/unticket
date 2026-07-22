@@ -14,7 +14,7 @@ vi.mock("@/hooks/useNoxlink", () => ({
   useFeedProjects: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({
-  useAuth: vi.fn(() => ({ selectedOrg: "acme" })),
+  useAuth: vi.fn(() => ({ selectedOrg: "acme", user: { login: "alice" } })),
 }));
 
 import { CurrentTab } from "../CurrentTab";
@@ -88,6 +88,18 @@ describe("CurrentTab (card grid)", () => {
     // Total for alice = 2. It also happens to be avg age = 2 days from the
     // sample fixture, so we just assert at least one "2" is rendered.
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+  });
+
+  it("filters PRs to the logged-in author with the Me toggle", () => {
+    mOpen.mockReturnValue({
+      data: [samplePR(), samplePR({ id: 2, user: { login: "bob", avatar_url: "" } })],
+      isLoading: false,
+    });
+    mMerged.mockReturnValue({ data: [], isLoading: false });
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Me" }));
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.queryByText("bob")).not.toBeInTheDocument();
   });
 
   it("clicking Merged switches to the merged card view", () => {

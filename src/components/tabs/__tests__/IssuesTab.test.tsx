@@ -14,6 +14,9 @@ vi.mock("@/hooks/useGitHub", () => ({
 vi.mock("@/hooks/useNoxlink", () => ({
   useFeedProjects: vi.fn(),
 }));
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({ user: { login: "alice" } }),
+}));
 
 import { IssuesTab } from "../IssuesTab";
 import {
@@ -90,6 +93,18 @@ describe("IssuesTab (card grid)", () => {
     expect(screen.getByText("alice")).toBeInTheDocument();
     // Total count of 2 is rendered on the alice card.
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+  });
+
+  it("filters issues to the logged-in assignee with the Me toggle", () => {
+    mOpen.mockReturnValue({
+      data: [issue(), issue({ id: 2, assignees: [{ login: "bob", avatar_url: "" }] })],
+      isLoading: false,
+    });
+    mClosed.mockReturnValue({ data: [], isLoading: false });
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Me" }));
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.queryByText("bob")).not.toBeInTheDocument();
   });
 
   it("shows an Unassigned card when issues have no assignees", () => {

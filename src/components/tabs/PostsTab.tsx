@@ -10,18 +10,26 @@ import {
 } from "@/hooks/useNoxlink";
 import { Spinner } from "@/components/Spinner";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
+import { useAuth } from "@/lib/auth";
 import type { FeedActor, FeedEvent, FeedProject } from "@/lib/noxlink-api";
 
 const PAGE_SIZE = 25;
 
 export function PostsTab() {
+  const { user } = useAuth();
   const actors = useFeedActors();
   const projects = useFeedProjects();
   const [actorFilter, setActorFilter] = useState<string>("");
+  const [meOnly, setMeOnly] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>("");
   const [mode, setMode] = useState<FeedMode>("post");
+  const meActorId = (actors.data ?? []).find(
+    (a) => a.github_login?.toLowerCase() === user?.login.toLowerCase(),
+  )?.id;
+  const effectiveActorFilter = meOnly ? (meActorId ?? "__missing_me_actor__") : actorFilter;
   const posts = useInfinitePosts({
-    actorId: actorFilter || undefined,
+    actorId: effectiveActorFilter || undefined,
     projectId: projectFilter || undefined,
     pageSize: PAGE_SIZE,
     mode,
@@ -78,14 +86,15 @@ export function PostsTab() {
     );
   }
 
-  const hasFilters = !!(actorFilter || projectFilter);
+  const hasFilters = !!(meOnly || actorFilter || projectFilter);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center gap-2">
+        <AllMeToggle me={meOnly} onChange={(me) => { setMeOnly(me); setActorFilter(""); }} />
         <SearchableSelect
           value={actorFilter}
-          onChange={setActorFilter}
+          onChange={(value) => { setActorFilter(value); setMeOnly(false); }}
           options={actorOptions}
           placeholder="All people"
           className="min-w-[160px]"
@@ -100,7 +109,7 @@ export function PostsTab() {
         {hasFilters && (
           <button
             type="button"
-            onClick={() => { setActorFilter(""); setProjectFilter(""); }}
+            onClick={() => { setActorFilter(""); setProjectFilter(""); setMeOnly(false); }}
             className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1"
           >
             Clear

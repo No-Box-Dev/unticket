@@ -24,6 +24,8 @@ import { cn } from "@/lib/cn";
 import { daysAgo, STALE_ISSUE_DAYS } from "@/lib/dates";
 import { SortIcon } from "@/components/ui/SortIcon";
 import { AssignDropdown } from "@/components/sprint/AssignDropdown";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
+import { useAuth } from "@/lib/auth";
 
 type SortKey = "repo" | "title" | "assignees" | "age";
 type SortDir = "asc" | "desc";
@@ -51,8 +53,12 @@ interface IssuesTabProps {
 //   ?tab=issues&assignee=<login>       — drilled into a person's issues
 //   ?tab=issues&assignee=__unassigned__ — drilled into the Unassigned bucket
 //   ?tab=issues&repo=<name>            — drilled into a repo's issues
+//   ?tab=issues&scope=me               — only issues assigned to the logged-in user
 export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
+  const { user } = useAuth();
+  const userLogin = user?.login.toLowerCase() ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
+  const meOnly = searchParams.get("scope") === "me";
   const view = (searchParams.get("view") as IssueView) === "closed" ? "closed" : "open";
   const groupBy = (searchParams.get("by") as GroupBy) === "repo" ? "repo" : "people";
   const drillAssignee = searchParams.get("assignee") ?? navFilter?.person ?? null;
@@ -79,10 +85,26 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
 
   // Drop issues from archived repos regardless of source.
   const scoped = useMemo(() => {
-    const list = issues ?? [];
-    if (archivedRepos.size === 0) return list;
-    return list.filter((i: any) => !archivedRepos.has(i.repo));
-  }, [issues, archivedRepos]);
+    let list = issues ?? [];
+    if (archivedRepos.size > 0) list = list.filter((i: any) => !archivedRepos.has(i.repo));
+    if (meOnly && userLogin) {
+      list = list.filter((i: any) => (i.assignees ?? []).some((a: any) => a.login?.toLowerCase() === userLogin));
+    }
+    return list;
+  }, [issues, archivedRepos, meOnly, userLogin]);
+
+  const visibleMembers = useMemo(
+    () => meOnly && userLogin
+      ? (members ?? []).filter((m) => m.login.toLowerCase() === userLogin)
+      : (members ?? []),
+    [members, meOnly, userLogin],
+  );
+  const visibleRepos = useMemo(
+    () => meOnly
+      ? Array.from(new Set(scoped.map((i: any) => i.repo).filter(Boolean))) as string[]
+      : activeRepoNames,
+    [meOnly, scoped, activeRepoNames],
+  );
 
   const setUrl = useCallback(
     (next: Record<string, string | null>) => {
@@ -101,6 +123,10 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
     <div className="space-y-4" data-tab="issues">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
+        <AllMeToggle
+          me={meOnly}
+          onChange={(me) => setUrl({ scope: me ? "me" : null, person: null, assignee: null, repo: null })}
+        />
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
           {(["open", "closed"] as IssueView[]).map((v) => (
             <button
@@ -148,7 +174,7 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
       {/* Critical banner — persists across grid and drill-in views, shows the
           org's currently-open critical issues so nobody misses them regardless
           of the grouping. Only appears on the Open view. */}
-      {view === "open" && <CriticalBanner />}
+      {view === "open" && <CriticalBanner assignee={meOnly ? userLogin ?? undefined : undefined} />}
 
       {isDrilled ? (
         <DrilledView
@@ -157,7 +183,7 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
           isLoading={isLoading}
           drillAssignee={drillAssignee}
           drillRepo={drillRepo}
-          allPeople={(members ?? []).map((m) => m.login).sort()}
+          allPeople={visibleMembers.map((m) => m.login).sort()}
           onBack={() => setUrl({ assignee: null, repo: null })}
         />
       ) : isLoading ? (
@@ -169,8 +195,8 @@ export function IssuesTab({ repoNames, navFilter }: IssuesTabProps) {
           issues={scoped}
           groupBy={groupBy}
           view={view}
-          members={members ?? []}
-          repos={activeRepoNames}
+          members={visibleMembers}
+          repos={visibleRepos}
           onOpen={(key) =>
             setUrl(groupBy === "people" ? { assignee: key, repo: null } : { repo: key, assignee: null })
           }
@@ -403,7 +429,7 @@ function BucketCard({ bucket, groupBy, view, onOpen }: {
 
 // ---------- Critical banner ----------
 
-function CriticalBanner() {
+function CriticalBanner({ assignee }: { assignee?: string }) {
   // Loaded independently so the banner is available even inside a drill-in
   // and doesn't rely on the caller's filtered view.
   const { data } = usePaginatedIssues({
@@ -414,7 +440,9 @@ function CriticalBanner() {
     sort: "created_at",
     sortDir: "desc",
   });
-  const criticals = (data?.data ?? []) as any[];
+  const criticals = ((data?.data ?? []) as any[]).filter(
+    (issue) => !assignee || (issue.assignees ?? []).some((a: any) => a.login?.toLowerCase() === assignee.toLowerCase()),
+  );
   if (criticals.length === 0) return null;
 
   return (

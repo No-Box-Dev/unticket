@@ -26,6 +26,7 @@ import { cn } from "@/lib/cn";
 import { daysAgo, STALE_PR_DAYS } from "@/lib/dates";
 import { SortIcon } from "@/components/ui/SortIcon";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
 import { closePR } from "@/lib/github";
 
 type SortKey = "repo" | "title" | "author" | "age" | "reviewers";
@@ -54,8 +55,12 @@ interface CurrentTabProps {
 //   ?tab=current&author=<login>           — drilled into a person, PRs sub-tab
 //   ?tab=current&author=<login>&pane=stats — drilled into a person, Stats sub-tab
 //   ?tab=current&repo=<name>              — drilled into a repo's PRs
+//   ?tab=current&scope=me                 — only the logged-in user's PRs
 export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
+  const { user } = useAuth();
+  const userLogin = user?.login.toLowerCase() ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
+  const meOnly = searchParams.get("scope") === "me";
   const rawView = searchParams.get("view");
   const view: PRView =
     rawView === "draft" ? "draft" : rawView === "merged" ? "merged" : "ready";
@@ -92,8 +97,24 @@ export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
     }
     if (view === "draft") list = list.filter((pr: any) => pr.draft);
     else if (view === "ready") list = list.filter((pr: any) => !pr.draft);
+    if (meOnly && userLogin) {
+      list = list.filter((pr: any) => pr.user?.login?.toLowerCase() === userLogin);
+    }
     return list;
-  }, [prs, archivedRepos, view]);
+  }, [prs, archivedRepos, view, meOnly, userLogin]);
+
+  const visibleMembers = useMemo(
+    () => meOnly && userLogin
+      ? (members ?? []).filter((m) => m.login.toLowerCase() === userLogin)
+      : (members ?? []),
+    [members, meOnly, userLogin],
+  );
+  const visibleRepos = useMemo(
+    () => meOnly
+      ? Array.from(new Set(scopedPrs.map((pr: any) => pr.head.repo?.name).filter(Boolean))) as string[]
+      : activeRepoNames,
+    [meOnly, scopedPrs, activeRepoNames],
+  );
 
   const setUrl = useCallback(
     (next: Record<string, string | null>) => {
@@ -117,6 +138,10 @@ export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
     <div className="space-y-4" data-tab="current">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
+        <AllMeToggle
+          me={meOnly}
+          onChange={(me) => setUrl({ scope: me ? "me" : null, person: null, author: null, repo: null, pane: null })}
+        />
         {showPrFilter && (
           <div className="flex rounded-lg border border-stone-200 overflow-hidden">
             {(["draft", "ready", "merged"] as PRView[]).map((v, i) => (
@@ -180,7 +205,7 @@ export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
           drillAuthor={drillAuthor}
           drillRepo={drillRepo}
           pane={pane}
-          members={members ?? []}
+          members={visibleMembers}
           onBack={() => setUrl({ author: null, repo: null, pane: null })}
           onPaneChange={(p) => setUrl({ pane: p === "prs" ? null : p })}
         />
@@ -193,8 +218,8 @@ export function CurrentTab({ repoNames, navFilter }: CurrentTabProps) {
           prs={scopedPrs}
           groupBy={groupBy}
           view={view}
-          members={members ?? []}
-          repos={activeRepoNames}
+          members={visibleMembers}
+          repos={visibleRepos}
           onOpen={(key) =>
             setUrl(groupBy === "people" ? { author: key, repo: null } : { repo: key, author: null })
           }

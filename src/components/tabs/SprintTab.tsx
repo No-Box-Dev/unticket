@@ -22,6 +22,7 @@ import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
 import { ArrowUpDown, Archive, LayoutGrid, Rocket, Search, Sparkles, Undo2 } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
 import { cn } from "@/lib/cn";
 
 type SortKey = "default" | "title";
@@ -81,12 +82,28 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   const { confirm, dialogProps } = useConfirm();
   const cleanDoneMut = useCleanDoneFeatures();
   const { user } = useAuth();
+  const userLogin = user?.login.toLowerCase() ?? null;
 
   const [detailFeature, setDetailFeature] = useState<Feature | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>("title");
+  const [selectedPersons, setSelectedPersons] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Board vs Backlog view is URL-synced so a bookmarked backlog stays put.
   const [searchParams, setSearchParams] = useSearchParams();
   const view: SprintView = searchParams.get("view") === "backlog" ? "backlog" : "board";
+  const meOnly = searchParams.get("scope") === "me";
+  const setMeOnly = useCallback(
+    (me: boolean) => {
+      const params = new URLSearchParams(searchParams);
+      if (me) params.set("scope", "me");
+      else params.delete("scope");
+      params.delete("person");
+      setSelectedPersons([]);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const setView = useCallback(
     (next: SprintView) => {
       const params = new URLSearchParams(searchParams);
@@ -130,10 +147,6 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
     onUrlChange?.(null);
   }, [onUrlChange]);
 
-  const [sortBy, setSortBy] = useState<SortKey>("title");
-  const [selectedPersons, setSelectedPersons] = useState<string[]>(navFilter?.person ? [navFilter.person] : []);
-  const [searchQuery, setSearchQuery] = useState("");
-
   const allPeopleNames = useMemo(
     () => (orgMembers ?? []).map((m) => m.login),
     [orgMembers],
@@ -158,11 +171,12 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
   const searchAndOwnerMatch = useCallback(
     (f: Feature) => {
       const q = searchQuery.toLowerCase().trim();
+      if (meOnly && userLogin && !f.owners.some((o) => o.toLowerCase() === userLogin)) return false;
       if (selectedPersons.length > 0 && !f.owners.some((o) => selectedPersons.some((p) => o.toLowerCase() === p.toLowerCase()))) return false;
       if (q && !f.title.toLowerCase().includes(q) && !f.owners.some((o) => o.toLowerCase().includes(q))) return false;
       return true;
     },
-    [selectedPersons, searchQuery],
+    [selectedPersons, searchQuery, meOnly, userLogin],
   );
 
   // Board view drops backlogged features; backlog view shows only them.
@@ -298,6 +312,8 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
         emptySpecs={EMPTY_SPECS}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
+        meOnly={meOnly}
+        setMeOnly={setMeOnly}
         selectedPersons={selectedPersons}
         setSelectedPersons={setSelectedPersons}
         personPills={personPills}
@@ -355,6 +371,8 @@ interface FeaturesViewProps {
   emptySpecs: Spec[];
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  meOnly: boolean;
+  setMeOnly: (me: boolean) => void;
   selectedPersons: string[];
   setSelectedPersons: (p: string[]) => void;
   personPills: { login: string; name: string }[];
@@ -381,7 +399,7 @@ interface FeaturesViewProps {
 function FeaturesView({
   view, onViewChange, backlogCount, backlogFeatures,
   stages, stageBuckets, specsByFeature, emptySpecs,
-  searchQuery, setSearchQuery, selectedPersons, setSelectedPersons,
+  searchQuery, setSearchQuery, meOnly, setMeOnly, selectedPersons, setSelectedPersons,
   personPills, allPeopleNames,
   sortBy, setSortBy, dragOverCol, onDragStart, onDragOver, onDragLeave, onDrop,
   onUpdate, onDelete, onOpenDetail, onAdd, onToggleBacklog, isAdmin,
@@ -424,6 +442,8 @@ function FeaturesView({
             )}
           </button>
         </div>
+
+        <AllMeToggle me={meOnly} onChange={setMeOnly} />
 
         {view === "board" && <AddFeatureInput onAdd={onAdd} />}
 
