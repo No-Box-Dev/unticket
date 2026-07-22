@@ -283,7 +283,7 @@ export function BoardStagesSection() {
               onClick={loadDefaults}
               disabled={busy}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 cursor-pointer"
-              title="Replace with the built-in 4-column scheme"
+              title="Replace with the built-in 5-column scheme"
             >
               <RotateCcw size={12} /> Reset to defaults
             </button>

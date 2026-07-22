@@ -93,6 +93,7 @@ describe("SprintTab", () => {
     mFeatures.mockReturnValue({ data: [], isLoading: false });
     renderTab();
     expect(screen.getByText("To do")).toBeInTheDocument();
+    expect(screen.getByText("Specced")).toBeInTheDocument();
     expect(screen.getByText("Testing on staging")).toBeInTheDocument();
     expect(screen.getByText("Ready for production")).toBeInTheDocument();
     expect(screen.getByText("On production")).toBeInTheDocument();

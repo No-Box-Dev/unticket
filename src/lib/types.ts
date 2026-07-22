@@ -175,6 +175,8 @@ export interface Spec {
   id: number;
   /** Issue number of the Feature this spec belongs to, or null when unfiled. */
   featureNumber: number | null;
+  /** Selected direct link for its Feature when that Feature has multiple specs. */
+  isPrimary: boolean;
   title: string;
   description: string;
   links: SpecLink[];

@@ -15,7 +15,7 @@ interface Ctx {
 }
 
 const SPEC_COLUMNS =
-  "id, org_id, feature_number, title, description, " +
+  "id, org_id, feature_number, is_primary, title, description, " +
   "links_json, archived, archived_at, created_by, created_at, updated_at";
 
 const SpecLinkSchema = z.object({

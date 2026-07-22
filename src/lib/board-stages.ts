@@ -1,6 +1,6 @@
 // Resolves the configured kanban columns for the current org. Admins can
 // rename/recolor/add/remove stages via Settings → Board stages; when no
-// override exists, this returns the historical 4-column layout so existing
+// override exists, this returns the built-in layout so existing
 // features and labels keep rendering.
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useConfigRepo";
@@ -8,6 +8,7 @@ import type { BoardStage, OrgSettings } from "@/lib/types";
 
 export const DEFAULT_BOARD_STAGES: BoardStage[] = [
   { id: "todo",       label: "To do",                color: "#94a3b8" },
+  { id: "specced",    label: "Specced",              color: "#8b83b8" },
   { id: "staging",    label: "Testing on staging",   color: "#b89464" },
   { id: "ready",      label: "Ready for production", color: "#6a9991" },
   { id: "production", label: "On production",        color: "#6e9970" },

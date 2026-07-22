@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import { FeatureCard } from "../FeatureCard";
 import { DEFAULT_BOARD_STAGES } from "@/lib/board-stages";
-import type { Feature } from "@/lib/types";
+import type { Feature, Spec } from "@/lib/types";
 
 const baseFeature: Feature = {
   id: 1,
@@ -25,6 +25,22 @@ const defaultProps = {
   onDelete: vi.fn(),
   onOpenDetail: vi.fn(),
 };
+
+function spec(id: number, title: string, isPrimary = false): Spec {
+  return {
+    id,
+    featureNumber: 1,
+    isPrimary,
+    title,
+    description: "",
+    links: [{ url: `https://example.test/${id}` }],
+    archived: false,
+    archivedAt: null,
+    createdBy: "alice",
+    createdAt: "2026-07-20T00:00:00Z",
+    updatedAt: "2026-07-20T00:00:00Z",
+  };
+}
 
 describe("FeatureCard", () => {
   it("renders feature title without truncation", () => {
@@ -74,7 +90,7 @@ describe("FeatureCard", () => {
     card.focus();
     await userEvent.keyboard("{ArrowRight}");
     expect(onUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "staging" }),
+      expect.objectContaining({ status: "specced" }),
     );
   });
 
@@ -82,5 +98,24 @@ describe("FeatureCard", () => {
     const { container } = render(<FeatureCard {...defaultProps} draggable />);
     const wrapper = container.firstElementChild!;
     expect(wrapper.getAttribute("draggable")).toBe("true");
+  });
+
+  it("shows the primary spec as the direct link and puts siblings in overflow", async () => {
+    render(
+      <FeatureCard
+        {...defaultProps}
+        ownSpecs={[spec(1, "Newest spec"), spec(2, "Primary spec", true)]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /Primary spec/ })).toHaveAttribute(
+      "href",
+      "https://example.test/2",
+    );
+    expect(screen.getByLabelText("Primary spec")).toBeInTheDocument();
+    expect(screen.queryByText("Newest spec")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /more spec/i }));
+    expect(screen.getByText("Newest spec")).toBeInTheDocument();
   });
 });

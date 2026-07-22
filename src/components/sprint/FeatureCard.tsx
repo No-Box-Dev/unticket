@@ -4,7 +4,7 @@ import { AssignDropdown } from "./AssignDropdown";
 import { withStatusTransition } from "@/lib/github-features";
 import { daysAgo } from "@/lib/dates";
 import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
-import { Archive, ChevronDown, ExternalLink, FileText, GripVertical, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ExternalLink, FileText, GripVertical, Star, Trash2 } from "lucide-react";
 
 interface FeatureCardProps {
   feature: Feature;
@@ -37,8 +37,6 @@ function relDays(iso: string): string {
   return `${Math.floor(d / 365)}y`;
 }
 
-const MAX_INLINE_SPECS = 3;
-
 export function FeatureCard({
   feature,
   stages,
@@ -56,8 +54,11 @@ export function FeatureCard({
 
   const isLastStage = stages.length > 0 && stages[stages.length - 1].id === feature.status;
 
-  const inlineSpecs = ownSpecs.slice(0, MAX_INLINE_SPECS);
-  const overflowSpecs = ownSpecs.slice(MAX_INLINE_SPECS);
+  // One direct link keeps dense cards scannable. With multiple specs the
+  // explicit primary wins; until one is selected, the newest spec (the API's
+  // list order) remains the stable fallback.
+  const directSpec = ownSpecs.find((s) => s.isPrimary) ?? ownSpecs[0];
+  const overflowSpecs = directSpec ? ownSpecs.filter((s) => s.id !== directSpec.id) : [];
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!draggable) return;
@@ -139,12 +140,11 @@ export function FeatureCard({
         </div>
       </div>
 
-      {/* Row 3: linked specs — top 3 latest inline, rest behind a dropdown. */}
-      {ownSpecs.length > 0 && (
+      {/* Row 3: one direct spec link; any other specs stay available behind
+          the compact overflow menu. */}
+      {directSpec && (
         <div className="mt-2 ml-6 space-y-1">
-          {inlineSpecs.map((s) => (
-            <SpecChip key={s.id} spec={s} />
-          ))}
+          <SpecChip spec={directSpec} showPrimary={ownSpecs.length > 1 && directSpec.isPrimary} />
           {overflowSpecs.length > 0 && <SpecOverflow specs={overflowSpecs} />}
         </div>
       )}
@@ -161,7 +161,7 @@ function primaryUrl(spec: Spec): string | null {
   return (explicit ?? spec.links[0]).url;
 }
 
-function SpecChip({ spec }: { spec: Spec }) {
+function SpecChip({ spec, showPrimary = false }: { spec: Spec; showPrimary?: boolean }) {
   const href = primaryUrl(spec) ?? `/?tab=specs&spec=${spec.id}`;
   const opensExternal = primaryUrl(spec) !== null;
   return (
@@ -178,6 +178,14 @@ function SpecChip({ spec }: { spec: Spec }) {
         <ExternalLink size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
       ) : (
         <FileText size={11} className="shrink-0 text-stone-400 group-hover/spec:text-accent" />
+      )}
+      {showPrimary && (
+        <Star
+          size={11}
+          fill="currentColor"
+          className="shrink-0 text-amber-500"
+          aria-label="Primary spec"
+        />
       )}
       <span className="truncate flex-1">
         {spec.title || <span className="text-stone-400">Untitled</span>}

@@ -7,6 +7,7 @@
 
 export const DEFAULT_BOARD_STAGES = [
   { id: "todo",       label: "To do",                color: "#94a3b8" },
+  { id: "specced",    label: "Specced",              color: "#8b83b8" },
   { id: "staging",    label: "Testing on staging",   color: "#b89464" },
   { id: "ready",      label: "Ready for production", color: "#6a9991" },
   { id: "production", label: "On production",        color: "#6e9970" },

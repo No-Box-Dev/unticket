@@ -55,6 +55,7 @@ export function useCreateSpec() {
       const optimistic: Spec = {
         id: tempId,
         featureNumber: input.featureNumber ?? null,
+        isPrimary: false,
         title: input.title,
         description: input.description ?? "",
         links: input.links ?? [],
@@ -118,18 +119,30 @@ export function useUpdateSpec() {
       title?: string;
       description?: string;
       featureNumber?: number | null;
+      isPrimary?: boolean;
       links?: SpecLink[];
     }) =>
       updateSpec(args.id, {
         title: args.title,
         description: args.description,
         featureNumber: args.featureNumber,
+        isPrimary: args.isPrimary,
         links: args.links,
       }),
     onMutate: async (args) => {
       await qc.cancelQueries({ queryKey: ["specs", selectedOrg] });
       await qc.cancelQueries({ queryKey: specKey(selectedOrg, args.id) });
       const snapshots: { key: readonly unknown[]; prev: unknown }[] = [];
+      let targetFeatureNumber = args.featureNumber;
+      if (targetFeatureNumber === undefined) {
+        for (const entry of qc.getQueryCache().findAll({ queryKey: ["specs", selectedOrg] })) {
+          const current = (entry.state.data as Spec[] | undefined)?.find((s) => s.id === args.id);
+          if (current) {
+            targetFeatureNumber = current.featureNumber;
+            break;
+          }
+        }
+      }
       qc.getQueryCache()
         .findAll({ queryKey: ["specs", selectedOrg] })
         .forEach((entry) => {
@@ -138,7 +151,19 @@ export function useUpdateSpec() {
           if (!data) return;
           qc.setQueryData<Spec[]>(
             entry.queryKey,
-            data.map((s) => (s.id === args.id ? { ...s, ...withoutUndefined(args) } : s)),
+            data.map((s) => {
+              if (s.id === args.id) {
+                const next = { ...s, ...withoutUndefined(args) };
+                if (args.featureNumber !== undefined && args.isPrimary === undefined) {
+                  next.isPrimary = false;
+                }
+                return next;
+              }
+              if (args.isPrimary && s.featureNumber === targetFeatureNumber) {
+                return { ...s, isPrimary: false };
+              }
+              return s;
+            }),
           );
         });
       const singleKey = specKey(selectedOrg, args.id);
@@ -157,7 +182,13 @@ export function useUpdateSpec() {
           if (!data) return;
           qc.setQueryData<Spec[]>(
             entry.queryKey,
-            data.map((s) => (s.id === result.id ? result : s)),
+            data.map((s) => {
+              if (s.id === result.id) return result;
+              if (result.isPrimary && s.featureNumber === result.featureNumber) {
+                return { ...s, isPrimary: false };
+              }
+              return s;
+            }),
           );
         });
       qc.setQueryData(specKey(selectedOrg, result.id), result);
@@ -181,7 +212,9 @@ export function useSetSpecArchived() {
       qc.invalidateQueries({ queryKey: ["specs", selectedOrg] });
       qc.setQueryData<Spec | undefined>(
         specKey(selectedOrg, result.id),
-        (old) => (old ? { ...old, archived: result.archived } : old),
+        (old) => (old
+          ? { ...old, archived: result.archived, isPrimary: result.archived ? false : old.isPrimary }
+          : old),
       );
     },
   });
