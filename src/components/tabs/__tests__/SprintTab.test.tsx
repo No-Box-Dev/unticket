@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/hooks/useConfigRepo", () => ({
@@ -110,6 +110,20 @@ describe("SprintTab", () => {
     renderTab();
     expect(screen.getByText("Add login")).toBeInTheDocument();
     expect(screen.getByText("Ship payments")).toBeInTheDocument();
+  });
+
+  it("filters features to the logged-in owner with the Me toggle", () => {
+    mFeatures.mockReturnValue({
+      data: [
+        { id: 1, title: "Alice feature", owners: ["alice"], status: "todo" },
+        { id: 2, title: "Bob feature", owners: ["bob"], status: "todo" },
+      ],
+      isLoading: false,
+    });
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Me" }));
+    expect(screen.getByText("Alice feature")).toBeInTheDocument();
+    expect(screen.queryByText("Bob feature")).not.toBeInTheDocument();
   });
 
   it("renders the admin-configured stages instead of the defaults", () => {

@@ -6,6 +6,8 @@ import { SpecListPane } from "@/components/specs/SpecListPane";
 import { SpecDetailModal } from "@/components/specs/SpecDetailModal";
 import { SpecEditorForm } from "@/components/specs/SpecEditorForm";
 import { PersonSelect } from "@/components/ui/PersonSelect";
+import { AllMeToggle } from "@/components/ui/AllMeToggle";
+import { useAuth } from "@/lib/auth";
 import { useSpecs } from "@/hooks/useSpecs";
 import { useFeatures } from "@/hooks/useConfigRepo";
 import { useActiveMembers } from "@/hooks/useGitHub";
@@ -44,6 +46,9 @@ function selectionToParam(sel: SidebarSelection): string | null {
 
 export function SpecsTab() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const userLogin = user?.login.toLowerCase() ?? null;
+  const meOnly = searchParams.get("scope") === "me";
   const selection = parseSelection(searchParams.get("feature"));
   const specParam = searchParams.get("spec");
   const openSpecId = specParam && Number.isFinite(Number(specParam)) ? Number(specParam) : null;
@@ -56,6 +61,16 @@ export function SpecsTab() {
       const params = new URLSearchParams(searchParams);
       if (login) params.set("person", login);
       else params.delete("person");
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const setMeOnly = useCallback(
+    (me: boolean) => {
+      const params = new URLSearchParams(searchParams);
+      if (me) params.set("scope", "me");
+      else params.delete("scope");
+      params.delete("person");
       setSearchParams(params, { replace: true });
     },
     [searchParams, setSearchParams],
@@ -74,6 +89,19 @@ export function SpecsTab() {
     featureList.forEach((f) => m.set(f.id, f));
     return m;
   }, [featureList]);
+  const scopeFeatures = useMemo(
+    () => meOnly && userLogin
+      ? featureList.filter((f) => f.owners.some((owner) => owner.toLowerCase() === userLogin))
+      : featureList,
+    [featureList, meOnly, userLogin],
+  );
+  const scopeFeatureIds = useMemo(() => new Set(scopeFeatures.map((f) => f.id)), [scopeFeatures]);
+  const scopeSpecs = useMemo(
+    () => meOnly
+      ? allSpecs.filter((s) => s.featureNumber != null && scopeFeatureIds.has(s.featureNumber))
+      : allSpecs,
+    [allSpecs, meOnly, scopeFeatureIds],
+  );
 
   const setSelection = useCallback(
     (next: SidebarSelection) => {
@@ -102,7 +130,7 @@ export function SpecsTab() {
   // only include specs whose owning feature has an owner matching `person`
   // (Features' `owners` array). Unfiled specs never match a person filter.
   const displayedSpecs = useMemo<Spec[]>(() => {
-    let list = allSpecs;
+    let list = scopeSpecs;
     switch (selection.kind) {
       case "archive":
         list = list.filter((s) => s.archived);
@@ -126,12 +154,12 @@ export function SpecsTab() {
       });
     }
     return list;
-  }, [allSpecs, selection, personFilter, featureById]);
+  }, [scopeSpecs, selection, personFilter, featureById]);
 
-  const archivedCount = useMemo(() => allSpecs.filter((s) => s.archived).length, [allSpecs]);
+  const archivedCount = useMemo(() => scopeSpecs.filter((s) => s.archived).length, [scopeSpecs]);
 
   const openSpecObj: Spec | null =
-    openSpecId != null ? allSpecs.find((s) => s.id === openSpecId) ?? null : null;
+    openSpecId != null ? scopeSpecs.find((s) => s.id === openSpecId) ?? null : null;
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -143,6 +171,7 @@ export function SpecsTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <AllMeToggle me={meOnly} onChange={setMeOnly} />
           <PersonSelect
             value={personFilter || null}
             onChange={(v) => setPersonFilter(Array.isArray(v) ? v[0] ?? null : v)}
@@ -162,8 +191,8 @@ export function SpecsTab() {
         <SpecFeatureSidebar
           selection={selection}
           onSelect={setSelection}
-          features={featureList}
-          specs={allSpecs}
+          features={scopeFeatures}
+          specs={scopeSpecs}
           archivedCount={archivedCount}
         />
         <SpecListPane
