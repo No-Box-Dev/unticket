@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Plus, Search, X } from "lucide-react";
+import { FileText, Plus, Search, Star, X } from "lucide-react";
 import { useSpecs, useCreateSpec, useUpdateSpec } from "@/hooks/useSpecs";
 import type { Spec } from "@/lib/types";
 
@@ -40,6 +40,10 @@ export function FeatureLinkedSpecsSection({ featureNumber, featureTitle }: Props
     updateMut.mutate({ id: spec.id, featureNumber });
   }
 
+  function setPrimary(spec: Spec) {
+    if (!spec.isPrimary) updateMut.mutate({ id: spec.id, isPrimary: true });
+  }
+
   return (
     <div>
       <span className="text-xs text-stone-500 block mb-1.5">Specs</span>
@@ -64,6 +68,20 @@ export function FeatureLinkedSpecsSection({ featureNumber, featureTitle }: Props
               >
                 {s.title || <span className="text-stone-400">Untitled</span>}
               </a>
+              {ownSpecs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPrimary(s)}
+                  aria-label={`Set ${s.title || "Untitled"} as primary spec`}
+                  aria-pressed={s.isPrimary}
+                  className={s.isPrimary
+                    ? "text-amber-500 cursor-default"
+                    : "text-stone-300 hover:text-amber-500 cursor-pointer"}
+                  title={s.isPrimary ? "Primary spec shown on the feature card" : "Show this spec on the feature card"}
+                >
+                  <Star size={13} fill={s.isPrimary ? "currentColor" : "none"} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => detach(s)}

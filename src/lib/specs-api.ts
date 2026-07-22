@@ -41,6 +41,7 @@ export function updateSpec(
     title?: string;
     description?: string;
     featureNumber?: number | null;
+    isPrimary?: boolean;
     links?: SpecLink[];
   },
 ): Promise<Spec> {

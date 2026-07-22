@@ -8,6 +8,7 @@ export interface SpecRow {
   id: number;
   org_id: number;
   feature_number: number | null;
+  is_primary: number;
   title: string;
   description: string;
   links_json: string;
@@ -22,6 +23,8 @@ export interface SpecDto {
   id: number;
   /** Issue number of the Feature this spec belongs to, or null when unfiled. */
   featureNumber: number | null;
+  /** The spec selected as this Feature's direct card link. */
+  isPrimary: boolean;
   title: string;
   description: string;
   links: SpecLink[];
@@ -43,6 +46,7 @@ export function specRowToDto(row: SpecRow): SpecDto {
   return {
     id: row.id,
     featureNumber: row.feature_number,
+    isPrimary: row.is_primary === 1,
     title: row.title,
     description: row.description ?? "",
     links,

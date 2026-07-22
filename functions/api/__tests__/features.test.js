@@ -24,6 +24,7 @@ const LABELS_OK_RESPONSE = {
     { name: "feature", color: "1B6971" },
     { name: "backlog", color: "94A3B8" },
     { name: "status:todo", color: "94a3b8" },
+    { name: "status:specced", color: "8b83b8" },
     { name: "status:staging", color: "b89464" },
     { name: "status:ready", color: "6a9991" },
     { name: "status:production", color: "6e9970" },

@@ -39,6 +39,7 @@ async function setArchived(context: Ctx, archive: boolean): Promise<Response> {
   const res = await context.env.DB.prepare(
     `UPDATE specs
         SET archived = ?, archived_at = ?,
+            is_primary = 0,
             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ? AND org_id = ? AND archived = ?`,
   )
