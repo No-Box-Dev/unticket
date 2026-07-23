@@ -2,6 +2,7 @@ import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { syncRepo } from "../lib/github-sync";
 
 const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const GITHUB_REPOSITORY = /^[A-Za-z0-9._-]{1,100}$/;
 
 function githubHeaders(token) {
   return {
@@ -100,7 +101,7 @@ export async function onRequestPost(context) {
     });
   }
 
-  if (!GITHUB_LOGIN.test(cursor)) return errorResponse("Invalid repository", 400);
+  if (!GITHUB_REPOSITORY.test(cursor)) return errorResponse("Invalid repository", 400);
 
   let project = null;
   if (!sourceOrg) {
