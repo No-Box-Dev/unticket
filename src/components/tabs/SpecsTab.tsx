@@ -158,8 +158,15 @@ export function SpecsTab() {
 
   const archivedCount = useMemo(() => scopeSpecs.filter((s) => s.archived).length, [scopeSpecs]);
 
-  const openSpecObj: Spec | null =
-    openSpecId != null ? scopeSpecs.find((s) => s.id === openSpecId) ?? null : null;
+  const openSpecObj: Spec | null = useMemo(() => {
+    if (openSpecId == null) return null;
+    const spec = scopeSpecs.find((s) => s.id === openSpecId) ?? null;
+    if (!spec) return null;
+    // Archived specs are intentionally reachable only from the Archive view.
+    // This also closes the modal immediately after Archive/Restore changes the
+    // spec's membership in the current view.
+    return spec.archived === (selection.kind === "archive") ? spec : null;
+  }, [openSpecId, scopeSpecs, selection.kind]);
 
   return (
     <div className="max-w-[1400px] mx-auto">

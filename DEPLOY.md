@@ -9,6 +9,7 @@ Unticket runs on Cloudflare: a Pages project (frontend + API Functions), a D1 da
 - Node.js 22+
 - A Cloudflare account, with `wrangler` authenticated (`npx wrangler login`)
 - A GitHub organisation you administer (to install the App on)
+- A Slack workspace where you can create an app (optional, for Slack mirroring)
 
 ## 1. Clone and configure
 
@@ -72,6 +73,9 @@ npx wrangler pages secret put GITHUB_APP_PRIVATE_KEY --project-name unticket
 npx wrangler pages secret put GITHUB_WEBHOOK_SECRET --project-name unticket
 npx wrangler pages secret put ENCRYPTION_KEY        --project-name unticket   # 64-char hex
 npx wrangler pages secret put ZHIPU_API_KEY         --project-name unticket
+npx wrangler pages secret put SLACK_CLIENT_ID       --project-name unticket
+npx wrangler pages secret put SLACK_CLIENT_SECRET   --project-name unticket
+npx wrangler pages secret put SLACK_SIGNING_SECRET  --project-name unticket
 ```
 
 Generate `ENCRYPTION_KEY` with `openssl rand -hex 32`.
@@ -86,6 +90,23 @@ npx wrangler secret put ENCRYPTION_KEY       --name unticket-cron
 ```
 
 > **LLM provider:** `ZHIPU_API_KEY` is the default narrator backend (Zhipu's Anthropic-compatible GLM endpoint). Each org can override it with their own key (BYOK) in Settings → AI Provider. Narration is optional — without a key, narration is skipped gracefully.
+
+### Provision the Slack app
+
+The versioned [`slack-app-manifest.json`](./slack-app-manifest.json) configures the OAuth callback, bot scopes, Events API endpoint, and `app.unticket.ai` link unfurls. Generate a temporary **app configuration token** under [Your Apps](https://api.slack.com/apps), then create the shared app:
+
+```bash
+SLACK_CONFIG_TOKEN=xoxe.xoxp-... npm run slack:validate
+SLACK_CONFIG_TOKEN=xoxe.xoxp-... npm run slack:create
+```
+
+The create command prints the app ID and its three credentials. Put the credentials into the Pages secrets listed above, deploy the Pages app, then verify the Events API request URL from the Slack app's **App Manifest** page. Keep the app ID locally for later manifest updates:
+
+```bash
+SLACK_CONFIG_TOKEN=xoxe.xoxp-... SLACK_APP_ID=A0123456789 npm run slack:push
+```
+
+Slack configuration tokens expire after 12 hours. They are only needed for manifest management and must not be committed. If a pushed manifest adds OAuth scopes, connected workspaces must reconnect from Unticket Settings to grant them.
 
 ## 5. Deploy
 

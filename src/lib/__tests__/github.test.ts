@@ -3,6 +3,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/lib/api", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
+  refreshAccessToken: vi.fn(),
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  },
+  broadcastError: vi.fn(),
 }));
 
 import { apiGet } from "@/lib/api";
@@ -63,6 +72,14 @@ describe("getOctokit", () => {
     resetOctokit();
     const b = getOctokit();
     expect(a).not.toBe(b);
+  });
+
+  it("rebuilds the singleton when another tab replaces the token", () => {
+    storage.ut_token = "old";
+    const oldClient = getOctokit();
+    storage.ut_token = "fresh";
+    const freshClient = getOctokit();
+    expect(freshClient).not.toBe(oldClient);
   });
 });
 

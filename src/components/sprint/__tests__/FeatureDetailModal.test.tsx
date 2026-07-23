@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/hooks/useConfigRepo", () => ({
@@ -66,23 +66,36 @@ describe("FeatureDetailModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("changing status fires onUpdate with the new status (synchronous, no debounce)", () => {
+  it("saves a changed status only when Save is clicked", () => {
     const onUpdate = vi.fn();
     renderModal(baseFeature, { onUpdate });
     const select = screen.getByRole("combobox") as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "ready" } });
+    expect(onUpdate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "ready" }));
   });
 
-  it("editing the title fires onUpdate with the new title (debounced 500ms)", async () => {
-    vi.useFakeTimers();
+  it("saves an edited title only when Save is clicked", () => {
     const onUpdate = vi.fn();
     renderModal(baseFeature, { onUpdate });
     const title = screen.getByDisplayValue("Login flow") as HTMLInputElement;
     fireEvent.change(title, { target: { value: "Login flow v2" } });
-    vi.advanceTimersByTime(500);
+    expect(onUpdate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ title: "Login flow v2" }));
-    vi.useRealTimers();
+  });
+
+  it("asks before closing with unsaved changes", async () => {
+    const onClose = vi.fn();
+    renderModal(baseFeature, { onClose });
+    fireEvent.change(screen.getByDisplayValue("Login flow"), { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close feature" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(await screen.findByRole("dialog", { name: "Discard unsaved changes?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   });
 
   it("no longer renders a Description section (Specs replace it)", () => {
@@ -91,4 +104,3 @@ describe("FeatureDetailModal", () => {
     expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
   });
 });
-

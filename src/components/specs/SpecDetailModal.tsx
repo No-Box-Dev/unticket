@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Archive, Pencil, Undo2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
@@ -14,11 +14,12 @@ interface Props {
   onClose: () => void;
 }
 
-// Local draft mirrors FeatureDetailModal's shape: debounced text saves via
-// `saveDebounced`, immediate saves for structural changes (feature, links).
-// `hasUnsavedChanges` ref lets us flush pending edits on close.
+// Local draft mirrors FeatureDetailModal's explicit-save behavior. All form
+// fields remain local until Save; closing a dirty modal requires confirmation.
 export function SpecDetailModal({ spec, features, onClose }: Props) {
   const [draft, setDraft] = useState<Spec>(spec);
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
   const stages = useBoardStages();
 
   const updateMut = useUpdateSpec();
@@ -26,82 +27,60 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
   const isAdmin = useIsAdmin();
   const { confirm, dialogProps } = useConfirm();
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const hasUnsavedChanges = useRef(false);
-
   type SpecPatch = { id: number; title?: string; description?: string; featureNumber?: number | null; links?: SpecLink[] };
 
-  const save = useCallback(
-    (patch: SpecPatch) => {
-      hasUnsavedChanges.current = false;
-      updateMut.mutate(patch);
-    },
-    [updateMut],
-  );
-
-  const saveDebounced = useCallback(
-    (patch: SpecPatch) => {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => save(patch), 500);
-    },
-    [save],
-  );
-
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  const markDirty = () => {
+    dirtyRef.current = true;
+    setDirty(true);
+  };
 
   const setTitle = (title: string) => {
-    setDraft((d) => {
-      const next = { ...d, title };
-      hasUnsavedChanges.current = true;
-      saveDebounced({ id: next.id, title });
-      return next;
-    });
+    markDirty();
+    setDraft((d) => ({ ...d, title }));
   };
 
   const setDescription = (description: string) => {
-    setDraft((d) => {
-      const next = { ...d, description };
-      hasUnsavedChanges.current = true;
-      saveDebounced({ id: next.id, description });
-      return next;
-    });
+    markDirty();
+    setDraft((d) => ({ ...d, description }));
   };
 
   const setLinks = (links: SpecLink[]) => {
-    setDraft((d) => {
-      const next = { ...d, links };
-      hasUnsavedChanges.current = true;
-      saveDebounced({ id: next.id, links });
-      return next;
-    });
+    markDirty();
+    setDraft((d) => ({ ...d, links }));
   };
 
   const setFeatureNumber = (raw: string) => {
     const featureNumber = raw === "" ? null : Number.parseInt(raw, 10);
     if (raw !== "" && !Number.isFinite(featureNumber)) return;
-    setDraft((d) => {
-      const next = { ...d, featureNumber };
-      hasUnsavedChanges.current = false;
-      clearTimeout(debounceRef.current);
-      save({ id: next.id, featureNumber });
-      return next;
-    });
+    markDirty();
+    setDraft((d) => ({ ...d, featureNumber }));
   };
 
-  function handleClose() {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = undefined;
-      if (hasUnsavedChanges.current) {
-        updateMut.mutate({
-          id: draft.id,
-          title: draft.title,
-          description: draft.description,
-          featureNumber: draft.featureNumber,
-          links: draft.links,
-        });
-        hasUnsavedChanges.current = false;
-      }
+  function handleSave() {
+    const patch: SpecPatch = {
+      id: draft.id,
+      title: draft.title,
+      description: draft.description,
+      featureNumber: draft.featureNumber,
+      links: draft.links,
+    };
+    updateMut.mutate(patch, {
+      onSuccess: () => {
+        dirtyRef.current = false;
+        setDirty(false);
+      },
+    });
+  }
+
+  async function handleClose() {
+    if (dirtyRef.current) {
+      const discard = await confirm({
+        title: "Discard unsaved changes?",
+        message: "Your changes to this spec have not been saved.",
+        confirmLabel: "Discard",
+        variant: "danger",
+      });
+      if (!discard) return;
     }
     onClose();
   }
@@ -129,8 +108,8 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
     const ok = await confirm({
       title: draft.archived ? "Restore this spec?" : "Archive this spec?",
       message: draft.archived
-        ? "The spec will move back into its feature (or Unfiled)."
-        : "You can restore it later from the Archive section.",
+        ? `The spec will move back into its feature (or Unfiled).${dirty ? " Unsaved changes will be discarded." : ""}`
+        : `You can restore it later from the Archive section.${dirty ? " Unsaved changes will be discarded." : ""}`,
       confirmLabel: draft.archived ? "Restore" : "Archive",
       variant: draft.archived ? "default" : "danger",
     });
@@ -139,7 +118,7 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
       { id: draft.id, archived: !draft.archived },
       {
         onSuccess: () => {
-          handleClose();
+          onClose();
         },
       },
     );
@@ -166,7 +145,7 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
             />
             <Pencil size={14} className="shrink-0 text-stone-300 group-hover/title:text-stone-400 transition-colors" />
           </div>
-          <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer ml-2">
+          <button aria-label="Close spec" onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer ml-2">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -225,8 +204,9 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
             onLinksChange={setLinks}
           />
 
-          {isAdmin && (
-            <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-stone-100 flex items-center justify-between gap-3">
+            {isAdmin ? (
+              <div className="flex items-center justify-between gap-3 flex-1">
               <span className="text-[11px] text-stone-400">
                 Admin actions
               </span>
@@ -248,8 +228,16 @@ export function SpecDetailModal({ spec, features, onClose }: Props) {
                   </>
                 )}
               </button>
-            </div>
-          )}
+              </div>
+            ) : <span />}
+            <button
+              onClick={handleSave}
+              disabled={!dirty || updateMut.isPending}
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              {updateMut.isPending ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
       <ConfirmDialog {...dialogProps} />

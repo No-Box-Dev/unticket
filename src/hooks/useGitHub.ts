@@ -402,7 +402,7 @@ export function useEngineerStats() {
   });
 }
 
-/** Daily PRs-opened + PRs-reviewed for one engineer, for a given month (activity table). */
+/** Tracked-repo daily activity for one month plus monthly totals for the trend chart. */
 export function useEngineerActivity(login: string, month?: string) {
   const { selectedOrg } = useAuth();
   return useQuery<EngineerActivity>({

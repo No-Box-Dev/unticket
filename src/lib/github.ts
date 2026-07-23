@@ -11,11 +11,15 @@ const CustomOctokit = Octokit.plugin(paginateRest, throttling, retry);
 type CustomOctokitInstance = InstanceType<typeof CustomOctokit>;
 
 let octokitInstance: CustomOctokitInstance | null = null;
+let octokitToken: string | null = null;
 
 export function getOctokit(): CustomOctokitInstance {
-  if (!octokitInstance) {
-    const token = localStorage.getItem("ut_token");
-    if (!token) throw new Error("Not authenticated");
+  const token = localStorage.getItem("ut_token");
+  if (!token) throw new Error("Not authenticated");
+  // localStorage token replacement events do not fire in the tab that made
+  // the change. Track the token used by the singleton so a refresh in this or
+  // another tab can never leave Octokit pinned to the expired credential.
+  if (!octokitInstance || octokitToken !== token) {
     octokitInstance = new CustomOctokit({
       auth: token,
       throttle: {
@@ -36,24 +40,30 @@ export function getOctokit(): CustomOctokitInstance {
       },
       retry: { doNotRetry: [400, 401, 403, 404, 422, 451] },
     });
+    octokitToken = token;
   }
   return octokitInstance;
 }
 
 export function resetOctokit() {
   octokitInstance = null;
+  octokitToken = null;
 }
 
 /** Wraps Octokit errors into ApiError so the retry logic can identify them. */
-function wrapOctokitError(err: unknown): never {
+function wrapOctokitError(err: unknown, failedToken?: string | null): never {
   if (err instanceof ApiError) throw err;
   if (err instanceof Error) {
     // Octokit includes status in the error object
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const status = (err as any).status as number | undefined;
     if (status === 401) {
-      localStorage.removeItem("ut_token");
-      window.dispatchEvent(new CustomEvent("ut:force-logout"));
+      // Never let a stale tab delete a newer token written by another tab.
+      // Only the credential that actually failed may terminate the session.
+      if (failedToken && localStorage.getItem("ut_token") === failedToken) {
+        localStorage.removeItem("ut_token");
+        window.dispatchEvent(new CustomEvent("ut:force-logout"));
+      }
       broadcastError("Token expired or revoked", 401);
       throw new ApiError("Token expired or revoked", 401);
     }
@@ -72,6 +82,32 @@ function wrapOctokitError(err: unknown): never {
   throw new ApiError(String(err), 0);
 }
 
+async function withOctokitAuthRetry<T>(request: (client: CustomOctokitInstance) => Promise<T>): Promise<T> {
+  const attemptedToken = localStorage.getItem("ut_token");
+  try {
+    return await request(getOctokit());
+  } catch (err) {
+    // Every remaining direct GitHub call gets the same silent-refresh path as
+    // fetchUser. A newer cross-tab token is reused without another rotation.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((err as any)?.status === 401 && attemptedToken) {
+      const currentToken = localStorage.getItem("ut_token");
+      const refreshed = currentToken && currentToken !== attemptedToken
+        ? currentToken
+        : await refreshAccessToken(attemptedToken);
+      if (refreshed) {
+        resetOctokit();
+        try {
+          return await request(getOctokit());
+        } catch (retryErr) {
+          throw wrapOctokitError(retryErr, refreshed);
+        }
+      }
+    }
+    throw wrapOctokitError(err, attemptedToken);
+  }
+}
+
 export interface RateLimitInfo {
   limit: number;
   remaining: number;
@@ -80,56 +116,30 @@ export interface RateLimitInfo {
 }
 
 export async function fetchRateLimit(): Promise<RateLimitInfo> {
-  const ok = getOctokit();
-  const { data } = await ok.rest.rateLimit.get();
-  const core = data.resources.core;
-  return {
-    limit: core.limit,
-    remaining: core.remaining,
-    reset: core.reset,
-    used: core.used,
-  };
+  return withOctokitAuthRetry(async (ok) => {
+    const { data } = await ok.rest.rateLimit.get();
+    const core = data.resources.core;
+    return {
+      limit: core.limit,
+      remaining: core.remaining,
+      reset: core.reset,
+      used: core.used,
+    };
+  });
 }
 
 export async function fetchUser() {
-  try {
-    const ok = getOctokit();
+  return withOctokitAuthRetry(async (ok) => {
     const { data } = await ok.rest.users.getAuthenticated();
     return data;
-  } catch (err) {
-    // 401 here means the access token expired (GitHub App default: 8h). Try
-    // one silent refresh + retry before treating it as a hard logout — this
-    // is the path that lets users stay signed in for the refresh-token TTL.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const status = (err as any)?.status;
-    if (status === 401) {
-      const expiredToken = localStorage.getItem("ut_token");
-      if (expiredToken) {
-        const refreshed = await refreshAccessToken(expiredToken);
-        if (refreshed) {
-          resetOctokit();
-          try {
-            const ok = getOctokit();
-            const { data } = await ok.rest.users.getAuthenticated();
-            return data;
-          } catch (retryErr) {
-            throw wrapOctokitError(retryErr);
-          }
-        }
-      }
-    }
-    throw wrapOctokitError(err);
-  }
+  });
 }
 
 export async function fetchOrgs() {
-  try {
-    const ok = getOctokit();
+  return withOctokitAuthRetry(async (ok) => {
     const { data } = await ok.rest.orgs.listForAuthenticatedUser();
     return data;
-  } catch (err) {
-    throw wrapOctokitError(err);
-  }
+  });
 }
 
 export interface MeResponse {
@@ -642,17 +652,14 @@ export async function fetchIssueBody(
   repo: string,
   number: number,
 ): Promise<IssueBody> {
-  try {
-    const ok = getOctokit();
+  return withOctokitAuthRetry(async (ok) => {
     const { data } = await ok.rest.issues.get({ owner, repo, issue_number: number });
     return {
       body: data.body ?? null,
       comments: data.comments ?? 0,
       reactions_total: data.reactions?.total_count ?? 0,
     };
-  } catch (err) {
-    throw wrapOctokitError(err);
-  }
+  });
 }
 
 export interface PrBody {
@@ -671,8 +678,7 @@ export async function fetchPrBody(
   repo: string,
   number: number,
 ): Promise<PrBody> {
-  try {
-    const ok = getOctokit();
+  return withOctokitAuthRetry(async (ok) => {
     const { data } = await ok.rest.pulls.get({ owner, repo, pull_number: number });
     return {
       body: data.body ?? null,
@@ -684,9 +690,7 @@ export async function fetchPrBody(
       merged: data.merged ?? false,
       mergeable: data.mergeable ?? null,
     };
-  } catch (err) {
-    throw wrapOctokitError(err);
-  }
+  });
 }
 
 export interface IssueStats {
@@ -739,15 +743,16 @@ export async function fetchEngineerStats(): Promise<EngineerStats> {
   return apiGet<EngineerStats>("/api/engineer-stats");
 }
 
-// Daily contribution counts for one engineer for a single month (People-tab
-// activity table). Maps keyed by "YYYY-MM-DD". `month` is the month shown,
-// `firstMonth` the selector's lower bound. See functions/api/engineer-activity.ts.
+// Tracked-repository contribution counts for one engineer. Daily maps are keyed
+// by "YYYY-MM-DD" for the selected month; monthly maps are keyed by "YYYY-MM".
 export interface EngineerActivity {
   login: string;
   month: string;
   firstMonth: string | null;
   prsOpened: Record<string, number>;
   prsReviewed: Record<string, number>;
+  monthlyOpened: Record<string, number>;
+  monthlyReviewed: Record<string, number>;
 }
 
 export async function fetchEngineerActivity(login: string, month?: string): Promise<EngineerActivity> {
@@ -763,4 +768,3 @@ export async function updateIssueAssignees(
 ): Promise<{ assignees: { login: string; avatar_url: string }[] }> {
   return apiPost("/api/assign", { repo, issue_number: issueNumber, assignees });
 }
-

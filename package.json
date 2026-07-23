@@ -11,6 +11,9 @@
     "typecheck:functions": "tsc -p tsconfig.functions.json",
     "lint": "eslint .",
     "preview": "vite preview",
+    "slack:validate": "node scripts/slack-manifest.mjs validate",
+    "slack:create": "node scripts/slack-manifest.mjs create",
+    "slack:push": "node scripts/slack-manifest.mjs push",
     "test": "vitest run",
     "test:watch": "vitest"
   },
