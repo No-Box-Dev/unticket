@@ -137,11 +137,12 @@ function RepoHistoryRecoverySection() {
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
+  const [sourceOrg, setSourceOrg] = useState("");
 
   async function handleRecovery() {
     setSyncing(true);
     setProgress(null);
-    await recoverRepoHistoryWithProgress(setProgress);
+    await recoverRepoHistoryWithProgress(setProgress, sourceOrg);
     setSyncing(false);
     qc.invalidateQueries({ queryKey: ["engineerStats"] });
     qc.invalidateQueries({ queryKey: ["engineerActivity"] });
@@ -151,8 +152,20 @@ function RepoHistoryRecoverySection() {
     <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
       <h2 className="text-sm font-semibold text-stone-900">Recover repository history</h2>
       <p className="text-xs text-stone-400">
-        Restore PR and issue history from archived, transferred, or GitHub-App-removed repositories using your GitHub access. Deleted repositories that GitHub no longer serves cannot be recovered.
+        Restore PR and issue history from archived, transferred, or GitHub-App-removed repositories using your GitHub access. To include repositories transferred to a dedicated archive organization, enter that organization below.
       </p>
+      <label className="block max-w-sm">
+        <span className="mb-1 block text-xs font-medium text-stone-600">
+          Historical organization <span className="font-normal text-stone-400">(optional)</span>
+        </span>
+        <input
+          value={sourceOrg}
+          onChange={(event) => setSourceOrg(event.target.value)}
+          disabled={syncing}
+          placeholder="e.g. company-archive"
+          className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-800 outline-none focus:border-accent disabled:bg-stone-50"
+        />
+      </label>
       <button
         onClick={handleRecovery}
         disabled={syncing}
@@ -163,7 +176,9 @@ function RepoHistoryRecoverySection() {
           ? progress?.phase === "syncing"
             ? `Checking ${progress.repo} (${progress.synced}/${progress.total})`
             : "Preparing recovery…"
-          : "Recover historical repositories"}
+          : sourceOrg.trim()
+            ? `Recover from ${sourceOrg.trim()}`
+            : "Recover historical repositories"}
       </button>
       {progress?.phase === "done" && !syncing ? (
         <p className="text-xs text-green-600">

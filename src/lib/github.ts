@@ -311,12 +311,18 @@ export async function triggerEventsBackfillWithProgress(
 // repositories using the logged-in admin's GitHub access.
 export async function recoverRepoHistoryWithProgress(
   onProgress: (status: SyncProgress) => void,
+  sourceOrg?: string,
   signal?: AbortSignal,
 ) {
+  const sourceQuery = sourceOrg?.trim()
+    ? `?sourceOrg=${encodeURIComponent(sourceOrg.trim())}`
+    : "";
   let init: SyncResponse;
   try {
     onProgress({ phase: "init", synced: 0, total: 0 });
-    init = await apiPost<SyncResponse & { repoList?: string[] }>("/api/recover-repo-history");
+    init = await apiPost<SyncResponse & { repoList?: string[] }>(
+      `/api/recover-repo-history${sourceQuery}`,
+    );
   } catch (err) {
     if (signal?.aborted) return;
     const msg = err instanceof Error ? err.message : "History recovery failed";
@@ -332,7 +338,9 @@ export async function recoverRepoHistoryWithProgress(
     onProgress({ phase: "syncing", repo, synced, total: repos.length, failed: [...failed] });
     try {
       const result = await apiPost<{ recovered: boolean; inaccessible?: boolean }>(
-        `/api/recover-repo-history?cursor=${encodeURIComponent(repo)}`,
+        `/api/recover-repo-history?cursor=${encodeURIComponent(repo)}${sourceOrg?.trim()
+          ? `&sourceOrg=${encodeURIComponent(sourceOrg.trim())}`
+          : ""}`,
       );
       if (result.recovered) synced += 1;
       else failed.push(repo);
