@@ -65,4 +65,48 @@ describe("POST /api/recover-repo-history", () => {
     expect(response.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("accepts GitHub repository names containing dots and underscores", async () => {
+    const calls = [];
+    const db = {
+      prepare(sql) {
+        return {
+          bind(...binds) {
+            calls.push({ sql, binds });
+            return this;
+          },
+          first: async () => null,
+          run: async () => ({ meta: { changes: 1 } }),
+        };
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).includes("/repos/acme-archive/n1.care_v2")) {
+        return new Response(JSON.stringify({
+          name: "n1.care_v2",
+          owner: { login: "acme-archive" },
+          archived: true,
+          language: "TypeScript",
+          pushed_at: "2026-01-01T00:00:00Z",
+        }), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    }));
+
+    const response = await onRequestPost({
+      request: new Request(
+        "https://app.test/api/recover-repo-history?sourceOrg=acme-archive&cursor=n1.care_v2",
+        { method: "POST" },
+      ),
+      env: { DB: db },
+      data: {
+        orgId: 1,
+        orgLogin: "acme",
+        token: "github-token",
+        isAdmin: true,
+      },
+    });
+
+    expect(response.status).toBe(200);
+  });
 });
