@@ -53,47 +53,68 @@ function forceLogout() {
   window.dispatchEvent(new CustomEvent("ut:force-logout"));
 }
 
-// Coalesce concurrent refresh attempts: if N requests 401 at once we only
-// want one round-trip to /api/auth/refresh, not N. Subsequent callers await
-// the in-flight promise instead.
-//
-// After the refresh resolves we hold the result for REFRESH_DEBOUNCE_MS
-// before allowing another attempt. The previous implementation cleared the
-// coalescing lock on the very next microtask — a burst of 401s from a tab
-// waking from sleep would fire multiple refresh calls milliseconds apart,
-// each rotating the refresh_token and invalidating the previous one, which
-// force-logged the user out. A 1.5s debounce covers the burst without
-// changing steady-state behaviour: legitimate refreshes are 8 hours apart.
-const REFRESH_DEBOUNCE_MS = 1500;
+// Coalesce concurrent refresh attempts in this tab. The Web Lock below extends
+// that protection across tabs: GitHub rotates refresh tokens, so two tabs
+// refreshing the same expired access token would otherwise invalidate one
+// another and force the losing tab to log the whole browser session out.
 let refreshPromise: Promise<string | null> | null = null;
 
+async function requestRefreshedToken(expiredToken: string): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: expiredToken }),
+    });
+  } catch {
+    throw new ApiError("Session refresh temporarily unavailable", 503);
+  }
+
+  // A 401 is the only confirmed terminal outcome: the refresh token is
+  // unknown, expired, or rejected. Preserve the session for 5xx/network and
+  // other unexpected responses so a temporary outage doesn't become logout.
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(body?.error ?? "Session refresh temporarily unavailable", res.status);
+  }
+
+  const body = (await res.json().catch(() => null)) as { token?: string } | null;
+  if (!body?.token) throw new ApiError("Session refresh returned an invalid response", 502);
+  localStorage.setItem("ut_token", body.token);
+  window.dispatchEvent(new CustomEvent("ut:token-refreshed"));
+  return body.token;
+}
+
+async function refreshAcrossTabs(expiredToken: string): Promise<string | null> {
+  const refresh = async () => {
+    // A tab that waited for the lock can reuse the token written by the tab
+    // that won it. Never send the already-rotated token to the refresh API.
+    const currentToken = localStorage.getItem("ut_token");
+    if (!currentToken) return null;
+    if (currentToken !== expiredToken) return currentToken;
+    return requestRefreshedToken(expiredToken);
+  };
+
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request("unticket-auth-refresh", refresh);
+  }
+  return refresh();
+}
+
 export async function refreshAccessToken(expiredToken: string): Promise<string | null> {
+  const currentToken = localStorage.getItem("ut_token");
+  if (currentToken && currentToken !== expiredToken) return currentToken;
   if (refreshPromise) return refreshPromise;
-  refreshPromise = (async () => {
-    try {
-      const res = await fetch("/api/auth/refresh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: expiredToken }),
-      });
-      if (!res.ok) return null;
-      const body = (await res.json().catch(() => null)) as { token?: string } | null;
-      if (!body?.token) return null;
-      localStorage.setItem("ut_token", body.token);
-      return body.token;
-    } catch {
-      return null;
-    }
-  })();
+  refreshPromise = refreshAcrossTabs(expiredToken);
   const p = refreshPromise;
-  // Reset the coalescing slot only after both the request resolves AND a
-  // short debounce window. Late arrivals during that window keep sharing
-  // this result; anything after gets a fresh attempt.
-  p.finally(() => {
-    setTimeout(() => {
-      if (refreshPromise === p) refreshPromise = null;
-    }, REFRESH_DEBOUNCE_MS);
-  });
+  // Use then(success, failure), rather than finally(), so a rejected refresh
+  // doesn't create a second unhandled rejected promise.
+  p.then(
+    () => { if (refreshPromise === p) refreshPromise = null; },
+    () => { if (refreshPromise === p) refreshPromise = null; },
+  );
   return p;
 }
 

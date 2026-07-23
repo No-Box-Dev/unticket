@@ -12,9 +12,10 @@ vi.mock("@/lib/oauth-proxy", () => ({
   getOAuthLoginUrl: vi.fn().mockReturnValue("https://github.com/login/oauth"),
 }));
 
-import { fetchUser } from "@/lib/github";
+import { fetchUser, resetOctokit } from "@/lib/github";
 
 const mockFetchUser = vi.mocked(fetchUser);
+const mockResetOctokit = vi.mocked(resetOctokit);
 
 let storage: Record<string, string> = {};
 
@@ -113,6 +114,25 @@ describe("useAuth", () => {
     });
   });
 
+  it("keeps the user signed in and resets Octokit when another tab rotates the token", async () => {
+    storage.ut_token = "old";
+    mockFetchUser.mockResolvedValue({ login: "alice", avatar_url: "", name: "Alice" } as any);
+    render(<AuthProvider><TestConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("user").textContent).toBe("alice"));
+    mockResetOctokit.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "ut_token",
+        oldValue: "old",
+        newValue: "fresh",
+      }));
+    });
+
+    expect(mockResetOctokit).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("user").textContent).toBe("alice");
+  });
+
   it("no user when no token", async () => {
     render(
       <AuthProvider><TestConsumer /></AuthProvider>,
@@ -122,6 +142,28 @@ describe("useAuth", () => {
       expect(screen.getByTestId("loading").textContent).toBe("false");
     });
     expect(screen.getByTestId("user").textContent).toBe("none");
+  });
+
+  it("preserves the stored session when startup authentication is temporarily unavailable", async () => {
+    storage.ut_token = "still-refreshable";
+    const temporary = Object.assign(new Error("Session refresh temporarily unavailable"), { status: 503 });
+    mockFetchUser.mockRejectedValue(temporary);
+
+    render(<AuthProvider><TestConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+
+    expect(storage.ut_token).toBe("still-refreshable");
+  });
+
+  it("clears the stored session after a confirmed startup 401", async () => {
+    storage.ut_token = "revoked";
+    const unauthorized = Object.assign(new Error("Token expired or revoked"), { status: 401 });
+    mockFetchUser.mockRejectedValue(unauthorized);
+
+    render(<AuthProvider><TestConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+
+    expect(storage.ut_token).toBeUndefined();
   });
 
   it("OAuth callback: exchanges auth code for token, stores, fetches user", async () => {

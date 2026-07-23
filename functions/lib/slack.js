@@ -265,12 +265,12 @@ const REDIRECT_PATH = "/api/slack/oauth/callback";
 // `links:read` + `links:write` power the link-shared unfurl handler at
 // /api/slack/events. Existing installs that didn't get these scopes will
 // stop unfurling until an admin re-runs the Connect flow.
-const BOT_SCOPES = ["channels:read", "groups:read", "chat:write", "chat:write.public", "links:read", "links:write"];
+export const SLACK_BOT_SCOPES = ["channels:read", "groups:read", "chat:write", "chat:write.public", "links:read", "links:write"];
 
 export function buildOAuthAuthorizeUrl(clientId, origin, state) {
   const u = new URL(`${SLACK_API}/oauth/v2/authorize`);
   u.searchParams.set("client_id", clientId);
-  u.searchParams.set("scope", BOT_SCOPES.join(","));
+  u.searchParams.set("scope", SLACK_BOT_SCOPES.join(","));
   u.searchParams.set("redirect_uri", `${origin}${REDIRECT_PATH}`);
   u.searchParams.set("state", state);
   return u.toString();

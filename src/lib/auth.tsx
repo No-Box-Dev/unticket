@@ -37,6 +37,10 @@ function isRateLimitError(err: unknown): boolean {
   return false;
 }
 
+function isUnauthorizedError(err: unknown): boolean {
+  return err instanceof Error && (err as Error & { status?: number }).status === 401;
+}
+
 /** Exchange a one-time auth code for a GitHub access token. */
 async function exchangeAuthCode(code: string): Promise<string> {
   const res = await fetch("/api/auth/exchange", {
@@ -84,11 +88,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("ut:force-logout", handler);
   }, []);
 
-  // Cross-tab logout: react when another tab removes ut_token from localStorage
+  // Keep the cached GitHub client aligned with token rotation in this tab.
+  useEffect(() => {
+    const handler = () => resetOctokit();
+    window.addEventListener("ut:token-refreshed", handler);
+    return () => window.removeEventListener("ut:token-refreshed", handler);
+  }, []);
+
+  // Cross-tab auth sync: a replacement means another tab refreshed the
+  // session, while removal is a real logout. Storage events do not fire in
+  // the tab that performed the write, hence the companion custom event above.
   useEffect(() => {
     const handler = (e: StorageEvent) => {
-      if (e.key === "ut_token" && e.newValue === null && user) {
-        resetOctokit();
+      if (e.key !== "ut_token") return;
+      resetOctokit();
+      if (e.newValue === null && user) {
         setUser(null);
         setSelectedOrg(null);
       }
@@ -118,8 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const msg = err instanceof Error ? err.message : "Authentication failed";
             setAuthError(msg);
             broadcastError(msg);
-            localStorage.removeItem("ut_token");
-            resetOctokit();
+            if (isUnauthorizedError(err)) {
+              localStorage.removeItem("ut_token");
+              resetOctokit();
+            }
           }
         })
         .finally(() => setIsLoading(false));
@@ -151,9 +167,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isRateLimitError(err)) {
             setAuthError("GitHub API rate limit exceeded. Please wait a few minutes and refresh.");
           } else {
-            broadcastError(err instanceof Error ? err.message : "Authentication failed");
-            localStorage.removeItem("ut_token");
-            resetOctokit();
+            const msg = err instanceof Error ? err.message : "Authentication failed";
+            setAuthError(msg);
+            broadcastError(msg);
+            if (isUnauthorizedError(err)) {
+              localStorage.removeItem("ut_token");
+              resetOctokit();
+            }
           }
         })
         .finally(() => setIsLoading(false));

@@ -1,0 +1,45 @@
+{
+  "_metadata": {
+    "major_version": 1
+  },
+  "display_information": {
+    "name": "Unticket",
+    "description": "Mirror Unticket updates and preview Unticket links in Slack.",
+    "background_color": "#1B6971"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Unticket",
+      "always_online": false
+    },
+    "unfurl_domains": [
+      "app.unticket.ai"
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://app.unticket.ai/api/slack/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "channels:read",
+        "groups:read",
+        "chat:write",
+        "chat:write.public",
+        "links:read",
+        "links:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://app.unticket.ai/api/slack/events",
+      "bot_events": [
+        "link_shared"
+      ]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

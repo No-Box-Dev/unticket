@@ -7,12 +7,14 @@ import {
   useMergedPRs,
   useIsAdmin,
   useActiveMembers,
+  useEngineerActivity,
   useEngineerStats,
 } from "@/hooks/useGitHub";
 import { useAuth } from "@/lib/auth";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 import {
   ArrowLeft,
+  CalendarDays,
   CircleCheck,
   ExternalLink,
   Folder,
@@ -709,16 +711,245 @@ function PersonStats({ login }: { login: string }) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      {cards.map((c) => (
-        <div key={c.label} className="bg-white border border-stone-200 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium text-stone-400 uppercase tracking-wider">
-            {c.icon}
-            <span>{c.label}</span>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {cards.map((c) => (
+          <div key={c.label} className="bg-white border border-stone-200 rounded-xl p-4">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-stone-400 uppercase tracking-wider">
+              {c.icon}
+              <span>{c.label}</span>
+            </div>
+            <div className="text-2xl font-bold font-display text-stone-800 mt-2 leading-none">{c.value}</div>
           </div>
-          <div className="text-2xl font-bold font-display text-stone-800 mt-2 leading-none">{c.value}</div>
+        ))}
+      </div>
+      <ActivityDashboard login={login} />
+    </div>
+  );
+}
+
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function enumerateMonths(start: string, end: string): string[] {
+  const [startYear, startMonth] = start.split("-").map(Number);
+  const [endYear, endMonth] = end.split("-").map(Number);
+  if (!startYear || !startMonth || !endYear || !endMonth) return [end];
+  const months: string[] = [];
+  let year = startYear;
+  let month = startMonth;
+  while ((year < endYear || (year === endYear && month <= endMonth)) && months.length < 240) {
+    months.push(`${year}-${String(month).padStart(2, "0")}`);
+    month += 1;
+    if (month > 12) {
+      year += 1;
+      month = 1;
+    }
+  }
+  return months.length > 0 ? months : [end];
+}
+
+function daysInMonth(monthKey: string): string[] {
+  const [year, month] = monthKey.split("-").map(Number);
+  if (!year || !month) return [];
+  const count = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Array.from({ length: count }, (_, index) => `${monthKey}-${String(index + 1).padStart(2, "0")}`);
+}
+
+function formatMonth(monthKey: string, long = false): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(year, (month || 1) - 1, 1)).toLocaleDateString("en-US", {
+    month: long ? "long" : "short",
+    year: long ? "numeric" : "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+function ActivityDashboard({ login }: { login: string }) {
+  const nowMonth = currentMonthKey();
+  const [selectedMonth, setSelectedMonth] = useState<string>();
+  const { data, isLoading } = useEngineerActivity(login, selectedMonth);
+  const shownMonth = data?.month ?? selectedMonth ?? nowMonth;
+  const days = useMemo(() => daysInMonth(shownMonth), [shownMonth]);
+  const firstMonth = data?.firstMonth ?? shownMonth;
+  const monthOptions = useMemo(
+    () => enumerateMonths(firstMonth, nowMonth).reverse(),
+    [firstMonth, nowMonth],
+  );
+  const trendMonths = useMemo(
+    () => enumerateMonths(firstMonth, nowMonth).slice(-6),
+    [firstMonth, nowMonth],
+  );
+
+  const opened = data?.prsOpened ?? {};
+  const reviewed = data?.prsReviewed ?? {};
+  let openedTotal = 0;
+  let reviewedTotal = 0;
+  let activeDays = 0;
+  let peakDay = "";
+  let peakCount = 0;
+  for (const day of days) {
+    const openedCount = opened[day] ?? 0;
+    const reviewedCount = reviewed[day] ?? 0;
+    const total = openedCount + reviewedCount;
+    openedTotal += openedCount;
+    reviewedTotal += reviewedCount;
+    if (total > 0) activeDays += 1;
+    if (total > peakCount) {
+      peakCount = total;
+      peakDay = day;
+    }
+  }
+
+  return (
+    <section className="bg-white border border-stone-200 rounded-xl overflow-hidden" aria-labelledby="activity-heading">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-stone-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 id="activity-heading" className="text-sm font-semibold text-stone-800">Contribution activity</h3>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Tracked repos only</span>
+          </div>
+          <p className="text-xs text-stone-400 mt-0.5">PRs opened and distinct PRs reviewed</p>
         </div>
-      ))}
+        <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
+          <CalendarDays size={14} />
+          <span className="sr-only">Activity month</span>
+          <select
+            aria-label="Activity month"
+            value={shownMonth}
+            onChange={(event) => setSelectedMonth(event.target.value)}
+            className="rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700"
+          >
+            {monthOptions.map((month) => <option key={month} value={month}>{formatMonth(month, true)}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {isLoading && !data ? (
+        <div className="flex justify-center py-16"><Spinner className="w-5 h-5 text-accent" /></div>
+      ) : (
+        <div className="space-y-5 p-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <ActivitySummary label="PRs opened" value={openedTotal} color="bg-teal-600" />
+            <ActivitySummary label="PRs reviewed" value={reviewedTotal} color="bg-violet-500" />
+            <ActivitySummary label="Active days" value={activeDays} detail={`of ${days.length}`} />
+            <ActivitySummary
+              label="Peak day"
+              value={peakCount}
+              detail={peakDay ? new Date(`${peakDay}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "No activity"}
+            />
+          </div>
+
+          <div>
+            <ChartHeading title={`Daily activity · ${formatMonth(shownMonth, true)}`} />
+            <DailyActivityChart days={days} opened={opened} reviewed={reviewed} />
+          </div>
+
+          <div>
+            <ChartHeading title="Six-month trend" />
+            <MonthlyActivityChart
+              months={trendMonths}
+              opened={data?.monthlyOpened ?? {}}
+              reviewed={data?.monthlyReviewed ?? {}}
+            />
+          </div>
+
+          <p className="text-[11px] text-stone-400">
+            Review history starts when the GitHub App began receiving events. Repeated reviews of the same PR on one day count once.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ActivitySummary({ label, value, detail, color }: { label: string; value: number; detail?: string; color?: string }) {
+  return (
+    <div className="rounded-lg border border-stone-100 bg-stone-50/70 px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-400">
+        {color ? <span className={cn("h-2 w-2 rounded-sm", color)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 flex items-baseline gap-1.5">
+        <span className="text-xl font-bold font-display tabular-nums text-stone-800">{value}</span>
+        {detail ? <span className="text-xs text-stone-400">{detail}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function ChartHeading({ title }: { title: string }) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-3">
+      <h4 className="text-xs font-medium text-stone-600">{title}</h4>
+      <div className="flex gap-3 text-[10px] text-stone-400">
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-teal-600" />Opened</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-violet-500" />Reviewed</span>
+      </div>
+    </div>
+  );
+}
+
+function DailyActivityChart({ days, opened, reviewed }: {
+  days: string[];
+  opened: Record<string, number>;
+  reviewed: Record<string, number>;
+}) {
+  const maximum = Math.max(1, ...days.flatMap((day) => [opened[day] ?? 0, reviewed[day] ?? 0]));
+  const width = Math.max(640, days.length * 23);
+  const plotHeight = 96;
+  const baseY = 108;
+  const groupWidth = width / Math.max(days.length, 1);
+  const barWidth = Math.max(3, Math.min(8, groupWidth * 0.32));
+  return (
+    <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
+      <svg viewBox={`0 0 ${width} 132`} className="h-36 min-w-[640px] w-full" role="img" aria-label="Daily PR activity bar chart">
+        <line x1="0" y1={baseY} x2={width} y2={baseY} stroke="#e7e5e4" />
+        {days.map((day, index) => {
+          const openedValue = opened[day] ?? 0;
+          const reviewedValue = reviewed[day] ?? 0;
+          const x = index * groupWidth + groupWidth / 2;
+          const openedHeight = (openedValue / maximum) * plotHeight;
+          const reviewedHeight = (reviewedValue / maximum) * plotHeight;
+          return (
+            <g key={day}>
+              <title>{`${day}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
+              <rect x={x - barWidth - 1} y={baseY - openedHeight} width={barWidth} height={openedHeight} rx="1.5" fill="#0d9488" />
+              <rect x={x + 1} y={baseY - reviewedHeight} width={barWidth} height={reviewedHeight} rx="1.5" fill="#8b5cf6" />
+              {(index === 0 || (index + 1) % 5 === 0 || index === days.length - 1) ? (
+                <text x={x} y="124" textAnchor="middle" fontSize="9" fill="#a8a29e">{index + 1}</text>
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function MonthlyActivityChart({ months, opened, reviewed }: {
+  months: string[];
+  opened: Record<string, number>;
+  reviewed: Record<string, number>;
+}) {
+  const maximum = Math.max(1, ...months.flatMap((month) => [opened[month] ?? 0, reviewed[month] ?? 0]));
+  return (
+    <div className="grid h-36 grid-cols-6 items-end gap-2 rounded-lg border border-stone-100 bg-stone-50/40 px-3 pt-4 pb-2">
+      {months.map((month) => {
+        const openedValue = opened[month] ?? 0;
+        const reviewedValue = reviewed[month] ?? 0;
+        return (
+          <div key={month} className="flex h-full min-w-0 flex-col justify-end gap-1" title={`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
+            <div className="flex min-h-0 flex-1 items-end justify-center gap-1">
+              <div className="w-2.5 rounded-t-sm bg-teal-600" style={{ height: `${Math.max(openedValue > 0 ? 4 : 0, (openedValue / maximum) * 100)}%` }} />
+              <div className="w-2.5 rounded-t-sm bg-violet-500" style={{ height: `${Math.max(reviewedValue > 0 ? 4 : 0, (reviewedValue / maximum) * 100)}%` }} />
+            </div>
+            <div className="truncate text-center text-[9px] text-stone-400">{formatMonth(month)}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

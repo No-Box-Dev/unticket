@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../crypto", () => ({
@@ -7,6 +9,7 @@ vi.mock("../crypto", () => ({
 
 import {
   buildOAuthAuthorizeUrl,
+  SLACK_BOT_SCOPES,
   exchangeOAuthCode,
   signOAuthState,
   verifyOAuthState,
@@ -27,6 +30,22 @@ describe("buildOAuthAuthorizeUrl", () => {
     expect(url).toContain("channels%3Aread");
     expect(url).toContain("chat%3Awrite");
     expect(url).toContain(encodeURIComponent("https://app.example.com/api/slack/oauth/callback"));
+  });
+});
+
+describe("Slack app manifest", () => {
+  const manifest = JSON.parse(readFileSync(join(process.cwd(), "slack-app-manifest.json"), "utf8"));
+
+  it("stays aligned with the OAuth flow and production endpoints", () => {
+    expect(manifest.oauth_config.scopes.bot).toEqual(SLACK_BOT_SCOPES);
+    expect(manifest.oauth_config.redirect_urls).toEqual([
+      "https://app.unticket.ai/api/slack/oauth/callback",
+    ]);
+    expect(manifest.settings.event_subscriptions).toEqual({
+      request_url: "https://app.unticket.ai/api/slack/events",
+      bot_events: ["link_shared"],
+    });
+    expect(manifest.features.unfurl_domains).toEqual(["app.unticket.ai"]);
   });
 });
 

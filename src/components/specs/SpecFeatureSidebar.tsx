@@ -19,10 +19,9 @@ interface Props {
   archivedCount: number;
 }
 
-// Sidebar for the Specs tab under the unified model: features are the
-// groupings. Only features that have at least one spec show up (avoids a
-// wall of empty rows when the org has many features on the kanban).
-// Grouped by kanban stage for skimmability.
+// Sidebar for the Specs tab under the unified model: every feature is a
+// grouping, including features that do not have a spec yet. Grouped by
+// kanban stage for skimmability.
 export function SpecFeatureSidebar({
   selection,
   onSelect,
@@ -51,23 +50,15 @@ export function SpecFeatureSidebar({
 
   const allActiveCount = activeSpecs.length;
 
-  const featureById = useMemo(() => {
-    const m = new Map<number, Feature>();
-    features.forEach((f) => m.set(f.id, f));
-    return m;
-  }, [features]);
-
-  // Group features (that have ≥1 spec) by stage. Any feature whose status
-  // isn't in the current stage set falls into a synthetic "Other" bucket
-  // so the sidebar never silently hides a spec.
+  // Group every feature by stage. Any feature whose status isn't in the
+  // current stage set falls into a synthetic "Other" bucket so the sidebar
+  // never silently hides it.
   const grouped = useMemo(() => {
     const stageIds = new Set(stages.map((s) => s.id));
     const byStage = new Map<string, Feature[]>();
     for (const s of stages) byStage.set(s.id, []);
     const other: Feature[] = [];
-    for (const [num] of specCountByFeature) {
-      const f = featureById.get(num);
-      if (!f) continue;
+    for (const f of features) {
       if (stageIds.has(f.status)) byStage.get(f.status)!.push(f);
       else other.push(f);
     }
@@ -75,7 +66,7 @@ export function SpecFeatureSidebar({
       byStage.set(id, list.sort((a, b) => a.title.localeCompare(b.title)));
     }
     return { byStage, other: other.sort((a, b) => a.title.localeCompare(b.title)) };
-  }, [featureById, specCountByFeature, stages]);
+  }, [features, stages]);
 
   const isActive = (sel: SidebarSelection) => {
     if (selection.kind !== sel.kind) return false;
@@ -242,7 +233,7 @@ function FeatureRow({
       >
         <Rocket size={12} className="shrink-0 text-stone-400" />
         <span className="flex-1 truncate">{feature.title || <span className="text-stone-400">Untitled</span>}</span>
-        {count > 0 && <span className="text-[10px] text-stone-400">{count}</span>}
+        <span className="text-[10px] text-stone-400">{count}</span>
       </button>
     </li>
   );

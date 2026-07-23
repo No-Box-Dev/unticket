@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { X, ExternalLink, Pencil } from "lucide-react";
+import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { AssignDropdown } from "./AssignDropdown";
 import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
 import { FeatureLinkedSpecsSection } from "./FeatureLinkedSpecsSection";
@@ -28,6 +29,9 @@ interface FeatureDetailModalProps {
 
 export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({ ...feature });
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const { confirm, dialogProps } = useConfirm();
   const stages = useBoardStages();
   // Status options include the current value even if it no longer matches a
   // configured stage, so admins can always pick a valid replacement.
@@ -37,26 +41,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   }, [stages, draft.status]);
   const currentStage = stageLookup(stages, draft.status);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const hasUnsavedChanges = useRef(false);
-
-  const save = useCallback((next: Feature) => {
-    hasUnsavedChanges.current = false;
-    onUpdate({ ...next });
-  }, [onUpdate]);
-
-  const saveDebounced = useCallback((next: Feature) => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => save(next), 500);
-  }, [save]);
-
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
-
   // Re-sync from parent when the source feature refetches and there are
   // no unsaved local edits. Without this, a webhook or cron refetch mid-
   // view would leave the modal showing the stale snapshot the user first
-  // opened — and any subsequent Save would silently revert whoever
-  // changed the row in the meantime. Guarded on hasUnsavedChanges so we
+  // opened — and Save would silently revert whoever
+  // changed the row in the meantime. Guarded on dirtyRef so we
   // don't stomp the user's in-progress edit; if they have local changes,
   // let their next Save win instead of clobbering the draft.
   //
@@ -67,34 +56,32 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
     `${feature.updatedAt ?? ""}|${(feature.owners ?? []).join(",")}|` +
     `${feature.specLinks?.length ?? 0}`;
   useEffect(() => {
-    if (hasUnsavedChanges.current) return;
+    if (dirtyRef.current) return;
     setDraft({ ...feature });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featureFingerprint]);
 
-  function update(patch: Partial<Feature>, debounce = false) {
-    setDraft((d) => {
-      const next = { ...d, ...patch };
-      hasUnsavedChanges.current = true;
-      if (debounce) {
-        saveDebounced(next);
-      } else {
-        clearTimeout(debounceRef.current);
-        save(next);
-      }
-      return next;
-    });
+  function update(patch: Partial<Feature>) {
+    dirtyRef.current = true;
+    setDirty(true);
+    setDraft((d) => ({ ...d, ...patch }));
   }
 
-  function handleClose() {
-    // Flush any pending debounced save, but only if there are unsaved changes
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = undefined;
-      if (hasUnsavedChanges.current) {
-        onUpdate({ ...draft });
-        hasUnsavedChanges.current = false;
-      }
+  function handleSave() {
+    onUpdate({ ...draft });
+    dirtyRef.current = false;
+    setDirty(false);
+  }
+
+  async function handleClose() {
+    if (dirtyRef.current) {
+      const discard = await confirm({
+        title: "Discard unsaved changes?",
+        message: "Your changes to this feature have not been saved.",
+        confirmLabel: "Discard",
+        variant: "danger",
+      });
+      if (!discard) return;
     }
     onClose();
   }
@@ -111,7 +98,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           <div className="group/title flex items-center gap-2 flex-1 min-w-0">
             <input
               value={draft.title}
-              onChange={(e) => update({ title: e.target.value }, true)}
+              onChange={(e) => update({ title: e.target.value })}
               className="text-lg font-semibold text-stone-800 bg-transparent w-full rounded px-2 py-1 -mx-2 border border-transparent hover:border-stone-200 focus:border-accent/40 focus:ring-2 focus:ring-accent/20 outline-none transition-all"
               title="Click to edit title"
             />
@@ -129,7 +116,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
               </a>
             )}
           </div>
-          <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer ml-2">
+          <button aria-label="Close feature" onClick={handleClose} className="text-stone-400 hover:text-stone-600 cursor-pointer ml-2">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -143,8 +130,8 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
                 onChange={(e) => {
                   const next = withStatusTransition(draft, e.target.value as FeatureStatus);
                   setDraft(next);
-                  hasUnsavedChanges.current = true;
-                  save(next);
+                  dirtyRef.current = true;
+                  setDirty(true);
                 }}
                 className="px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-xs text-stone-700 focus:outline-none focus:border-accent cursor-pointer"
               >
@@ -171,7 +158,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* Spec links (free external URLs — Figma / Notion / etc.) */}
           <SpecLinksSection
             value={draft.specLinks ?? []}
-            onChange={(links) => update({ specLinks: links }, true)}
+            onChange={(links) => update({ specLinks: links })}
           />
 
           {/* Status History Timeline */}
@@ -211,8 +198,19 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
             />
             {currentStage.label}
           </div>
+
+          <div className="pt-3 border-t border-stone-100 flex justify-end">
+            <button
+              onClick={handleSave}
+              disabled={!dirty}
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }
@@ -232,4 +230,3 @@ function formatTimeAgo(date: Date): string {
   const months = Math.floor(days / 30);
   return `${months}mo ago`;
 }
-
