@@ -10,6 +10,8 @@
 //   - assignedIssues:  open issues assigned to the member              (grid + detail)
 //   - lifetimePRs:     PRs authored, all states                        (detail stat)
 //   - prsLast4Weeks:   PRs authored, created in the last 28 days       (detail stat)
+//   - lifetimeCommits: authored default-branch commits                 (detail stat)
+//   - commitsLast4Weeks: authored commits in the last 28 days           (detail stat)
 //   - issuesClosed:    issues closed by the member                     (detail stat)
 //
 // Uses the native D1 batch + parameterized SQL (same proven pattern as prs.js /
@@ -46,7 +48,7 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     : "0";
   const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [openPRs, reviewing, approvals, merges, assigned, lifetime, recent, closed, coverage, audits] =
+  const [openPRs, reviewing, approvals, merges, assigned, lifetime, recent, lifetimeCommits, recentCommits, closed, coverage, audits] =
     await db.batch([
       db
         .prepare(
@@ -151,6 +153,35 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
         .bind(orgId, fourWeeksAgo),
       db
         .prepare(
+          `SELECT commit_row.author AS login, COUNT(*) AS c
+           FROM github_commits commit_row
+           WHERE commit_row.org_id = ? AND commit_row.author IS NOT NULL
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = commit_row.org_id AND period.repo = commit_row.repo
+                 AND commit_row.authored_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR commit_row.authored_at < period.tracked_until)
+             )
+           GROUP BY commit_row.author`,
+        )
+        .bind(orgId),
+      db
+        .prepare(
+          `SELECT commit_row.author AS login, COUNT(*) AS c
+           FROM github_commits commit_row
+           WHERE commit_row.org_id = ? AND commit_row.author IS NOT NULL
+             AND commit_row.authored_at >= ?
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = commit_row.org_id AND period.repo = commit_row.repo
+                 AND commit_row.authored_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR commit_row.authored_at < period.tracked_until)
+             )
+           GROUP BY commit_row.author`,
+        )
+        .bind(orgId, fourWeeksAgo),
+      db
+        .prepare(
           `SELECT i.closed_by AS login, COUNT(*) AS c FROM issues i
            WHERE i.org_id = ? AND i.state = 'closed' AND i.closed_by IS NOT NULL
              AND EXISTS (
@@ -226,6 +257,8 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     assignedIssues: toCountMap(assigned.results),
     lifetimePRs: toCountMap(lifetime.results),
     prsLast4Weeks: toCountMap(recent.results),
+    lifetimeCommits: toCountMap(lifetimeCommits.results),
+    commitsLast4Weeks: toCountMap(recentCommits.results),
     issuesClosed: toCountMap(closed.results),
     coverage: {
       approvalsGivenSince: coverageRow?.approvals_since ?? null,

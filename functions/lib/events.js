@@ -205,6 +205,44 @@ export async function storeEvent(db, ghEvent, deliveryId, payload, ownerId) {
     ).bind(projectId, repo, org, repo, ownerId).run();
   }
 
+  // Keep commit statistics current between repository syncs. Push payloads
+  // expose GitHub's resolved author username when one is available; the
+  // periodic default-branch sync later fills any unresolved identities.
+  if (ghEvent === "push" && repo && org && Array.isArray(payload.commits) && payload.commits.length > 0) {
+    const orgRow = await db
+      .prepare("SELECT id FROM orgs WHERE lower(github_login) = lower(?) LIMIT 1")
+      .bind(ownerId)
+      .first();
+    if (orgRow?.id != null) {
+      const commitStmt = db.prepare(
+        `INSERT INTO github_commits
+           (org_id, repo, sha, author, authored_at, committed_at, html_url, message)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(org_id, repo, sha) DO UPDATE SET
+           author = COALESCE(excluded.author, github_commits.author),
+           authored_at = COALESCE(excluded.authored_at, github_commits.authored_at),
+           committed_at = COALESCE(excluded.committed_at, github_commits.committed_at),
+           html_url = COALESCE(excluded.html_url, github_commits.html_url),
+           message = COALESCE(excluded.message, github_commits.message)`,
+      );
+      for (let i = 0; i < payload.commits.length; i += 50) {
+        await db.batch(
+          payload.commits.slice(i, i + 50).map((commit) =>
+            commitStmt.bind(
+              orgRow.id,
+              repo,
+              commit.id,
+              commit.author?.username ?? null,
+              commit.timestamp ?? null,
+              commit.timestamp ?? null,
+              commit.url ?? null,
+              commit.message?.slice(0, 500) ?? null,
+            )),
+        );
+      }
+    }
+  }
+
   // Resolve the actor from whoever triggered the event. Prefer the typed
   // author for PRs/issues/releases; fall back to sender for everything else.
   const author = pickAuthor(ghEvent, payload);

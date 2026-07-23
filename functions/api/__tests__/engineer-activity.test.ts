@@ -42,6 +42,8 @@ describe("GET /api/engineer-activity", () => {
         { results: [{ k: "2026-06", c: 3 }, { k: "2026-07", c: 2 }] },
         { results: [{ k: "2026-07-05", c: 1 }] },
         { results: [{ k: "2026-06", c: 2 }, { k: "2026-07", c: 1 }] },
+        { results: [{ k: "2026-07-03", c: 6 }] },
+        { results: [{ k: "2026-06", c: 5 }, { k: "2026-07", c: 6 }] },
         { results: [{ k: "2026-07-04", c: 4 }] },
         { results: [{ k: "2026-05", c: 1 }, { k: "2026-07", c: 4 }] },
       ],
@@ -57,19 +59,22 @@ describe("GET /api/engineer-activity", () => {
       prsOpened: { "2026-07-03": 2 },
       prsMerged: { "2026-07-05": 1 },
       prsReviewed: { "2026-07-04": 4 },
+      commits: { "2026-07-03": 6 },
       monthlyOpened: { "2026-06": 3, "2026-07": 2 },
       monthlyMerged: { "2026-06": 2, "2026-07": 1 },
       monthlyReviewed: { "2026-05": 1, "2026-07": 4 },
+      monthlyCommits: { "2026-06": 5, "2026-07": 6 },
     });
 
     const statements = db._calls.batch[0];
-    expect(statements).toHaveLength(6);
+    expect(statements).toHaveLength(8);
     for (const statement of statements) {
       expect(statement.sql).toContain("repo_tracking_periods");
     }
-    expect(statements[4].sql).toContain("repo || '#'");
-    expect(statements[4].sql).toContain("$.review.submitted_at");
-    expect(statements[5].sql).toMatch(/GROUP BY k, repo, pr_number/);
+    expect(statements[4].sql).toContain("github_commits");
+    expect(statements[6].sql).toContain("repo || '#'");
+    expect(statements[6].sql).toContain("$.review.submitted_at");
+    expect(statements[7].sql).toMatch(/GROUP BY k, repo, pr_number/);
   });
 
   it("returns PR activity without review queries when the login has no actor", async () => {
@@ -80,6 +85,8 @@ describe("GET /api/engineer-activity", () => {
         { results: [{ k: "2026-07", c: 1 }] },
         { results: [] },
         { results: [] },
+        { results: [] },
+        { results: [] },
       ],
     });
 
@@ -88,7 +95,9 @@ describe("GET /api/engineer-activity", () => {
       firstMonth: "2026-07",
       prsReviewed: {},
       monthlyReviewed: {},
+      commits: {},
+      monthlyCommits: {},
     });
-    expect(db._calls.batch[0]).toHaveLength(4);
+    expect(db._calls.batch[0]).toHaveLength(6);
   });
 });

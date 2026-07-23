@@ -12,7 +12,7 @@ import { startRepoTracking, stopRepoTracking } from "./repo-tracking";
 // only if you also split the call across multiple invocations.
 const MAX_PAGES = 50;
 
-async function fetchAllPages(token, url, params = {}) {
+async function fetchAllPages(token, url, params = {}, emptyStatuses = []) {
   const all = [];
   let page = 1;
 
@@ -32,6 +32,7 @@ async function fetchAllPages(token, url, params = {}) {
     });
 
     if (!res.ok) {
+      if (emptyStatuses.includes(res.status)) return all;
       if (res.status === 401) {
         throw new Error("GitHub token expired or revoked");
       }
@@ -265,6 +266,53 @@ export async function syncPRs(db, token, orgId, orgLogin, repo, since, env = nul
   if (prs.length > 0 || !since) {
     await setSyncState(db, orgId, `prs:${repo}`);
   }
+}
+
+// ---------- Sync default-branch commits ----------
+
+export async function syncCommits(db, token, orgId, orgLogin, repo, since) {
+  const params = {};
+  if (since) params.since = since;
+
+  const commits = await fetchAllPages(
+    token,
+    `https://api.github.com/repos/${orgLogin}/${repo}/commits`,
+    params,
+    [409],
+  );
+
+  const stmt = db.prepare(
+    `INSERT INTO github_commits
+       (org_id, repo, sha, author, author_avatar, authored_at, committed_at, html_url, message)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(org_id, repo, sha) DO UPDATE SET
+       author = excluded.author,
+       author_avatar = excluded.author_avatar,
+       authored_at = excluded.authored_at,
+       committed_at = excluded.committed_at,
+       html_url = excluded.html_url,
+       message = excluded.message`,
+  );
+
+  for (let i = 0; i < commits.length; i += 50) {
+    await db.batch(
+      commits.slice(i, i + 50).map((commit) =>
+        stmt.bind(
+          orgId,
+          repo,
+          commit.sha,
+          commit.author?.login ?? null,
+          commit.author?.avatar_url ?? null,
+          commit.commit?.author?.date ?? null,
+          commit.commit?.committer?.date ?? null,
+          commit.html_url ?? null,
+          commit.commit?.message?.slice(0, 500) ?? null,
+        )),
+    );
+  }
+
+  await setSyncState(db, orgId, `commits:${repo}`);
+  return commits.length;
 }
 
 // ---------- Sync Issues ----------
@@ -922,6 +970,14 @@ export async function syncRepo(db, token, orgId, orgLogin, repo, force = false, 
     await syncIssues(db, token, orgId, orgLogin, repo, issueSince);
   } catch (err) {
     console.error(`[unticket] syncRepo issues failed for ${repo}:`, err?.message ?? err);
+    throw err;
+  }
+
+  try {
+    const commitSince = force ? null : (await getSyncState(db, orgId, `commits:${repo}`))?.lastSynced;
+    await syncCommits(db, token, orgId, orgLogin, repo, commitSince);
+  } catch (err) {
+    console.error(`[unticket] syncRepo commits failed for ${repo}:`, err?.message ?? err);
     throw err;
   }
 }

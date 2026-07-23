@@ -555,8 +555,8 @@ describe("syncMembers", () => {
 });
 
 describe("syncRepo orchestration", () => {
-  it("calls syncPRs then syncIssues, both with the since cursor", async () => {
-    // Single page of PRs, single page of issues
+  it("calls syncPRs, syncIssues, then syncCommits with their cursors", async () => {
+    // Single page of PRs, issues, and commits
     fetch
       .mockResolvedValueOnce({
         ok: true, headers: { get: () => null },
@@ -565,12 +565,17 @@ describe("syncRepo orchestration", () => {
       .mockResolvedValueOnce({
         ok: true, headers: { get: () => null },
         json: async () => [],
-      });  // Issues
+      })  // Issues
+      .mockResolvedValueOnce({
+        ok: true, headers: { get: () => null },
+        json: async () => [],
+      });  // Commits
     const db = makeDb();
     await syncRepo(db, "tok", "org-1", "no-box-dev", "api", true);
-    // PR URL first, issues URL second.
+    // PR URL first, issues URL second, commits URL third.
     expect(fetch.mock.calls[0][0]).toContain("/repos/no-box-dev/api/pulls");
     expect(fetch.mock.calls[1][0]).toContain("/repos/no-box-dev/api/issues");
+    expect(fetch.mock.calls[2][0]).toContain("/repos/no-box-dev/api/commits");
   });
 
   it("propagates errors from underlying syncs", async () => {

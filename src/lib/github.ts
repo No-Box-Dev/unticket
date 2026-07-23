@@ -786,6 +786,8 @@ export interface EngineerStats {
   assignedIssues: Record<string, number>;
   lifetimePRs: Record<string, number>;
   prsLast4Weeks: Record<string, number>;
+  lifetimeCommits: Record<string, number>;
+  commitsLast4Weeks: Record<string, number>;
   issuesClosed: Record<string, number>;
   coverage: {
     approvalsGivenSince: string | null;
@@ -817,9 +819,11 @@ export interface EngineerActivity {
   prsOpened: Record<string, number>;
   prsMerged: Record<string, number>;
   prsReviewed: Record<string, number>;
+  commits: Record<string, number>;
   monthlyOpened: Record<string, number>;
   monthlyMerged: Record<string, number>;
   monthlyReviewed: Record<string, number>;
+  monthlyCommits: Record<string, number>;
 }
 
 export async function fetchEngineerActivity(login: string, month?: string): Promise<EngineerActivity> {
