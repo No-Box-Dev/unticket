@@ -694,11 +694,40 @@ function DrilledView({ prs, view, isLoading, drillAuthor, drillRepo, pane, membe
 
 function PersonStats({ login }: { login: string }) {
   const { data: stats, isLoading } = useEngineerStats();
+  const audit = stats?.prAudits?.[login];
+  const approvalsSince = stats?.coverage?.approvalsGivenSince
+    ? new Date(stats.coverage.approvalsGivenSince).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : null;
+  const mergeCoverage = stats?.coverage?.mergedPRs
+    ? Math.round((stats.coverage.mergedByKnown / stats.coverage.mergedPRs) * 100)
+    : 0;
   const cards = [
-    { label: "Lifetime PRs", value: stats?.lifetimePRs?.[login] ?? 0, icon: <GitPullRequest size={14} className="text-stone-400" /> },
+    {
+      label: "Lifetime PRs",
+      value: stats?.lifetimePRs?.[login] ?? 0,
+      detail: audit && audit.githubPRs === audit.cachedAllPRs
+        ? `GitHub verified · ${audit.cachedTrackedPRs} tracked of ${audit.githubPRs}`
+        : undefined,
+      icon: <GitPullRequest size={14} className="text-stone-400" />,
+    },
     { label: "PRs · last 4 weeks", value: stats?.prsLast4Weeks?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
-    { label: "Approvals given", value: stats?.approvalsGiven?.[login] ?? 0, icon: <CircleCheck size={14} className="text-stone-400" /> },
-    { label: "Merged for others", value: stats?.mergesOfOthers?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
+    {
+      label: "Approvals captured",
+      value: stats?.approvalsGiven?.[login] ?? 0,
+      detail: approvalsSince ? `Since ${approvalsSince}` : "No review history captured",
+      icon: <CircleCheck size={14} className="text-stone-400" />,
+    },
+    {
+      label: "Merges captured",
+      value: stats?.mergesOfOthers?.[login] ?? 0,
+      detail: `${mergeCoverage}% of merged PRs have merger data`,
+      icon: <GitMerge size={14} className="text-stone-400" />,
+    },
     { label: "Issues closed", value: stats?.issuesClosed?.[login] ?? 0, icon: <CircleCheck size={14} className="text-stone-400" /> },
   ];
 
@@ -720,6 +749,7 @@ function PersonStats({ login }: { login: string }) {
               <span>{c.label}</span>
             </div>
             <div className="text-2xl font-bold font-display text-stone-800 mt-2 leading-none">{c.value}</div>
+            {c.detail ? <div className="mt-2 text-[10px] leading-snug text-stone-400">{c.detail}</div> : null}
           </div>
         ))}
       </div>

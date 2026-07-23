@@ -30,16 +30,18 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { CurrentTab } from "../CurrentTab";
-import { useOpenPRs, useMergedPRs } from "@/hooks/useGitHub";
+import { useOpenPRs, useMergedPRs, useEngineerStats } from "@/hooks/useGitHub";
 import { useFeedProjects } from "@/hooks/useNoxlink";
 
 const mOpen = useOpenPRs as unknown as ReturnType<typeof vi.fn>;
 const mMerged = useMergedPRs as unknown as ReturnType<typeof vi.fn>;
+const mStats = useEngineerStats as unknown as ReturnType<typeof vi.fn>;
 const mProjects = useFeedProjects as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mOpen.mockReset();
   mMerged.mockReset();
+  mStats.mockReturnValue({ data: undefined, isLoading: false });
   mProjects.mockReturnValue({ data: [] });
 });
 
@@ -161,6 +163,47 @@ describe("CurrentTab (card grid)", () => {
     expect(screen.getByText("4 PRs")).toBeInTheDocument();
     fireEvent.mouseLeave(julyOpened);
     expect(screen.queryByText("Jul 3 · Opened")).not.toBeInTheDocument();
+  });
+
+  it("shows GitHub verification and honest historical coverage labels", () => {
+    mOpen.mockReturnValue({ data: [samplePR()], isLoading: false });
+    mMerged.mockReturnValue({ data: [], isLoading: false });
+    mStats.mockReturnValue({
+      isLoading: false,
+      data: {
+        lifetimePRs: { alice: 9 },
+        prsLast4Weeks: { alice: 4 },
+        approvalsGiven: { alice: 3 },
+        mergesOfOthers: { alice: 2 },
+        issuesClosed: { alice: 1 },
+        coverage: {
+          approvalsGivenSince: "2026-05-12T08:24:17Z",
+          mergedByKnown: 40,
+          mergedPRs: 100,
+          issuesClosedByKnown: 10,
+          closedIssues: 10,
+        },
+        prAudits: {
+          alice: {
+            startMonth: "2026-01",
+            endMonth: "2026-07",
+            completedAt: "2026-07-23T04:10:01Z",
+            githubPRs: 10,
+            cachedAllPRs: 10,
+            cachedTrackedPRs: 9,
+          },
+        },
+      },
+    });
+    renderTab();
+
+    fireEvent.click(screen.getByText("alice"));
+    fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+
+    expect(screen.getByText("GitHub verified · 9 tracked of 10")).toBeInTheDocument();
+    expect(screen.getByText("Approvals captured")).toBeInTheDocument();
+    expect(screen.getByText("Since May 12, 2026")).toBeInTheDocument();
+    expect(screen.getByText("40% of merged PRs have merger data")).toBeInTheDocument();
   });
 
   it("group toggle switches to repo cards", () => {
