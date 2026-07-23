@@ -18,9 +18,11 @@ vi.mock("@/hooks/useGitHub", () => ({
       prsOpened: { "2026-07-03": 4 },
       prsMerged: { "2026-07-03": 3 },
       prsReviewed: { "2026-07-03": 2 },
+      commits: { "2026-07-03": 5 },
       monthlyOpened: { "2026-06": 3, "2026-07": 4 },
       monthlyMerged: { "2026-06": 2, "2026-07": 3 },
       monthlyReviewed: { "2026-06": 1, "2026-07": 2 },
+      monthlyCommits: { "2026-06": 4, "2026-07": 5 },
     },
   })),
 }));
@@ -153,9 +155,9 @@ describe("CurrentTab (card grid)", () => {
 
     expect(screen.getByText("Contribution activity")).toBeInTheDocument();
     expect(screen.getByText("Tracked at the time")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Daily PR activity bar chart with day and PR count axes/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Daily contribution activity bar chart with day and activity count axes/ })).toBeInTheDocument();
     expect(screen.getByText("Last 12 months")).toBeInTheDocument();
-    expect(screen.getAllByText("PR count")).toHaveLength(2);
+    expect(screen.getAllByText("Activity count")).toHaveLength(2);
     expect(screen.getByText("Day")).toBeInTheDocument();
     expect(screen.getByText("Month")).toBeInTheDocument();
 
@@ -165,6 +167,11 @@ describe("CurrentTab (card grid)", () => {
     expect(screen.getByText("4 PRs")).toBeInTheDocument();
     fireEvent.mouseLeave(julyOpened);
     expect(screen.queryByText("Jul 3 · Opened")).not.toBeInTheDocument();
+
+    const julyCommits = screen.getByLabelText("Jul 3, authored commits: 5");
+    fireEvent.mouseEnter(julyCommits);
+    expect(screen.getByText("Jul 3 · Commits")).toBeInTheDocument();
+    expect(screen.getByText("5 commits")).toBeInTheDocument();
   });
 
   it("shows GitHub verification and honest historical coverage labels", () => {
@@ -175,6 +182,8 @@ describe("CurrentTab (card grid)", () => {
       data: {
         lifetimePRs: { alice: 9 },
         prsLast4Weeks: { alice: 4 },
+        lifetimeCommits: { alice: 24 },
+        commitsLast4Weeks: { alice: 8 },
         approvalsGiven: { alice: 3 },
         mergesOfOthers: { alice: 2 },
         issuesClosed: { alice: 1 },

@@ -8,6 +8,8 @@
 //   - prsMerged:   authored PRs merged, by their merge day (full history)
 //   - prsReviewed: distinct PRs they reviewed, by day (review events — only
 //                  since the GitHub App was installed; older months read 0)
+//   - commits:      default-branch commits authored by the engineer, by the
+//                   commit author's timestamp
 // `month` defaults to the current month. Monthly totals and `firstMonth` are
 // returned for the trend chart and month selector.
 
@@ -119,10 +121,41 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
          GROUP BY k`,
       )
       .bind(orgId, login),
+    // [4] Authored default-branch commits, by day, within the month.
+    db
+      .prepare(
+        `SELECT strftime('%Y-%m-%d', authored_at) AS k, COUNT(*) AS c
+         FROM github_commits commit_row
+         WHERE commit_row.org_id = ? AND commit_row.author = ?
+           AND strftime('%Y-%m', commit_row.authored_at) = ?
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = commit_row.org_id AND period.repo = commit_row.repo
+               AND commit_row.authored_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR commit_row.authored_at < period.tracked_until)
+           )
+         GROUP BY k`,
+      )
+      .bind(orgId, login, month),
+    // [5] Authored default-branch commits, by month.
+    db
+      .prepare(
+        `SELECT strftime('%Y-%m', authored_at) AS k, COUNT(*) AS c
+         FROM github_commits commit_row
+         WHERE commit_row.org_id = ? AND commit_row.author = ?
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = commit_row.org_id AND period.repo = commit_row.repo
+               AND commit_row.authored_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR commit_row.authored_at < period.tracked_until)
+           )
+         GROUP BY k`,
+      )
+      .bind(orgId, login),
   ];
   if (actorId) {
     statements.push(
-      // [4] PRs reviewed, by day, within the month
+      // [6] PRs reviewed, by day, within the month
       db
         .prepare(
           `SELECT strftime('%Y-%m-%d', COALESCE(json_extract(payload_json, '$.review.submitted_at'), created_at)) AS k,
@@ -139,7 +172,7 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
            GROUP BY k`,
         )
         .bind(orgLogin, actorId, month, orgId),
-      // [5] Distinct PRs reviewed by month. Qualifying with the repo avoids
+      // [7] Distinct PRs reviewed by month. Qualifying with the repo avoids
       // collapsing e.g. api#42 and web#42 into a single review.
       db
         .prepare(
@@ -170,11 +203,14 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   const monthlyOpened = toCountMap(results[1].results);
   const prsMerged = toCountMap(results[2].results);
   const monthlyMerged = toCountMap(results[3].results);
-  const prsReviewed = actorId ? toCountMap(results[4].results) : {};
-  const monthlyReviewed = actorId ? toCountMap(results[5].results) : {};
+  const commits = toCountMap(results[4].results);
+  const monthlyCommits = toCountMap(results[5].results);
+  const prsReviewed = actorId ? toCountMap(results[6].results) : {};
+  const monthlyReviewed = actorId ? toCountMap(results[7].results) : {};
   const firstMonthCandidates = [
     ...Object.keys(monthlyOpened),
     ...Object.keys(monthlyMerged),
+    ...Object.keys(monthlyCommits),
     ...Object.keys(monthlyReviewed),
   ];
   const firstMonth = firstMonthCandidates.sort()[0] ?? null;
@@ -186,9 +222,11 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     prsOpened,
     prsMerged,
     prsReviewed,
+    commits,
     monthlyOpened,
     monthlyMerged,
     monthlyReviewed,
+    monthlyCommits,
   });
 }
 

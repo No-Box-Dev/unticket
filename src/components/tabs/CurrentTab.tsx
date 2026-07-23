@@ -18,6 +18,7 @@ import {
   CircleCheck,
   ExternalLink,
   Folder,
+  GitCommit,
   GitMerge,
   GitPullRequest,
   Users,
@@ -716,6 +717,8 @@ function PersonStats({ login }: { login: string }) {
       icon: <GitPullRequest size={14} className="text-stone-400" />,
     },
     { label: "Opened · last 4 weeks", value: stats?.prsLast4Weeks?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
+    { label: "Authored commits", value: stats?.lifetimeCommits?.[login] ?? 0, icon: <GitCommit size={14} className="text-stone-400" /> },
+    { label: "Commits · last 4 weeks", value: stats?.commitsLast4Weeks?.[login] ?? 0, icon: <GitCommit size={14} className="text-stone-400" /> },
     {
       label: "Approvals captured",
       value: stats?.approvalsGiven?.[login] ?? 0,
@@ -741,7 +744,7 @@ function PersonStats({ login }: { login: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         {cards.map((c) => (
           <div key={c.label} className="bg-white border border-stone-200 rounded-xl p-4">
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-stone-400 uppercase tracking-wider">
@@ -816,9 +819,11 @@ function ActivityDashboard({ login }: { login: string }) {
   const opened = data?.prsOpened ?? {};
   const merged = data?.prsMerged ?? {};
   const reviewed = data?.prsReviewed ?? {};
+  const commits = data?.commits ?? {};
   let openedTotal = 0;
   let mergedTotal = 0;
   let reviewedTotal = 0;
+  let commitTotal = 0;
   let activeDays = 0;
   let peakDay = "";
   let peakCount = 0;
@@ -826,10 +831,12 @@ function ActivityDashboard({ login }: { login: string }) {
     const openedCount = opened[day] ?? 0;
     const mergedCount = merged[day] ?? 0;
     const reviewedCount = reviewed[day] ?? 0;
+    const commitCount = commits[day] ?? 0;
     const total = openedCount + mergedCount + reviewedCount;
     openedTotal += openedCount;
     mergedTotal += mergedCount;
     reviewedTotal += reviewedCount;
+    commitTotal += commitCount;
     if (total > 0) activeDays += 1;
     if (total > peakCount) {
       peakCount = total;
@@ -845,7 +852,7 @@ function ActivityDashboard({ login }: { login: string }) {
             <h3 id="activity-heading" className="text-sm font-semibold text-stone-800">Contribution activity</h3>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Tracked at the time</span>
           </div>
-          <p className="text-xs text-stone-400 mt-0.5">Authored PRs by open/merge date, plus distinct PRs reviewed</p>
+          <p className="text-xs text-stone-400 mt-0.5">Authored commits, PRs by open/merge date, and distinct PRs reviewed</p>
         </div>
         <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
           <CalendarDays size={14} />
@@ -865,10 +872,11 @@ function ActivityDashboard({ login }: { login: string }) {
         <div className="flex justify-center py-16"><Spinner className="w-5 h-5 text-accent" /></div>
       ) : (
         <div className="space-y-5 p-4">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
             <ActivitySummary label="Authored · opened" value={openedTotal} color="bg-teal-600" />
             <ActivitySummary label="Authored · merged" value={mergedTotal} color="bg-amber-500" />
             <ActivitySummary label="PRs reviewed" value={reviewedTotal} color="bg-violet-500" />
+            <ActivitySummary label="Authored commits" value={commitTotal} color="bg-blue-600" />
             <ActivitySummary label="Active days" value={activeDays} detail={`of ${days.length}`} />
             <ActivitySummary
               label="Peak day"
@@ -879,7 +887,7 @@ function ActivityDashboard({ login }: { login: string }) {
 
           <div>
             <ChartHeading title={`Daily activity · ${formatMonth(shownMonth, true)}`} />
-            <DailyActivityChart days={days} opened={opened} merged={merged} reviewed={reviewed} />
+            <DailyActivityChart days={days} opened={opened} merged={merged} reviewed={reviewed} commits={commits} />
           </div>
 
           <div>
@@ -889,11 +897,12 @@ function ActivityDashboard({ login }: { login: string }) {
               opened={data?.monthlyOpened ?? {}}
               merged={data?.monthlyMerged ?? {}}
               reviewed={data?.monthlyReviewed ?? {}}
+              commits={data?.monthlyCommits ?? {}}
             />
           </div>
 
           <p className="text-[11px] text-stone-400">
-            Archived, transferred, and deleted repositories retain activity from their tracked periods. Review history starts when the GitHub App began receiving events; repeated reviews of one PR on one day count once.
+            Commits are authored commits reachable from each tracked repository&apos;s default branch, dated by their Git author timestamp. Archived and transferred repositories retain activity from their tracked periods. Review history starts when the GitHub App began receiving events; repeated reviews of one PR on one day count once.
           </p>
         </div>
       )}
@@ -924,6 +933,7 @@ function ChartHeading({ title }: { title: string }) {
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-teal-600" />Opened</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-500" />Merged</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-violet-500" />Reviewed</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-blue-600" />Commits</span>
       </div>
     </div>
   );
@@ -955,6 +965,7 @@ interface ChartHover {
   label: string;
   value: number;
   color: string;
+  unit?: "PRs" | "commits";
 }
 
 function ChartTooltip({ hover, left, right }: { hover: ChartHover; left: number; right: number }) {
@@ -965,19 +976,27 @@ function ChartTooltip({ hover, left, right }: { hover: ChartHover; left: number;
       <rect width={tooltipWidth} height="28" rx="5" fill="#292524" opacity="0.96" />
       <circle cx="9" cy="9" r="3" fill={hover.color} />
       <text x="16" y="12" fontSize="8" fill="#fafaf9">{hover.label}</text>
-      <text x="9" y="23" fontSize="9" fontWeight="600" fill="#ffffff">{`${hover.value} PR${hover.value === 1 ? "" : "s"}`}</text>
+      <text x="9" y="23" fontSize="9" fontWeight="600" fill="#ffffff">
+        {hover.unit === "commits"
+          ? `${hover.value} commit${hover.value === 1 ? "" : "s"}`
+          : `${hover.value} PR${hover.value === 1 ? "" : "s"}`}
+      </text>
     </g>
   );
 }
 
-function DailyActivityChart({ days, opened, merged, reviewed }: {
+function DailyActivityChart({ days, opened, merged, reviewed, commits }: {
   days: string[];
   opened: Record<string, number>;
   merged: Record<string, number>;
   reviewed: Record<string, number>;
+  commits: Record<string, number>;
 }) {
   const [hover, setHover] = useState<ChartHover | null>(null);
-  const maximum = Math.max(1, ...days.flatMap((day) => [opened[day] ?? 0, merged[day] ?? 0, reviewed[day] ?? 0]));
+  const maximum = Math.max(
+    1,
+    ...days.flatMap((day) => [opened[day] ?? 0, merged[day] ?? 0, reviewed[day] ?? 0, commits[day] ?? 0]),
+  );
   const { top, ticks } = chartScale(maximum);
   const left = 42;
   const right = 12;
@@ -989,11 +1008,11 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
   const width = left + plotWidth + right;
   const height = baseY + bottom;
   const groupWidth = plotWidth / Math.max(days.length, 1);
-  const barWidth = Math.max(3, Math.min(7, groupWidth * 0.23));
+  const barWidth = Math.max(3, Math.min(6, groupWidth * 0.18));
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[760px] w-full" role="img" aria-label="Daily PR activity bar chart with day and PR count axes">
-        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">PR count</text>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[760px] w-full" role="img" aria-label="Daily contribution activity bar chart with day and activity count axes">
+        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">Activity count</text>
         {ticks.map((tick) => {
           const y = baseY - (tick / top) * plotHeight;
           return (
@@ -1007,15 +1026,17 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
           const openedValue = opened[day] ?? 0;
           const mergedValue = merged[day] ?? 0;
           const reviewedValue = reviewed[day] ?? 0;
+          const commitValue = commits[day] ?? 0;
           const x = left + index * groupWidth + groupWidth / 2;
           const openedHeight = (openedValue / top) * plotHeight;
           const mergedHeight = (mergedValue / top) * plotHeight;
           const reviewedHeight = (reviewedValue / top) * plotHeight;
+          const commitHeight = (commitValue / top) * plotHeight;
           return (
-            <g key={day} aria-label={`${formatDayPoint(day)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}>
-              <title>{`${day}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}</title>
+            <g key={day} aria-label={`${formatDayPoint(day)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed, ${commitValue} commits`}>
+              <title>{`${day}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed, ${commitValue} commits`}</title>
               <rect
-                x={x - barWidth * 1.5 - 2}
+                x={x - barWidth * 2 - 3}
                 y={baseY - Math.max(openedHeight, 1)}
                 width={barWidth}
                 height={Math.max(openedHeight, 1)}
@@ -1030,7 +1051,7 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x - barWidth / 2}
+                x={x - barWidth - 1}
                 y={baseY - Math.max(mergedHeight, 1)}
                 width={barWidth}
                 height={Math.max(mergedHeight, 1)}
@@ -1045,7 +1066,7 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x + barWidth / 2 + 2}
+                x={x + 1}
                 y={baseY - Math.max(reviewedHeight, 1)}
                 width={barWidth}
                 height={Math.max(reviewedHeight, 1)}
@@ -1059,9 +1080,25 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
                 onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
                 onBlur={() => setHover(null)}
               />
-              {openedValue > 0 ? <text x={x - barWidth - 2} y={Math.max(chartTop + 7, baseY - openedHeight - 3)} textAnchor="middle" fontSize="7" fill="#0f766e">{openedValue}</text> : null}
-              {mergedValue > 0 ? <text x={x} y={Math.max(chartTop + 7, baseY - mergedHeight - 3)} textAnchor="middle" fontSize="7" fill="#b45309">{mergedValue}</text> : null}
-              {reviewedValue > 0 ? <text x={x + barWidth + 2} y={Math.max(chartTop + 7, baseY - reviewedHeight - 3)} textAnchor="middle" fontSize="7" fill="#7c3aed">{reviewedValue}</text> : null}
+              <rect
+                x={x + barWidth + 3}
+                y={baseY - Math.max(commitHeight, 1)}
+                width={barWidth}
+                height={Math.max(commitHeight, 1)}
+                rx="1.5"
+                fill="#2563eb"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatDayPoint(day)}, authored commits: ${commitValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatDayPoint(day)} · Commits`, value: commitValue, color: "#2563eb", unit: "commits" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Commits`, value: commitValue, color: "#2563eb", unit: "commits" })}
+                onBlur={() => setHover(null)}
+              />
+              {openedValue > 0 ? <text x={x - barWidth * 1.5 - 3} y={Math.max(chartTop + 7, baseY - openedHeight - 3)} textAnchor="middle" fontSize="7" fill="#0f766e">{openedValue}</text> : null}
+              {mergedValue > 0 ? <text x={x - barWidth / 2 - 1} y={Math.max(chartTop + 7, baseY - mergedHeight - 3)} textAnchor="middle" fontSize="7" fill="#b45309">{mergedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 1} y={Math.max(chartTop + 7, baseY - reviewedHeight - 3)} textAnchor="middle" fontSize="7" fill="#7c3aed">{reviewedValue}</text> : null}
+              {commitValue > 0 ? <text x={x + barWidth * 1.5 + 3} y={Math.max(chartTop + 7, baseY - commitHeight - 3)} textAnchor="middle" fontSize="7" fill="#1d4ed8">{commitValue}</text> : null}
               <text x={x} y={baseY + 14} textAnchor="middle" fontSize="7.5" fill="#78716c">{formatDayPoint(day)}</text>
             </g>
           );
@@ -1073,14 +1110,18 @@ function DailyActivityChart({ days, opened, merged, reviewed }: {
   );
 }
 
-function MonthlyActivityChart({ months, opened, merged, reviewed }: {
+function MonthlyActivityChart({ months, opened, merged, reviewed, commits }: {
   months: string[];
   opened: Record<string, number>;
   merged: Record<string, number>;
   reviewed: Record<string, number>;
+  commits: Record<string, number>;
 }) {
   const [hover, setHover] = useState<ChartHover | null>(null);
-  const maximum = Math.max(1, ...months.flatMap((month) => [opened[month] ?? 0, merged[month] ?? 0, reviewed[month] ?? 0]));
+  const maximum = Math.max(
+    1,
+    ...months.flatMap((month) => [opened[month] ?? 0, merged[month] ?? 0, reviewed[month] ?? 0, commits[month] ?? 0]),
+  );
   const { top, ticks } = chartScale(maximum);
   const left = 42;
   const right = 12;
@@ -1092,11 +1133,11 @@ function MonthlyActivityChart({ months, opened, merged, reviewed }: {
   const width = left + plotWidth + right;
   const height = baseY + bottom;
   const groupWidth = plotWidth / Math.max(months.length, 1);
-  const barWidth = Math.min(14, groupWidth * 0.2);
+  const barWidth = Math.min(12, groupWidth * 0.16);
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[620px] w-full" role="img" aria-label="Monthly PR activity bar chart with month and PR count axes">
-        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">PR count</text>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[620px] w-full" role="img" aria-label="Monthly contribution activity bar chart with month and activity count axes">
+        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">Activity count</text>
         {ticks.map((tick) => {
           const y = baseY - (tick / top) * plotHeight;
           return (
@@ -1110,15 +1151,17 @@ function MonthlyActivityChart({ months, opened, merged, reviewed }: {
           const openedValue = opened[month] ?? 0;
           const mergedValue = merged[month] ?? 0;
           const reviewedValue = reviewed[month] ?? 0;
+          const commitValue = commits[month] ?? 0;
           const x = left + index * groupWidth + groupWidth / 2;
           const openedHeight = (openedValue / top) * plotHeight;
           const mergedHeight = (mergedValue / top) * plotHeight;
           const reviewedHeight = (reviewedValue / top) * plotHeight;
+          const commitHeight = (commitValue / top) * plotHeight;
           return (
-            <g key={month} aria-label={`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}>
-              <title>{`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}</title>
+            <g key={month} aria-label={`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed, ${commitValue} commits`}>
+              <title>{`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed, ${commitValue} commits`}</title>
               <rect
-                x={x - barWidth * 1.5 - 3}
+                x={x - barWidth * 2 - 4}
                 y={baseY - Math.max(openedHeight, 1)}
                 width={barWidth}
                 height={Math.max(openedHeight, 1)}
@@ -1133,7 +1176,7 @@ function MonthlyActivityChart({ months, opened, merged, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x - barWidth / 2}
+                x={x - barWidth - 1}
                 y={baseY - Math.max(mergedHeight, 1)}
                 width={barWidth}
                 height={Math.max(mergedHeight, 1)}
@@ -1148,7 +1191,7 @@ function MonthlyActivityChart({ months, opened, merged, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x + barWidth / 2 + 3}
+                x={x + 1}
                 y={baseY - Math.max(reviewedHeight, 1)}
                 width={barWidth}
                 height={Math.max(reviewedHeight, 1)}
@@ -1162,9 +1205,25 @@ function MonthlyActivityChart({ months, opened, merged, reviewed }: {
                 onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
                 onBlur={() => setHover(null)}
               />
-              {openedValue > 0 ? <text x={x - barWidth - 3} y={Math.max(chartTop + 7, baseY - openedHeight - 4)} textAnchor="middle" fontSize="8" fill="#0f766e">{openedValue}</text> : null}
-              {mergedValue > 0 ? <text x={x} y={Math.max(chartTop + 7, baseY - mergedHeight - 4)} textAnchor="middle" fontSize="8" fill="#b45309">{mergedValue}</text> : null}
-              {reviewedValue > 0 ? <text x={x + barWidth + 3} y={Math.max(chartTop + 7, baseY - reviewedHeight - 4)} textAnchor="middle" fontSize="8" fill="#7c3aed">{reviewedValue}</text> : null}
+              <rect
+                x={x + barWidth + 4}
+                y={baseY - Math.max(commitHeight, 1)}
+                width={barWidth}
+                height={Math.max(commitHeight, 1)}
+                rx="2"
+                fill="#2563eb"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatMonth(month, true)}, authored commits: ${commitValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatMonth(month, true)} · Commits`, value: commitValue, color: "#2563eb", unit: "commits" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Commits`, value: commitValue, color: "#2563eb", unit: "commits" })}
+                onBlur={() => setHover(null)}
+              />
+              {openedValue > 0 ? <text x={x - barWidth * 1.5 - 4} y={Math.max(chartTop + 7, baseY - openedHeight - 4)} textAnchor="middle" fontSize="8" fill="#0f766e">{openedValue}</text> : null}
+              {mergedValue > 0 ? <text x={x - barWidth / 2 - 1} y={Math.max(chartTop + 7, baseY - mergedHeight - 4)} textAnchor="middle" fontSize="8" fill="#b45309">{mergedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 1} y={Math.max(chartTop + 7, baseY - reviewedHeight - 4)} textAnchor="middle" fontSize="8" fill="#7c3aed">{reviewedValue}</text> : null}
+              {commitValue > 0 ? <text x={x + barWidth * 1.5 + 4} y={Math.max(chartTop + 7, baseY - commitHeight - 4)} textAnchor="middle" fontSize="8" fill="#1d4ed8">{commitValue}</text> : null}
               <text x={x} y={baseY + 15} textAnchor="middle" fontSize="8.5" fill="#78716c">{formatMonth(month)}</text>
             </g>
           );

@@ -29,9 +29,18 @@ function makeDb({ insertRowId = 100 } = {}) {
         }
         return { meta: { changes: 1 } };
       },
+      async first() {
+        return sql.includes("SELECT id FROM orgs") ? { id: 1 } : null;
+      },
     };
   }
-  return { prepare, _calls: calls };
+  return {
+    prepare,
+    async batch(statements) {
+      return Promise.all(statements.map((statement) => statement.run()));
+    },
+    _calls: calls,
+  };
 }
 
 beforeEach(() => {
@@ -167,6 +176,7 @@ describe("storeEvent", () => {
     }, "owner-1");
     const eventInsert = db._calls.runs.find((r) => r.sql.includes("INSERT INTO events"));
     expect(eventInsert.binds[7]).toBe("Push to main (1 commit)");
+    expect(db._calls.runs.some((r) => r.sql.includes("INSERT INTO github_commits"))).toBe(true);
   });
 
   it("plural commits when count != 1", async () => {
