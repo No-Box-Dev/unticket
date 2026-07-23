@@ -108,5 +108,10 @@ describe("POST /api/recover-repo-history", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(calls.some(({ sql, binds }) =>
+      sql.includes("INSERT INTO projects")
+      && sql.includes("archived = 1")
+      && binds.includes("n1.care_v2"),
+    )).toBe(true);
   });
 });

@@ -24,10 +24,18 @@ async function setArchived(context, value) {
 
   const archivedAt = value === 1 ? new Date().toISOString() : null;
   const project = await context.env.DB
-    .prepare("SELECT repo, archived FROM projects WHERE id = ? AND owner_id = ?")
-    .bind(id, orgLogin)
+    .prepare(
+      `SELECT project.repo, project.archived, repo.archived_at, repo.retired_at
+       FROM projects project
+       LEFT JOIN repos repo ON repo.org_id = ? AND repo.name = project.repo
+       WHERE project.id = ? AND project.owner_id = ?`,
+    )
+    .bind(orgId, id, orgLogin)
     .first();
   if (!project) return errorResponse(`Unknown project ${id}`, 404);
+  if (value === 0 && (project.archived_at || project.retired_at)) {
+    return errorResponse("Cannot restore a repository that is archived or retired on GitHub", 409);
+  }
 
   const result = await context.env.DB.prepare(
     `UPDATE projects

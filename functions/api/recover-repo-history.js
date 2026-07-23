@@ -178,6 +178,26 @@ export async function onRequestPost(context) {
     )
     .run();
 
+  // Historical-source and transferred repositories must never become active
+  // projects. The repo row is the durable lifecycle source of truth, while
+  // projects.archived drives the Repos tab. Keep both sides aligned so a
+  // previously visible project cannot resurface after history recovery.
+  if (transferred) {
+    const projectId = `proj_${orgLogin}_${cursor}`.toLowerCase();
+    await context.env.DB
+      .prepare(
+        `INSERT INTO projects
+           (id, name, org, repo, owner_id, archived, archived_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           archived = 1,
+           archived_at = COALESCE(projects.archived_at, excluded.archived_at),
+           updated_at = excluded.updated_at`,
+      )
+      .bind(projectId, cursor, orgLogin, cursor, orgLogin, stamp, stamp)
+      .run();
+  }
+
   // GitHub follows old-repository redirects, so the original org/name path
   // can still recover a transferred repository while preserving its historic
   // identity in Unticket.

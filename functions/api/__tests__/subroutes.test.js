@@ -19,7 +19,7 @@ function makeDb({ firstResult = null, projectResult = { repo: "api", archived: 0
         bind(...binds) { this._binds = binds; return this; },
         async first() {
           calls.first.push({ sql, binds: this._binds });
-          return sql.includes("SELECT repo, archived FROM projects") ? projectResult : firstResult;
+          return sql.includes("FROM projects project") ? projectResult : firstResult;
         },
         async run() { calls.run.push({ sql, binds: this._binds }); return runResult; },
       };
@@ -143,5 +143,19 @@ describe("POST/DELETE /api/projects/:id/archive", () => {
     const { binds } = db._calls.run[0];
     expect(binds[0]).toBe(0);
     expect(binds[1]).toBe(null);
+  });
+
+  it("DELETE refuses to restore a GitHub-retired repository", async () => {
+    const db = makeDb({
+      projectResult: {
+        repo: "old-api",
+        archived: 1,
+        archived_at: null,
+        retired_at: "2026-07-23T07:00:00Z",
+      },
+    });
+    const res = await archiveDelete(makeCtx({ db, params: { id: "p1" }, method: "DELETE" }));
+    expect(res.status).toBe(409);
+    expect(db._calls.run).toHaveLength(0);
   });
 });

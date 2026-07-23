@@ -2,9 +2,6 @@ import { getCtx, jsonResponse, errorResponse } from "../lib/db";
 import { getInstallationToken, signAppJwt } from "../lib/github-app";
 import { setInstallationRepos, upsertInstallation } from "../lib/gh-mirror";
 
-const SELECT_COLS =
-  "id, name, slug, org, repo, description, narrator_enabled, archived, archived_at, updated_at";
-
 // GET /api/projects — list projects (narrator scope) for this org.
 //
 // Source of truth is installations.repos_json, maintained by GitHub App
@@ -25,8 +22,21 @@ export async function onRequestGet(context) {
   await syncProjectsFromInstallations(db, orgLogin);
 
   const rows = await db.prepare(
-    `SELECT ${SELECT_COLS} FROM projects WHERE owner_id = ? ORDER BY archived, COALESCE(org, ''), name`
-  ).bind(orgLogin).all();
+    `SELECT project.id, project.name, project.slug, project.org, project.repo,
+            project.description, project.narrator_enabled,
+            CASE
+              WHEN project.archived = 1
+                OR repo.archived_at IS NOT NULL
+                OR repo.retired_at IS NOT NULL
+              THEN 1 ELSE 0
+            END AS archived,
+            COALESCE(project.archived_at, repo.archived_at, repo.retired_at) AS archived_at,
+            project.updated_at
+     FROM projects project
+     LEFT JOIN repos repo ON repo.org_id = ? AND repo.name = project.repo
+     WHERE project.owner_id = ?
+     ORDER BY archived, COALESCE(project.org, ''), project.name`
+  ).bind(orgId, orgLogin).all();
 
   return jsonResponse({ projects: rows.results ?? [] });
 }
