@@ -9,7 +9,7 @@ import { onRequestGet as getPR } from "../prs/[repo]/[number].js";
 import { onRequestPost as archivePost, onRequestDelete as archiveDelete } from "../projects/[id]/archive.js";
 import { getActiveRepoNames } from "../../lib/inactive-repos.js";
 
-function makeDb({ firstResult = null, runResult = { meta: { changes: 1 } } } = {}) {
+function makeDb({ firstResult = null, projectResult = { repo: "api", archived: 0 }, runResult = { meta: { changes: 1 } } } = {}) {
   const calls = { first: [], run: [] };
   return {
     prepare(sql) {
@@ -17,7 +17,10 @@ function makeDb({ firstResult = null, runResult = { meta: { changes: 1 } } } = {
         _sql: sql,
         _binds: [],
         bind(...binds) { this._binds = binds; return this; },
-        async first() { calls.first.push({ sql, binds: this._binds }); return firstResult; },
+        async first() {
+          calls.first.push({ sql, binds: this._binds });
+          return sql.includes("SELECT repo, archived FROM projects") ? projectResult : firstResult;
+        },
         async run() { calls.run.push({ sql, binds: this._binds }); return runResult; },
       };
     },
@@ -115,7 +118,7 @@ describe("POST/DELETE /api/projects/:id/archive", () => {
   });
 
   it("404s when no row was updated (unknown project)", async () => {
-    const db = makeDb({ runResult: { meta: { changes: 0 } } });
+    const db = makeDb({ projectResult: null, runResult: { meta: { changes: 0 } } });
     const res = await archivePost(makeCtx({ db, params: { id: "ghost" }, method: "POST" }));
     expect(res.status).toBe(404);
   });

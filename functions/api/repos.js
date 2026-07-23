@@ -15,7 +15,11 @@ export async function onRequestGet(context) {
 
   const [rowsResult, inactive] = await Promise.all([
     context.env.DB
-      .prepare("SELECT name, language, pushed_at, discovered_at, acknowledged_at FROM repos WHERE org_id = ? ORDER BY pushed_at DESC")
+      .prepare(
+        `SELECT name, language, pushed_at, discovered_at, acknowledged_at,
+                retired_at, retirement_reason, transferred_to
+         FROM repos WHERE org_id = ? ORDER BY pushed_at DESC`,
+      )
       .bind(orgId)
       .all(),
     getInactiveRepoSet(context.env.DB, orgId, orgLogin),
@@ -27,6 +31,9 @@ export async function onRequestGet(context) {
     pushed_at: r.pushed_at,
     discoveredAt: r.discovered_at,
     acknowledgedAt: r.acknowledged_at,
+    retiredAt: r.retired_at,
+    retirementReason: r.retirement_reason,
+    transferredTo: r.transferred_to,
   }));
   if (includeAll) {
     return jsonResponse(rows.map((r) => ({ ...r, inactive: inactive.has(r.name) })));

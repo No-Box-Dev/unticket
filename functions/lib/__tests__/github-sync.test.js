@@ -336,14 +336,14 @@ describe("repo lifecycle helpers", () => {
     expect(db._calls.runs[0].sql).toContain("UPDATE repos SET archived_at");
   });
 
-  it("removeRepo batches 3 DELETE statements", async () => {
+  it("removeRepo retires the repo and preserves dependent history", async () => {
     const db = makeDb();
-    await removeRepo(db, "org", "api");
-    expect(db._calls.batches).toHaveLength(1);
-    const sqls = db._calls.batches[0].map((s) => s.sql).join(" || ");
-    expect(sqls).toContain("DELETE FROM issues");
-    expect(sqls).toContain("DELETE FROM pull_requests");
-    expect(sqls).toContain("DELETE FROM repos");
+    await removeRepo(db, "org", "api", "transferred", "new-owner");
+    const sqls = db._calls.runs.map((s) => s.sql).join(" || ");
+    expect(sqls).toContain("UPDATE repos");
+    expect(sqls).toContain("retirement_reason");
+    expect(sqls).toContain("UPDATE repo_tracking_periods");
+    expect(sqls).not.toContain("DELETE");
   });
 
   it("renameRepo no-ops when names missing or identical", async () => {
@@ -354,11 +354,11 @@ describe("repo lifecycle helpers", () => {
     expect(db._calls.batches).toHaveLength(0);
   });
 
-  it("renameRepo updates 3 tables in a single batch", async () => {
+  it("renameRepo updates cached rows and tracking history in a single batch", async () => {
     const db = makeDb();
     await renameRepo(db, "org", "old", "new");
     expect(db._calls.batches).toHaveLength(1);
-    expect(db._calls.batches[0]).toHaveLength(3);
+    expect(db._calls.batches[0]).toHaveLength(5);
   });
 
   it("touchRepoPushed updates pushed_at", async () => {
@@ -495,18 +495,11 @@ describe("upsertDiscoveredRepo", () => {
     const wasNew = await upsertDiscoveredRepo(db, "org-1", "new-repo");
     expect(wasNew).toBe(true);
     expect(db._calls.runs[0].sql).toContain("INSERT INTO repos");
-    expect(db._calls.runs[0].sql).toContain("ON CONFLICT(org_id, name) DO NOTHING");
+    expect(db._calls.runs[0].sql).toContain("ON CONFLICT(org_id, name) DO UPDATE");
   });
 
   it("returns false when row already exists (changes=0)", async () => {
-    // Override makeDb's default run() that returns changes=1.
-    const db = makeDb();
-    const orig = db.prepare;
-    db.prepare = (sql) => {
-      const stmt = orig(sql);
-      stmt.run = async () => ({ meta: { changes: 0 } });
-      return stmt;
-    };
+    const db = makeDb({ "SELECT 1 AS present": { present: 1 } });
     const wasNew = await upsertDiscoveredRepo(db, "org-1", "existing-repo");
     expect(wasNew).toBe(false);
   });

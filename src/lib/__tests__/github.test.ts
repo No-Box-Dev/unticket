@@ -105,6 +105,9 @@ describe("fetchRepos", () => {
         inactive: false,
         discoveredAt: null,
         acknowledgedAt: null,
+        retiredAt: null,
+        retirementReason: null,
+        transferredTo: null,
       },
     ]);
   });

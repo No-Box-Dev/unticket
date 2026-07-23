@@ -8,6 +8,10 @@ vi.mock("../stats-audit.js", () => ({
   runNextStatsAudit: vi.fn(() => Promise.resolve(null)),
 }));
 
+vi.mock("../database-recovery.js", () => ({
+  runDatabaseRecoveryStep: vi.fn(() => Promise.resolve({ done: true, idle: true })),
+}));
+
 import worker from "../index.js";
 import { reconcileOrg } from "../reconcile.js";
 

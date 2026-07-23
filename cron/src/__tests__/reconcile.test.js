@@ -130,7 +130,7 @@ describe("reconcileOrg", () => {
     // Stale members + repos removed; live ones never touched.
     expect(removeMember).toHaveBeenCalledWith(db, 42, "ghost");
     expect(removeMember).toHaveBeenCalledTimes(1);
-    expect(removeRepo).toHaveBeenCalledWith(db, 42, "old-repo");
+    expect(removeRepo).toHaveBeenCalledWith(db, 42, "old-repo", "missing_from_github");
     expect(removeRepo).toHaveBeenCalledTimes(1);
   });
 

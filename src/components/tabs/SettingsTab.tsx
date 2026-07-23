@@ -13,6 +13,7 @@ import { SyncFromGithubModal } from "@/components/SyncFromGithub";
 import {
   triggerSyncWithProgress,
   triggerEventsBackfillWithProgress,
+  recoverRepoHistoryWithProgress,
   type SyncProgress,
 } from "@/lib/github";
 import { Activity, AlertTriangle, Check, Cpu, Loader2, MessageSquare, RefreshCw, Sparkles, Trash2 } from "lucide-react";
@@ -122,11 +123,57 @@ export function SettingsTab() {
           <TrackedReposSection />
           <ManualSyncSection />
           <FullResyncSection />
+          <RepoHistoryRecoverySection />
           <ActivityEventsBackfillSection />
           <PostsBackfillSection />
           <RecentFailuresSection />
         </section>
       )}
+    </div>
+  );
+}
+
+function RepoHistoryRecoverySection() {
+  const qc = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  async function handleRecovery() {
+    setSyncing(true);
+    setProgress(null);
+    await recoverRepoHistoryWithProgress(setProgress);
+    setSyncing(false);
+    qc.invalidateQueries({ queryKey: ["engineerStats"] });
+    qc.invalidateQueries({ queryKey: ["engineerActivity"] });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-3">
+      <h2 className="text-sm font-semibold text-stone-900">Recover repository history</h2>
+      <p className="text-xs text-stone-400">
+        Restore PR and issue history from archived, transferred, or GitHub-App-removed repositories using your GitHub access. Deleted repositories that GitHub no longer serves cannot be recovered.
+      </p>
+      <button
+        onClick={handleRecovery}
+        disabled={syncing}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+      >
+        {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+        {syncing
+          ? progress?.phase === "syncing"
+            ? `Checking ${progress.repo} (${progress.synced}/${progress.total})`
+            : "Preparing recovery…"
+          : "Recover historical repositories"}
+      </button>
+      {progress?.phase === "done" && !syncing ? (
+        <p className="text-xs text-green-600">
+          Recovered {progress.synced} of {progress.total} candidates.
+          {progress.failed?.length ? ` ${progress.failed.length} are no longer accessible.` : ""}
+        </p>
+      ) : null}
+      {progress?.phase === "error" && !syncing ? (
+        <p className="text-xs text-red-500">{progress.error}</p>
+      ) : null}
     </div>
   );
 }

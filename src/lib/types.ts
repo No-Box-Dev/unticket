@@ -20,6 +20,9 @@ export interface RepoInfo {
   // NULL means the repo is "new" and should appear in the NewRepoBanner
   // + Settings → Newly detected section.
   acknowledgedAt?: string | null;
+  retiredAt?: string | null;
+  retirementReason?: string | null;
+  transferredTo?: string | null;
   // True for drafts (platform-archived), GH-archived, or the unticket repo.
   // Only present when the endpoint is called with `?include=all`.
   inactive?: boolean;

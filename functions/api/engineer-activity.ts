@@ -1,9 +1,11 @@
 // GET /api/engineer-activity?login=X&month=YYYY-MM — daily contribution counts
 // for one engineer for a single month, for the People-tab activity table.
-// All metrics are restricted to the same tracked/active repository set used by
-// engineer-stats, so the daily chart and headline cards always reconcile.
+// Historical metrics use durable repository tracking periods: activity counts
+// while a repo was tracked remains visible after archive/transfer/deletion,
+// while activity before opt-in or after removal is excluded.
 // Two metrics, both from D1:
 //   - prsOpened:   PRs authored, by day (pull_requests — full history)
+//   - prsMerged:   authored PRs merged, by their merge day (full history)
 //   - prsReviewed: distinct PRs they reviewed, by day (review events — only
 //                  since the GitHub App was installed; older months read 0)
 // `month` defaults to the current month. Monthly totals and `firstMonth` are
@@ -11,7 +13,6 @@
 
 import { z } from "zod";
 import { getCtx, jsonResponse } from "../lib/db";
-import { getActiveRepoNames } from "../lib/inactive-repos";
 import { validate } from "../lib/validate";
 
 interface Env {
@@ -47,20 +48,6 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   const month = parsed.data.month ?? currentMonth;
 
   const db = context.env.DB;
-  const activeRepos = await getActiveRepoNames(db, orgId, orgLogin);
-  if (activeRepos.length === 0) {
-    return jsonResponse({
-      login,
-      month,
-      firstMonth: null,
-      prsOpened: {},
-      prsReviewed: {},
-      monthlyOpened: {},
-      monthlyReviewed: {},
-    });
-  }
-  const repoIn = `repo IN (${activeRepos.map(() => "?").join(",")})`;
-
   // Reviews are attributed via the actor row (actors.name = GitHub login).
   const actor = await db
     .prepare("SELECT id FROM actors WHERE name = ? AND owner_id = ?")
@@ -73,37 +60,86 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     db
       .prepare(
         `SELECT strftime('%Y-%m-%d', created_at) AS k, COUNT(*) AS c
-         FROM pull_requests
-         WHERE org_id = ? AND author = ? AND strftime('%Y-%m', created_at) = ?
-           AND ${repoIn}
+         FROM pull_requests p
+         WHERE p.org_id = ? AND p.author = ? AND strftime('%Y-%m', p.created_at) = ?
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = p.org_id AND period.repo = p.repo
+               AND p.created_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR p.created_at < period.tracked_until)
+           )
          GROUP BY k`,
       )
-      .bind(orgId, login, month, ...activeRepos),
+      .bind(orgId, login, month),
     // [1] PRs opened by month — powers the longer-range trend chart.
     db
       .prepare(
         `SELECT strftime('%Y-%m', created_at) AS k, COUNT(*) AS c
-         FROM pull_requests
-         WHERE org_id = ? AND author = ? AND ${repoIn}
+         FROM pull_requests p
+         WHERE p.org_id = ? AND p.author = ?
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = p.org_id AND period.repo = p.repo
+               AND p.created_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR p.created_at < period.tracked_until)
+           )
          GROUP BY k`,
       )
-      .bind(orgId, login, ...activeRepos),
+      .bind(orgId, login),
+    // [2] Authored PRs merged, by merge day, within the month. This is
+    // intentionally keyed by merged_at rather than created_at so the UI does
+    // not imply that "opened" and "completed" are the same activity.
+    db
+      .prepare(
+        `SELECT strftime('%Y-%m-%d', merged_at) AS k, COUNT(*) AS c
+         FROM pull_requests p
+         WHERE p.org_id = ? AND p.author = ? AND p.merged_at IS NOT NULL
+           AND strftime('%Y-%m', p.merged_at) = ?
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = p.org_id AND period.repo = p.repo
+               AND p.merged_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR p.merged_at < period.tracked_until)
+           )
+         GROUP BY k`,
+      )
+      .bind(orgId, login, month),
+    // [3] Authored PRs merged by month.
+    db
+      .prepare(
+        `SELECT strftime('%Y-%m', merged_at) AS k, COUNT(*) AS c
+         FROM pull_requests p
+         WHERE p.org_id = ? AND p.author = ? AND p.merged_at IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = p.org_id AND period.repo = p.repo
+               AND p.merged_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR p.merged_at < period.tracked_until)
+           )
+         GROUP BY k`,
+      )
+      .bind(orgId, login),
   ];
   if (actorId) {
     statements.push(
-      // [2] PRs reviewed, by day, within the month
+      // [4] PRs reviewed, by day, within the month
       db
         .prepare(
           `SELECT strftime('%Y-%m-%d', COALESCE(json_extract(payload_json, '$.review.submitted_at'), created_at)) AS k,
                   COUNT(DISTINCT repo || '#' || CAST(json_extract(payload_json, '$.pr.number') AS TEXT)) AS c
-           FROM events
-           WHERE org = ? AND actor_id = ? AND type LIKE 'github:pr:review:%'
+           FROM events e
+           WHERE e.org = ? AND e.actor_id = ? AND e.type LIKE 'github:pr:review:%'
              AND strftime('%Y-%m', COALESCE(json_extract(payload_json, '$.review.submitted_at'), created_at)) = ?
-             AND ${repoIn}
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = ? AND period.repo = e.repo
+                 AND COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) < period.tracked_until)
+             )
            GROUP BY k`,
         )
-        .bind(orgLogin, actorId, month, ...activeRepos),
-      // [3] Distinct PRs reviewed by month. Qualifying with the repo avoids
+        .bind(orgLogin, actorId, month, orgId),
+      // [5] Distinct PRs reviewed by month. Qualifying with the repo avoids
       // collapsing e.g. api#42 and web#42 into a single review.
       db
         .prepare(
@@ -112,25 +148,33 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
                strftime('%Y-%m', COALESCE(json_extract(payload_json, '$.review.submitted_at'), created_at)) AS k,
                repo,
                json_extract(payload_json, '$.pr.number') AS pr_number
-             FROM events
-             WHERE org = ? AND actor_id = ? AND type LIKE 'github:pr:review:%'
-               AND ${repoIn}
+             FROM events e
+             WHERE e.org = ? AND e.actor_id = ? AND e.type LIKE 'github:pr:review:%'
+               AND EXISTS (
+                 SELECT 1 FROM repo_tracking_periods period
+                 WHERE period.org_id = ? AND period.repo = e.repo
+                   AND COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) >= period.tracked_from
+                   AND (period.tracked_until IS NULL OR COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) < period.tracked_until)
+               )
                AND json_extract(payload_json, '$.pr.number') IS NOT NULL
              GROUP BY k, repo, pr_number
            )
            GROUP BY k`,
         )
-        .bind(orgLogin, actorId, ...activeRepos),
+        .bind(orgLogin, actorId, orgId),
     );
   }
 
   const results = await db.batch(statements);
   const prsOpened = toCountMap(results[0].results);
-  const prsReviewed = actorId ? toCountMap(results[2].results) : {};
   const monthlyOpened = toCountMap(results[1].results);
-  const monthlyReviewed = actorId ? toCountMap(results[3].results) : {};
+  const prsMerged = toCountMap(results[2].results);
+  const monthlyMerged = toCountMap(results[3].results);
+  const prsReviewed = actorId ? toCountMap(results[4].results) : {};
+  const monthlyReviewed = actorId ? toCountMap(results[5].results) : {};
   const firstMonthCandidates = [
     ...Object.keys(monthlyOpened),
+    ...Object.keys(monthlyMerged),
     ...Object.keys(monthlyReviewed),
   ];
   const firstMonth = firstMonthCandidates.sort()[0] ?? null;
@@ -140,8 +184,10 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     month,
     firstMonth,
     prsOpened,
+    prsMerged,
     prsReviewed,
     monthlyOpened,
+    monthlyMerged,
     monthlyReviewed,
   });
 }

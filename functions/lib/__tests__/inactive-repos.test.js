@@ -36,7 +36,7 @@ function makeDb({
         if (sql.includes("FROM projects")) {
           return { results: archivedProjects.map((repo) => ({ repo })) };
         }
-        if (sql.includes("FROM repos WHERE org_id = ? AND archived_at IS NOT NULL")) {
+        if (sql.includes("FROM repos WHERE org_id = ? AND (archived_at IS NOT NULL OR retired_at IS NOT NULL)")) {
           return { results: ghArchivedRepos.map((name) => ({ name })) };
         }
         if (sql.includes("FROM repos WHERE org_id = ?")) {

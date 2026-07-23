@@ -33,35 +33,17 @@ interface Ctx {
 
 type CountRow = { login: string | null; c: number };
 
-const EMPTY = {
-  openPRs: {},
-  reviewing: {},
-  approvalsGiven: {},
-  mergesOfOthers: {},
-  assignedIssues: {},
-  lifetimePRs: {},
-  prsLast4Weeks: {},
-  issuesClosed: {},
-  coverage: {
-    approvalsGivenSince: null,
-    mergedByKnown: 0,
-    mergedPRs: 0,
-    issuesClosedByKnown: 0,
-    closedIssues: 0,
-  },
-  prAudits: {},
-};
-
 export async function onRequestGet(context: Ctx): Promise<Response> {
   // getCtx returns context.data, populated by functions/_middleware.js after it
   // authenticates the request and resolves the org. db.js is untyped JS, hence the cast.
   const { orgId, orgLogin } = getCtx(context) as { orgId: number; orgLogin: string };
 
   const activeRepos: string[] = await getActiveRepoNames(context.env.DB, orgId, orgLogin);
-  if (activeRepos.length === 0) return jsonResponse(EMPTY);
 
   const db = context.env.DB;
-  const repoIn = `repo IN (${activeRepos.map(() => "?").join(",")})`;
+  const repoIn = activeRepos.length > 0
+    ? `repo IN (${activeRepos.map(() => "?").join(",")})`
+    : "0";
   const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
   const [openPRs, reviewing, approvals, merges, assigned, lifetime, recent, closed, coverage, audits] =
@@ -103,9 +85,14 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
                repo AS r,
                COALESCE(CAST(json_extract(payload_json, '$.pr.number') AS INTEGER), id) AS pr_num,
                COALESCE(json_extract(payload_json, '$.review.submitted_at'), id) AS ts
-             FROM events
-             WHERE org = ? AND type = 'github:pr:review:approved'
-               AND ${repoIn}
+             FROM events e
+             WHERE e.org = ? AND e.type = 'github:pr:review:approved'
+               AND EXISTS (
+                 SELECT 1 FROM repo_tracking_periods period
+                 WHERE period.org_id = ? AND period.repo = e.repo
+                   AND COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) >= period.tracked_from
+                   AND (period.tracked_until IS NULL OR COALESCE(json_extract(e.payload_json, '$.review.submitted_at'), e.created_at) < period.tracked_until)
+               )
                AND json_extract(payload_json, '$.review.author') IS NOT NULL
                AND json_extract(payload_json, '$.review.author')
                    != json_extract(payload_json, '$.pr.author')
@@ -113,16 +100,21 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
            )
            GROUP BY login`,
         )
-        .bind(orgLogin, ...activeRepos),
+        .bind(orgLogin, orgId),
       db
         .prepare(
-          `SELECT merged_by AS login, COUNT(*) AS c FROM pull_requests
-           WHERE org_id = ? AND merged_at IS NOT NULL
-             AND merged_by IS NOT NULL AND merged_by != author
-             AND ${repoIn}
+          `SELECT p.merged_by AS login, COUNT(*) AS c FROM pull_requests p
+           WHERE p.org_id = ? AND p.merged_at IS NOT NULL
+             AND p.merged_by IS NOT NULL AND p.merged_by != p.author
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = p.org_id AND period.repo = p.repo
+                 AND p.merged_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR p.merged_at < period.tracked_until)
+             )
            GROUP BY merged_by`,
         )
-        .bind(orgId, ...activeRepos),
+        .bind(orgId),
       db
         .prepare(
           `SELECT json_extract(value, '$.login') AS login, COUNT(*) AS c
@@ -133,25 +125,43 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
         .bind(orgId, ...activeRepos),
       db
         .prepare(
-          `SELECT author AS login, COUNT(*) AS c FROM pull_requests
-           WHERE org_id = ? AND author IS NOT NULL AND ${repoIn}
+          `SELECT p.author AS login, COUNT(*) AS c FROM pull_requests p
+           WHERE p.org_id = ? AND p.author IS NOT NULL
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = p.org_id AND period.repo = p.repo
+                 AND p.created_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR p.created_at < period.tracked_until)
+             )
            GROUP BY author`,
         )
-        .bind(orgId, ...activeRepos),
+        .bind(orgId),
       db
         .prepare(
-          `SELECT author AS login, COUNT(*) AS c FROM pull_requests
-           WHERE org_id = ? AND author IS NOT NULL AND created_at >= ? AND ${repoIn}
+          `SELECT p.author AS login, COUNT(*) AS c FROM pull_requests p
+           WHERE p.org_id = ? AND p.author IS NOT NULL AND p.created_at >= ?
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = p.org_id AND period.repo = p.repo
+                 AND p.created_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR p.created_at < period.tracked_until)
+             )
            GROUP BY author`,
         )
-        .bind(orgId, fourWeeksAgo, ...activeRepos),
+        .bind(orgId, fourWeeksAgo),
       db
         .prepare(
-          `SELECT closed_by AS login, COUNT(*) AS c FROM issues
-           WHERE org_id = ? AND state = 'closed' AND closed_by IS NOT NULL AND ${repoIn}
+          `SELECT i.closed_by AS login, COUNT(*) AS c FROM issues i
+           WHERE i.org_id = ? AND i.state = 'closed' AND i.closed_by IS NOT NULL
+             AND EXISTS (
+               SELECT 1 FROM repo_tracking_periods period
+               WHERE period.org_id = i.org_id AND period.repo = i.repo
+                 AND i.closed_at >= period.tracked_from
+                 AND (period.tracked_until IS NULL OR i.closed_at < period.tracked_until)
+             )
            GROUP BY closed_by`,
         )
-        .bind(orgId, ...activeRepos),
+        .bind(orgId),
       db
         .prepare(
           `WITH active(repo) AS (SELECT value FROM json_each(?))

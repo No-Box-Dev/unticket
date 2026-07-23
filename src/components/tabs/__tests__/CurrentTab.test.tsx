@@ -16,8 +16,10 @@ vi.mock("@/hooks/useGitHub", () => ({
       month: "2026-07",
       firstMonth: "2026-02",
       prsOpened: { "2026-07-03": 4 },
+      prsMerged: { "2026-07-03": 3 },
       prsReviewed: { "2026-07-03": 2 },
       monthlyOpened: { "2026-06": 3, "2026-07": 4 },
+      monthlyMerged: { "2026-06": 2, "2026-07": 3 },
       monthlyReviewed: { "2026-06": 1, "2026-07": 2 },
     },
   })),
@@ -150,7 +152,7 @@ describe("CurrentTab (card grid)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stats" }));
 
     expect(screen.getByText("Contribution activity")).toBeInTheDocument();
-    expect(screen.getByText("Tracked repos only")).toBeInTheDocument();
+    expect(screen.getByText("Tracked at the time")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Daily PR activity bar chart with day and PR count axes/ })).toBeInTheDocument();
     expect(screen.getByText("Last 12 months")).toBeInTheDocument();
     expect(screen.getAllByText("PR count")).toHaveLength(2);
@@ -200,7 +202,7 @@ describe("CurrentTab (card grid)", () => {
     fireEvent.click(screen.getByText("alice"));
     fireEvent.click(screen.getByRole("button", { name: "Stats" }));
 
-    expect(screen.getByText("GitHub verified · 9 tracked of 10")).toBeInTheDocument();
+    expect(screen.getByText("GitHub verified · 9 while tracked of 10")).toBeInTheDocument();
     expect(screen.getByText("Approvals captured")).toBeInTheDocument();
     expect(screen.getByText("Since May 12, 2026")).toBeInTheDocument();
     expect(screen.getByText("40% of merged PRs have merger data")).toBeInTheDocument();
