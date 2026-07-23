@@ -737,6 +737,21 @@ export interface EngineerStats {
   lifetimePRs: Record<string, number>;
   prsLast4Weeks: Record<string, number>;
   issuesClosed: Record<string, number>;
+  coverage: {
+    approvalsGivenSince: string | null;
+    mergedByKnown: number;
+    mergedPRs: number;
+    issuesClosedByKnown: number;
+    closedIssues: number;
+  };
+  prAudits: Record<string, {
+    startMonth: string;
+    endMonth: string;
+    completedAt: string;
+    githubPRs: number;
+    cachedAllPRs: number;
+    cachedTrackedPRs: number;
+  }>;
 }
 
 export async function fetchEngineerStats(): Promise<EngineerStats> {

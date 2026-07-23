@@ -4,6 +4,10 @@ vi.mock("../reconcile.js", () => ({
   reconcileOrg: vi.fn(),
 }));
 
+vi.mock("../stats-audit.js", () => ({
+  runNextStatsAudit: vi.fn(() => Promise.resolve(null)),
+}));
+
 import worker from "../index.js";
 import { reconcileOrg } from "../reconcile.js";
 

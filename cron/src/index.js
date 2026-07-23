@@ -15,6 +15,7 @@ import { narrateEvent, narrateReleaseNotes, narratePrOpened } from "../../functi
 import { bootstrapInstallation, syncRepo } from "../../functions/lib/github-sync.js";
 import { getInstallationToken } from "../../functions/lib/github-app.js";
 import { recordFailure } from "../../functions/lib/op-failures.js";
+import { runNextStatsAudit } from "./stats-audit.js";
 
 // Cap concurrent orgs per tick to keep GitHub API consumption bounded.
 // Tune up once we measure real numbers.
@@ -105,6 +106,15 @@ async function runTick(env) {
   const db = env.DB;
 
   await healOrgInstallationLinks(db);
+
+  // Process at most one explicitly-requested source-of-truth audit per tick.
+  // Each request is bounded to 120 monthly GitHub Search calls and is durable
+  // in D1, so a failed audit is visible instead of silently skewing metrics.
+  try {
+    await runNextStatsAudit(env);
+  } catch (err) {
+    console.error("[unticket-cron] stats audit failed:", err?.message ?? err);
+  }
 
   const orgs = await db
     .prepare(

@@ -42,6 +42,14 @@ const EMPTY = {
   lifetimePRs: {},
   prsLast4Weeks: {},
   issuesClosed: {},
+  coverage: {
+    approvalsGivenSince: null,
+    mergedByKnown: 0,
+    mergedPRs: 0,
+    issuesClosedByKnown: 0,
+    closedIssues: 0,
+  },
+  prAudits: {},
 };
 
 export async function onRequestGet(context: Ctx): Promise<Response> {
@@ -56,7 +64,7 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
   const repoIn = `repo IN (${activeRepos.map(() => "?").join(",")})`;
   const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [openPRs, reviewing, approvals, merges, assigned, lifetime, recent, closed] =
+  const [openPRs, reviewing, approvals, merges, assigned, lifetime, recent, closed, coverage, audits] =
     await db.batch([
       db
         .prepare(
@@ -144,7 +152,61 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
            GROUP BY closed_by`,
         )
         .bind(orgId, ...activeRepos),
+      db
+        .prepare(
+          `WITH active(repo) AS (SELECT value FROM json_each(?))
+           SELECT
+             (SELECT MIN(created_at) FROM events
+              WHERE org = ? AND type LIKE 'github:pr:review:%' AND repo IN (SELECT repo FROM active)) AS approvals_since,
+             (SELECT COUNT(*) FROM pull_requests
+              WHERE org_id = ? AND merged_at IS NOT NULL AND merged_by IS NOT NULL
+                AND repo IN (SELECT repo FROM active)) AS merged_by_known,
+             (SELECT COUNT(*) FROM pull_requests
+              WHERE org_id = ? AND merged_at IS NOT NULL
+                AND repo IN (SELECT repo FROM active)) AS merged_prs,
+             (SELECT COUNT(*) FROM issues
+              WHERE org_id = ? AND state = 'closed' AND closed_by IS NOT NULL
+                AND repo IN (SELECT repo FROM active)) AS issues_closed_by_known,
+             (SELECT COUNT(*) FROM issues
+              WHERE org_id = ? AND state = 'closed'
+                AND repo IN (SELECT repo FROM active)) AS closed_issues`,
+        )
+        .bind(
+          JSON.stringify(activeRepos),
+          orgLogin,
+          orgId,
+          orgId,
+          orgId,
+          orgId,
+        ),
+      db
+        .prepare(
+          `SELECT request.login, request.start_month, request.end_month, request.completed_at,
+                  SUM(month.github_prs) AS github_prs,
+                  SUM(month.cached_all_prs) AS cached_all_prs,
+                  SUM(month.cached_tracked_prs) AS cached_tracked_prs
+           FROM github_stats_audit_requests request
+           JOIN github_stats_audit_months month ON month.request_id = request.id
+           WHERE request.org_id = ? AND request.status = 'completed'
+             AND request.id = (
+               SELECT MAX(latest.id)
+               FROM github_stats_audit_requests latest
+               WHERE latest.org_id = request.org_id
+                 AND latest.login = request.login
+                 AND latest.status = 'completed'
+             )
+           GROUP BY request.id, request.login`,
+        )
+        .bind(orgId),
     ]);
+
+  const coverageRow = coverage.results[0] as {
+    approvals_since?: string | null;
+    merged_by_known?: number;
+    merged_prs?: number;
+    issues_closed_by_known?: number;
+    closed_issues?: number;
+  } | undefined;
 
   return jsonResponse({
     openPRs: toCountMap(openPRs.results),
@@ -155,6 +217,14 @@ export async function onRequestGet(context: Ctx): Promise<Response> {
     lifetimePRs: toCountMap(lifetime.results),
     prsLast4Weeks: toCountMap(recent.results),
     issuesClosed: toCountMap(closed.results),
+    coverage: {
+      approvalsGivenSince: coverageRow?.approvals_since ?? null,
+      mergedByKnown: Number(coverageRow?.merged_by_known ?? 0),
+      mergedPRs: Number(coverageRow?.merged_prs ?? 0),
+      issuesClosedByKnown: Number(coverageRow?.issues_closed_by_known ?? 0),
+      closedIssues: Number(coverageRow?.closed_issues ?? 0),
+    },
+    prAudits: toAuditMap(audits.results),
   });
 }
 
@@ -162,6 +232,30 @@ function toCountMap(rows: unknown[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const raw of rows as CountRow[]) {
     if (raw.login) map[raw.login] = Number(raw.c);
+  }
+  return map;
+}
+
+function toAuditMap(rows: unknown[]): Record<string, {
+  startMonth: string;
+  endMonth: string;
+  completedAt: string;
+  githubPRs: number;
+  cachedAllPRs: number;
+  cachedTrackedPRs: number;
+}> {
+  const map: ReturnType<typeof toAuditMap> = {};
+  for (const raw of rows as Array<Record<string, unknown>>) {
+    const login = raw.login;
+    if (typeof login !== "string") continue;
+    map[login] = {
+      startMonth: String(raw.start_month),
+      endMonth: String(raw.end_month),
+      completedAt: String(raw.completed_at),
+      githubPRs: Number(raw.github_prs ?? 0),
+      cachedAllPRs: Number(raw.cached_all_prs ?? 0),
+      cachedTrackedPRs: Number(raw.cached_tracked_prs ?? 0),
+    };
   }
   return map;
 }
