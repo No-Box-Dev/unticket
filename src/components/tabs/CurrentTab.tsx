@@ -779,7 +779,7 @@ function ActivityDashboard({ login }: { login: string }) {
     [firstMonth, nowMonth],
   );
   const trendMonths = useMemo(
-    () => enumerateMonths(firstMonth, nowMonth).slice(-6),
+    () => enumerateMonths(firstMonth, nowMonth).slice(-12),
     [firstMonth, nowMonth],
   );
 
@@ -848,7 +848,7 @@ function ActivityDashboard({ login }: { login: string }) {
           </div>
 
           <div>
-            <ChartHeading title="Six-month trend" />
+            <ChartHeading title="Last 12 months" />
             <MonthlyActivityChart
               months={trendMonths}
               opened={data?.monthlyOpened ?? {}}
@@ -892,38 +892,126 @@ function ChartHeading({ title }: { title: string }) {
   );
 }
 
+function chartScale(maximum: number): { top: number; ticks: number[] } {
+  const safeMaximum = Math.max(1, maximum);
+  const roughStep = safeMaximum / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep || 1));
+  const normalized = roughStep / magnitude;
+  const niceNormalized = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const step = Math.max(1, niceNormalized * magnitude);
+  const top = Math.ceil(safeMaximum / step) * step;
+  const ticks: number[] = [];
+  for (let value = 0; value <= top; value += step) ticks.push(value);
+  return { top, ticks };
+}
+
+function formatDayPoint(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+interface ChartHover {
+  x: number;
+  label: string;
+  value: number;
+  color: string;
+}
+
+function ChartTooltip({ hover, left, right }: { hover: ChartHover; left: number; right: number }) {
+  const tooltipWidth = 150;
+  const x = Math.min(Math.max(hover.x - tooltipWidth / 2, left), right - tooltipWidth);
+  return (
+    <g transform={`translate(${x} 2)`} pointerEvents="none" aria-hidden="true">
+      <rect width={tooltipWidth} height="28" rx="5" fill="#292524" opacity="0.96" />
+      <circle cx="9" cy="9" r="3" fill={hover.color} />
+      <text x="16" y="12" fontSize="8" fill="#fafaf9">{hover.label}</text>
+      <text x="9" y="23" fontSize="9" fontWeight="600" fill="#ffffff">{`${hover.value} PR${hover.value === 1 ? "" : "s"}`}</text>
+    </g>
+  );
+}
+
 function DailyActivityChart({ days, opened, reviewed }: {
   days: string[];
   opened: Record<string, number>;
   reviewed: Record<string, number>;
 }) {
+  const [hover, setHover] = useState<ChartHover | null>(null);
   const maximum = Math.max(1, ...days.flatMap((day) => [opened[day] ?? 0, reviewed[day] ?? 0]));
-  const width = Math.max(640, days.length * 23);
-  const plotHeight = 96;
-  const baseY = 108;
-  const groupWidth = width / Math.max(days.length, 1);
-  const barWidth = Math.max(3, Math.min(8, groupWidth * 0.32));
+  const { top, ticks } = chartScale(maximum);
+  const left = 42;
+  const right = 12;
+  const chartTop = 18;
+  const plotHeight = 108;
+  const baseY = chartTop + plotHeight;
+  const bottom = 40;
+  const plotWidth = Math.max(720, days.length * 30);
+  const width = left + plotWidth + right;
+  const height = baseY + bottom;
+  const groupWidth = plotWidth / Math.max(days.length, 1);
+  const barWidth = Math.max(4, Math.min(9, groupWidth * 0.3));
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
-      <svg viewBox={`0 0 ${width} 132`} className="h-36 min-w-[640px] w-full" role="img" aria-label="Daily PR activity bar chart">
-        <line x1="0" y1={baseY} x2={width} y2={baseY} stroke="#e7e5e4" />
-        {days.map((day, index) => {
-          const openedValue = opened[day] ?? 0;
-          const reviewedValue = reviewed[day] ?? 0;
-          const x = index * groupWidth + groupWidth / 2;
-          const openedHeight = (openedValue / maximum) * plotHeight;
-          const reviewedHeight = (reviewedValue / maximum) * plotHeight;
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[760px] w-full" role="img" aria-label="Daily PR activity bar chart with day and PR count axes">
+        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">PR count</text>
+        {ticks.map((tick) => {
+          const y = baseY - (tick / top) * plotHeight;
           return (
-            <g key={day}>
-              <title>{`${day}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
-              <rect x={x - barWidth - 1} y={baseY - openedHeight} width={barWidth} height={openedHeight} rx="1.5" fill="#0d9488" />
-              <rect x={x + 1} y={baseY - reviewedHeight} width={barWidth} height={reviewedHeight} rx="1.5" fill="#8b5cf6" />
-              {(index === 0 || (index + 1) % 5 === 0 || index === days.length - 1) ? (
-                <text x={x} y="124" textAnchor="middle" fontSize="9" fill="#a8a29e">{index + 1}</text>
-              ) : null}
+            <g key={tick}>
+              <line x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="#e7e5e4" strokeDasharray={tick === 0 ? undefined : "3 3"} />
+              <text x={left - 7} y={y + 3} textAnchor="end" fontSize="8" fill="#78716c">{tick}</text>
             </g>
           );
         })}
+        {days.map((day, index) => {
+          const openedValue = opened[day] ?? 0;
+          const reviewedValue = reviewed[day] ?? 0;
+          const x = left + index * groupWidth + groupWidth / 2;
+          const openedHeight = (openedValue / top) * plotHeight;
+          const reviewedHeight = (reviewedValue / top) * plotHeight;
+          return (
+            <g key={day} aria-label={`${formatDayPoint(day)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
+              <title>{`${day}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
+              <rect
+                x={x - barWidth - 1}
+                y={baseY - Math.max(openedHeight, 1)}
+                width={barWidth}
+                height={Math.max(openedHeight, 1)}
+                rx="1.5"
+                fill="#0d9488"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatDayPoint(day)}, PRs opened: ${openedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatDayPoint(day)} · Opened`, value: openedValue, color: "#0d9488" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Opened`, value: openedValue, color: "#0d9488" })}
+                onBlur={() => setHover(null)}
+              />
+              <rect
+                x={x + 1}
+                y={baseY - Math.max(reviewedHeight, 1)}
+                width={barWidth}
+                height={Math.max(reviewedHeight, 1)}
+                rx="1.5"
+                fill="#8b5cf6"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatDayPoint(day)}, PRs reviewed: ${reviewedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatDayPoint(day)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
+                onBlur={() => setHover(null)}
+              />
+              {openedValue > 0 ? <text x={x - barWidth / 2 - 1} y={Math.max(chartTop + 7, baseY - openedHeight - 3)} textAnchor="middle" fontSize="7" fill="#0f766e">{openedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 1} y={Math.max(chartTop + 7, baseY - reviewedHeight - 3)} textAnchor="middle" fontSize="7" fill="#7c3aed">{reviewedValue}</text> : null}
+              <text x={x} y={baseY + 14} textAnchor="middle" fontSize="7.5" fill="#78716c">{formatDayPoint(day)}</text>
+            </g>
+          );
+        })}
+        <text x={left + plotWidth / 2} y={height - 5} textAnchor="middle" fontSize="9" fill="#78716c">Day</text>
+        {hover ? <ChartTooltip hover={hover} left={left} right={left + plotWidth} /> : null}
       </svg>
     </div>
   );
@@ -934,22 +1022,81 @@ function MonthlyActivityChart({ months, opened, reviewed }: {
   opened: Record<string, number>;
   reviewed: Record<string, number>;
 }) {
+  const [hover, setHover] = useState<ChartHover | null>(null);
   const maximum = Math.max(1, ...months.flatMap((month) => [opened[month] ?? 0, reviewed[month] ?? 0]));
+  const { top, ticks } = chartScale(maximum);
+  const left = 42;
+  const right = 12;
+  const chartTop = 18;
+  const plotHeight = 108;
+  const baseY = chartTop + plotHeight;
+  const bottom = 40;
+  const plotWidth = Math.max(560, months.length * 92);
+  const width = left + plotWidth + right;
+  const height = baseY + bottom;
+  const groupWidth = plotWidth / Math.max(months.length, 1);
+  const barWidth = Math.min(18, groupWidth * 0.28);
   return (
-    <div className="grid h-36 grid-cols-6 items-end gap-2 rounded-lg border border-stone-100 bg-stone-50/40 px-3 pt-4 pb-2">
-      {months.map((month) => {
-        const openedValue = opened[month] ?? 0;
-        const reviewedValue = reviewed[month] ?? 0;
-        return (
-          <div key={month} className="flex h-full min-w-0 flex-col justify-end gap-1" title={`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
-            <div className="flex min-h-0 flex-1 items-end justify-center gap-1">
-              <div className="w-2.5 rounded-t-sm bg-teal-600" style={{ height: `${Math.max(openedValue > 0 ? 4 : 0, (openedValue / maximum) * 100)}%` }} />
-              <div className="w-2.5 rounded-t-sm bg-violet-500" style={{ height: `${Math.max(reviewedValue > 0 ? 4 : 0, (reviewedValue / maximum) * 100)}%` }} />
-            </div>
-            <div className="truncate text-center text-[9px] text-stone-400">{formatMonth(month)}</div>
-          </div>
-        );
-      })}
+    <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[620px] w-full" role="img" aria-label="Monthly PR activity bar chart with month and PR count axes">
+        <text x="12" y={chartTop + plotHeight / 2} transform={`rotate(-90 12 ${chartTop + plotHeight / 2})`} textAnchor="middle" fontSize="9" fill="#78716c">PR count</text>
+        {ticks.map((tick) => {
+          const y = baseY - (tick / top) * plotHeight;
+          return (
+            <g key={tick}>
+              <line x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="#e7e5e4" strokeDasharray={tick === 0 ? undefined : "3 3"} />
+              <text x={left - 7} y={y + 3} textAnchor="end" fontSize="8" fill="#78716c">{tick}</text>
+            </g>
+          );
+        })}
+        {months.map((month, index) => {
+          const openedValue = opened[month] ?? 0;
+          const reviewedValue = reviewed[month] ?? 0;
+          const x = left + index * groupWidth + groupWidth / 2;
+          const openedHeight = (openedValue / top) * plotHeight;
+          const reviewedHeight = (reviewedValue / top) * plotHeight;
+          return (
+            <g key={month} aria-label={`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
+              <title>{`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
+              <rect
+                x={x - barWidth - 2}
+                y={baseY - Math.max(openedHeight, 1)}
+                width={barWidth}
+                height={Math.max(openedHeight, 1)}
+                rx="2"
+                fill="#0d9488"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatMonth(month, true)}, PRs opened: ${openedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatMonth(month, true)} · Opened`, value: openedValue, color: "#0d9488" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Opened`, value: openedValue, color: "#0d9488" })}
+                onBlur={() => setHover(null)}
+              />
+              <rect
+                x={x + 2}
+                y={baseY - Math.max(reviewedHeight, 1)}
+                width={barWidth}
+                height={Math.max(reviewedHeight, 1)}
+                rx="2"
+                fill="#8b5cf6"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatMonth(month, true)}, PRs reviewed: ${reviewedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatMonth(month, true)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
+                onBlur={() => setHover(null)}
+              />
+              {openedValue > 0 ? <text x={x - barWidth / 2 - 2} y={Math.max(chartTop + 7, baseY - openedHeight - 4)} textAnchor="middle" fontSize="8" fill="#0f766e">{openedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 2} y={Math.max(chartTop + 7, baseY - reviewedHeight - 4)} textAnchor="middle" fontSize="8" fill="#7c3aed">{reviewedValue}</text> : null}
+              <text x={x} y={baseY + 15} textAnchor="middle" fontSize="8.5" fill="#78716c">{formatMonth(month)}</text>
+            </g>
+          );
+        })}
+        <text x={left + plotWidth / 2} y={height - 5} textAnchor="middle" fontSize="9" fill="#78716c">Month</text>
+        {hover ? <ChartTooltip hover={hover} left={left} right={left + plotWidth} /> : null}
+      </svg>
     </div>
   );
 }

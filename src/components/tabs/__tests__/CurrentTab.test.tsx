@@ -149,8 +149,18 @@ describe("CurrentTab (card grid)", () => {
 
     expect(screen.getByText("Contribution activity")).toBeInTheDocument();
     expect(screen.getByText("Tracked repos only")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Daily PR activity bar chart" })).toBeInTheDocument();
-    expect(screen.getByText("Six-month trend")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Daily PR activity bar chart with day and PR count axes/ })).toBeInTheDocument();
+    expect(screen.getByText("Last 12 months")).toBeInTheDocument();
+    expect(screen.getAllByText("PR count")).toHaveLength(2);
+    expect(screen.getByText("Day")).toBeInTheDocument();
+    expect(screen.getByText("Month")).toBeInTheDocument();
+
+    const julyOpened = screen.getByLabelText("Jul 3, PRs opened: 4");
+    fireEvent.mouseEnter(julyOpened);
+    expect(screen.getByText("Jul 3 · Opened")).toBeInTheDocument();
+    expect(screen.getByText("4 PRs")).toBeInTheDocument();
+    fireEvent.mouseLeave(julyOpened);
+    expect(screen.queryByText("Jul 3 · Opened")).not.toBeInTheDocument();
   });
 
   it("group toggle switches to repo cards", () => {

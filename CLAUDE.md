@@ -193,7 +193,7 @@ Issues dashboard. Top section: four stat cards (open, unassigned, stale >30d, cl
 #### Current (`current` tab — replaces the old `prs` + `engineers` tabs)
 Unified "what's happening right now" view. The grid at top is a card per **active member** (default) or **repo**, always seeded — a person with 0 open PRs still gets a card, so the grid is a stable team/portfolio overview rather than a list of whoever happened to open something. The Draft/Ready/Merged toggle filters the underlying PR set; **Ready** is the default. Clicking a person card drills into a person page with a **PRs / Stats** sub-tab bar:
 - **PRs** (default) — the sortable PR table (repo, title, author, reviewers, age). Stale (>7 days) highlighted amber. Admin-only Close-PR action.
-- **Stats** — 5 headline stat cards from `useEngineerStats` plus the tracked-repository contribution dashboard from `useEngineerActivity`: daily PRs opened/reviewed, active and peak days, and a six-month trend. Review history begins when the GitHub App starts receiving events.
+- **Stats** — 5 headline stat cards from `useEngineerStats` plus the tracked-repository contribution dashboard from `useEngineerActivity`: daily PRs opened/reviewed, active and peak days, and a 12-month trend. Both charts have labeled time/count axes, visible point values, and exact mouse/focus tooltips. Review history begins when the GitHub App starts receiving events.
 
 Clicking a repo card drills into that repo's PR table (no sub-tabs).
 
