@@ -178,12 +178,12 @@ async function reconcileDeletedRepos(db, orgId, apiRepoNames) {
   }
   const apiSet = new Set(apiRepoNames);
   const existing = await db
-    .prepare("SELECT name FROM repos WHERE org_id = ?")
+    .prepare("SELECT name FROM repos WHERE org_id = ? AND retired_at IS NULL")
     .bind(orgId)
     .all();
   for (const row of existing.results ?? []) {
     if (!apiSet.has(row.name)) {
-      await removeRepo(db, orgId, row.name);
+      await removeRepo(db, orgId, row.name, "missing_from_github");
     }
   }
 }

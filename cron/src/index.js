@@ -16,6 +16,7 @@ import { bootstrapInstallation, syncRepo } from "../../functions/lib/github-sync
 import { getInstallationToken } from "../../functions/lib/github-app.js";
 import { recordFailure } from "../../functions/lib/op-failures.js";
 import { runNextStatsAudit } from "./stats-audit.js";
+import { runDatabaseRecoveryStep } from "./database-recovery.js";
 
 // Cap concurrent orgs per tick to keep GitHub API consumption bounded.
 // Tune up once we measure real numbers.
@@ -78,6 +79,10 @@ export default {
       const result = await archiveOldEvents(env, Date.now());
       return new Response(`${JSON.stringify(result)}\n`);
     }
+    if (url.pathname === "/__recover") {
+      const result = await runDatabaseRecoveryStep(env);
+      return Response.json(result);
+    }
     return new Response("not found", { status: 404 });
   },
 };
@@ -114,6 +119,12 @@ async function runTick(env) {
     await runNextStatsAudit(env);
   } catch (err) {
     console.error("[unticket-cron] stats audit failed:", err?.message ?? err);
+  }
+
+  try {
+    await runDatabaseRecoveryStep(env);
+  } catch (err) {
+    console.error("[unticket-cron] database recovery step failed:", err?.message ?? err);
   }
 
   const orgs = await db

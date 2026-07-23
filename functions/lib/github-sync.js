@@ -3,6 +3,7 @@ import { filterInactive, getUnticketRepoName } from "./inactive-repos";
 import { getInstallationToken } from "./github-app";
 import { upsertGhUser } from "./gh-mirror";
 import { upsertFeatureRow } from "./feature-issues";
+import { startRepoTracking, stopRepoTracking } from "./repo-tracking";
 
 // Paginated GitHub API fetcher.
 // MAX_PAGES caps any single resource sync at 5000 items (50 pages × 100/page).
@@ -91,7 +92,10 @@ export async function syncRepos(db, token, orgId, orgLogin) {
      ON CONFLICT(org_id, name) DO UPDATE SET
        language = excluded.language,
        pushed_at = excluded.pushed_at,
-       discovered_at = COALESCE(repos.discovered_at, excluded.discovered_at)`
+       discovered_at = COALESCE(repos.discovered_at, excluded.discovered_at),
+       retired_at = NULL,
+       retirement_reason = NULL,
+       transferred_to = NULL`
   );
 
   for (let i = 0; i < repos.length; i += 50) {
@@ -103,6 +107,15 @@ export async function syncRepos(db, token, orgId, orgLogin) {
 
   if (newlyDiscovered.length > 0) {
     await applyNewRepoPolicy(db, orgLogin, newlyDiscovered);
+  }
+
+  // Open a durable history period for every currently-active repository.
+  // Auto-excluded discoveries are filtered out by the same central policy
+  // used by read endpoints, so they never acquire a false tracking period.
+  const visibleNames = repos.map((r) => r.name);
+  const activeNames = await filterInactive(db, orgId, orgLogin, visibleNames);
+  for (const name of activeNames) {
+    await startRepoTracking(db, orgId, name);
   }
 
   await setSyncState(db, orgId, "repos");
@@ -1033,10 +1046,12 @@ export async function removeMember(db, orgId, login) {
 // Mark a repo as archived on GitHub. Keeps the row so historical issues/PRs
 // remain joinable; UI is expected to filter on archived_at IS NULL.
 export async function markRepoArchived(db, orgId, repo) {
+  const stamp = new Date().toISOString();
   await db
-    .prepare("UPDATE repos SET archived_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE org_id = ? AND name = ?")
-    .bind(orgId, repo)
+    .prepare("UPDATE repos SET archived_at = ? WHERE org_id = ? AND name = ?")
+    .bind(stamp, orgId, repo)
     .run();
+  await stopRepoTracking(db, orgId, repo, "github_archived", stamp);
 }
 
 // Insert a single repo row stamped as just-discovered. Used by the
@@ -1053,15 +1068,22 @@ export async function markRepoArchived(db, orgId, repo) {
 // repo that was discovered by cron stays stamped with the cron timestamp
 // when the webhook later replays the same row.
 export async function upsertDiscoveredRepo(db, orgId, repoName) {
+  const existing = await db
+    .prepare("SELECT 1 AS present FROM repos WHERE org_id = ? AND name = ?")
+    .bind(orgId, repoName)
+    .first();
   const result = await db
     .prepare(
       `INSERT INTO repos (org_id, name, discovered_at)
        VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-       ON CONFLICT(org_id, name) DO NOTHING`,
+       ON CONFLICT(org_id, name) DO UPDATE SET
+         retired_at = NULL,
+         retirement_reason = NULL,
+         transferred_to = NULL`,
     )
     .bind(orgId, repoName)
     .run();
-  return (result.meta?.changes ?? 0) > 0;
+  return !existing && (result.meta?.changes ?? 0) > 0;
 }
 
 // Public re-export so the webhook can apply the same policy `syncRepos`
@@ -1071,16 +1093,31 @@ export async function applyNewRepoExcludePolicy(db, orgLogin, newRepoNames) {
   await applyNewRepoPolicy(db, orgLogin, newRepoNames);
 }
 
-// Drop a repo and all of its dependent rows. Used when GitHub fires
-// `repository.deleted` or `repository.transferred` — the repo is no
-// longer accessible under this org, so its issues and PRs go with it.
-// Renames go through `renameRepo` instead so historical rows are kept.
-export async function removeRepo(db, orgId, repo) {
-  await db.batch([
-    db.prepare("DELETE FROM issues WHERE org_id = ? AND repo = ?").bind(orgId, repo),
-    db.prepare("DELETE FROM pull_requests WHERE org_id = ? AND repo = ?").bind(orgId, repo),
-    db.prepare("DELETE FROM repos WHERE org_id = ? AND name = ?").bind(orgId, repo),
-  ]);
+// Retire a repo without deleting its issues/PRs. GitHub deletes, transfers,
+// and installation-access removals must remove it from current views while
+// preserving the source rows that historical analytics depend on.
+export async function removeRepo(db, orgId, repo, reason = "removed", transferredTo = null) {
+  const stamp = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE repos
+       SET retired_at = ?, retirement_reason = ?, transferred_to = ?
+       WHERE org_id = ? AND name = ?`,
+    )
+    .bind(stamp, reason, transferredTo, orgId, repo)
+    .run();
+  await db
+    .prepare(
+      `UPDATE projects
+       SET archived = 1,
+           archived_at = COALESCE(archived_at, ?),
+           updated_at = ?
+       WHERE owner_id = (SELECT github_login FROM orgs WHERE id = ?)
+         AND repo = ?`,
+    )
+    .bind(stamp, stamp, orgId, repo)
+    .run();
+  await stopRepoTracking(db, orgId, repo, reason, stamp);
 }
 
 // Rename a repo across every table that stores `repo` as plain text.
@@ -1094,6 +1131,9 @@ export async function renameRepo(db, orgId, fromName, toName) {
     db.prepare("UPDATE repos SET name = ? WHERE org_id = ? AND name = ?").bind(toName, orgId, fromName),
     db.prepare("UPDATE issues SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
     db.prepare("UPDATE pull_requests SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE repo_tracking_periods SET repo = ? WHERE org_id = ? AND repo = ?").bind(toName, orgId, fromName),
+    db.prepare("UPDATE projects SET repo = ?, name = ? WHERE owner_id = (SELECT github_login FROM orgs WHERE id = ?) AND repo = ?")
+      .bind(toName, toName, orgId, fromName),
   ]);
 }
 
@@ -1109,4 +1149,3 @@ export async function touchRepoPushed(db, orgId, repo) {
     .bind(orgId, repo)
     .run();
 }
-

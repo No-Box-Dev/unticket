@@ -35,6 +35,9 @@ vi.mock("../../lib/gh-mirror.js", () => ({
 vi.mock("../../lib/github-app.js", () => ({
   getInstallationToken: vi.fn(async () => "inst-tok"),
 }));
+vi.mock("../../lib/repo-tracking.js", () => ({
+  startRepoTracking: vi.fn(async () => {}),
+}));
 vi.mock("../../lib/narrator.js", () => ({
   narrateEvent: vi.fn(() => Promise.resolve()),
 }));

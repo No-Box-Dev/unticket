@@ -20,6 +20,7 @@ import { storeEvent } from "../lib/events";
 import { upsertInstallation, setInstallationRepos, getInstallationRepos } from "../lib/gh-mirror";
 import { TASK, enqueueTask } from "../lib/tasks";
 import { recordFailure } from "../lib/op-failures";
+import { startRepoTracking } from "../lib/repo-tracking";
 
 // Every `waitUntil` handler that logs a failure runs after the webhook
 // response has already been returned — a plain console.error is invisible
@@ -266,8 +267,12 @@ export async function onRequestPost(context) {
         await markRepoArchived(db, orgId, repo);
       } else if (action === "unarchived") {
         await db.prepare("UPDATE repos SET archived_at = NULL WHERE org_id = ? AND name = ?").bind(orgId, repo).run();
+        await startRepoTracking(db, orgId, repo);
       } else if (action === "deleted" || action === "transferred") {
-        await removeRepo(db, orgId, repo);
+        const transferredTo = action === "transferred"
+          ? payload.repository?.owner?.login ?? null
+          : null;
+        await removeRepo(db, orgId, repo, action, transferredTo);
       } else if (action === "renamed") {
         // GitHub fires a repository rename with `changes.repository.name.from`
         // and the new name at `payload.repository.name`. Rename in place so
@@ -449,9 +454,8 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
     }
   }
 
-  // For removed repos, drop their D1 footprint so they stop appearing in
-  // dashboards. The org-resolution lookup is the same shape used by the
-  // main handler.
+  // Repositories removed from the installation become inactive, but their
+  // cached PR/issue history remains available to time-aware analytics.
   const orgRow = accountLogin
     ? await db.prepare("SELECT id FROM orgs WHERE github_login = ?").bind(accountLogin).first()
     : null;
@@ -461,7 +465,7 @@ async function handleInstallationReposEvent(context, payload, deliveryId) {
       const name = r?.name ?? (r?.full_name?.split("/")[1] ?? null);
       if (!name) continue;
       try {
-        await removeRepo(db, orgRow.id, name);
+        await removeRepo(db, orgRow.id, name, "installation_removed");
       } catch (err) {
         await reportWebhookFailure(db, accountLogin, "removeRepo", deliveryId, err, { repo: name });
       }

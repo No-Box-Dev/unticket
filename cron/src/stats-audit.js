@@ -54,31 +54,24 @@ async function githubPrCount(token, orgLogin, login, month) {
   return Number(data.total_count ?? 0);
 }
 
-async function cachedCounts(db, orgId, orgLogin, login, month) {
+async function cachedCounts(db, orgId, login, month) {
   const rows = await db
     .prepare(
       `SELECT
          COUNT(*) AS all_prs,
          SUM(
-           CASE WHEN
-             p.repo != COALESCE(
-               json_extract((SELECT data FROM config WHERE org_id = ? AND key = 'settings'), '$.unticketRepo'),
-               'unticket'
-             )
-             AND NOT EXISTS (
-               SELECT 1 FROM projects project
-               WHERE project.owner_id = ? AND project.repo = p.repo AND project.archived = 1
-             )
-             AND NOT EXISTS (
-               SELECT 1 FROM repos repo
-               WHERE repo.org_id = ? AND repo.name = p.repo AND repo.archived_at IS NOT NULL
-             )
+           CASE WHEN EXISTS (
+             SELECT 1 FROM repo_tracking_periods period
+             WHERE period.org_id = p.org_id AND period.repo = p.repo
+               AND p.created_at >= period.tracked_from
+               AND (period.tracked_until IS NULL OR p.created_at < period.tracked_until)
+           )
            THEN 1 ELSE 0 END
          ) AS tracked_prs
        FROM pull_requests p
        WHERE p.org_id = ? AND p.author = ? AND strftime('%Y-%m', p.created_at) = ?`,
     )
-    .bind(orgId, orgLogin, orgId, orgId, login, month)
+    .bind(orgId, login, month)
     .first();
 
   return {
@@ -112,7 +105,7 @@ export async function runNextStatsAudit(env) {
     for (const month of months) {
       const [githubCount, cached] = await Promise.all([
         githubPrCount(token, request.github_login, request.login, month),
-        cachedCounts(env.DB, request.org_id, request.github_login, request.login, month),
+        cachedCounts(env.DB, request.org_id, request.login, month),
       ]);
       await env.DB
         .prepare(

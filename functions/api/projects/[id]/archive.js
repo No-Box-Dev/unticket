@@ -1,4 +1,5 @@
 import { getCtx, jsonResponse, errorResponse } from "../../../lib/db";
+import { startRepoTracking, stopRepoTracking } from "../../../lib/repo-tracking";
 
 // POST   /api/projects/:id/archive  → archive the project (inactive on platform)
 // DELETE /api/projects/:id/archive  → unarchive
@@ -16,12 +17,17 @@ export async function onRequestDelete(context) {
 }
 
 async function setArchived(context, value) {
-  const { orgLogin } = getCtx(context);
-  if (!orgLogin) return errorResponse("Missing org context", 400);
+  const { orgId, orgLogin } = getCtx(context);
+  if (!orgId || !orgLogin) return errorResponse("Missing org context", 400);
   const { id } = context.params;
   if (!id) return errorResponse("Missing project id", 400);
 
   const archivedAt = value === 1 ? new Date().toISOString() : null;
+  const project = await context.env.DB
+    .prepare("SELECT repo, archived FROM projects WHERE id = ? AND owner_id = ?")
+    .bind(id, orgLogin)
+    .first();
+  if (!project) return errorResponse(`Unknown project ${id}`, 404);
 
   const result = await context.env.DB.prepare(
     `UPDATE projects
@@ -31,6 +37,14 @@ async function setArchived(context, value) {
 
   const changes = result.meta?.changes ?? 0;
   if (!changes) return errorResponse(`Unknown project ${id}`, 404);
+
+  if (project.repo) {
+    if (value === 1) {
+      await stopRepoTracking(context.env.DB, orgId, project.repo, "platform_archived", archivedAt);
+    } else {
+      await startRepoTracking(context.env.DB, orgId, project.repo);
+    }
+  }
 
   return jsonResponse({ ok: true, id, archived: value === 1 });
 }

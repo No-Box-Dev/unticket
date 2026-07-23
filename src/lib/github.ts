@@ -307,6 +307,42 @@ export async function triggerEventsBackfillWithProgress(
   }
 }
 
+// Recover historic PR/issue rows from archived, transferred, or App-removed
+// repositories using the logged-in admin's GitHub access.
+export async function recoverRepoHistoryWithProgress(
+  onProgress: (status: SyncProgress) => void,
+  signal?: AbortSignal,
+) {
+  let init: SyncResponse;
+  try {
+    onProgress({ phase: "init", synced: 0, total: 0 });
+    init = await apiPost<SyncResponse & { repoList?: string[] }>("/api/recover-repo-history");
+  } catch (err) {
+    if (signal?.aborted) return;
+    const msg = err instanceof Error ? err.message : "History recovery failed";
+    onProgress({ phase: "error", synced: 0, total: 0, error: msg });
+    return;
+  }
+
+  const repos = init.repoList ?? [];
+  const failed: string[] = [];
+  let synced = 0;
+  for (const repo of repos) {
+    if (signal?.aborted) return;
+    onProgress({ phase: "syncing", repo, synced, total: repos.length, failed: [...failed] });
+    try {
+      const result = await apiPost<{ recovered: boolean; inaccessible?: boolean }>(
+        `/api/recover-repo-history?cursor=${encodeURIComponent(repo)}`,
+      );
+      if (result.recovered) synced += 1;
+      else failed.push(repo);
+    } catch {
+      failed.push(repo);
+    }
+  }
+  onProgress({ phase: "done", synced, total: repos.length, failed });
+}
+
 export async function triggerFeatureSync() {
   return apiPost<{ done: true; scope: "features" }>("/api/sync?scope=features");
 }
@@ -319,6 +355,9 @@ interface ApiRepo {
   pushed_at: string | null;
   discoveredAt?: string | null;
   acknowledgedAt?: string | null;
+  retiredAt?: string | null;
+  retirementReason?: string | null;
+  transferredTo?: string | null;
   inactive?: boolean;
 }
 
@@ -426,6 +465,9 @@ export async function fetchRepos(opts?: { includeAll?: boolean }) {
     inactive: r.inactive ?? false,
     discoveredAt: r.discoveredAt ?? null,
     acknowledgedAt: r.acknowledgedAt ?? null,
+    retiredAt: r.retiredAt ?? null,
+    retirementReason: r.retirementReason ?? null,
+    transferredTo: r.transferredTo ?? null,
   }));
 }
 
@@ -765,8 +807,10 @@ export interface EngineerActivity {
   month: string;
   firstMonth: string | null;
   prsOpened: Record<string, number>;
+  prsMerged: Record<string, number>;
   prsReviewed: Record<string, number>;
   monthlyOpened: Record<string, number>;
+  monthlyMerged: Record<string, number>;
   monthlyReviewed: Record<string, number>;
 }
 

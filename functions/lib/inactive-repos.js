@@ -5,6 +5,7 @@
 //     Repos tab)
 //   - has repos.archived_at IS NOT NULL (GitHub-side archive, captured by
 //     the `repository.archived` webhook)
+//   - has repos.retired_at IS NOT NULL (deleted, transferred, or App access removed)
 //   - is the configured "unticket" repo (settings.unticketRepo, default
 //     "unticket") — that repo holds features/todos/plans, not product work
 //
@@ -13,7 +14,7 @@ export async function getInactiveRepoSet(db, orgId, orgLogin) {
   const [settingsRow, archivedRows, ghArchivedRows] = await db.batch([
     db.prepare("SELECT data FROM config WHERE org_id = ? AND key = 'settings'").bind(orgId),
     db.prepare("SELECT repo FROM projects WHERE owner_id = ? AND archived = 1").bind(orgLogin),
-    db.prepare("SELECT name FROM repos WHERE org_id = ? AND archived_at IS NOT NULL").bind(orgId),
+    db.prepare("SELECT name FROM repos WHERE org_id = ? AND (archived_at IS NOT NULL OR retired_at IS NOT NULL)").bind(orgId),
   ]);
 
   const exclude = new Set();

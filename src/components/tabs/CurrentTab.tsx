@@ -708,14 +708,14 @@ function PersonStats({ login }: { login: string }) {
     : 0;
   const cards = [
     {
-      label: "Lifetime PRs",
+      label: "Authored PRs opened",
       value: stats?.lifetimePRs?.[login] ?? 0,
       detail: audit && audit.githubPRs === audit.cachedAllPRs
-        ? `GitHub verified · ${audit.cachedTrackedPRs} tracked of ${audit.githubPRs}`
+        ? `GitHub verified · ${audit.cachedTrackedPRs} while tracked of ${audit.githubPRs}`
         : undefined,
       icon: <GitPullRequest size={14} className="text-stone-400" />,
     },
-    { label: "PRs · last 4 weeks", value: stats?.prsLast4Weeks?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
+    { label: "Opened · last 4 weeks", value: stats?.prsLast4Weeks?.[login] ?? 0, icon: <GitMerge size={14} className="text-stone-400" /> },
     {
       label: "Approvals captured",
       value: stats?.approvalsGiven?.[login] ?? 0,
@@ -814,17 +814,21 @@ function ActivityDashboard({ login }: { login: string }) {
   );
 
   const opened = data?.prsOpened ?? {};
+  const merged = data?.prsMerged ?? {};
   const reviewed = data?.prsReviewed ?? {};
   let openedTotal = 0;
+  let mergedTotal = 0;
   let reviewedTotal = 0;
   let activeDays = 0;
   let peakDay = "";
   let peakCount = 0;
   for (const day of days) {
     const openedCount = opened[day] ?? 0;
+    const mergedCount = merged[day] ?? 0;
     const reviewedCount = reviewed[day] ?? 0;
-    const total = openedCount + reviewedCount;
+    const total = openedCount + mergedCount + reviewedCount;
     openedTotal += openedCount;
+    mergedTotal += mergedCount;
     reviewedTotal += reviewedCount;
     if (total > 0) activeDays += 1;
     if (total > peakCount) {
@@ -839,9 +843,9 @@ function ActivityDashboard({ login }: { login: string }) {
         <div>
           <div className="flex items-center gap-2">
             <h3 id="activity-heading" className="text-sm font-semibold text-stone-800">Contribution activity</h3>
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Tracked repos only</span>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Tracked at the time</span>
           </div>
-          <p className="text-xs text-stone-400 mt-0.5">PRs opened and distinct PRs reviewed</p>
+          <p className="text-xs text-stone-400 mt-0.5">Authored PRs by open/merge date, plus distinct PRs reviewed</p>
         </div>
         <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
           <CalendarDays size={14} />
@@ -861,8 +865,9 @@ function ActivityDashboard({ login }: { login: string }) {
         <div className="flex justify-center py-16"><Spinner className="w-5 h-5 text-accent" /></div>
       ) : (
         <div className="space-y-5 p-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <ActivitySummary label="PRs opened" value={openedTotal} color="bg-teal-600" />
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <ActivitySummary label="Authored · opened" value={openedTotal} color="bg-teal-600" />
+            <ActivitySummary label="Authored · merged" value={mergedTotal} color="bg-amber-500" />
             <ActivitySummary label="PRs reviewed" value={reviewedTotal} color="bg-violet-500" />
             <ActivitySummary label="Active days" value={activeDays} detail={`of ${days.length}`} />
             <ActivitySummary
@@ -874,7 +879,7 @@ function ActivityDashboard({ login }: { login: string }) {
 
           <div>
             <ChartHeading title={`Daily activity · ${formatMonth(shownMonth, true)}`} />
-            <DailyActivityChart days={days} opened={opened} reviewed={reviewed} />
+            <DailyActivityChart days={days} opened={opened} merged={merged} reviewed={reviewed} />
           </div>
 
           <div>
@@ -882,12 +887,13 @@ function ActivityDashboard({ login }: { login: string }) {
             <MonthlyActivityChart
               months={trendMonths}
               opened={data?.monthlyOpened ?? {}}
+              merged={data?.monthlyMerged ?? {}}
               reviewed={data?.monthlyReviewed ?? {}}
             />
           </div>
 
           <p className="text-[11px] text-stone-400">
-            Review history starts when the GitHub App began receiving events. Repeated reviews of the same PR on one day count once.
+            Archived, transferred, and deleted repositories retain activity from their tracked periods. Review history starts when the GitHub App began receiving events; repeated reviews of one PR on one day count once.
           </p>
         </div>
       )}
@@ -916,6 +922,7 @@ function ChartHeading({ title }: { title: string }) {
       <h4 className="text-xs font-medium text-stone-600">{title}</h4>
       <div className="flex gap-3 text-[10px] text-stone-400">
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-teal-600" />Opened</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-500" />Merged</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-violet-500" />Reviewed</span>
       </div>
     </div>
@@ -963,13 +970,14 @@ function ChartTooltip({ hover, left, right }: { hover: ChartHover; left: number;
   );
 }
 
-function DailyActivityChart({ days, opened, reviewed }: {
+function DailyActivityChart({ days, opened, merged, reviewed }: {
   days: string[];
   opened: Record<string, number>;
+  merged: Record<string, number>;
   reviewed: Record<string, number>;
 }) {
   const [hover, setHover] = useState<ChartHover | null>(null);
-  const maximum = Math.max(1, ...days.flatMap((day) => [opened[day] ?? 0, reviewed[day] ?? 0]));
+  const maximum = Math.max(1, ...days.flatMap((day) => [opened[day] ?? 0, merged[day] ?? 0, reviewed[day] ?? 0]));
   const { top, ticks } = chartScale(maximum);
   const left = 42;
   const right = 12;
@@ -981,7 +989,7 @@ function DailyActivityChart({ days, opened, reviewed }: {
   const width = left + plotWidth + right;
   const height = baseY + bottom;
   const groupWidth = plotWidth / Math.max(days.length, 1);
-  const barWidth = Math.max(4, Math.min(9, groupWidth * 0.3));
+  const barWidth = Math.max(3, Math.min(7, groupWidth * 0.23));
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[760px] w-full" role="img" aria-label="Daily PR activity bar chart with day and PR count axes">
@@ -997,15 +1005,17 @@ function DailyActivityChart({ days, opened, reviewed }: {
         })}
         {days.map((day, index) => {
           const openedValue = opened[day] ?? 0;
+          const mergedValue = merged[day] ?? 0;
           const reviewedValue = reviewed[day] ?? 0;
           const x = left + index * groupWidth + groupWidth / 2;
           const openedHeight = (openedValue / top) * plotHeight;
+          const mergedHeight = (mergedValue / top) * plotHeight;
           const reviewedHeight = (reviewedValue / top) * plotHeight;
           return (
-            <g key={day} aria-label={`${formatDayPoint(day)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
-              <title>{`${day}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
+            <g key={day} aria-label={`${formatDayPoint(day)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}>
+              <title>{`${day}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}</title>
               <rect
-                x={x - barWidth - 1}
+                x={x - barWidth * 1.5 - 2}
                 y={baseY - Math.max(openedHeight, 1)}
                 width={barWidth}
                 height={Math.max(openedHeight, 1)}
@@ -1020,7 +1030,22 @@ function DailyActivityChart({ days, opened, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x + 1}
+                x={x - barWidth / 2}
+                y={baseY - Math.max(mergedHeight, 1)}
+                width={barWidth}
+                height={Math.max(mergedHeight, 1)}
+                rx="1.5"
+                fill="#f59e0b"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatDayPoint(day)}, authored PRs merged: ${mergedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatDayPoint(day)} · Merged`, value: mergedValue, color: "#f59e0b" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Merged`, value: mergedValue, color: "#f59e0b" })}
+                onBlur={() => setHover(null)}
+              />
+              <rect
+                x={x + barWidth / 2 + 2}
                 y={baseY - Math.max(reviewedHeight, 1)}
                 width={barWidth}
                 height={Math.max(reviewedHeight, 1)}
@@ -1034,8 +1059,9 @@ function DailyActivityChart({ days, opened, reviewed }: {
                 onFocus={() => setHover({ x, label: `${formatDayPoint(day)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
                 onBlur={() => setHover(null)}
               />
-              {openedValue > 0 ? <text x={x - barWidth / 2 - 1} y={Math.max(chartTop + 7, baseY - openedHeight - 3)} textAnchor="middle" fontSize="7" fill="#0f766e">{openedValue}</text> : null}
-              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 1} y={Math.max(chartTop + 7, baseY - reviewedHeight - 3)} textAnchor="middle" fontSize="7" fill="#7c3aed">{reviewedValue}</text> : null}
+              {openedValue > 0 ? <text x={x - barWidth - 2} y={Math.max(chartTop + 7, baseY - openedHeight - 3)} textAnchor="middle" fontSize="7" fill="#0f766e">{openedValue}</text> : null}
+              {mergedValue > 0 ? <text x={x} y={Math.max(chartTop + 7, baseY - mergedHeight - 3)} textAnchor="middle" fontSize="7" fill="#b45309">{mergedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth + 2} y={Math.max(chartTop + 7, baseY - reviewedHeight - 3)} textAnchor="middle" fontSize="7" fill="#7c3aed">{reviewedValue}</text> : null}
               <text x={x} y={baseY + 14} textAnchor="middle" fontSize="7.5" fill="#78716c">{formatDayPoint(day)}</text>
             </g>
           );
@@ -1047,13 +1073,14 @@ function DailyActivityChart({ days, opened, reviewed }: {
   );
 }
 
-function MonthlyActivityChart({ months, opened, reviewed }: {
+function MonthlyActivityChart({ months, opened, merged, reviewed }: {
   months: string[];
   opened: Record<string, number>;
+  merged: Record<string, number>;
   reviewed: Record<string, number>;
 }) {
   const [hover, setHover] = useState<ChartHover | null>(null);
-  const maximum = Math.max(1, ...months.flatMap((month) => [opened[month] ?? 0, reviewed[month] ?? 0]));
+  const maximum = Math.max(1, ...months.flatMap((month) => [opened[month] ?? 0, merged[month] ?? 0, reviewed[month] ?? 0]));
   const { top, ticks } = chartScale(maximum);
   const left = 42;
   const right = 12;
@@ -1065,7 +1092,7 @@ function MonthlyActivityChart({ months, opened, reviewed }: {
   const width = left + plotWidth + right;
   const height = baseY + bottom;
   const groupWidth = plotWidth / Math.max(months.length, 1);
-  const barWidth = Math.min(18, groupWidth * 0.28);
+  const barWidth = Math.min(14, groupWidth * 0.2);
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-100 bg-stone-50/40">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-44 min-w-[620px] w-full" role="img" aria-label="Monthly PR activity bar chart with month and PR count axes">
@@ -1081,15 +1108,17 @@ function MonthlyActivityChart({ months, opened, reviewed }: {
         })}
         {months.map((month, index) => {
           const openedValue = opened[month] ?? 0;
+          const mergedValue = merged[month] ?? 0;
           const reviewedValue = reviewed[month] ?? 0;
           const x = left + index * groupWidth + groupWidth / 2;
           const openedHeight = (openedValue / top) * plotHeight;
+          const mergedHeight = (mergedValue / top) * plotHeight;
           const reviewedHeight = (reviewedValue / top) * plotHeight;
           return (
-            <g key={month} aria-label={`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}>
-              <title>{`${formatMonth(month, true)}: ${openedValue} opened, ${reviewedValue} reviewed`}</title>
+            <g key={month} aria-label={`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}>
+              <title>{`${formatMonth(month, true)}: ${openedValue} opened, ${mergedValue} merged, ${reviewedValue} reviewed`}</title>
               <rect
-                x={x - barWidth - 2}
+                x={x - barWidth * 1.5 - 3}
                 y={baseY - Math.max(openedHeight, 1)}
                 width={barWidth}
                 height={Math.max(openedHeight, 1)}
@@ -1104,7 +1133,22 @@ function MonthlyActivityChart({ months, opened, reviewed }: {
                 onBlur={() => setHover(null)}
               />
               <rect
-                x={x + 2}
+                x={x - barWidth / 2}
+                y={baseY - Math.max(mergedHeight, 1)}
+                width={barWidth}
+                height={Math.max(mergedHeight, 1)}
+                rx="2"
+                fill="#f59e0b"
+                className="cursor-help outline-none focus:stroke-stone-800 focus:stroke-1"
+                tabIndex={0}
+                aria-label={`${formatMonth(month, true)}, authored PRs merged: ${mergedValue}`}
+                onMouseEnter={() => setHover({ x, label: `${formatMonth(month, true)} · Merged`, value: mergedValue, color: "#f59e0b" })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Merged`, value: mergedValue, color: "#f59e0b" })}
+                onBlur={() => setHover(null)}
+              />
+              <rect
+                x={x + barWidth / 2 + 3}
                 y={baseY - Math.max(reviewedHeight, 1)}
                 width={barWidth}
                 height={Math.max(reviewedHeight, 1)}
@@ -1118,8 +1162,9 @@ function MonthlyActivityChart({ months, opened, reviewed }: {
                 onFocus={() => setHover({ x, label: `${formatMonth(month, true)} · Reviewed`, value: reviewedValue, color: "#8b5cf6" })}
                 onBlur={() => setHover(null)}
               />
-              {openedValue > 0 ? <text x={x - barWidth / 2 - 2} y={Math.max(chartTop + 7, baseY - openedHeight - 4)} textAnchor="middle" fontSize="8" fill="#0f766e">{openedValue}</text> : null}
-              {reviewedValue > 0 ? <text x={x + barWidth / 2 + 2} y={Math.max(chartTop + 7, baseY - reviewedHeight - 4)} textAnchor="middle" fontSize="8" fill="#7c3aed">{reviewedValue}</text> : null}
+              {openedValue > 0 ? <text x={x - barWidth - 3} y={Math.max(chartTop + 7, baseY - openedHeight - 4)} textAnchor="middle" fontSize="8" fill="#0f766e">{openedValue}</text> : null}
+              {mergedValue > 0 ? <text x={x} y={Math.max(chartTop + 7, baseY - mergedHeight - 4)} textAnchor="middle" fontSize="8" fill="#b45309">{mergedValue}</text> : null}
+              {reviewedValue > 0 ? <text x={x + barWidth + 3} y={Math.max(chartTop + 7, baseY - reviewedHeight - 4)} textAnchor="middle" fontSize="8" fill="#7c3aed">{reviewedValue}</text> : null}
               <text x={x} y={baseY + 15} textAnchor="middle" fontSize="8.5" fill="#78716c">{formatMonth(month)}</text>
             </g>
           );
