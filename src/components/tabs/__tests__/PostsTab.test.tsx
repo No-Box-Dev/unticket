@@ -46,7 +46,7 @@ describe("PostsTab", () => {
     expect(container.querySelector(".animate-spin")).not.toBeNull();
   });
 
-  it("renders the empty state when there are no posts", () => {
+  it("renders the empty state when there are no merged updates", () => {
     mActors.mockReturnValue({ data: [], isLoading: false });
     mProjects.mockReturnValue({ data: [], isLoading: false });
     mPosts.mockReturnValue({
@@ -56,7 +56,7 @@ describe("PostsTab", () => {
       hasNextPage: false,
     });
     renderTab();
-    expect(screen.getByText(/No posts yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No merged updates yet/)).toBeInTheDocument();
   });
 
   it("renders a post card with summary and actor label", () => {
@@ -104,7 +104,7 @@ describe("PostsTab", () => {
     expect(screen.getByText(/Failed to load feed/)).toBeInTheDocument();
   });
 
-  it("renders three toggle options — Opened, Posts, Release notes", () => {
+  it("renders three toggle options — Opened, Merged, Release notes", () => {
     mActors.mockReturnValue({ data: [], isLoading: false });
     mProjects.mockReturnValue({ data: [], isLoading: false });
     mPosts.mockReturnValue({
@@ -117,7 +117,7 @@ describe("PostsTab", () => {
     // Each is a role="tab" button in FeedModeToggle.
     const tabs = screen.getAllByRole("tab");
     const labels = tabs.map((t) => t.textContent);
-    expect(labels).toEqual(["Opened", "Posts", "Release notes"]);
+    expect(labels).toEqual(["Opened", "Merged", "Release notes"]);
   });
 
   it("queries the logged-in actor with the Me toggle", () => {

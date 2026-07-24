@@ -126,6 +126,39 @@ describe("SprintTab", () => {
     expect(screen.queryByText("Bob feature")).not.toBeInTheDocument();
   });
 
+  it("moves a backlog item to Features without dropping its metadata", () => {
+    const mutate = vi.fn();
+    mUpdate.mockReturnValue({ mutate, isPending: false });
+    mFeatures.mockReturnValue({
+      data: [{
+        id: 7,
+        title: "Parked feature",
+        owners: ["alice"],
+        status: "specced",
+        plan: "Keep this plan",
+        specLinks: ["https://example.com/spec"],
+        backlog: true,
+      }],
+      isLoading: false,
+    });
+    render(
+      <MemoryRouter initialEntries={["/?view=backlog"]}>
+        <SprintTab />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Parked feature to Features" }));
+
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
+      id: 7,
+      owners: ["alice"],
+      status: "specced",
+      plan: "Keep this plan",
+      specLinks: ["https://example.com/spec"],
+      backlog: false,
+    }));
+  });
+
   it("renders the admin-configured stages instead of the defaults", () => {
     mSettings.mockReturnValue({
       data: {
@@ -142,7 +175,7 @@ describe("SprintTab", () => {
     });
     renderTab();
     // "Backlog" appears twice: once as the admin's stage label (column
-    // header) and once as the Board/Backlog view-toggle label — assert
+    // header) and once as the Features/Backlog view-toggle label — assert
     // that at least one shows up rather than requiring uniqueness.
     expect(screen.getAllByText("Backlog").length).toBeGreaterThan(0);
     expect(screen.getByText("Doing")).toBeInTheDocument();

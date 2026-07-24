@@ -47,6 +47,7 @@ describe("CommandPalette", () => {
     openWithCmdK();
     expect(screen.getByPlaceholderText("Search features, people...")).toBeInTheDocument();
     expect(screen.getByText("Features")).toBeInTheDocument();
+    expect(screen.getByText("Merged")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 

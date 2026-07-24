@@ -19,7 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
 import type { BoardStage, Feature, FeatureStatus, Spec } from "@/lib/types";
-import { ArrowUpDown, Archive, LayoutGrid, Rocket, Search, Sparkles, Undo2 } from "lucide-react";
+import { ArrowRight, ArrowUpDown, Archive, LayoutGrid, Rocket, Search, Sparkles } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { PersonSelect } from "@/components/ui/PersonSelect";
 import { AllMeToggle } from "@/components/ui/AllMeToggle";
@@ -411,7 +411,7 @@ function FeaturesView({
           Wraps on narrow screens via flex-wrap but everything stays inline
           on ~640px+ where the tab is mostly used. */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Board / Backlog toggle. Board is default; badge shows backlog
+        {/* Features / Backlog toggle. Features is default; badge shows backlog
             count so nothing gets forgotten in there. */}
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
           <button
@@ -423,7 +423,7 @@ function FeaturesView({
                 : "bg-white text-stone-600 hover:bg-stone-50",
             )}
           >
-            <LayoutGrid size={12} /> Board
+            <LayoutGrid size={12} /> Features
           </button>
           <button
             onClick={() => onViewChange("backlog")}
@@ -576,7 +576,7 @@ function BacklogList({ features, stages, onOpenDetail, onRestore }: BacklogListP
   if (features.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-stone-200 bg-white/50 px-6 py-16 text-center text-sm text-stone-500">
-        Nothing in the backlog. Send a feature here from the board when you want
+        Nothing in the backlog. Send a feature here from Features when you want
         to park it out of sight without losing it.
       </div>
     );
@@ -598,11 +598,12 @@ function BacklogList({ features, stages, onOpenDetail, onRestore }: BacklogListP
                   e.stopPropagation();
                   onRestore(f);
                 }}
-                className="shrink-0 p-1.5 rounded-md border border-stone-200 text-stone-500 hover:text-accent hover:border-accent/40 cursor-pointer"
-                title="Move back to board"
-                aria-label={`Move ${f.title} back to board`}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-stone-200 px-2 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:border-accent/40 cursor-pointer"
+                title="Move to Features"
+                aria-label={`Move ${f.title} to Features`}
               >
-                <Undo2 size={12} />
+                <ArrowRight size={12} />
+                Move to features
               </button>
               <span className="flex-1 truncate text-sm text-stone-700">
                 {f.title}

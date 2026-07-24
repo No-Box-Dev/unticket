@@ -21,7 +21,7 @@ interface SearchResult {
 const TAB_ITEMS: { id: TabId; label: string; keywords: string }[] = [
   { id: "current", label: "Current", keywords: "current people engineers team members prs pull requests" },
   { id: "sprint", label: "Features", keywords: "features kanban board" },
-  { id: "posts", label: "Feed", keywords: "feed posts narrator agents activity" },
+  { id: "posts", label: "Merged", keywords: "merged feed posts narrator agents activity" },
   { id: "issues", label: "Issues", keywords: "issues bugs" },
   { id: "repos", label: "Repos", keywords: "repos projects backfill narrator" },
   { id: "settings", label: "Settings", keywords: "settings admin config teams webhook" },
