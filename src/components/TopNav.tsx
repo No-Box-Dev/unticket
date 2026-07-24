@@ -9,7 +9,7 @@ const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "current", label: "Current" },
   { id: "sprint", label: "Features" },
   { id: "specs", label: "Specs" },
-  { id: "posts", label: "Merged" },
+  { id: "posts", label: "Feed" },
   { id: "issues", label: "Issues" },
   { id: "repos", label: "Repos" },
 ];
