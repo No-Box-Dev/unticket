@@ -345,6 +345,7 @@ export function SprintTab({ navFilter, urlFeatureId, onUrlChange }: SprintTabPro
         <FeatureDetailModal
           key={detailFeature.id}
           feature={detailFeature}
+          allFeatures={features ?? []}
           allPeople={allPeopleNames}
           onClose={closeDetail}
           onUpdate={updateFeature}

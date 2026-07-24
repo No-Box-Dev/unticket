@@ -26,6 +26,7 @@ function renderModal(
     <MemoryRouter>
       <FeatureDetailModal
         feature={feature}
+        allFeatures={[feature]}
         allPeople={["alice", "bob"]}
         onClose={opts.onClose ?? vi.fn()}
         onUpdate={opts.onUpdate ?? vi.fn()}
