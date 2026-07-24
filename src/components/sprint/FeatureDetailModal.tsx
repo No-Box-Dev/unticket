@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { X, ExternalLink, Pencil } from "lucide-react";
 import { ConfirmDialog, useConfirm } from "@/components/ui/ConfirmDialog";
 import { AssignDropdown } from "./AssignDropdown";
-import { SpecLinksSection } from "@/components/specs/SpecLinksSection";
 import { FeatureLinkedSpecsSection } from "./FeatureLinkedSpecsSection";
 import { withStatusTransition } from "@/lib/github-features";
 import { useBoardStages } from "@/lib/board-stages";
@@ -22,12 +21,19 @@ function stageLookup(stages: BoardStage[], id: FeatureStatus): { label: string; 
 
 interface FeatureDetailModalProps {
   feature: Feature;
+  allFeatures: Feature[];
   allPeople: string[];
   onClose: () => void;
   onUpdate: (updated: Feature) => void;
 }
 
-export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: FeatureDetailModalProps) {
+export function FeatureDetailModal({
+  feature,
+  allFeatures,
+  allPeople,
+  onClose,
+  onUpdate,
+}: FeatureDetailModalProps) {
   const [draft, setDraft] = useState<Feature>({ ...feature });
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
@@ -53,8 +59,7 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
   // re-render — only when something the modal actually reads changes.
   const featureFingerprint =
     `${feature.id}|${feature.title}|${feature.status}|${!!feature.backlog}|` +
-    `${feature.updatedAt ?? ""}|${(feature.owners ?? []).join(",")}|` +
-    `${feature.specLinks?.length ?? 0}`;
+    `${feature.updatedAt ?? ""}|${(feature.owners ?? []).join(",")}`;
   useEffect(() => {
     if (dirtyRef.current) return;
     setDraft({ ...feature });
@@ -153,12 +158,11 @@ export function FeatureDetailModal({ feature, allPeople, onClose, onUpdate }: Fe
           {/* All rich content on a feature lives in its Specs — a feature
               no longer has its own description/plan field. The Specs
               section is the only content surface. */}
-          <FeatureLinkedSpecsSection featureNumber={draft.id} featureTitle={draft.title} />
-
-          {/* Spec links (free external URLs — Figma / Notion / etc.) */}
-          <SpecLinksSection
-            value={draft.specLinks ?? []}
-            onChange={(links) => update({ specLinks: links })}
+          <FeatureLinkedSpecsSection
+            featureNumber={draft.id}
+            features={allFeatures.map((candidate) =>
+              candidate.id === draft.id ? draft : candidate
+            )}
           />
 
           {/* Status History Timeline */}

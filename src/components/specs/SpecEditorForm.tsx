@@ -10,6 +10,7 @@ import type { Feature, Spec, SpecLink } from "@/lib/types";
 interface Props {
   features: Feature[];
   initialFeatureNumber: number | null;
+  lockedFeatureNumber?: number;
   onClose: () => void;
   onCreated: (spec: Spec) => void;
 }
@@ -18,10 +19,18 @@ interface Props {
 // feature picker has a synthetic "+ Create new feature…" row at the top —
 // choosing it swaps in a compact create-inline input so a spec can be
 // filed against a brand-new feature without leaving this modal.
-export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCreated }: Props) {
+export function SpecEditorForm({
+  features,
+  initialFeatureNumber,
+  lockedFeatureNumber,
+  onClose,
+  onCreated,
+}: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [featureNumber, setFeatureNumber] = useState<number | null>(initialFeatureNumber);
+  const [featureNumber, setFeatureNumber] = useState<number | null>(
+    lockedFeatureNumber ?? initialFeatureNumber,
+  );
   const [links, setLinks] = useState<SpecLink[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creatingFeature, setCreatingFeature] = useState(false);
@@ -152,7 +161,12 @@ export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCrea
 
           <div>
             <label className="text-xs text-stone-500 block mb-1">Feature</label>
-            {creatingFeature ? (
+            {lockedFeatureNumber != null ? (
+              <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+                {features.find((feature) => feature.id === lockedFeatureNumber)?.title
+                  || `Feature #${lockedFeatureNumber}`}
+              </div>
+            ) : creatingFeature ? (
               <div className="flex items-center gap-2">
                 <input
                   autoFocus
@@ -194,7 +208,7 @@ export function SpecEditorForm({ features, initialFeatureNumber, onClose, onCrea
                 className="w-full"
               />
             )}
-            {!creatingFeature && (
+            {lockedFeatureNumber == null && !creatingFeature && (
               <p className="text-[11px] text-stone-400 mt-1">
                 New features land in the first board stage ({stages[0]?.label ?? "todo"}). Fine-tune
                 status, owners and plan on the Features tab.
