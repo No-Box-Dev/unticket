@@ -123,12 +123,12 @@ export function PostsTab() {
       {events.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-stone-400">
           {hasFilters
-            ? `No ${mode === "post" ? "posts" : mode === "release_notes" ? "release notes" : "opened PRs"} match the current filters.`
+            ? `No ${mode === "post" ? "merged updates" : mode === "release_notes" ? "release notes" : "opened PRs"} match the current filters.`
             : mode === "post"
-              ? "No posts yet. As people open PRs, push commits, and ship releases, first-person posts will appear here."
+              ? "No merged updates yet. As people merge PRs, their updates will appear here."
               : mode === "release_notes"
                 ? "No release notes yet. Structured release notes will appear here as PRs get merged."
-                : "Nothing here yet. As your team opens PRs, first-person posts will appear here — then move to Posts and Release notes when they merge."}
+                : "Nothing here yet. Opened PRs will appear here, then move to Merged and Release notes when they merge."}
         </div>
       ) : (
         <>
@@ -170,7 +170,7 @@ function FeedModeToggle({
 }) {
   const options: { value: FeedMode; label: string }[] = [
     { value: "opened", label: "Opened" },
-    { value: "post", label: "Posts" },
+    { value: "post", label: "Merged" },
     { value: "release_notes", label: "Release notes" },
   ];
   return (
