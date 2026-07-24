@@ -40,7 +40,7 @@ describe("TopNav", () => {
     render(<TopNav activeTab="sprint" onTabChange={vi.fn()} />);
     // Both desktop + mobile nav lists render — multiple matches expected.
     expect(screen.getAllByText("Features").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Merged").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Feed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Issues").length).toBeGreaterThan(0);
   });
